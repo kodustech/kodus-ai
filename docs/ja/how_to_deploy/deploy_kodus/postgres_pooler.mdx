@@ -83,6 +83,12 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 `kodus-installer` は Kodus の実行方法ごとにプーラーを組み込み、上記の設定を
 自動で埋めます。
 
+直接接続を設定すると、Kodus の協調ロックもセッションロックからデータベースの行に
+切り替わります。直接接続なしで動いている Pod は新しいロックを認識できないため、
+古い Pod を止めた状態でプーラーを有効にしてください。先に `docker compose down`
+を実行するか、`helm upgrade` の前に api・worker・webhooks の Deployment を 0 に
+スケールします。
+
 ### Docker Compose
 
 `pgbouncer` プロファイルは、同梱の PostgreSQL の前に transaction モードの
@@ -201,7 +207,8 @@ HAProxy、CloudNativePG の `-rw` サービス、またはプライマリに追�
 Kodus はすべてのコンポーネントから書き込むため、リードレプリカは使用しません。
 
 フェイルオーバー中は実行中のクエリが失敗し、プールは次のリクエストで再接続します。
-協調ロックはデータベースの行なので、データと一緒にフェイルオーバー後も残ります。
+プーラーを使う場合、協調ロックはデータベースの行なので、データと一緒にフェイルオーバー後も残ります。
+プーラーなしではセッションロックで、旧プライマリーとのセッションが切れた時点で解放されます。
 
 ## 設定の確認
 

@@ -1,7 +1,11 @@
+import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+
 import { IDistributedLockRepository } from '../domain/contracts/distributed-lock.repository.contract';
 import {
     LOCK_LEASE_MS,
     DistributedLockService,
+    lockModeFor,
 } from './distributed-lock.service';
 import { TimerLeaseRenewer } from './lease-renewer';
 
@@ -80,14 +84,22 @@ describe('DistributedLockService', () => {
         // Renewals on the (fake) main-thread clock; the renewal thread is
         // proven against a real database in the integration spec.
         const renewer = new TimerLeaseRenewer(leases);
-        instanceA = new DistributedLockService({} as any, leases, { renewer });
-        instanceB = new DistributedLockService({} as any, leases, { renewer });
+        instanceA = new DistributedLockService({} as any, leases, {
+            renewer,
+            mode: 'lease',
+        });
+        instanceB = new DistributedLockService({} as any, leases, {
+            renewer,
+            mode: 'lease',
+        });
     });
 
     afterEach(async () => {
         // Stops the per-process sweeper so each spec starts without one.
-        await instanceA.onModuleDestroy();
-        await instanceB.onModuleDestroy();
+        instanceA.onModuleDestroy();
+        instanceB.onModuleDestroy();
+        await instanceA.onApplicationShutdown();
+        await instanceB.onApplicationShutdown();
         jest.useRealTimers();
     });
 
@@ -141,6 +153,7 @@ describe('DistributedLockService', () => {
     it('a late acquire hands the time it asked for the lease to the renewer', async () => {
         const grants: (number | undefined)[] = [];
         const service = new DistributedLockService({} as any, leases, {
+            mode: 'lease',
             renewer: {
                 track: (_key, _holder, _leaseMs, _onLost, grantedAt) => {
                     grants.push(grantedAt);
@@ -160,7 +173,7 @@ describe('DistributedLockService', () => {
 
         expect(await service.acquire('job')).not.toBeNull();
         expect(grants).toEqual([askedAt]);
-        await service.onModuleDestroy();
+        await service.onApplicationShutdown();
     });
 
     it('a holder that stops beating loses the key to another instance after its lease', async () => {
@@ -228,7 +241,7 @@ describe('DistributedLockService', () => {
         const stillHeld = await instanceA.acquire('still-held');
         const release = jest.spyOn(leases, 'release');
 
-        await instanceA.onModuleDestroy();
+        await instanceA.onApplicationShutdown();
 
         expect(release).toHaveBeenCalledTimes(1);
         expect(release).toHaveBeenCalledWith('still-held', stillHeld!.holder);
@@ -236,7 +249,7 @@ describe('DistributedLockService', () => {
 
     it('after shutdown the sweeper stops', async () => {
         instanceA.onModuleInit();
-        await instanceA.onModuleDestroy();
+        instanceA.onModuleDestroy();
 
         await jest.advanceTimersByTimeAsync(60 * 60_000);
 
@@ -269,6 +282,7 @@ describe('DistributedLockService', () => {
     it('a configured lease of 0 falls back to the default lease instead of expiring on acquire', async () => {
         const tracked: number[] = [];
         const service = new DistributedLockService({} as any, leases, {
+            mode: 'lease',
             leaseMs: 0,
             renewer: {
                 track: (_key, _holder, leaseMs) => {
@@ -283,7 +297,7 @@ describe('DistributedLockService', () => {
         expect(tracked).toEqual([LOCK_LEASE_MS]);
         expect(await instanceB.acquire('job')).toBeNull();
         await lock!.release();
-        await service.onModuleDestroy();
+        await service.onApplicationShutdown();
     });
 
     it('when the renewal thread cannot start, held locks still renew on the main event loop', async () => {
@@ -295,7 +309,9 @@ describe('DistributedLockService', () => {
                 extra: { ssl: { checkServerIdentity: () => undefined } },
             },
         };
-        const fallback = new DistributedLockService(dataSource as any, leases);
+        const fallback = new DistributedLockService(dataSource as any, leases, {
+            mode: 'lease',
+        });
         const lock = await fallback.acquire('job');
 
         await jest.advanceTimersByTimeAsync(LOCK_LEASE_MS * 5);
@@ -309,10 +325,47 @@ describe('DistributedLockService', () => {
         await instanceA.acquire('a');
         await instanceA.acquire('b');
 
-        await instanceA.onModuleDestroy();
+        await instanceA.onApplicationShutdown();
 
         expect(await instanceB.acquire('a')).not.toBeNull();
         expect(await instanceB.acquire('b')).not.toBeNull();
+    });
+
+    it('a lock stays held from the start of shutdown until the application shuts down, however long that takes', async () => {
+        await instanceA.acquire('review:pr-1');
+
+        instanceA.onModuleDestroy();
+        await jest.advanceTimersByTimeAsync(3 * LOCK_LEASE_MS);
+
+        expect(await instanceB.acquire('review:pr-1')).toBeNull();
+        await instanceA.onApplicationShutdown();
+        expect(await instanceB.acquire('review:pr-1')).not.toBeNull();
+    });
+
+    it('in a Nest app, a lock is still held while beforeApplicationShutdown drains the work, and free once the app is closed', async () => {
+        const seenWhileDraining: boolean[] = [];
+        @Injectable()
+        class Drain implements BeforeApplicationShutdown {
+            async beforeApplicationShutdown() {
+                seenWhileDraining.push(
+                    (await instanceB.acquire('review:pr-1')) === null,
+                );
+            }
+        }
+        const moduleRef = await Test.createTestingModule({
+            providers: [
+                { provide: DistributedLockService, useValue: instanceA },
+                Drain,
+            ],
+        }).compile();
+        const app = moduleRef.createNestApplication();
+        await app.init();
+        await instanceA.acquire('review:pr-1');
+
+        await app.close();
+
+        expect(seenWhileDraining).toEqual([true]);
+        expect(await instanceB.acquire('review:pr-1')).not.toBeNull();
     });
 
     it('acquiring while the database is down throws, so the caller chooses fail-open or fail-closed', async () => {
@@ -325,5 +378,27 @@ describe('DistributedLockService', () => {
     it('isLocked answers "locked" when the database is down (callers skip)', async () => {
         leases.failing = true;
         expect(await instanceA.isLocked('job')).toBe(true);
+    });
+});
+
+describe('lockModeFor', () => {
+    it('keeps advisory locks when no direct connection says a pooler is in front', () => {
+        expect(lockModeFor({})).toBe('advisory');
+        expect(lockModeFor({ API_PG_DB_HOST: 'db' })).toBe('advisory');
+    });
+
+    it('uses leases when a direct connection is configured, by URL or by host', () => {
+        expect(
+            lockModeFor({
+                DATABASE_DIRECT_URL: 'postgres://u:p@db:5432/kodus',
+            }),
+        ).toBe('lease');
+        expect(lockModeFor({ API_PG_DB_DIRECT_HOST: 'db' })).toBe('lease');
+    });
+
+    it('uses leases when the direct connection set is invalid: a pooler was meant', () => {
+        expect(lockModeFor({ DATABASE_DIRECT_URL: 'mysql://db' })).toBe(
+            'lease',
+        );
     });
 });

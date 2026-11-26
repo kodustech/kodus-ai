@@ -32,6 +32,7 @@ async function main(): Promise<void> {
     await dataSource.initialize();
     const service = new DistributedLockService(dataSource, undefined, {
         leaseMs,
+        mode: 'lease',
     });
 
     const lock = await service.acquire(key);
@@ -46,7 +47,8 @@ async function main(): Promise<void> {
 
     await send({ lost: lock?.isLost() ?? null });
     await lock?.release().catch(() => undefined);
-    await service.onModuleDestroy();
+    service.onModuleDestroy();
+    await service.onApplicationShutdown();
     await ThreadLeaseRenewer.stopAll();
     await dataSource.destroy();
 }

@@ -86,6 +86,12 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 O `kodus-installer` liga o pooler em cada forma de rodar a Kodus e preenche
 as configurações acima por você.
 
+Configurar a conexão direta também muda os locks de coordenação da Kodus de
+locks de sessão para linhas no banco. Pods que ainda rodam sem ela não
+enxergam os novos locks, então ligue o pooler com os pods antigos parados:
+rode `docker compose down` antes, ou escale os Deployments de api, worker e
+webhooks para 0 antes do `helm upgrade`.
+
 ### Docker Compose
 
 O profile `pgbouncer` sobe o PgBouncer 1.26 em modo transaction na frente do
@@ -210,8 +216,9 @@ primary. Todos os componentes da Kodus escrevem, então réplicas de leitura nã
 são usadas.
 
 Durante um failover, as queries em andamento falham e os pools reconectam na
-próxima requisição. Os locks de coordenação são linhas no banco, então
-sobrevivem ao failover junto com os dados.
+próxima requisição. Atrás de um pooler, os locks de coordenação são linhas no
+banco, então sobrevivem ao failover junto com os dados; sem pooler são locks
+de sessão, liberados quando caem as sessões com o primário antigo.
 
 ## Confira a configuração
 

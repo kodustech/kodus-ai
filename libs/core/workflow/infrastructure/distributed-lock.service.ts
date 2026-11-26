@@ -4,6 +4,7 @@ import { hostname } from 'node:os';
 import {
     Inject,
     Injectable,
+    OnApplicationShutdown,
     OnModuleDestroy,
     OnModuleInit,
     Optional,
@@ -11,6 +12,7 @@ import {
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
+import { resolveDirectConnection } from '@libs/core/infrastructure/database/typeorm/postgres-connection-env';
 import { createLogger } from '@libs/core/log/logger';
 
 import {
@@ -22,6 +24,7 @@ import {
     ThreadLeaseRenewer,
     TimerLeaseRenewer,
 } from './lease-renewer';
+import { AdvisoryLockRepository } from './repositories/advisory-lock.repository';
 import { DistributedLockRepository } from './repositories/distributed-lock.repository';
 
 export interface DistributedLockOptions {
@@ -41,6 +44,33 @@ export interface DistributedLockOptions {
  */
 export const LOCK_LEASE_MS = 60_000;
 
+/**
+ * What a lock is held with:
+ * - advisory: a session advisory lock on a pinned connection, as releases
+ *   before leases did. Pods of both releases see each other's locks during
+ *   a rolling deploy. Wrong behind a pooler in transaction mode.
+ * - lease: a row in kodus_workflow.distributed_locks, right on any
+ *   connection.
+ */
+export type LockMode = 'advisory' | 'lease';
+
+/**
+ * Leases when a direct connection is configured, which is what declares a
+ * pooler in front of Postgres; advisory locks otherwise, so installs without
+ * a pooler (Kodus cloud included) keep the locks they had. Switching an
+ * install to the pooler moves it to leases: pods still running without the
+ * direct connection hold advisory locks the new ones cannot see, so roll
+ * that change out with the old pods stopped first.
+ */
+export function lockModeFor(env: NodeJS.ProcessEnv): LockMode {
+    try {
+        return resolveDirectConnection(env) ? 'lease' : 'advisory';
+    } catch {
+        // A direct connection was set but is invalid: a pooler was meant.
+        return 'lease';
+    }
+}
+
 /** Optional settings; the defaults are what production runs. */
 export const DISTRIBUTED_LOCK_CONFIG_TOKEN = Symbol('DistributedLockConfig');
 export interface DistributedLockConfig {
@@ -48,7 +78,12 @@ export interface DistributedLockConfig {
     leaseMs?: number;
     /** Who renews held leases. Defaults to a renewal thread. */
     renewer?: LeaseRenewer;
+    /** Defaults to lockModeFor(process.env). */
+    mode?: LockMode;
 }
+
+/** An advisory lock lives as long as its session: nothing to renew. */
+const NO_RENEWAL: LeaseRenewer = { track: () => () => undefined };
 /** A window taken with DistributedLockService.claim. */
 export interface Claim {
     /** Frees the window for the next taker; false when it already ran out. */
@@ -180,27 +215,35 @@ export class DistributedLock {
 }
 
 /**
- * Cross-process mutual exclusion on Postgres leases (`kodus_workflow.
- * distributed_locks`).
+ * Cross-process mutual exclusion on Postgres, held as LockMode says.
  *
- * It used to hold a session advisory lock on a pinned pool connection. That
- * breaks behind a pooler in transaction mode — the pinned client connection
- * does not pin a server session, so two holders got the same key and the
- * lock stayed held after release — and it kept a pool connection busy for
- * as long as the lock was held. A lease is one row: every call is a single
- * statement on any connection, and the connection goes back to the pool
- * between calls.
+ * Behind a pooler (a direct connection configured) it holds leases
+ * (`kodus_workflow.distributed_locks`). A session advisory lock breaks
+ * there: in transaction mode the pinned client connection does not pin a
+ * server session, so two holders got the same key and the lock stayed held
+ * after release. A lease is one row: every call is a single statement on
+ * any connection. Trade-off: a holder that dies without releasing blocks
+ * the key until its lease runs out (LOCK_LEASE_MS, or its ttl if shorter)
+ * instead of the instant its session closes.
  *
- * Trade-off: a holder that dies without releasing blocks the key until its
- * lease runs out (LOCK_LEASE_MS, or its ttl if shorter) instead
- * of the instant its session closes.
+ * Without a pooler it holds session advisory locks, as before leases, so a
+ * rolling deploy from an earlier release stays exclusive.
+ *
+ * claim() always uses the lease table: it must expire without a release,
+ * and releases before it never take those keys.
  */
 @Injectable()
-export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
+export class DistributedLockService
+    implements OnModuleInit, OnModuleDestroy, OnApplicationShutdown
+{
     private static sweeper: NodeJS.Timeout | null = null;
 
     private readonly logger = createLogger(DistributedLockService.name);
+    /** Where acquire holds its locks: advisory or lease, by mode. */
     private readonly repository: IDistributedLockRepository;
+    /** The lease table: claims and the sweep. */
+    private readonly leases: IDistributedLockRepository;
+    readonly mode: LockMode;
     private readonly leaseMs: number;
     private readonly renewer: LeaseRenewer;
     private readonly held = new Set<DistributedLock>();
@@ -218,14 +261,21 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
         // Every module that provides this service already resolves the
         // DataSource; building the repository here keeps the SQL in the
         // repository layer without wiring a token into each of them.
+        this.leases = repository ?? new DistributedLockRepository(dataSource);
+        this.mode = config?.mode ?? lockModeFor(process.env);
         this.repository =
-            repository ?? new DistributedLockRepository(dataSource);
+            this.mode === 'advisory'
+                ? new AdvisoryLockRepository(dataSource)
+                : this.leases;
         // A lease of 0 would be expired the moment it is taken.
         this.leaseMs =
             config?.leaseMs && config.leaseMs > 0
                 ? config.leaseMs
                 : LOCK_LEASE_MS;
-        this.renewer = config?.renewer ?? this.defaultRenewer(dataSource);
+        this.renewer =
+            this.mode === 'advisory'
+                ? NO_RENEWAL
+                : (config?.renewer ?? this.defaultRenewer(dataSource));
     }
 
     private defaultRenewer(dataSource: DataSource): LeaseRenewer {
@@ -258,13 +308,22 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
         DistributedLockService.sweeper.unref?.();
     }
 
-    async onModuleDestroy(): Promise<void> {
+    onModuleDestroy(): void {
         if (DistributedLockService.sweeper) {
             clearInterval(DistributedLockService.sweeper);
             DistributedLockService.sweeper = null;
         }
-        // Hand the keys back on a graceful shutdown instead of making the
-        // next instance wait out the lease.
+    }
+
+    /**
+     * Hands the keys still held back on a graceful shutdown instead of
+     * making the next instance wait out the lease. Not before: Nest runs
+     * onModuleDestroy before beforeApplicationShutdown, where the worker
+     * drains the jobs that hold them (a review's per-PR lock, a BYOK slot).
+     * The connection may already be closed by now (TypeORM closes it in its
+     * own onApplicationShutdown); the leases then lapse on their own.
+     */
+    async onApplicationShutdown(): Promise<void> {
         const locks = [...this.held];
         if (locks.length === 0) {
             return;
@@ -380,10 +439,10 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
         const holder = `${hostname()}:${process.pid}:${randomUUID()}`;
         // A hold of 0 would be expired the moment it is taken.
         const hold = holdMs > 0 ? holdMs : this.leaseMs;
-        if (!(await this.repository.tryAcquire(key, holder, hold, hold))) {
+        if (!(await this.leases.tryAcquire(key, holder, hold, hold))) {
             return null;
         }
-        return { release: () => this.repository.release(key, holder) };
+        return { release: () => this.leases.release(key, holder) };
     }
 
     /**
@@ -406,7 +465,7 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
 
     private async sweepExpired(): Promise<void> {
         try {
-            const deleted = await this.repository.deleteExpired(
+            const deleted = await this.leases.deleteExpired(
                 EXPIRED_LEASE_GRACE_MS,
             );
             if (deleted > 0) {

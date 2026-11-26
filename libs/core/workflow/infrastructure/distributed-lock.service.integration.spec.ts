@@ -28,6 +28,7 @@ import { DistributedLockLeases2026112300000000 } from '@libs/core/infrastructure
 
 import { DistributedLockService } from './distributed-lock.service';
 import { ThreadLeaseRenewer } from './lease-renewer';
+import { advisoryLockId } from './repositories/advisory-lock.repository';
 import { DistributedLockRepository } from './repositories/distributed-lock.repository';
 
 const PG_HOST = process.env.TEST_PG_HOST ?? 'localhost';
@@ -125,9 +126,15 @@ const targets = [
                     await ds.initialize();
                     sources.push(ds);
                 }
-                instanceA = new DistributedLockService(sources[0]);
-                instanceB = new DistributedLockService(sources[1]);
-                observer = new DistributedLockService(sources[2]);
+                instanceA = new DistributedLockService(sources[0], undefined, {
+                    mode: 'lease',
+                });
+                instanceB = new DistributedLockService(sources[1], undefined, {
+                    mode: 'lease',
+                });
+                observer = new DistributedLockService(sources[2], undefined, {
+                    mode: 'lease',
+                });
                 repository = new DistributedLockRepository(sources[2]);
             }, 30_000);
 
@@ -361,7 +368,7 @@ const targets = [
                 const holder = new DistributedLockService(
                     sources[0],
                     undefined,
-                    { leaseMs },
+                    { leaseMs, mode: 'lease' },
                 );
                 const lock = await holder.acquire(key);
                 expect(lock).not.toBeNull();
@@ -443,6 +450,7 @@ const targets = [
                 await viaRelay.initialize();
                 const holder = new DistributedLockService(viaRelay, undefined, {
                     leaseMs,
+                    mode: 'lease',
                 });
                 try {
                     const locks = await Promise.all(
@@ -496,6 +504,7 @@ const targets = [
                 await viaRelay.initialize();
                 const holder = new DistributedLockService(viaRelay, undefined, {
                     leaseMs,
+                    mode: 'lease',
                 });
                 try {
                     const lock = await holder.acquire(key);
@@ -524,7 +533,7 @@ const targets = [
                 const holder = new DistributedLockService(
                     sources[0],
                     undefined,
-                    { leaseMs },
+                    { leaseMs, mode: 'lease' },
                 );
                 const lock = await holder.acquire(key);
                 expect(lock).not.toBeNull();
@@ -552,7 +561,7 @@ const targets = [
                 const holder = new DistributedLockService(
                     sources[0],
                     undefined,
-                    { leaseMs },
+                    { leaseMs, mode: 'lease' },
                 );
                 const lock = await holder.acquire(key);
                 expect(lock).not.toBeNull();
@@ -622,7 +631,7 @@ const targets = [
                 const holder = new DistributedLockService(
                     sources[0],
                     undefined,
-                    { leaseMs: 2_000 },
+                    { leaseMs: 2_000, mode: 'lease' },
                 );
                 const lock = await holder.acquire(key);
                 await expireLease(key);
@@ -633,7 +642,8 @@ const targets = [
 
                 expect(lock!.isLost()).toBe(true);
                 await taken!.release();
-                await holder.onModuleDestroy();
+                holder.onModuleDestroy();
+                await holder.onApplicationShutdown();
             }, 20_000);
 
             it('the sweep deletes leases left by dead holders and keeps live ones', async () => {
@@ -663,6 +673,112 @@ const targets = [
                     false,
                 );
                 await repository.release(live, 'live');
+            });
+        });
+
+        // No pooler: what Kodus cloud and every install without a direct
+        // connection run, mid rolling deploy from the release before leases.
+        describe('without a pooler, next to pods of the previous release', () => {
+            const sources: DataSource[] = [];
+            let newPod: DistributedLockService;
+            let otherNewPod: DistributedLockService;
+
+            /** What the previous release ran to take a lock. */
+            const oldPodTakes = async (key: string) => {
+                const runner = sources[2].createQueryRunner();
+                await runner.connect();
+                const [{ acquired }] = await runner.query(
+                    'SELECT pg_try_advisory_lock($1, $2) AS acquired',
+                    advisoryLockId(key),
+                );
+                return {
+                    acquired: acquired as boolean,
+                    release: async () => {
+                        await runner.query(
+                            'SELECT pg_advisory_unlock($1, $2)',
+                            advisoryLockId(key),
+                        );
+                        await runner.release();
+                    },
+                };
+            };
+
+            beforeAll(async () => {
+                for (let i = 0; i < 3; i++) {
+                    const ds = makeDataSource(PG_PORT, 3);
+                    await ds.initialize();
+                    sources.push(ds);
+                }
+                newPod = new DistributedLockService(sources[0], undefined, {
+                    mode: 'advisory',
+                });
+                otherNewPod = new DistributedLockService(
+                    sources[1],
+                    undefined,
+                    { mode: 'advisory' },
+                );
+            }, 30_000);
+
+            afterAll(async () => {
+                await newPod.onApplicationShutdown();
+                await otherNewPod.onApplicationShutdown();
+                await Promise.all(sources.map((ds) => ds.destroy()));
+            });
+
+            it('a lock an old pod holds keeps a new pod out, until the old pod lets go', async () => {
+                const key = uniqueKey('old-holds');
+                const old = await oldPodTakes(key);
+                expect(old.acquired).toBe(true);
+
+                expect(await newPod.acquire(key)).toBeNull();
+                expect(await newPod.isLocked(key)).toBe(true);
+
+                await old.release();
+                const lock = await newPod.acquire(key);
+                expect(lock).not.toBeNull();
+                await lock!.release();
+            });
+
+            it('a lock a new pod holds keeps an old pod out, until the new pod releases it', async () => {
+                const key = uniqueKey('new-holds');
+                const lock = await newPod.acquire(key);
+                expect(lock).not.toBeNull();
+
+                const old = await oldPodTakes(key);
+                expect(old.acquired).toBe(false);
+                await old.release();
+
+                await lock!.release();
+                const after = await oldPodTakes(key);
+                expect(after.acquired).toBe(true);
+                await after.release();
+            });
+
+            it('two new pods never hold one key at once, and a released key is free', async () => {
+                const key = uniqueKey('new-new');
+                const results = await Promise.all([
+                    newPod.acquire(key),
+                    otherNewPod.acquire(key),
+                ]);
+                const winners = results.filter((lock) => lock !== null);
+                expect(winners).toHaveLength(1);
+
+                await winners[0]!.release();
+                expect(await otherNewPod.isLocked(key)).toBe(false);
+            });
+
+            it('a lock still held at shutdown is handed back', async () => {
+                const key = uniqueKey('shutdown');
+                const pod = new DistributedLockService(sources[0], undefined, {
+                    mode: 'advisory',
+                });
+                expect(await pod.acquire(key)).not.toBeNull();
+
+                await pod.onApplicationShutdown();
+
+                const old = await oldPodTakes(key);
+                expect(old.acquired).toBe(true);
+                await old.release();
             });
         });
     },

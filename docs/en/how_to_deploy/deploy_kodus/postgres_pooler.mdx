@@ -86,6 +86,12 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 The `kodus-installer` wires the pooler for each way of running Kodus, and
 fills in the settings above for you.
 
+Setting the direct connection also moves Kodus's coordination locks from
+session locks to rows in the database. Pods still running without it do not
+see the new locks, so turn the pooler on with the old pods stopped: run
+`docker compose down` first, or scale the api, worker and webhooks
+Deployments to 0 before the `helm upgrade`.
+
 ### Docker Compose
 
 The `pgbouncer` profile starts PgBouncer 1.26 in transaction mode in front of
@@ -208,8 +214,9 @@ checks, the `-rw` service of CloudNativePG, or a PgBouncer that follows the
 primary. Kodus writes from every component, so read replicas are not used.
 
 During a failover, queries in flight fail and the pools reconnect on the
-next request. Coordination locks are rows in the database, so they survive a
-failover with the data.
+next request. Behind a pooler, coordination locks are rows in the database,
+so they survive a failover with the data; without one they are session locks,
+freed when the sessions to the old primary drop.
 
 ## Check the setup
 

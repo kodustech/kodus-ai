@@ -20,7 +20,9 @@ async function main(): Promise<void> {
         extra: { max: 1 },
     });
     await dataSource.initialize();
-    const service = new DistributedLockService(dataSource);
+    const service = new DistributedLockService(dataSource, undefined, {
+        mode: 'lease',
+    });
     const lock = await service.acquire(`exiting-holder::${process.pid}`);
     // The parent tells this run from one that died before holding a lock.
     await new Promise<void>((resolve) =>
