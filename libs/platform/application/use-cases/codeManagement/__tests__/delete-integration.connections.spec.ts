@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
@@ -77,9 +78,12 @@ const build = (opts: {
         ),
     };
 
-    const licenseService = {
-        releaseConnection: jest.fn(async () => true),
-        bindPrimaryConnection: jest.fn(async () => true),
+    const connectionBilling = {
+        releaseBeforeRemoving: jest.fn(async () => true),
+        ensurePrimary: jest.fn(async () => ({
+            status: 'bound',
+            primaryConnectionId: 'gl-b',
+        })),
     };
 
     const useCase = new (DeleteIntegrationUseCase as any)(
@@ -91,8 +95,8 @@ const build = (opts: {
         { emit: jest.fn() },
         mcpManagerService,
         { user: { uuid: 'user-1', email: 'owner@example.test' } },
+        connectionBilling,
         parametersService,
-        licenseService,
     ) as DeleteIntegrationUseCase;
 
     return {
@@ -101,7 +105,7 @@ const build = (opts: {
         codeManagementService,
         mcpManagerService,
         createOrUpdateParametersUseCase,
-        licenseService,
+        connectionBilling,
         parametersService,
     };
 };
@@ -237,11 +241,15 @@ describe('DeleteIntegrationUseCase — one connection of several', () => {
 });
 
 describe('DeleteIntegrationUseCase — billing', () => {
-    it('releases the removed connection and hands the workspace plan to the oldest one left', async () => {
-        const { useCase, licenseService } = build({
+    it('frees the primary slot before removing anything, then settles which connection keeps the plan', async () => {
+        const {
+            useCase,
+            connectionBilling,
+            integrationService,
+            codeManagementService,
+        } = build({
             connections: [
                 { uuid: 'gh-a', createdAt: new Date('2025-01-01') },
-                { uuid: 'fj-c', createdAt: new Date('2026-05-01') },
                 { uuid: 'gl-b', createdAt: new Date('2026-02-01') },
             ],
         });
@@ -252,33 +260,49 @@ describe('DeleteIntegrationUseCase — billing', () => {
             connectionId: 'gh-a',
         });
 
-        expect(licenseService.releaseConnection).toHaveBeenCalledWith(
-            { organizationId: ORG, teamId: TEAM },
+        const workspace = { organizationId: ORG, teamId: TEAM };
+        expect(connectionBilling.releaseBeforeRemoving).toHaveBeenCalledWith(
+            workspace,
             'gh-a',
         );
-        expect(licenseService.bindPrimaryConnection).toHaveBeenCalledWith(
-            { organizationId: ORG, teamId: TEAM },
-            'gl-b',
+        expect(
+            connectionBilling.releaseBeforeRemoving.mock.invocationCallOrder[0],
+        ).toBeLessThan(
+            codeManagementService.deleteWebhook.mock.invocationCallOrder[0],
+        );
+        expect(connectionBilling.ensurePrimary).toHaveBeenCalledWith(workspace);
+        expect(
+            connectionBilling.ensurePrimary.mock.invocationCallOrder[0],
+        ).toBeGreaterThan(
+            integrationService.delete.mock.invocationCallOrder[0],
         );
     });
 
-    it('binds nothing when the workspace keeps no connection', async () => {
-        const { useCase, licenseService } = build({
-            connections: [{ uuid: 'gh-a' }],
-        });
+    it('refuses the reset, removing nothing, while billing cannot free the slot', async () => {
+        const {
+            useCase,
+            connectionBilling,
+            integrationService,
+            codeManagementService,
+        } = build({ connections: [{ uuid: 'gh-a' }, { uuid: 'gl-b' }] });
+        connectionBilling.releaseBeforeRemoving.mockResolvedValue(false);
 
-        await useCase.execute({ organizationId: ORG, teamId: TEAM });
-
-        expect(licenseService.releaseConnection).toHaveBeenCalled();
-        expect(licenseService.bindPrimaryConnection).not.toHaveBeenCalled();
+        await expect(
+            useCase.execute({
+                organizationId: ORG,
+                teamId: TEAM,
+                connectionId: 'gh-a',
+            }),
+        ).rejects.toBeInstanceOf(ServiceUnavailableException);
+        expect(codeManagementService.deleteWebhook).not.toHaveBeenCalled();
+        expect(integrationService.delete).not.toHaveBeenCalled();
     });
 
-    it('finishes the reset when billing cannot be reached', async () => {
-        const { useCase, licenseService, integrationService } = build({
+    it('finishes the reset when only naming the next primary fails, which a later pass completes', async () => {
+        const { useCase, connectionBilling, integrationService } = build({
             connections: [{ uuid: 'gh-a' }, { uuid: 'gl-b' }],
         });
-        licenseService.releaseConnection.mockResolvedValue(false);
-        licenseService.bindPrimaryConnection.mockResolvedValue(false);
+        connectionBilling.ensurePrimary.mockResolvedValue({ status: 'failed' });
 
         await useCase.execute({
             organizationId: ORG,

@@ -13,6 +13,7 @@ import {
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { IntegrationStatusFilter } from '@libs/organization/domain/team/interfaces/team.interface';
+import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
 import { AutoRevokeRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/auto-revoke-removed-license-seats.use-case';
 
 const CRON_PRUNE_LICENSE_SEATS =
@@ -30,6 +31,7 @@ export class PruneLicenseSeatsCronProvider {
         private readonly teamService: ITeamService,
         private readonly autoRevokeRemovedLicenseSeatsUseCase: AutoRevokeRemovedLicenseSeatsUseCase,
         private readonly distributedLockService: DistributedLockService,
+        private readonly connectionBilling: ConnectionBillingService,
     ) {}
 
     @GatedCron(CRON_PRUNE_LICENSE_SEATS, {
@@ -66,6 +68,8 @@ export class PruneLicenseSeatsCronProvider {
                     continue;
                 }
 
+                await this.settleBillingPrimary(organizationAndTeamData);
+
                 try {
                     const result =
                         await this.autoRevokeRemovedLicenseSeatsUseCase.execute(
@@ -92,6 +96,29 @@ export class PruneLicenseSeatsCronProvider {
             }
         } finally {
             await lock.release().catch(() => {});
+        }
+    }
+
+    /**
+     * Completes a billing hand-over a reset or an outage left undone, for
+     * workspaces with several Git connections (the only ones that have one).
+     */
+    private async settleBillingPrimary(workspace: {
+        organizationId: string;
+        teamId: string;
+    }): Promise<void> {
+        try {
+            const connections =
+                await this.connectionBilling.workspaceConnections(workspace);
+            if (connections.length < 2) return;
+            await this.connectionBilling.ensurePrimary(workspace);
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to settle the billing primary connection',
+                context: PruneLicenseSeatsCronProvider.name,
+                metadata: { ...workspace },
+                error,
+            });
         }
     }
 

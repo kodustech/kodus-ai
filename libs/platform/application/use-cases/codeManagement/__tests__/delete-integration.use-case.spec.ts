@@ -87,6 +87,12 @@ describe('DeleteIntegrationUseCase', () => {
             mockEventEmitter,
             mockMcpManagerService,
             mockRequest,
+            {
+                releaseBeforeRemoving: jest.fn().mockResolvedValue(true),
+                ensurePrimary: jest
+                    .fn()
+                    .mockResolvedValue({ status: 'unbound' }),
+            },
         );
     });
 

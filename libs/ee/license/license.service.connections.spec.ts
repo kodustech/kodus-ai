@@ -14,7 +14,9 @@ describe('LicenseService per Git connection', () => {
 
     const makeService = () => {
         const get = jest.fn().mockResolvedValue({ valid: true });
-        const post = jest.fn().mockResolvedValue({ successful: [], failed: [] });
+        const post = jest
+            .fn()
+            .mockResolvedValue({ successful: [], failed: [] });
         const service = new LicenseService();
         (service as any).licenseRequest = { get, post };
         return { service, get, post };
@@ -67,17 +69,34 @@ describe('LicenseService per Git connection', () => {
         );
     });
 
-    it('binds the workspace primary connection', async () => {
+    it("binds the workspace primary connection and answers billing's primary", async () => {
         const { service, post } = makeService();
         post.mockResolvedValue({ found: true, primaryConnectionId: 'gh-a' });
 
         await expect(
             service.bindPrimaryConnection(workspace, 'gh-a'),
-        ).resolves.toBe(true);
+        ).resolves.toEqual({
+            ok: true,
+            licensed: true,
+            primaryConnectionId: 'gh-a',
+        });
         expect(post).toHaveBeenCalledWith('connections/primary', {
             organizationId: 'org-1',
             teamId: 'team-1',
             connectionId: 'gh-a',
+        });
+    });
+
+    it('answers the primary billing kept when it would not bind the connection', async () => {
+        const { service, post } = makeService();
+        post.mockResolvedValue({ found: true, primaryConnectionId: null });
+
+        await expect(
+            service.bindPrimaryConnection(workspace, 'gl-b'),
+        ).resolves.toEqual({
+            ok: true,
+            licensed: true,
+            primaryConnectionId: null,
         });
     });
 
@@ -87,7 +106,7 @@ describe('LicenseService per Git connection', () => {
 
         await expect(
             service.bindPrimaryConnection(workspace, 'gh-a'),
-        ).resolves.toBe(false);
+        ).resolves.toEqual({ ok: false });
     });
 
     it('treats a workspace billing has no licence for as nothing to bind', async () => {
@@ -98,26 +117,62 @@ describe('LicenseService per Git connection', () => {
 
         await expect(
             service.bindPrimaryConnection(workspace, 'gh-a'),
-        ).resolves.toBe(true);
+        ).resolves.toEqual({ ok: true, licensed: false });
     });
 
     it('treats a billing service without the bind route as a failed bind', async () => {
         const { service, post } = makeService();
         post.mockRejectedValue({
-            response: { status: 404, data: 'Cannot POST /api/billing/connections/primary' },
+            response: {
+                status: 404,
+                data: 'Cannot POST /api/billing/connections/primary',
+            },
         });
 
         await expect(
             service.bindPrimaryConnection(workspace, 'gh-a'),
-        ).resolves.toBe(false);
+        ).resolves.toEqual({ ok: false });
     });
 
-    it('releases a removed connection without throwing', async () => {
+    it('tells a release that freed the slot, one with nothing to free, and one billing never answered', async () => {
         const { service, post } = makeService();
-        post.mockRejectedValue(new Error('billing down'));
 
+        post.mockResolvedValueOnce({ released: true });
         await expect(
             service.releaseConnection(workspace, 'gh-a'),
-        ).resolves.toBe(false);
+        ).resolves.toBe('released');
+
+        post.mockResolvedValueOnce({ released: false });
+        await expect(
+            service.releaseConnection(workspace, 'gh-a'),
+        ).resolves.toBe('not_held');
+
+        post.mockRejectedValueOnce(new Error('billing down'));
+        await expect(
+            service.releaseConnection(workspace, 'gh-a'),
+        ).resolves.toBe('failed');
+    });
+
+    it('reads the workspace primary and the connections billed on their own licence', async () => {
+        const { service, get } = makeService();
+        get.mockResolvedValue({
+            primaryConnectionId: 'gh-a',
+            connections: [{ connectionId: 'gl-b' }],
+        });
+
+        await expect(service.getConnectionLicenses(workspace)).resolves.toEqual(
+            {
+                primaryConnectionId: 'gh-a',
+                ownLicenceConnectionIds: ['gl-b'],
+            },
+        );
+        expect(get).toHaveBeenCalledWith('connections', {
+            params: { organizationId: 'org-1', teamId: 'team-1' },
+        });
+
+        get.mockRejectedValue(new Error('billing down'));
+        await expect(
+            service.getConnectionLicenses(workspace),
+        ).resolves.toBeNull();
     });
 });

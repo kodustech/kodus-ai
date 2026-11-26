@@ -25,11 +25,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    ILicenseService,
-    LICENSE_SERVICE_TOKEN,
-} from '@libs/ee/license/interfaces/license.interface';
-import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
+import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
     IParametersService,
@@ -64,9 +60,7 @@ export class CreateIntegrationUseCase implements IUseCase {
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
 
-        @Optional()
-        @Inject(LICENSE_SERVICE_TOKEN)
-        private readonly licenseService?: ILicenseService,
+        private readonly connectionBilling: ConnectionBillingService,
 
         @Optional()
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -106,6 +100,12 @@ export class CreateIntegrationUseCase implements IUseCase {
             organizationAndTeamData.integrationId = connectionId;
         }
         const newConnection = !connectionId && params?.newConnection === true;
+        if (!connectionId) {
+            await this.connectionBilling.attributeLegacySeatsBeforeAdding({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            });
+        }
         const separateConnection = newConnection
             ? await this.bindPrimaryConnection(organizationAndTeamData)
             : false;
@@ -237,29 +237,19 @@ export class CreateIntegrationUseCase implements IUseCase {
         organizationId: string;
         teamId: string;
     }): Promise<boolean> {
-        const existing =
-            (await this.integrationService.find({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                status: true,
-            })) ?? [];
-        const primary = primaryConnectionOf(existing);
-        if (!primary) return false;
-        await this.recordCentralizedConfigOwner(
-            organizationAndTeamData,
-            primary.uuid,
-        );
-        if (!this.licenseService) return true;
+        const workspace = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+        const [oldest] =
+            await this.connectionBilling.workspaceConnections(workspace);
+        if (!oldest) return false;
+        await this.recordCentralizedConfigOwner(workspace, oldest.uuid);
 
-        const bound = await this.licenseService.bindPrimaryConnection(
-            {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            },
-            primary.uuid,
-        );
-        if (!bound) {
+        const handover = await this.connectionBilling.ensurePrimary(workspace, {
+            beforeAddingConnection: true,
+        });
+        if (handover.status === 'failed') {
             throw new ServiceUnavailableException(
                 'Billing could not be reached to add this connection. Try again in a moment.',
             );

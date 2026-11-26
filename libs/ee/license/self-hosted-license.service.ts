@@ -10,13 +10,16 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 
 import {
+    BindPrimaryConnectionResult,
     ConsumeTrialReviewCreditResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
+    ReleaseConnectionResult,
     SelfHostedLicensePayload,
     SubscriptionStatus,
     UserWithLicense,
     DebitCreditsResult,
+    WorkspaceConnectionLicenses,
 } from './interfaces/license.interface';
 
 // Ed25519 public key used to verify self-hosted license JWTs.
@@ -366,12 +369,48 @@ export class SelfHostedLicenseService implements ILicenseService {
 
     // Self-hosted seats are one instance-wide pool: there is no per
     // connection licence to bind or release.
-    async bindPrimaryConnection(): Promise<boolean> {
-        return true;
+    async bindPrimaryConnection(): Promise<BindPrimaryConnectionResult> {
+        return { ok: true, licensed: false };
     }
 
-    async releaseConnection(): Promise<boolean> {
-        return false;
+    async releaseConnection(): Promise<ReleaseConnectionResult> {
+        return 'not_held';
+    }
+
+    async getConnectionLicenses(): Promise<WorkspaceConnectionLicenses> {
+        return { primaryConnectionId: null, ownLicenceConnectionIds: [] };
+    }
+
+    /**
+     * Seats assigned before connections were recorded name none. While the
+     * organization had one connection they were all its seats, so they are
+     * recorded as its own before another connection could match them.
+     */
+    async attributeLegacySeats(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connection: { uuid: string; platform: string },
+    ): Promise<void> {
+        const assignedUsers = await this.getAssignedUsers(
+            organizationAndTeamData,
+        );
+        const legacy = assignedUsers.filter((entry) => !entry.connectionId);
+        if (!legacy.length) return;
+
+        const provider = connection.platform.toLowerCase();
+        for (const entry of legacy) {
+            entry.connectionId = connection.uuid;
+            entry.provider = entry.provider ?? provider;
+        }
+        await this.saveAssignedUsers(organizationAndTeamData, assignedUsers);
+        this.logger.log({
+            message: 'license_legacy_seats_attributed',
+            context: SelfHostedLicenseService.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                connectionId: connection.uuid,
+                seats: legacy.length,
+            },
+        });
     }
 
     // Prepaid credits are a cloud product: self-hosted has no Kodus-routed
@@ -448,22 +487,36 @@ export class SelfHostedLicenseService implements ILicenseService {
                 configKey: OrganizationParametersKey.LICENSE_ASSIGNED_USERS,
             });
 
-            const uniqueUsers = new Set<string>();
+            const identities = new Set<string>();
+            const legacyGitIds = new Set<string>();
             for (const param of allParams) {
                 const raw = param.configValue?.users;
                 if (Array.isArray(raw)) {
                     const entries: AssignedUserEntry[] = isLegacyFormat(raw)
-                        ? raw.map((id) => ({ gitId: id, status: 'active' as const }))
+                        ? raw.map((id) => ({
+                              gitId: id,
+                              status: 'active' as const,
+                          }))
                         : (raw as AssignedUserEntry[]);
                     for (const entry of entries) {
-                        if (entry.status === 'active') {
-                            uniqueUsers.add(identityOf(entry));
-                        }
+                        if (entry.status !== 'active') continue;
+                        if (entry.provider) identities.add(identityOf(entry));
+                        else legacyGitIds.add(entry.gitId);
                     }
                 }
             }
 
-            return uniqueUsers.size;
+            // A seat without a provider was counted by git id alone, so it
+            // still counts once with any seat of the same id.
+            const identifiedGitIds = new Set(
+                [...identities].map((identity) =>
+                    identity.slice(identity.indexOf('|') + 1),
+                ),
+            );
+            const unmatchedLegacy = [...legacyGitIds].filter(
+                (gitId) => !identifiedGitIds.has(gitId),
+            );
+            return identities.size + unmatchedLegacy.length;
         } catch {
             return 0;
         }

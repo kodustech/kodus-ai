@@ -24,6 +24,10 @@ describe('PruneLicenseSeatsCronProvider', () => {
     let teamService: jest.Mocked<ITeamService>;
     let autoRevokeUseCase: jest.Mocked<AutoRevokeRemovedLicenseSeatsUseCase>;
     let lockService: jest.Mocked<DistributedLockService>;
+    let connectionBilling: {
+        workspaceConnections: jest.Mock;
+        ensurePrimary: jest.Mock;
+    };
     let release: jest.Mock;
 
     beforeEach(() => {
@@ -41,11 +45,52 @@ describe('PruneLicenseSeatsCronProvider', () => {
             acquire: jest.fn().mockResolvedValue({ release }),
         } as any;
 
+        connectionBilling = {
+            workspaceConnections: jest.fn().mockResolvedValue([{ uuid: 'a' }]),
+            ensurePrimary: jest.fn().mockResolvedValue({ status: 'unbound' }),
+        };
+
         cron = new PruneLicenseSeatsCronProvider(
             teamService,
             autoRevokeUseCase,
             lockService,
+            connectionBilling as any,
         );
+    });
+
+    it('settles the billing primary of every workspace with several Git connections, before its seats', async () => {
+        teamService.findTeamsWithIntegrations.mockResolvedValue([
+            team('team-1', 'org-1'),
+            team('team-2', 'org-2'),
+        ] as any);
+        connectionBilling.workspaceConnections.mockImplementation(
+            async ({ teamId }) =>
+                teamId === 'team-2'
+                    ? [{ uuid: 'a' }, { uuid: 'b' }]
+                    : [{ uuid: 'a' }],
+        );
+
+        await cron.handleCron();
+
+        expect(connectionBilling.ensurePrimary).toHaveBeenCalledTimes(1);
+        expect(connectionBilling.ensurePrimary).toHaveBeenCalledWith({
+            organizationId: 'org-2',
+            teamId: 'team-2',
+        });
+        expect(autoRevokeUseCase.execute).toHaveBeenCalledTimes(2);
+    });
+
+    it('still sweeps the seats when settling the primary throws', async () => {
+        teamService.findTeamsWithIntegrations.mockResolvedValue([
+            team('team-1', 'org-1'),
+        ] as any);
+        connectionBilling.workspaceConnections.mockRejectedValue(
+            new Error('pg down'),
+        );
+
+        await cron.handleCron();
+
+        expect(autoRevokeUseCase.execute).toHaveBeenCalledTimes(1);
     });
 
     it('skips the sweep entirely when another instance holds the lock', async () => {

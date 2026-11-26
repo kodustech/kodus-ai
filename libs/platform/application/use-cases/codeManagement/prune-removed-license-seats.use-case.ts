@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
@@ -15,12 +15,7 @@ import { authorFiltersFor } from '@libs/organization/domain/organizationParamete
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
-import {
-    IIntegrationService,
-    INTEGRATION_SERVICE_TOKEN,
-} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
-import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
+import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
 
 export type PruneRemovedLicenseSeatsResult = {
     status: 'ok' | 'members_unavailable';
@@ -57,9 +52,7 @@ export class PruneRemovedLicenseSeatsUseCase {
         private readonly licenseService: ILicenseService,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
-        @Optional()
-        @Inject(INTEGRATION_SERVICE_TOKEN)
-        private readonly integrationService?: IIntegrationService,
+        private readonly connectionBilling: ConnectionBillingService,
     ) {}
 
     /**
@@ -71,17 +64,13 @@ export class PruneRemovedLicenseSeatsUseCase {
         params: PruneRemovedLicenseSeatsParams,
     ): Promise<PruneRemovedLicenseSeatsResult> {
         const { organizationAndTeamData } = params;
-        const connections =
-            organizationAndTeamData.integrationId || !this.integrationService
-                ? []
-                : ((await this.integrationService.find({
-                      organization: {
-                          uuid: organizationAndTeamData.organizationId,
-                      },
-                      team: { uuid: organizationAndTeamData.teamId },
-                      integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                      status: true,
-                  })) ?? []);
+        const workspace = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+        const connections = organizationAndTeamData.integrationId
+            ? []
+            : await this.connectionBilling.workspaceConnections(workspace);
 
         if (connections.length <= 1) {
             const {
@@ -96,15 +85,9 @@ export class PruneRemovedLicenseSeatsUseCase {
         // Billing keeps the workspace seats on one connection and, until it
         // knows which, answers every connection with them: pruning those
         // against one connection's members would strip the others' seats.
-        const primary = primaryConnectionOf(connections);
-        const bound = await this.licenseService.bindPrimaryConnection(
-            {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            },
-            primary.uuid,
-        );
-        if (!bound) {
+        // Settling it here also completes a hand-over a reset left undone.
+        const handover = await this.connectionBilling.ensurePrimary(workspace);
+        if (handover.status === 'failed') {
             this.logger.error({
                 message:
                     'Skipping license seat prune: billing could not confirm the workspace primary connection',
@@ -118,6 +101,12 @@ export class PruneRemovedLicenseSeatsUseCase {
                 failed: [],
             };
         }
+        // Shared seats sit on the workspace's own pool: the primary's, or
+        // the oldest connection's where nothing is bound (self-hosted).
+        const primaryConnectionId =
+            handover.status === 'bound'
+                ? handover.primaryConnectionId
+                : connections[0].uuid;
 
         const merged: PruneRemovedLicenseSeatsResult = {
             status: 'ok',
@@ -142,10 +131,9 @@ export class PruneRemovedLicenseSeatsUseCase {
         }
 
         if (merged.status === 'ok') {
-            // Shared seats sit on the primary's pool, the workspace's own.
             const shared = await this.pruneSharedSeats(
                 params,
-                primary.uuid,
+                primaryConnectionId,
                 pools,
             );
             merged.candidates.push(...shared.candidates);

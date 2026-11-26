@@ -1,14 +1,11 @@
-import {
-    ILicenseService,
-    LICENSE_SERVICE_TOKEN,
-} from '@libs/ee/license/interfaces/license.interface';
-import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
+import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
 import { createLogger } from '@libs/core/log/logger';
 import {
     BadRequestException,
     Inject,
     Injectable,
     Optional,
+    ServiceUnavailableException,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -57,12 +54,10 @@ export class DeleteIntegrationUseCase {
                 email: string;
             };
         },
+        private readonly connectionBilling: ConnectionBillingService,
         @Optional()
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService?: IParametersService,
-        @Optional()
-        @Inject(LICENSE_SERVICE_TOKEN)
-        private readonly licenseService?: ILicenseService,
     ) {}
 
     async execute(params: {
@@ -103,6 +98,23 @@ export class DeleteIntegrationUseCase {
             teamId: params.teamId,
             integrationId: integration.uuid,
         };
+        const workspace = {
+            organizationId: params.organizationId,
+            teamId: params.teamId,
+        };
+
+        // Billing frees the plan's slot first: a reset that went ahead
+        // without it would leave the workspace plan on a deleted connection.
+        if (
+            !(await this.connectionBilling.releaseBeforeRemoving(
+                workspace,
+                integration.uuid,
+            ))
+        ) {
+            throw new ServiceUnavailableException(
+                'Billing could not be reached to reset this connection. Try again in a moment.',
+            );
+        }
 
         const otherConnections = (
             (await this.integrationService.find({
@@ -217,10 +229,10 @@ export class DeleteIntegrationUseCase {
             integration.authIntegration.uuid,
         );
 
-        await this.handOverWorkspacePlan(
-            organizationAndTeamData,
-            remainingInWorkspace,
-        );
+        // Names the connection that keeps the plan when two or more remain.
+        // A billing blip here is completed by the next pass (another
+        // connection added, the daily seat sweep).
+        await this.connectionBilling.ensurePrimary(workspace);
 
         this.logger.log({
             message: 'connection_reset',
@@ -232,39 +244,6 @@ export class DeleteIntegrationUseCase {
                 actorUserId: this.request?.user?.uuid,
             },
         });
-    }
-
-    /**
-     * Billing keeps the workspace plan and seats on one connection. When that
-     * one leaves, the oldest remaining connection takes them. Billing being
-     * down never blocks a reset: the next connection added binds again.
-     */
-    private async handOverWorkspacePlan(
-        organizationAndTeamData: {
-            organizationId: string;
-            teamId: string;
-            integrationId: string;
-        },
-        remaining: Array<{ uuid: string; createdAt?: Date }>,
-    ): Promise<void> {
-        if (!this.licenseService) return;
-        const workspace = {
-            organizationId: organizationAndTeamData.organizationId,
-            teamId: organizationAndTeamData.teamId,
-        };
-
-        await this.licenseService.releaseConnection(
-            workspace,
-            organizationAndTeamData.integrationId,
-        );
-
-        const next = primaryConnectionOf(remaining);
-        if (next) {
-            await this.licenseService.bindPrimaryConnection(
-                workspace,
-                next.uuid,
-            );
-        }
     }
 
     /** Whether the workspace's centralized config repository is on this connection. */

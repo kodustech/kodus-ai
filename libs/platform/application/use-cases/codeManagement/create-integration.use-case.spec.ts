@@ -46,10 +46,24 @@ const build = (
         find: jest.fn().mockResolvedValue(opts.workspaceConnections ?? []),
         update: jest.fn().mockResolvedValue(undefined),
     };
-    const licenseService = {
-        bindPrimaryConnection: jest
+    const connectionBilling = {
+        workspaceConnections: jest.fn(async () =>
+            [...(opts.workspaceConnections ?? [])].sort(
+                (a, b) =>
+                    (a.createdAt?.getTime() ?? Infinity) -
+                    (b.createdAt?.getTime() ?? Infinity),
+            ),
+        ),
+        attributeLegacySeatsBeforeAdding: jest
             .fn()
-            .mockResolvedValue(opts.bindPrimary ?? true),
+            .mockResolvedValue(undefined),
+        ensurePrimary: jest
+            .fn()
+            .mockResolvedValue(
+                opts.bindPrimary === false
+                    ? { status: 'failed' }
+                    : { status: 'bound', primaryConnectionId: 'gh-a' },
+            ),
     };
     const ignoreBots = { execute: jest.fn().mockResolvedValue(undefined) };
     const useCase = new CreateIntegrationUseCase(
@@ -66,14 +80,14 @@ const build = (
         ignoreBots as any,
         { gitIntegrationChanged: jest.fn() } as any,
         integrationService as any,
-        licenseService as any,
+        connectionBilling as any,
         parametersService as any,
     );
     return {
         useCase,
         codeManagementService,
         integrationService,
-        licenseService,
+        connectionBilling,
         ignoreBots,
         parametersService,
     };
@@ -169,13 +183,15 @@ describe('CreateIntegrationUseCase — connections', () => {
     });
 
     describe('billing primary connection', () => {
-        it('binds the workspace connection that keeps the plan before another is added', async () => {
-            const { useCase, licenseService, codeManagementService } = build({
-                workspaceConnections: [
-                    { uuid: 'gl-b', createdAt: new Date('2026-03-01') },
-                    { uuid: 'gh-a', createdAt: new Date('2025-01-01') },
-                ],
-            });
+        it('settles which connection keeps the plan before another is added', async () => {
+            const { useCase, connectionBilling, codeManagementService } = build(
+                {
+                    workspaceConnections: [
+                        { uuid: 'gl-b', createdAt: new Date('2026-03-01') },
+                        { uuid: 'gh-a', createdAt: new Date('2025-01-01') },
+                    ],
+                },
+            );
 
             await useCase.execute({
                 integrationType: 'forgejo',
@@ -183,13 +199,12 @@ describe('CreateIntegrationUseCase — connections', () => {
                 organizationAndTeamData: { teamId: TEAM },
             });
 
-            expect(licenseService.bindPrimaryConnection).toHaveBeenCalledWith(
+            expect(connectionBilling.ensurePrimary).toHaveBeenCalledWith(
                 { organizationId: ORG, teamId: TEAM },
-                'gh-a',
+                { beforeAddingConnection: true },
             );
             expect(
-                licenseService.bindPrimaryConnection.mock
-                    .invocationCallOrder[0],
+                connectionBilling.ensurePrimary.mock.invocationCallOrder[0],
             ).toBeLessThan(
                 codeManagementService.createAuthIntegration.mock
                     .invocationCallOrder[0],
@@ -233,10 +248,44 @@ describe('CreateIntegrationUseCase — connections', () => {
             });
 
             expect(
-                first.licenseService.bindPrimaryConnection,
+                first.connectionBilling.ensurePrimary,
             ).not.toHaveBeenCalled();
             expect(
-                reconnect.licenseService.bindPrimaryConnection,
+                reconnect.connectionBilling.ensurePrimary,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('self-hosted seats from before connections', () => {
+        it('are attributed before any new connection is created, never on a reconnect', async () => {
+            const added = build({ workspaceConnections: [{ uuid: 'gh-a' }] });
+            await added.useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+            expect(
+                added.connectionBilling.attributeLegacySeatsBeforeAdding,
+            ).toHaveBeenCalledWith({ organizationId: ORG, teamId: TEAM });
+            expect(
+                added.connectionBilling.attributeLegacySeatsBeforeAdding.mock
+                    .invocationCallOrder[0],
+            ).toBeLessThan(
+                added.codeManagementService.createAuthIntegration.mock
+                    .invocationCallOrder[0],
+            );
+
+            const reconnect = build({
+                existingConnection: { uuid: 'gh-a' },
+                workspaceConnections: [{ uuid: 'gh-a' }],
+            });
+            await reconnect.useCase.execute({
+                integrationType: 'github',
+                connectionId: 'gh-a',
+                organizationAndTeamData: { teamId: TEAM },
+            });
+            expect(
+                reconnect.connectionBilling.attributeLegacySeatsBeforeAdding,
             ).not.toHaveBeenCalled();
         });
     });

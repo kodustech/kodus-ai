@@ -19,6 +19,8 @@ const build = (opts: {
     shared?: string[];
     members: Record<string, string[] | 'unavailable'>;
     bound?: boolean;
+    /** The connection billing keeps the workspace plan on, when not the oldest. */
+    primary?: string;
     autoAssign?: Record<string, unknown>;
 }) => {
     const licenseService = {
@@ -31,7 +33,6 @@ const build = (opts: {
                 sharedAcrossConnections: true,
             })),
         ]),
-        bindPrimaryConnection: jest.fn(async () => opts.bound ?? true),
         unassignLicenses: jest.fn(async (_otd: any, gitIds: string[]) => ({
             revoked: gitIds,
             failed: [],
@@ -53,12 +54,25 @@ const build = (opts: {
             otd.integrationId === 'gl-b' ? 'gitlab' : 'github',
         ),
     };
-    const integrationService = {
-        find: jest.fn(async () =>
-            opts.connections.map((uuid) => ({
+    const oldestFirst = [...opts.connections].sort(
+        (a, b) =>
+            new Date(opts.createdAt?.[a] ?? 0).getTime() -
+            new Date(opts.createdAt?.[b] ?? 0).getTime(),
+    );
+    const connectionBilling = {
+        workspaceConnections: jest.fn(async () =>
+            oldestFirst.map((uuid) => ({
                 uuid,
                 createdAt: opts.createdAt?.[uuid],
             })),
+        ),
+        ensurePrimary: jest.fn(async () =>
+            opts.bound === false
+                ? { status: 'failed' }
+                : {
+                      status: 'bound',
+                      primaryConnectionId: opts.primary ?? oldestFirst[0],
+                  },
         ),
     };
     const useCase = new PruneRemovedLicenseSeatsUseCase(
@@ -70,9 +84,9 @@ const build = (opts: {
                 opts.autoAssign ? { configValue: opts.autoAssign } : undefined,
             ),
         } as any,
-        integrationService as any,
+        connectionBilling as any,
     );
-    return { useCase, licenseService, memberList };
+    return { useCase, licenseService, memberList, connectionBilling };
 };
 
 describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
@@ -173,6 +187,25 @@ describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
             { ...workspace, integrationId: 'gh-a' },
             ['5'],
             'github',
+        );
+    });
+
+    it('revokes shared seats through the connection billing keeps the workspace plan on', async () => {
+        const { useCase, licenseService } = build({
+            connections: ['gh-a', 'gl-b'],
+            createdAt: { 'gh-a': '2024-01-01', 'gl-b': '2026-01-01' },
+            primary: 'gl-b',
+            seats: { 'gh-a': [], 'gl-b': [] },
+            shared: ['5'],
+            members: { 'gh-a': [], 'gl-b': [] },
+        });
+
+        await useCase.execute({ organizationAndTeamData: workspace });
+
+        expect(licenseService.unassignLicenses).toHaveBeenCalledWith(
+            { ...workspace, integrationId: 'gl-b' },
+            ['5'],
+            'gitlab',
         );
     });
 

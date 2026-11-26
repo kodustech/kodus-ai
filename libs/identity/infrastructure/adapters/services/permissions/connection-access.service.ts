@@ -198,6 +198,20 @@ export class ConnectionAccessService {
         return rows.length > 0;
     }
 
+    async connectionInOrganization(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<boolean> {
+        const rows = (await this.repository.manager.query(
+            `SELECT 1 FROM "integrations" i
+              WHERE i."uuid" = $1
+                AND i."organization_id" = $2
+                AND i."integrationCategory" = 'CODE_MANAGEMENT'`,
+            [integrationId, organizationId],
+        )) as unknown[];
+        return rows.length > 0;
+    }
+
     /** The given users that belong to the organization. */
     async membersOfOrganization(
         organizationId: string,

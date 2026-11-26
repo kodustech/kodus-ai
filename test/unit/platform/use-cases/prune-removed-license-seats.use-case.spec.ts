@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
+import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
 import { PruneRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/prune-removed-license-seats.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
@@ -82,6 +83,12 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
                 {
                     provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
                     useValue: mockOrganizationParametersService,
+                },
+                {
+                    provide: ConnectionBillingService,
+                    useValue: {
+                        workspaceConnections: jest.fn().mockResolvedValue([]),
+                    },
                 },
             ],
         }).compile();

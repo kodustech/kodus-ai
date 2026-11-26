@@ -4,6 +4,7 @@ import {
     Controller,
     Get,
     Inject,
+    NotFoundException,
     Post,
     Query,
     UseGuards,
@@ -29,6 +30,8 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { SelfHostedLicenseService } from '@libs/ee/license/self-hosted-license.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import { assertConnectionReadable } from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 import { PruneRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/prune-removed-license-seats.use-case';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TrialExtensionNotifierService } from '../services/trial-extension-notifier.service';
@@ -46,6 +49,7 @@ export class LicenseController {
         private readonly trialExtensionNotifierService: TrialExtensionNotifierService,
         private readonly pruneRemovedLicenseSeatsUseCase: PruneRemovedLicenseSeatsUseCase,
         private readonly telemetry: TelemetryService,
+        private readonly connectionAccess: ConnectionAccessService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -209,6 +213,11 @@ export class LicenseController {
             );
         }
 
+        await this.assertSeatConnection(
+            organizationId,
+            undefined,
+            connectionId,
+        );
         return this.licenseService.getAllUsersEverWithLicense({
             organizationId,
             ...(connectionId ? { integrationId: connectionId } : {}),
@@ -250,6 +259,11 @@ export class LicenseController {
             );
         }
 
+        await this.assertSeatConnection(
+            organizationId,
+            body.teamId,
+            body.connectionId,
+        );
         const orgData = {
             organizationId,
             teamId: body.teamId,
@@ -309,7 +323,7 @@ export class LicenseController {
         @Query('connectionId') connectionId?: string,
     ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
-            organizationAndTeamData: this.resolveOrganizationAndTeamData(
+            organizationAndTeamData: await this.resolveOrganizationAndTeamData(
                 teamId,
                 connectionId,
             ),
@@ -335,7 +349,7 @@ export class LicenseController {
         body: { teamId?: string; connectionId?: string; gitIds?: string[] },
     ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
-            organizationAndTeamData: this.resolveOrganizationAndTeamData(
+            organizationAndTeamData: await this.resolveOrganizationAndTeamData(
                 body?.teamId,
                 body?.connectionId,
             ),
@@ -371,7 +385,7 @@ export class LicenseController {
         });
     }
 
-    private resolveOrganizationAndTeamData(
+    private async resolveOrganizationAndTeamData(
         teamId?: string,
         connectionId?: string,
     ) {
@@ -383,10 +397,40 @@ export class LicenseController {
             );
         }
 
+        await this.assertSeatConnection(organizationId, teamId, connectionId);
         return {
             organizationId,
             teamId,
             ...(connectionId ? { integrationId: connectionId } : {}),
         };
+    }
+
+    /**
+     * A seat call may name only a connection of the caller's workspace (or
+     * organization, when no workspace is given) that the caller is granted.
+     */
+    private async assertSeatConnection(
+        organizationId: string,
+        teamId: string | undefined,
+        connectionId: string | undefined,
+    ): Promise<void> {
+        if (!connectionId) return;
+        assertConnectionReadable(
+            await this.connectionAccess.restrictionFor(this.request?.user),
+            connectionId,
+        );
+        const known = teamId
+            ? await this.connectionAccess.connectionInWorkspace(
+                  organizationId,
+                  teamId,
+                  connectionId,
+              )
+            : await this.connectionAccess.connectionInOrganization(
+                  organizationId,
+                  connectionId,
+              );
+        if (!known) {
+            throw new NotFoundException('Git connection not found.');
+        }
     }
 }

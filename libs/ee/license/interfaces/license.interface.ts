@@ -134,6 +134,19 @@ export type ConsumeTrialReviewCreditResult = {
 
 export const LICENSE_SERVICE_TOKEN = Symbol.for('LicenseService');
 
+/** `ok: false`: billing could not be asked. `licensed: false`: billing has no licence for the workspace, so nothing binds. */
+export type BindPrimaryConnectionResult =
+    | { ok: false }
+    | { ok: true; licensed: false }
+    | { ok: true; licensed: true; primaryConnectionId: string | null };
+
+export type ReleaseConnectionResult = 'released' | 'not_held' | 'failed';
+
+export type WorkspaceConnectionLicenses = {
+    primaryConnectionId: string | null;
+    ownLicenceConnectionIds: string[];
+};
+
 export interface ILicenseService {
     /**
      * Validate organization license.
@@ -230,20 +243,36 @@ export interface ILicenseService {
     ): Promise<boolean>;
 
     /**
-     * Name the workspace connection that keeps the workspace plan and seats.
-     * False when billing could not be asked: the caller must not add another
-     * connection then. Self-hosted has nothing to bind and answers true.
+     * Ask billing to name the workspace connection that keeps the workspace
+     * plan and seats. Billing names it only while none is named and the
+     * connection has no licence of its own; the answer carries the primary
+     * it holds afterwards. Never throws.
      */
     bindPrimaryConnection(
         organizationAndTeamData: OrganizationAndTeamData,
         connectionId: string,
-    ): Promise<boolean>;
+    ): Promise<BindPrimaryConnectionResult>;
 
-    /** A connection was removed from the workspace. Never throws. */
+    /** A connection left the workspace; frees the primary slot if it held it. Never throws. */
     releaseConnection(
         organizationAndTeamData: OrganizationAndTeamData,
         connectionId: string,
-    ): Promise<boolean>;
+    ): Promise<ReleaseConnectionResult>;
+
+    /**
+     * Records seats assigned before connections existed as the given
+     * connection's, the organization's only one, before another is added.
+     * Cloud seats live in billing, so only self-hosted has any.
+     */
+    attributeLegacySeats(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connection: { uuid: string; platform: string },
+    ): Promise<void>;
+
+    /** The workspace's primary connection and the connections billed on their own licence; null when billing could not be asked. */
+    getConnectionLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<WorkspaceConnectionLicenses | null>;
 
     // ── Prepaid credits ("Kodus as the provider") ────────────────────────
 
