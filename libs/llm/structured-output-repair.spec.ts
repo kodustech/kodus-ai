@@ -1830,6 +1830,42 @@ describe('repairAndValidate: review on #2700', () => {
         ).resolves.toEqual(JSON.parse(answer));
     });
 
+    it('last chance: a fenced answer that fails the schema is no quote, so the example before it is not shipped', async () => {
+        // Round 2: the reply restates the prompt's empty example, then gives
+        // its violation in a ```json fence with a string line.
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    reasoning: { type: 'string' },
+                    suggestions: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                ruleId: { type: 'string' },
+                                line: { type: 'integer' },
+                            },
+                            required: ['ruleId', 'line'],
+                        },
+                    },
+                },
+                required: ['reasoning', 'suggestions'],
+            } as any),
+        );
+        const example =
+            '{"reasoning":"Checked all rules, no violations found","suggestions":[]}';
+        const text = `If no violations: ${example}\n\n\`\`\`json\n{"reasoning":"found","suggestions":[{"ruleId":"r1","line":"42"}]}\n\`\`\``;
+        await expect(
+            repairAndValidate(strict, text, { lastChance: true }),
+        ).resolves.toBeUndefined();
+        // A fence of code that is no JSON still lets the answer before it stand.
+        const quoted = `${example}\n\`\`\`ts\nif (a) { b() }\n\`\`\``;
+        await expect(
+            repairAndValidate(strict, quoted, { lastChance: true }),
+        ).resolves.toEqual(JSON.parse(example));
+    });
+
     it('prose quoting many unclosed diff lines before a long reply still finds the answer', async () => {
         const quoted = Array.from(
             { length: 20 },

@@ -258,9 +258,10 @@ fi
 llm_from_legacy=0
 if [ -n "$existing_llm_provider" ]; then
     default_llm_provider="$existing_llm_provider"
-elif [ "$existing_llm_model" = "auto" ] && [ -z "$existing_openai_base_url" ]; then
-    # `auto` ran no env model (the key next to it was only the embeddings
-    # key), so a re-run keeps it instead of guessing a provider from that key.
+elif [ "$existing_llm_model" = "auto" ]; then
+    # `auto` ran no env model: the key next to it was only the embeddings key,
+    # and no base URL is read under it (the old setup stored one anyway, the
+    # Moonshot URL on Enter). A re-run keeps it instead of guessing a provider.
     default_llm_provider="auto"
 elif [ -n "$existing_openai_key$existing_openai_base_url" ] \
     || { [ -n "$existing_llm_model" ] && [ "$existing_llm_model" != "auto" ]; }; then

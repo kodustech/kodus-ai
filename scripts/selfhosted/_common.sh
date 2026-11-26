@@ -50,8 +50,25 @@ __load_value_from_file() {
     # shellcheck disable=SC1090
     set -a; . "$file"; set +a
 }
+# The LLM vars are read from the files alone (restored below): a caller that
+# exported the config first (scripts/e2e/run.sh's load_config_file, direnv's
+# .envrc) holds the config's own values, which say nothing about what it wants.
+unset API_OPEN_AI_API_KEY API_OPENAI_FORCE_BASE_URL API_LLM_PROVIDER \
+      API_LLM_API_KEY API_LLM_BASE_URL
 __load_value_from_file "$GLOBAL_CONFIG"
 __load_value_from_file "$REPO_ROOT/scripts/selfhosted/.env"
+# A caller value equal to the config's is the config's: not caller-set for the
+# legacy-vs-generic rule below. Restoring it changes nothing either way.
+__from_config() {
+    local var="$1" snap_var="$2"
+    [ -n "${!var+x}" ] && [ "${!snap_var}" = "__SET__${!var}" ] && eval "$snap_var="
+    return 0
+}
+__from_config API_OPEN_AI_API_KEY       __snap_API_OPEN_AI_API_KEY
+__from_config API_OPENAI_FORCE_BASE_URL __snap_API_OPENAI_FORCE_BASE_URL
+__from_config API_LLM_PROVIDER          __snap_API_LLM_PROVIDER
+__from_config API_LLM_API_KEY           __snap_API_LLM_API_KEY
+__from_config API_LLM_BASE_URL          __snap_API_LLM_BASE_URL
 
 # Restore caller's pre-existing values on top (caller wins).
 __restore_if_set() {
@@ -94,11 +111,11 @@ __caller_legacy_wins() {
     unset "$generic"
 }
 # The key alone is ambiguous: API_OPEN_AI_API_KEY is also the embeddings key.
-# It stands for the LLM when the caller says so: beside the legacy base URL, or
-# beside a provider it declared itself. Otherwise only in a config that names no
-# provider (a pre-API_LLM_* one); the configured LLM key stays.
+# It stands for the LLM when the caller says so: beside an endpoint (either
+# name) or a provider it declared itself. Otherwise only in a config that names
+# no provider (a pre-API_LLM_* one); the configured LLM key stays.
 __caller_key_won=
-case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_PROVIDER" in
+case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_BASE_URL$__snap_API_LLM_PROVIDER" in
     *__SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" && __caller_key_won=1 ;;
     *) [ -z "${API_LLM_PROVIDER:-}" ] && __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" && __caller_key_won=1 ;;
 esac
@@ -116,7 +133,7 @@ unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \
       __snap_KODUS_INSTALLER_PATH __snap_TEST_VM_PROVIDER \
       __snap_IMAGE_TAG __snap_DO_REGION __snap_DO_SIZE __snap_DO_IMAGE \
       __snap_HCLOUD_LOCATION __snap_HCLOUD_SERVER_TYPE __snap_HCLOUD_IMAGE
-unset -f __load_value_from_file __restore_if_set __caller_legacy_wins
+unset -f __load_value_from_file __restore_if_set __caller_legacy_wins __from_config
 
 # Resolve 1Password CLI references — any var whose value starts with `op://`
 # is replaced with the value of that 1Password item field, fetched via the

@@ -509,6 +509,18 @@ const UNREACHABLE_CODES = new Set([
     'ENETUNREACH',
 ]);
 
+/** The AI SDK's own wording for a fetch that never got an answer, alone
+ *  (`maxRetries: 0`) or as the last attempt of its retries:
+ *  "Failed after 4 attempts. Last error: AI_APICallError: Cannot connect to
+ *  API: getaddrinfo ENOTFOUND api.x.cm". Read only on errors the SDK named. */
+const SDK_CONNECT_FAILURE =
+    /^(?:failed after \d+ attempts\. last error: (?:ai_apicallerror: )?)?cannot connect to api\b/i;
+
+/** "<CODE> <host or address[:port]>" in a socket message; the host stops at
+ *  the first character a hostname or address cannot hold. */
+const UNREACHABLE_IN_TEXT =
+    /\b(ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH)\s+([A-Za-z0-9.:[\]-]+)/;
+
 /** The errors an error is made of: itself, its `cause`, the AI SDK's
  *  `RetryError` attempts, an `AggregateError`'s members (dual-stack connect). */
 function errorTree(
@@ -552,17 +564,24 @@ function connectFailureOf(err: unknown): string | undefined {
     const coded = tree.findLast((e) =>
         UNREACHABLE_CODES.has(String((e as { code?: unknown }).code ?? '')),
     ) as { code?: string; message?: string } | undefined;
-    const sdkConnect = tree.some(
-        (e) =>
-            (e as { name?: string }).name === 'AI_APICallError' &&
-            /^cannot connect to api\b/i.test(
-                String((e as { message?: string }).message ?? ''),
-            ),
-    );
+    const sdkConnect = tree.find((e) => {
+        const { name, message } = e as { name?: string; message?: string };
+        return (
+            (name === 'AI_APICallError' || name === 'AI_RetryError') &&
+            SDK_CONNECT_FAILURE.test(String(message ?? ''))
+        );
+    }) as { message?: string } | undefined;
     if (!coded && !sdkConnect) return undefined;
     // Published in a public comment: only the code and the host the org
     // configured, never a raw message (it can carry a URL with a key in it).
-    if (!coded) return 'the connection failed';
+    if (!coded) {
+        // The agent runner keeps only name + message: the SDK put the socket's
+        // own message after its prefix, so the code and host are read there.
+        const named = UNREACHABLE_IN_TEXT.exec(String(sdkConnect?.message));
+        return named
+            ? `${named[1]} ${named[2]}`.slice(0, 200)
+            : 'the connection failed';
+    }
     const { hostname, address, port } = coded as {
         hostname?: unknown;
         address?: unknown;

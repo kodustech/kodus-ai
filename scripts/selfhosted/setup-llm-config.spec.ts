@@ -285,6 +285,37 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
         expect(describeEnvLLMConfig(config)).toEqual(before);
     });
 
+    it.each([
+        // The old setup never wrote it empty: Enter stored the Moonshot URL.
+        'https://api.moonshot.ai/v1',
+        // Its hint for native OpenAI: this URL with model `auto`.
+        'https://api.openai.com/v1',
+    ])(
+        'a re-run over an `auto` config the old setup wrote (base URL %s) keeps auto',
+        (baseURL) => {
+            // Review, PR #2700 round 2: `auto` reads no base URL, so whatever
+            // the old one holds, nothing ran on the env model.
+            const box = sandbox();
+            writeConfig(box, [
+                `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+                'API_OPEN_AI_API_KEY=sk-proj-fake-openai',
+                `API_OPENAI_FORCE_BASE_URL=${baseURL}`,
+                'API_LLM_PROVIDER_MODEL=auto',
+                `KODUS_INSTALLER_PATH=${INSTALLER}`,
+            ]);
+
+            const config = runSetup(box, ['', '', '', '', '', '', '']);
+
+            expect(config.API_LLM_PROVIDER_MODEL).toBe('auto');
+            expect(config.API_LLM_PROVIDER ?? '').toBe('');
+            expect(config.API_LLM_API_KEY ?? '').toBe('');
+            expect(config.API_OPEN_AI_API_KEY).toBe('sk-proj-fake-openai');
+            expect(describeEnvLLMConfig(config)).toEqual({
+                configured: false,
+            });
+        },
+    );
+
     it('a first setup on all defaults still lands on the team default upstream', () => {
         const box = sandbox();
 
@@ -573,6 +604,91 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         expect(declared.kind === 'declared' && declared.config).toMatchObject({
             apiKey: 'fw-fake-caller',
             baseURL: 'https://api.fireworks.ai/inference/v1',
+        });
+    });
+
+    describe('a caller that exported the whole config first (scripts/e2e/run.sh, direnv)', () => {
+        // Review, PR #2700 round 2: run.sh's load_config_file exports every
+        // config line, then the trio; direnv's .envrc exports the config. The
+        // config's own values reached the snapshot as if the caller set them.
+        const configs: Record<string, string[]> = {
+            moonshot: [
+                'API_LLM_PROVIDER=openai_compatible',
+                'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+                'API_LLM_API_KEY=sk-fake-moonshot',
+                'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+            ],
+            gemini: [
+                'API_LLM_PROVIDER=google_gemini',
+                'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+                'API_LLM_API_KEY=AIza-fake-studio-key',
+            ],
+        };
+        const exported = (lines: string[]) =>
+            parseEnvLines(
+                [...lines, 'API_OPEN_AI_API_KEY=sk-proj-embed'].join('\n'),
+            );
+
+        it.each(Object.keys(configs))(
+            '%s config: run.sh trio wins, key and endpoint together',
+            (name) => {
+                const box = sandbox();
+                writeConfig(box, [
+                    ...configs[name],
+                    'API_OPEN_AI_API_KEY=sk-proj-embed',
+                ]);
+                const vmEnv = vmLlmEnv(box, {
+                    ...exported(configs[name]),
+                    // scripts/e2e/run.sh, the trio
+                    API_OPEN_AI_API_KEY: 'fw-fake-e2e',
+                    API_LLM_PROVIDER: 'openai_compatible',
+                    API_OPENAI_FORCE_BASE_URL:
+                        'https://api.fireworks.ai/inference/v1',
+                    API_LLM_PROVIDER_MODEL:
+                        'accounts/fireworks/models/deepseek-v4p1-flash',
+                });
+                const declared = resolveDeclaredEnvProvider(vmEnv);
+                expect(declared.kind).toBe('declared');
+                expect(
+                    declared.kind === 'declared' && declared.config,
+                ).toMatchObject({
+                    apiKey: 'fw-fake-e2e',
+                    baseURL: 'https://api.fireworks.ai/inference/v1',
+                });
+            },
+        );
+
+        it.each(Object.keys(configs))(
+            '%s config under direnv, nothing overridden: the config runs as written',
+            (name) => {
+                const box = sandbox();
+                writeConfig(box, [
+                    ...configs[name],
+                    'API_OPEN_AI_API_KEY=sk-proj-embed',
+                ]);
+                expect(vmLlmEnv(box, exported(configs[name]))).toEqual(
+                    vmLlmEnv(box),
+                );
+            },
+        );
+
+        it('under direnv, overriding only the embeddings key keeps the configured LLM key', () => {
+            const box = sandbox();
+            writeConfig(box, [
+                ...configs.moonshot,
+                'API_OPEN_AI_API_KEY=sk-proj-embed',
+            ]);
+            const vmEnv = vmLlmEnv(box, {
+                ...exported(configs.moonshot),
+                API_OPEN_AI_API_KEY: 'sk-proj-other-embed',
+            });
+            const declared = resolveDeclaredEnvProvider(vmEnv);
+            expect(
+                declared.kind === 'declared' && declared.config,
+            ).toMatchObject({
+                apiKey: 'sk-fake-moonshot',
+                baseURL: 'https://api.moonshot.ai/v1',
+            });
         });
     });
 

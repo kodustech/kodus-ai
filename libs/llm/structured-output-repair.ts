@@ -870,9 +870,12 @@ export async function repairAndValidate<T = unknown>(
     const validate =
         typeof schema.validate === 'function' ? schema.validate : null;
     const candidate = extractJsonFromText(rawText);
+    // The primary parsed as JSON and failed the schema: an answer attempt.
+    let primaryParsed = false;
     if (candidate != null) {
         const value = parseLenient(candidate);
         if (value !== undefined) {
+            primaryParsed = true;
             if (!validate) {
                 return value as T;
             }
@@ -903,7 +906,10 @@ export async function repairAndValidate<T = unknown>(
         validate,
         primarySpanEnd(stripped),
         candidate == null || fenced,
-        opts.lastChance === true,
+        // Only a quote of code lets the object before it stand alone. A fence
+        // that parses is the model's own answer, invalid: taking the object
+        // before it would ship the prompt's example instead (review on #2700).
+        opts.lastChance === true && !(fenced && primaryParsed),
     );
 }
 
