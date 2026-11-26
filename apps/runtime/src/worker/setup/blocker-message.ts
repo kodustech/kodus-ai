@@ -1,5 +1,8 @@
-/** How much of a blocker's message is kept. */
-export const BLOCKER_MESSAGE_MAX = 500;
+/**
+ * How much of a blocker's message is kept: the cell's reason is at most 4096 bytes (CLAIM_FAILED_REASON_MAX), and a
+ * failed build's step and its last lines are most of it, so 2000 characters keep what a developer needs to fix it.
+ */
+export const BLOCKER_MESSAGE_MAX = 2_000;
 
 /**
  * A blocker's message: its start (the step and what ran) and its end (where a

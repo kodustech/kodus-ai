@@ -1,4 +1,4 @@
-import { ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
 
 import type { EnvSessionOpen, EnvSessionOwner, EnvSessionView, EnvStepView } from '@libs/runtime/contracts/env-session';
 import { ownsEnvSession } from '@libs/runtime/contracts/env-session';
@@ -103,7 +103,7 @@ class FakeEnvSessionPort implements RuntimeEnvSessionPort {
 }
 
 function harness(
-    opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[]; membership?: InMemoryEnvironmentRepositories; heads?: Record<string, string> } = {},
+    opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[]; membership?: InMemoryEnvironmentRepositories; heads?: Record<string, string>; repoFiles?: Record<string, string> | 'unreadable' } = {},
 ) {
     const environments = opts.environments ?? [
         env(),
@@ -114,6 +114,7 @@ function harness(
         get: async (org: string, id: string) => environments.find((e) => e.organizationId === org && e.environmentId === id) ?? null,
         findByRepository: async (org: string, repo: string) => environments.find((e) => e.organizationId === org && e.repositoryId === repo) ?? null,
         listByOrganization: async (org: string) => environments.filter((e) => e.organizationId === org),
+        setSubmittedRecipe: async () => undefined,
     };
     const setupReads: Array<{ organizationId: string; environmentId: string }> = [];
     const views = {
@@ -131,7 +132,17 @@ function harness(
     const service = new RuntimeEnvToolsService(
         products,
         views,
-        { getDefaultBranchHead: async (r: { repositoryId: string }) => ({ status: 'ok', branch: 'main', sha: opts.heads?.[r.repositoryId] ?? SHA }) },
+        {
+            getDefaultBranchHead: async (r: { repositoryId: string }) => ({ status: 'ok', branch: 'main', sha: opts.heads?.[r.repositoryId] ?? SHA }),
+            readFileAtCommit: async (r: { path: string }) => {
+                if (opts.repoFiles === 'unreadable') throw new Error('git is down');
+                return opts.repoFiles?.[r.path] ?? null;
+            },
+            listFilesAtCommit: async () => {
+                if (opts.repoFiles === 'unreadable') throw new Error('git is down');
+                return Object.keys(opts.repoFiles ?? {});
+            },
+        } as any,
         {
             issue: async (r: { repositoryId: string }) => {
                 const token = r.repositoryId === 'repo-a' ? 'ghs_plain' : `ghs_${r.repositoryId}`;
@@ -465,6 +476,106 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         });
         expect(h.setupRequests[0].u).toEqual({ uuid: 'team-key:key-a' });
         expect(h.audit.rows.map((r) => r.kind)).toEqual(['env_fix', 'env_fix']);
+    });
+
+    describe('env_recipe_check reads the repository at its default-branch head', () => {
+        const RECIPE = 'version: 1\nservices:\n  compose:\n    files: [.kodus/compose.yaml]\n    public: app\n  expose:\n    - { service: app, port: 3000, kind: http }\n';
+        const dockerfile = { path: '.kodus/Dockerfile', content: 'FROM node:22-bookworm\nWORKDIR /app\nCOPY . .\nRUN npm ci\nCMD ["npm", "start"]\n' };
+        const compose = (context: string) => ({
+            path: '.kodus/compose.yaml',
+            content: `services:\n  app:\n    build:\n      context: ${context}\n      dockerfile: .kodus/Dockerfile\n    expose: ["3000"]\n`,
+        });
+
+        it('refuses a compose build context outside the repository root, which the boot refuses, before any setup', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}' } });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('..')] });
+            expect(check.ok).toBe(false);
+            expect(check.errors.join('\n')).toMatch(/build\.context: must be a directory of the repository, relative to its root/);
+            expect(check.readAt).toBe(SHA);
+        });
+
+        it('refuses a recipe that names a compose file the repository does not have at that commit', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}' } });
+            const recipe = RECIPE.replace('.kodus/compose.yaml', 'docker-compose.yml');
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe });
+            expect(check.ok).toBe(false);
+            expect(check.errors).toContain('services.compose.files: docker-compose.yml is not in the repository at this commit');
+        });
+
+        it('passes a recipe whose files the repository and the checks accept, saying which commit it read', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}', 'src/index.js': '' } });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });
+            expect(check).toMatchObject({ ok: true, errors: [], readAt: SHA });
+        });
+
+        it('warns, without refusing, of a slow Node monorepo install: advice the boot does not refuse', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{"workspaces":["apps/*"]}', 'package-lock.json': '{}', 'apps/a/package.json': '{}' } });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });
+            expect(check.ok).toBe(true);
+            expect(check.errors).toEqual([]);
+            expect(check.warnings.length).toBeGreaterThan(0);
+        });
+
+        it('is no verdict when the repository cannot be read: it passes what it can check and says it skipped the rest', async () => {
+            const h = harness({ repoFiles: 'unreadable' });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });
+            expect(check.ok).toBe(true);
+            expect(check.readAt).toBeUndefined();
+            expect(check.warnings.join(' ')).toMatch(/skipped/);
+        });
+
+        it('keeps submit as it was: a recipe the repository checks refuse is still sent when it parses', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}' } });
+            await expect(h.service.submitRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('..')] })).resolves.toMatchObject({ setupRequested: true });
+        });
+    });
+
+    it('a key that reaches several environments is told which, as a message and as data the CLI can choose from', async () => {
+        const h = harness({ environments: [env(), env({ environmentId: 'env-c', repositoryId: 'repo-c', repositoryName: 'acme/billing' })] });
+        const key = { ...KEY, repositoryIds: ['repo-a', 'repo-c'] };
+        const refused = await h.service.status(key, {}).catch((e: unknown) => e);
+        expect(refused).toBeInstanceOf(BadRequestException);
+        expect((refused as BadRequestException).getResponse()).toMatchObject({
+            code: 'environment_required',
+            message: 'Name the environment: env-a (acme/shop), env-c (acme/billing)',
+            environments: [
+                { environmentId: 'env-a', repositoryName: 'acme/shop' },
+                { environmentId: 'env-c', repositoryName: 'acme/billing' },
+            ],
+        });
+    });
+
+    it('env_recipe_guide tells the developer agent what Kody is told and what only the sandbox shows, and needs env:exec or env:fix', async () => {
+        const h = harness();
+        const { guide } = await h.service.recipeGuide(KEY);
+        // The rules Kody's author gets, word for word (one source).
+        expect(guide).toContain('The build reaches package registries and the read-only hosts');
+        expect(guide).toContain('COPY --parents');
+        // What a repository does not show.
+        expect(guide).toContain('relative to the repository root');
+        expect(guide).toContain('ARG npm_config_registry'.replace('ARG ', ''));
+        expect(guide).toContain('FIREBASE_EMULATORS_MIRROR');
+        expect(guide).toContain('fetch it when the service starts instead');
+        // Kody's own prompt mechanics stay out.
+        expect(guide).not.toContain('submit_recipe');
+        expect(guide).not.toContain('list_files');
+        expect(guide).not.toMatch(/in notes|in the Facts/);
+        await expect(h.service.recipeGuide({ ...KEY, capabilities: ['runs:read'] })).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(h.service.recipeGuide({ ...KEY, capabilities: ['env:exec'] })).resolves.toHaveProperty('guide');
+    });
+
+    it('env_blockers names the failed build step and carries its output, where the Runtime page keeps one line', async () => {
+        const lines = ['step [build 3/5] RUN npm run build failed:', ...Array.from({ length: 30 }, (_, i) => `  src/a.ts(${i},1): error TS2322: line ${i}`), 'docker build: exit status 1: ERROR: failed to solve'];
+        const failed: EnvironmentSetupRecord = {
+            ...blockedSetup,
+            blockers: [{ kind: 'toolchain', signature: 'compose_up', message: lines[0], at: '2026-11-03T00:00:00Z' } as any],
+            failureBundle: { services: [{ name: 'boot output', state: 'failed', logTail: lines }], ports: [], disk: [], deniedEgress: [], redactions: 0, truncated: false, collectedAt: '2026-11-03T00:00:00.000Z' } as any,
+        };
+        const view = await harness({ setup: failed }).service.blockers(KEY, { environmentId: 'env-a' });
+        const evidence = view.blockers[0].evidence!;
+        expect(evidence.step).toBe('[build 3/5] RUN npm run build');
+        expect(evidence.lines).toHaveLength(30);
+        expect(evidence.lines.at(-1)).toBe('src/a.ts(29,1): error TS2322: line 29');
     });
 
     it('env_fix never approves an egress host (S-27, S-40)', async () => {

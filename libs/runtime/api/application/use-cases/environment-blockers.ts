@@ -1,5 +1,5 @@
 import { recipeOutsideRepository } from '@libs/runtime/contracts/runtime-commands';
-import { type BlockerFixView, classifyBlocker, KODY_FIX_PREFIX } from '@libs/runtime/blockers/catalog';
+import { type BlockerFixView, classifyBlocker, fullEvidenceOf, KODY_FIX_PREFIX } from '@libs/runtime/blockers/catalog';
 import { BLOCKER_KINDS } from '@libs/runtime/contracts/enums';
 import { type Lesson, lessonsFor } from '@libs/runtime/blockers/lessons';
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
@@ -50,9 +50,16 @@ export function runReasonBlockers(reason: string | undefined): Array<{ kind: str
  * The environment's blockers grouped by signature, read by the catalog
  * (docs §4): the latest setup's blockers, with its failure bundle, and the
  * reasons of its could_not_boot Runs. Classified on every read, so a better
- * catalog applies to what was already recorded.
+ * catalog applies to what was already recorded. `fullEvidence` gives a failed
+ * build or boot the failing step and its output (evidence.ts) instead of one
+ * line: for a developer's coding agent, not for the Runtime page.
  */
-export function blockerGroups(setup: EnvironmentSetupRecord | null, runs: RuntimeRunProjection[], memory?: { lessons: Lesson[]; organizationId: string; repositoryId: string }) {
+export function blockerGroups(
+    setup: EnvironmentSetupRecord | null,
+    runs: RuntimeRunProjection[],
+    memory?: { lessons: Lesson[]; organizationId: string; repositoryId: string },
+    options: { fullEvidence?: boolean } = {},
+) {
     const groups = new Map<string, RuntimeBlockerGroupView & { recipeChanges: Map<string, BlockerFixView['recipeChange']> }>();
     const recipe = { text: recipeText(setup), path: setup?.recipe?.path };
     const add = (input: { kind: string; signature: string; message: string; bundle?: EnvironmentSetupRecord['failureBundle'] }, at?: string, pr?: number) => {
@@ -63,7 +70,7 @@ export function blockerGroups(setup: EnvironmentSetupRecord | null, runs: Runtim
             title: c.title,
             count: 0,
             state: 'open' as const,
-            evidence: c.evidence,
+            evidence: options.fullEvidence ? fullEvidenceOf(input, c) : c.evidence,
             fixes: c.fixes.map((f) => fixView(f, recipe)),
             recipeChanges: new Map(c.fixes.filter((f) => f.recipeChange).map((f) => [f.id, f.recipeChange])),
         };

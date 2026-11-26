@@ -129,6 +129,7 @@ describe('MCP SDK → scoped tools → signed session listener → cell protocol
             'env_exec',
             'env_fix',
             'env_recipe_check',
+            'env_recipe_guide',
             'env_recipe_submit',
             'env_status',
             'env_step',
@@ -256,7 +257,11 @@ describe('MCP SDK → scoped tools → signed session listener → cell protocol
         h = await runtimeEnvFixture({ noCommittedRecipe: true });
         const client = await h.connect();
         const recipe = 'version: 1\nservices:\n  compose:\n    files: [.kodus/compose.yaml]\n    public: web\n    health: /health\n  expose: [{service: web, port: 3000, kind: http}]\n';
-        const files = [{ path: '.kodus/compose.yaml', content: 'services:\n  web:\n    build: .\n' }];
+        // The check reads the repository: a build names a Dockerfile that exists, here one submitted beside it.
+        const files = [
+            { path: '.kodus/compose.yaml', content: 'services:\n  web:\n    build: { context: ., dockerfile: .kodus/Dockerfile }\n' },
+            { path: '.kodus/Dockerfile', content: 'FROM node:22-bookworm\nWORKDIR /app\nCOPY . .\nCMD [\"node\", \"index.js\"]\n' },
+        ];
 
         const bad = await call<{ ok: boolean; errors: string[] }>(client, 'env_recipe_check', { environmentId: 'blocked', recipe: 'version: 2\n' });
         expect(bad.ok).toBe(false);

@@ -109,6 +109,8 @@ export interface BlockerEvidence {
     /** The log lines that matched, redacted by the cell. */
     lines: string[];
     service?: string;
+    /** A failed build: the name of the step that failed (evidence.ts). */
+    step?: string;
 }
 
 export interface ClassifiedBlocker {
@@ -135,6 +137,7 @@ export { MAX_HEALTH_TIMEOUT_SECONDS };
 
 // The rules and the helpers callers import from this path (README "Who imports what").
 export { credentialNeeded, deniedEgressBundle, FULL_ACCESS_FIX_PREFIX, isApprovableDeniedHost, isPackageRegistry, MAX_PR_DENIED_HOSTS, prOnlyDeniedHosts } from './rules/egress';
+export { fullEvidenceOf, FULL_EVIDENCE_LINES } from './evidence';
 export { matchedBlockerLine, testValueFor } from './rules/log';
 export { notReadyWaited, SUITE_UNRUNNABLE_SIGNATURE } from './rules/setup';
 export type { BlockerRule } from './rules/rule';

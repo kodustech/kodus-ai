@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import request from 'supertest';
@@ -65,6 +65,7 @@ describe('/mcp/env tools', () => {
             'env_exec',
             'env_fix',
             'env_recipe_check',
+            'env_recipe_guide',
             'env_recipe_submit',
             'env_status',
             'env_step',
@@ -72,6 +73,13 @@ describe('/mcp/env tools', () => {
             'env_upload',
             'env_validate',
         ]);
+    });
+
+    it('env_recipe_guide answers the authoring guide from the credential alone, with no environment named', async () => {
+        const recipeGuide = jest.fn(async () => ({ guide: 'the rules' }));
+        const res = await post(app(TEAM_KEY, { recipeGuide }), call('env_recipe_guide', {}));
+        expect(res.body.result.structuredContent).toEqual({ guide: 'the rules' });
+        expect(recipeGuide).toHaveBeenCalledTimes(1);
     });
 
     it('refuses every env_* call as not available to an org Kody Runtime is not released to, before the service', async () => {
@@ -221,6 +229,18 @@ describe('/mcp/env tools', () => {
                 },
             }),
         ).toBeNull();
+    });
+
+    it('envToolError forwards the environments a key must choose from, and nothing else of the body', () => {
+        const out = envToolError(
+            new BadRequestException({ code: 'environment_required', message: 'Name the environment: e1 (a/b)', environments: [{ environmentId: 'e1', repositoryName: 'a/b' }], secret: 'x' }),
+        );
+        expect(out.structuredContent).toEqual({
+            status: 400,
+            code: 'environment_required',
+            message: 'Name the environment: e1 (a/b)',
+            environments: [{ environmentId: 'e1', repositoryName: 'a/b' }],
+        });
     });
 
     it('envToolError never forwards an unexpected error message', () => {

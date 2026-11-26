@@ -17,7 +17,7 @@ export type EnvBlockerGroup = {
     count: number;
     lastAt?: string;
     lastPr?: number;
-    evidence?: { lines: string[]; service?: string };
+    evidence?: { lines: string[]; service?: string; step?: string };
     fixes: EnvFixView[];
 };
 
@@ -52,6 +52,9 @@ export type EnvRecipeInput = EnvTarget & {
 export type EnvRecipeCheck = {
     ok: boolean;
     errors: string[];
+    warnings?: string[];
+    /** The default-branch head the repository checks read. */
+    readAt?: string;
     environment: { environmentId: string; repositoryName: string };
     summary?: {
         public?: string;
@@ -59,6 +62,9 @@ export type EnvRecipeCheck = {
         expose: Array<{ service: string; port: number; kind: string }>;
     };
 };
+
+/** env_recipe_guide: the authoring rules as text. */
+export type EnvRecipeGuide = { guide: string };
 
 /** env_recipe_submit: the setup that boots it (env_status answers it as setupKey once it is the latest). */
 export type EnvRecipeSubmit = {

@@ -14,6 +14,9 @@ export function countSetupOutcome(metrics: RuntimeMetrics | undefined, rec: Envi
     for (const b of rec.blockers) metrics.recordBlocker(b, { orgId: rec.organizationId, consumer: 'setup' });
 }
 
+/** The longest step detail kept: a failed boot's detail is its blocker's message, read by the developer's agent. */
+export const STEP_DETAIL_MAX = 2_000;
+
 /**
  * How one setup writes its record: every clock read is a step (`clock:<n>`)
  * and every save is one (`record:<n>`), numbered in the order they are asked,
@@ -60,7 +63,7 @@ export class SetupJournal {
         s.state = state;
         s.finishedAt = end;
         s.durationMs = Date.parse(end) - Date.parse(s.startedAt);
-        if (detail) s.detail = detail.slice(0, 300);
+        if (detail) s.detail = detail.slice(0, STEP_DETAIL_MAX);
         await this.save(this.rec);
     }
 

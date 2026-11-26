@@ -6,7 +6,12 @@ vi.mock('../../utils/team-key-auth.js', () => ({
 }));
 
 import { EnvService } from '../../services/env.service.js';
-import { envCommand, formatEnvFix, formatEnvStatus } from '../env.js';
+import {
+    envCommand,
+    formatEnvFix,
+    formatEnvStatus,
+    formatRecipeCheck,
+} from '../env.js';
 
 const STATUS: EnvStatus = {
     environment: {
@@ -87,6 +92,102 @@ describe('kodus env', () => {
         });
     });
 
+    it('reads the authoring guide from env_recipe_guide with no environment named', async () => {
+        const requester = vi.fn(async () => rpc({ guide: 'the rules' }));
+        const service = new EnvService(requester as any);
+        await expect(service.recipeGuide()).resolves.toEqual({
+            guide: 'the rules',
+        });
+        const [, init] = (requester.mock.calls[0] as any[]) ?? [];
+        expect(JSON.parse(init.body).params).toEqual({
+            name: 'env_recipe_guide',
+            arguments: {},
+        });
+        const recipe = envCommand.commands.find((c) => c.name() === 'recipe')!;
+        expect(recipe.commands.map((c) => c.name()).sort()).toEqual([
+            'check',
+            'guide',
+            'submit',
+        ]);
+    });
+
+    describe('a key that reaches several environments', () => {
+        const refusal = rpc(
+            {
+                status: 400,
+                code: 'environment_required',
+                message: 'Name the environment: env-1 (acme/shop), env-2 (acme/billing)',
+                environments: [
+                    { environmentId: 'env-1', repositoryName: 'acme/shop' },
+                    { environmentId: 'env-2', repositoryName: 'Acme/Billing' },
+                ],
+            },
+            true,
+        );
+        const sentTo = (requester: ReturnType<typeof vi.fn>) =>
+            requester.mock.calls.map(
+                (c: any[]) => JSON.parse(c[1].body).params.arguments,
+            );
+
+        it('takes the environment of the git remote origin, case-insensitive, and asks again with it', async () => {
+            const requester = vi
+                .fn()
+                .mockResolvedValueOnce(refusal)
+                .mockResolvedValueOnce(rpc(STATUS));
+            const service = new EnvService(
+                requester as any,
+                async () => 'git@github.com:acme/billing.git',
+            );
+            await expect(service.status({})).resolves.toEqual(STATUS);
+            expect(sentTo(requester)).toEqual([{}, { environmentId: 'env-2' }]);
+        });
+
+        it('keeps the refusal, listing them, when the remote matches none or no remote is set', async () => {
+            for (const remote of [
+                'https://github.com/acme/other.git',
+                null,
+            ]) {
+                const service = new EnvService(
+                    vi.fn(async () => refusal) as any,
+                    async () => remote,
+                );
+                await expect(service.status({})).rejects.toThrow(
+                    /Name the environment: env-1 \(acme\/shop\), env-2/,
+                );
+            }
+        });
+
+        it('keeps the refusal when the remote matches several environments', async () => {
+            const twice = rpc(
+                {
+                    status: 400,
+                    code: 'environment_required',
+                    message: 'Name the environment: a (acme/shop), b (ACME/shop)',
+                    environments: [
+                        { environmentId: 'a', repositoryName: 'acme/shop' },
+                        { environmentId: 'b', repositoryName: 'ACME/shop' },
+                    ],
+                },
+                true,
+            );
+            const service = new EnvService(
+                vi.fn(async () => twice) as any,
+                async () => 'https://github.com/acme/shop',
+            );
+            await expect(service.status({})).rejects.toThrow(/Name the environment/);
+        });
+
+        it('never reads the remote when --env or --repo-id names the environment', async () => {
+            const remote = vi.fn(async () => 'https://github.com/acme/shop');
+            const requester = vi.fn(async () => refusal);
+            const service = new EnvService(requester as any, remote);
+            await expect(service.status({ environmentId: 'env-9' })).rejects.toThrow();
+            await expect(service.health({ repositoryId: 'r' })).rejects.toThrow();
+            expect(remote).not.toHaveBeenCalled();
+            expect(requester).toHaveBeenCalledTimes(2);
+        });
+    });
+
     it('turns a tool error into a message the dev can act on', async () => {
         const forbidden = new EnvService(
             vi.fn(async () =>
@@ -139,6 +240,40 @@ describe('kodus env', () => {
             /use_mock:SESSION_SECRET: Use a test double \[by hand\]/,
         );
         expect(out).toContain('kodus env fix <signature> --fix <fix-id>');
+    });
+
+    it('prints the failed step and every evidence line, not the first three', () => {
+        const lines = Array.from({ length: 40 }, (_, i) => `error TS2322: line ${i}`);
+        const status = {
+            ...STATUS,
+            blockers: [
+                {
+                    ...STATUS.blockers[0],
+                    evidence: { lines, step: '[build 3/5] RUN npm run build' },
+                },
+            ],
+        };
+        const out = formatEnvStatus(status).join('\n');
+        expect(out).toContain('failed step: [build 3/5] RUN npm run build');
+        expect(out).toContain('error TS2322: line 0');
+        expect(out).toContain('error TS2322: line 39');
+    });
+
+    it('prints the check errors, the warnings and the commit it read', () => {
+        const out = formatRecipeCheck(
+            {
+                ok: false,
+                errors: ['.kodus/compose.yaml services.app.build.context: must be a directory of the repository'],
+                warnings: ['.kodus/Dockerfile: the install runs after COPY . .'],
+                readAt: 'abcdef1234567',
+                environment: { environmentId: 'env-1', repositoryName: 'acme/shop' },
+            },
+            '.kodus/workspace.yaml',
+            2,
+        ).join('\n');
+        expect(out).toContain('must be a directory of the repository');
+        expect(out).toContain('warning: .kodus/Dockerfile');
+        expect(out).toContain('read the repository at abcdef1');
     });
 
     it('prints what a fix did', () => {

@@ -169,7 +169,7 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
     {
         name: 'env_blockers',
         description:
-            "Why the environment does not boot: each blocker with its evidence and the catalog's fixes, the recommended one first (what worked before in this repo comes first). Needs env:exec or env:fix.",
+            "Why the environment does not boot: each blocker with its evidence and the catalog's fixes, the recommended one first (what worked before in this repo comes first). For a failed build or boot the evidence names the failing `step` and carries its last lines, redacted (a compiler error is there whole). Needs env:exec or env:fix.",
         inputSchema: target,
         annotations: {
             readOnlyHint: true,
@@ -210,9 +210,22 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
         run: (s, p, a) => s.fix(p, a),
     },
     {
+        name: 'env_recipe_guide',
+        description:
+            "The rules for writing the recipe (.kodus/workspace.yaml and its .kodus/ build files), the same Kody's own author is given, plus what the sandbox does that the repository does not show (compose paths are relative to the repository root, builds reach registries only, the mirror's build args, what the checks refuse). Read it before writing a recipe. Static text: nothing is read from the repository. Needs env:exec or env:fix.",
+        inputSchema: {},
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+        },
+        run: (s, p) => s.recipeGuide(p),
+    },
+    {
         name: 'env_recipe_check',
         description:
-            "Check a recipe the developer's agent wrote (.kodus/workspace.yaml and its .kodus/ build files) the way Kodus checks one before it boots: `ok`, each error to fix, and what Kodus read from it (public service, health path, exposed services). Nothing is kept and nothing boots. Needs env:exec or env:fix.",
+            "Check a recipe the developer's agent wrote (.kodus/workspace.yaml and its .kodus/ build files) the way Kodus checks one before it boots: `ok`, each error to fix, `warnings` (advice that does not refuse it), and what Kodus read from it (public service, health path, exposed services). It reads the repository at its default-branch head (`readAt`): a compose file or COPY source that is not there, a compose path outside the repository root, a Dockerfile the cell refuses. Nothing is kept and nothing boots. Needs env:exec or env:fix.",
         inputSchema: {
             ...target,
             recipe: z.string().max(65_536).describe('The recipe text, version 1.'),
@@ -298,7 +311,9 @@ export function envToolError(e: unknown): CallToolResult {
                   )
                 : e.message;
     }
-    const payload = { status, code, message };
+    // `environments`: the environments a key that reaches several must choose from (code environment_required).
+    const choices = e instanceof HttpException ? (e.getResponse() as { environments?: unknown }).environments : undefined;
+    const payload = { status, code, message, ...(Array.isArray(choices) ? { environments: choices } : {}) };
     return {
         content: [{ type: 'text', text: JSON.stringify(payload) }],
         structuredContent: payload,

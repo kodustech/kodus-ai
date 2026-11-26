@@ -76,12 +76,27 @@ Four sources, first match wins:
 
 1. **Committed** in the repository (the paths above).
 2. **Submitted** by the developer's own coding agent with their own model: `kodus env recipe submit` (the
-   `kodus-runtime-setup` skill), the `/mcp/env` tool `env_recipe_submit`. The API checks it (parse, `.kodus/` build files
-   under Kody's bounds: `libs/runtime/api/application/env-tools.service.ts` `recipeProblems`), keeps it on the environment
+   `kodus-runtime-setup` skill), the `/mcp/env` tool `env_recipe_submit`. The API checks it: submit blocks on the parse and the `.kodus/` build files
+   under Kody's bounds (`libs/runtime/api/application/env-tools.service.ts` `recipeProblems`); `env_recipe_check` also reads the
+   repository at its default-branch head and runs the checks Kody's own submissions pass (`checkAuthoredSubmission`,
+   `repositoryProblems`: errors for what Kodus refuses, such as a compose file or COPY source that is not there, a compose path
+   outside the repository root, a Dockerfile the cell refuses; warnings for the Node build rules), and skips them with a
+   warning when the repository cannot be read or the environment has several repositories. Submit does not block on them:
+   they are stricter than the cell, a developer's own recipe may use what Kody never writes, and the boot is the proof, keeps it on the environment
    (`runtime_environments.submitted_recipe`) and asks for a setup that boots it with its files (`origin: 'submitted'`).
    It needs `env:fix` and is audited (`env_recipe_submit`). Kody never repairs it and the learn loop leaves it: the agent
    reads `env_status` (its `setupKey`) and `env_blockers` and sends another. Once it boots twice, the Runtime page offers
-   the PR that commits it, like Kody's.
+   the PR that commits it, like Kody's. A key that reaches several environments refuses a call that names none
+   (`environment_required`, with the list as data); `kodus env` then reads `git remote get-url origin`, takes the
+   environment whose `repositoryName` is that owner/name (case-insensitive) and asks again, and keeps the refusal when none
+   or several match (`apps/cli/src/services/env.service.ts` `targeted`). Before writing it, the agent reads the authoring guide: `kodus env recipe guide`,
+   the `/mcp/env` tool `env_recipe_guide` (`env:exec` or `env:fix`, static text, no repository read). It is Kody's own
+   author's rules (`recipe-author/recipe-authoring-rules.ts`, one source: the author's prompt is built from the same
+   blocks, byte for byte) plus the facts of the sandbox a repository does not show (`recipe-authoring-guide.ts`): compose
+   paths are relative to the repository root, a build reaches registries only (download at start instead), the mirror's
+   build args and that a stage must declare them (Kodus adds those `ARG`s, and the Firebase emulator fetch, only to
+   Dockerfiles Kody writes, not to files a developer sends), and the Firebase emulators mirror
+   (`FIREBASE_EMULATORS_MIRROR`, `buildmirror.go`).
 3. **Inferred** by Kodus from the files, with no model (`runtime-setup-requester.service.ts:173-176`).
 4. **Written by Kody**, only when nothing is committed and inference failed
    (`environment-setup.service.ts:443`), and only for the default-branch head (`:935`;
@@ -251,6 +266,15 @@ anything (`environment-setup.service.ts:981-1004`).
 - `classifyBlocker` turns it into a card with title, evidence and fixes (`libs/runtime/blockers/catalog.ts:579`).
   Cards added in this round: `environment_not_prepared`, `builder_failed`, `image_load` (platform, retry),
   `image_too_large` (resources), `compose_refused` (toolchain).
+- **Evidence for a developer's agent.** A card's evidence is one line, enough for the page. `env_blockers` (and so
+  `kodus env status` and `submit --wait`) carries more for a failed build or boot (signature `compose_up`):
+  `evidence.step`, the failed build step, and `evidence.lines`, its output (`libs/runtime/blockers/evidence.ts`
+  `fullEvidenceOf`, chosen by `blockerGroups(..., { fullEvidence: true })`). The bounds, from the build to the tool:
+  the cell keeps a failed step's last 40 lines and its first 8 error lines that scrolled out (`buildprogress`
+  `MaxTailLines`, `MaxErrorLines`), each at most 500 bytes (`MaxLine`), redacted; the failure bundle's `boot output`
+  entry carries them (500 lines of 2048 bytes); the blocker message is kept to 2000 characters
+  (`BLOCKER_MESSAGE_MAX`) and a step's detail to 2000 (`STEP_DETAIL_MAX`), up from 500 and 300; the evidence is at most
+  49 lines (`FULL_EVIDENCE_LINES`). A boot with no step named gets the last lines of the boot output instead.
 - A builder that prints nothing for 5 minutes while no step of the Dockerfile runs (`[stage N/M] RUN|COPY|...`) is
   stopped by the cell as `builder_failed` (`dockergvisor/build.go` `watchBuildStall`): a builder that hangs between
   BuildKit's own steps is the platform's, and before this it waited out the worker's boot limit, which read as the

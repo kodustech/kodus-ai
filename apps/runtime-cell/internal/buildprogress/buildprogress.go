@@ -35,12 +35,15 @@ const (
 	// MaxName bounds a step's name, in bytes; a longer one is cut.
 	MaxName = 160
 	// MaxErrorLines is how many error lines a step keeps (its first), and
-	// MaxTailLines how many of its last lines; MaxLine bounds each.
+	// MaxTailLines how many of its last lines; MaxLine bounds each. The tail
+	// is what a developer's coding agent reads to fix a failed build (a
+	// compiler's errors are the last lines of the step), so it is long enough
+	// for a whole error report and its lines are not cut short.
 	MaxErrorLines = 8
-	MaxTailLines  = 4
-	MaxLine       = 300
+	MaxTailLines  = 40
+	MaxLine       = 500
 	// maxKeptLines bounds the lines a Tracker keeps across all its steps.
-	maxKeptLines = 2048
+	maxKeptLines = 4096
 )
 
 // Step is one BuildKit step (vertex) as the build reported it.
@@ -89,13 +92,21 @@ type Tracker struct {
 // stepOutput is what a step printed, bounded: its first error lines, its
 // last lines, its ERROR line, and whether it mounts a build cache.
 type stepOutput struct {
-	errors     []string
-	tail       []string
+	errors     []keptLine
+	tail       []keptLine
+	printed    int
 	errLine    string
 	cacheMount bool
 	exited     bool
 	exitCode   int
 	segfaulted bool
+}
+
+// keptLine is a line a step printed with its place in the step's output, so
+// an error line that is also in the tail is not told twice.
+type keptLine struct {
+	n    int
+	text string
 }
 
 func New() *Tracker { return NewAt(time.Now) }
@@ -110,9 +121,9 @@ func NewAt(now func() time.Time) *Tracker {
 type Failure struct {
 	// Step is its name (redacted, bounded).
 	Step string
-	// Lines are the first lines it printed that read as errors, then its
-	// last lines when none did, then BuildKit's own ERROR line; redacted,
-	// each at most MaxLine bytes.
+	// Lines are the first lines it printed that read as errors and that
+	// scrolled out of its last lines, then its last MaxTailLines lines, then
+	// BuildKit's own ERROR line; redacted, each at most MaxLine bytes.
 	Lines []string
 	// ProcessExit: the step's command ran and exited unsuccessfully (a RUN
 	// that failed), not BuildKit failing around it.
@@ -264,11 +275,12 @@ func (t *Tracker) printed(id int, line string) {
 		return
 	}
 	o := t.output(id)
+	o.printed++
 	if !o.segfaulted && segfaultLine.MatchString(line) {
 		o.segfaulted = true
 	}
 	if len(o.errors) < MaxErrorLines && errorLine.MatchString(line) && t.kept < maxKeptLines {
-		o.errors = append(o.errors, cleanLine(line))
+		o.errors = append(o.errors, keptLine{o.printed, cleanLine(line)})
 		t.kept++
 	}
 	switch {
@@ -279,7 +291,7 @@ func (t *Tracker) printed(id int, line string) {
 	default:
 		t.kept++
 	}
-	o.tail = append(o.tail, cleanLine(line))
+	o.tail = append(o.tail, keptLine{o.printed, cleanLine(line)})
 }
 
 // Failure is the first step that reported ERROR, with what it printed;
@@ -297,11 +309,15 @@ func (t *Tracker) Failure() (Failure, bool) {
 	}
 	if o := t.out[t.failedFirst]; o != nil {
 		f.ProcessExit, f.CacheMount, f.ExitCode, f.Segfaulted = o.exited, o.cacheMount, o.exitCode, o.segfaulted
-		lines := o.errors
-		if len(lines) == 0 {
-			lines = o.tail
+		// An error line that is still in the tail is told once, where it was printed.
+		for _, l := range o.errors {
+			if len(o.tail) == 0 || l.n < o.tail[0].n {
+				f.Lines = append(f.Lines, l.text)
+			}
 		}
-		f.Lines = append(f.Lines, lines...)
+		for _, l := range o.tail {
+			f.Lines = append(f.Lines, l.text)
+		}
 		if o.errLine != "" {
 			f.Lines = append(f.Lines, o.errLine)
 		}
