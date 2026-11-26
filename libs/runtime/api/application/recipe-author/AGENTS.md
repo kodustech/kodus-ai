@@ -7,6 +7,7 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 - What it knows before reading: `repository-facts.ts` `repositoryFacts`, `factsBlock`, `workspaceFactsBlock` (no model).
 - Which workspace members the open pull requests change, from their paths (no model): `pull-request-focus.ts` `pullRequestFocusFact`, a line of the Facts; the use case reads the paths (`openPullRequestPaths`, bounded, a failure leaves it out).
 - How the repo's CI boots its app (job, services, setup, commands, env names only, 4 KB cap), no model: `ci-evidence.ts` `ciEvidenceBlock`. `ciEvidence` also returns the structured `suiteCandidate` for the recipe's `suite:` block (`suite-candidate.ts`: runner, command with the Cypress Cloud flags removed and `{specs}` in place, matrix size, spec glob read from the runner's config as text, env and secret NAMES only; absent when no job runs cypress or playwright directly).
+- What the organization's earlier repairs taught it: `repair-lessons.ts` `repairLessonLines` (this organization's active lessons that carry a `repair`, the failure's signature first, at most 5) and `repairLessonsBlock` (cleaned again, bounded, headed as data, never an instruction). The use case reads them through `RUNTIME_LESSON_READER`; an unreadable store leaves them out.
 - Context size options (off by default): `recipe-author-context.ts` (`ClearStaleReadsPolicy`, prefetch).
 - Rules a written recipe must pass beyond a repository's: `authored-recipe-policy.ts` `checkAuthoredRecipe`. Rules for its files: `authored-files-policy.ts` (`checkAuthoredDockerfile`, `checkNodeBuild`, compose checks, `checkAuthoredDockerignore`: a `<Dockerfile>.dockerignore` of one of Kody's Dockerfiles, which BuildKit reads instead of the context's), `authored-compose-sanitiser.ts` `sanitiseAuthoredCompose`, `authored-dockerfile-mirror.ts` `declareMirrorBuildArgs`.
 - Readers: `git-repo-reader.ts` `GitRepoReader` (over `RuntimeGitPort`, `GIT_READ_MAX_BYTES`), `workspace-repo-reader.ts` `WorkspaceRepoReader` (every repository of a multi-repo workspace, each at its commit), `repo-reader.ts` (re-export of `libs/runtime/planner/repo-reader`, kept as an entry point).
@@ -33,11 +34,12 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 
 ## Module map
 
-Files (17, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-e2e.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `pull-request-focus.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-block.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
+Files (18, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-e2e.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `pull-request-focus.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repair-lessons.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-block.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
 
 Imports these Runtime modules:
 
 - [`libs/runtime/api/domain`](../../domain/AGENTS.md)
+- [`libs/runtime/blockers`](../../../blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../../contracts/AGENTS.md)
 - [`libs/runtime/planner`](../../../planner/AGENTS.md)
 - [`libs/runtime/protocol`](../../../protocol/AGENTS.md)

@@ -225,6 +225,11 @@ export interface EnvironmentSetupRepair {
     /** no_token: no fresh download token for the new boot (the cell revoked the last boot's), so Kody was not asked.
      *  same_failure: Kody's last rewrite failed exactly as the recipe it replaced, so Kody was not asked again. */
     outcome: 'writing' | 'booting' | 'booted' | 'blocked' | 'no_recipe' | 'identical' | 'refused' | 'unavailable' | 'budget' | 'no_token' | 'same_failure';
+    /**
+     * What a lesson of this repair keeps if its rewrite boots (derived at the repair, redacted and bounded): one line of
+     * the failure and the paths Kody changed against the recipe that failed. Never the files' content.
+     */
+    learned?: { evidence: string; changed: string[] };
     at: string;
 }
 

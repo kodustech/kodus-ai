@@ -41,6 +41,7 @@ Imported by:
 - [`libs/runtime/api/application`](../api/application/AGENTS.md)
 - [`libs/runtime/api/application/recipe-author`](../api/application/recipe-author/AGENTS.md)
 - [`libs/runtime/api/application/use-cases`](../api/application/use-cases/AGENTS.md)
+- [`libs/runtime/blockers`](../blockers/AGENTS.md)
 - [`libs/runtime/gate`](../gate/AGENTS.md)
 - [`libs/runtime/planner`](../planner/AGENTS.md)
 - [`libs/runtime/probe`](../probe/AGENTS.md)

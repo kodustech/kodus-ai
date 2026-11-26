@@ -1,4 +1,4 @@
-import { deriveLessons } from '@libs/runtime/blockers/lessons';
+import { deriveLessons, deriveRepairLesson } from '@libs/runtime/blockers/lessons';
 import { type EnvironmentRuntime, isBlocked, isCapacityWait } from '@libs/runtime/environment';
 import { parseRecipeSummary, recipeDigest } from '@libs/runtime/run';
 import { checkReservedRecipeResources } from '@libs/runtime/run/recipe-resources';
@@ -32,15 +32,26 @@ export async function learnFromSetup(run: SetupRun, lastEnv: EnvironmentRuntime)
     );
 }
 
-/** A default-branch setup that booted right after a blocked one proves the fix that changed: it becomes a lesson. Never fails the setup. */
+/** A default-branch setup that booted right after a blocked one proves the fix that changed, and one whose repair of Kody's recipe booted proves that repair: each becomes a lesson. Never fails the setup. */
 async function recordLessons(run: SetupRun): Promise<void> {
     const { previous, rec, step } = run;
     const lessons = run.deps.opts.lessons;
-    if (!lessons || rec.state !== 'active' || previous?.state !== 'blocked' || rec.refSource !== 'default_branch') return;
+    if (!lessons || rec.state !== 'active' || rec.refSource !== 'default_branch') return;
+    // A repair of Kody's recipe whose rewrite booted: this setup proved it by itself, whatever the setup before it was.
+    const repaired = rec.repairs?.find((r) => r.outcome === 'booted' && r.learned);
+    const afterBlocked = previous?.state === 'blocked';
+    if (!repaired && !afterBlocked) return;
     try {
         await step('lessons', async () => {
-            const approvedHosts = await lessons.approvedHosts(rec.organizationId, rec.environmentId);
-            for (const lesson of deriveLessons({ previous, current: rec, approvedHosts, at: rec.finishedAt ?? rec.updatedAt })) await lessons.store.record(lesson);
+            const at = rec.finishedAt ?? rec.updatedAt;
+            if (afterBlocked) {
+                const approvedHosts = await lessons.approvedHosts(rec.organizationId, rec.environmentId);
+                for (const lesson of deriveLessons({ previous, current: rec, approvedHosts, at })) await lessons.store.record(lesson);
+            }
+            if (repaired?.learned) {
+                const lesson = deriveRepairLesson({ current: rec, blocker: repaired.blocker, learned: repaired.learned, notes: rec.recipe?.notes, at });
+                if (lesson) await lessons.store.record(lesson);
+            }
         });
     } catch (e) {
         if (isCancellation(e)) throw e;

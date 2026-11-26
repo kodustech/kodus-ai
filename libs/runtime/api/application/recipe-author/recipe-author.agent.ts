@@ -18,6 +18,7 @@ import { ciEvidence } from './ci-evidence';
 import { suiteServiceOf } from './authored-dockerfile-e2e';
 import { appendSuiteBlock } from './suite-block';
 import type { PullRequestPaths } from './pull-request-focus';
+import { repairLessonsBlock } from './repair-lessons';
 import { factsBlock, repositoryFacts, workspaceFactsBlock } from './repository-facts';
 import {
     ClearStaleReadsPolicy,
@@ -254,7 +255,7 @@ export interface RecipeAuthorInput {
     workspace?: readonly RecipeAuthorWorkspaceRepository[];
     /** Earlier recipes of this setup that did not boot, oldest first. */
     previous?: PreviousAttempt[];
-    /** What earlier setups of this repository learned, in Kodus's words. */
+    /** What earlier repairs of the organization's recipes learned (repair-lessons.ts `repairLessonLines`): data for the prompt, cleaned and bounded again there. */
     lessons?: string[];
     signal?: AbortSignal;
     /** Lowers RECIPE_AUTHOR_LIMITS.maxTokens to what the setup's LLM budget reserved for this run. */
@@ -553,7 +554,8 @@ function previousPrompt(previous: PreviousAttempt[]): string {
 export function recipeAuthorPrompt(input: Pick<RecipeAuthorInput, 'repositoryName' | 'sha' | 'previous' | 'lessons' | 'workspace' | 'mode'>): string {
     const parts = [`Repository ${input.repositoryName} at commit ${input.sha}. Write its recipe.`];
     if (input.workspace && input.workspace.length > 1) parts.push(workspacePrompt(input.workspace, input.mode));
-    if (input.lessons?.length) parts.push(`What earlier setups of this repository learned:\n${input.lessons.map((l) => `- ${l}`).join('\n')}`);
+    const lessons = input.lessons?.length ? repairLessonsBlock(input.lessons) : '';
+    if (lessons) parts.push(lessons);
     if (input.previous?.length) {
         const rewrite = input.previous.every((p) => p.stage === 'reauthor');
         parts.push(`${previousPrompt(input.previous)}\n\n${rewrite ? 'Write it under the current rules.' : 'Change what the blocker points at; do not submit the same recipe again (the checks refuse it, whitespace aside).'}`);

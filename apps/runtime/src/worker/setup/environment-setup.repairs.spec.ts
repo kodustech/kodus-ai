@@ -8,7 +8,7 @@ import { clockFrom, testSetupService } from '../../testing/setup-service';
 import type { RecipeAuthorClient, RecipeAuthorOutcome, RecipeAuthorRequestInput } from '../agent/http-recipe-author';
 import { capacityBlocked } from '../env/hub-environment-runtime';
 import { repairFailureOf, type SetupOptions, type SetupStepRunner } from './environment-setup.service';
-import { InMemoryEnvironmentSetupStore } from './testing';
+import { InMemoryEnvironmentSetupStore, InMemoryLessonStore } from './testing';
 
 // A recipe Kody wrote whose boot fails on the recipe's account goes back to
 // Kody inside the same setup (RUNTIME_SETUP_AUTHOR_REPAIRS), and the recipe
@@ -164,6 +164,7 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
                 failedDigest: recipeDigest(FIRST, FILES),
                 recipeDigest: recipeDigest(SECOND, FILES),
                 outcome: 'booted',
+                learned: { evidence: 'main.go:3:2: undefined: Handler', changed: ['.kodus/workspace.yaml'] },
                 at: expect.any(String),
             },
         ]);
@@ -657,5 +658,55 @@ describe("the boot of Kody's rewrite downloads with fresh tokens", () => {
             expect(rec.repairs).toEqual([expect.objectContaining({ n: 1, outcome: 'no_token' })]);
             expect(rec.steps.at(-1)?.detail).toMatch(/^Kody's rewrite was not asked: a new boot could not download the repository again/);
         }
+    });
+});
+
+// What a repair that boots proves stays for the next repository of the organization: Kody's own notes of the
+// fix and the files it changed, never the repository's content (the author reads them as data, scoped by org).
+describe('a repair that boots becomes a lesson of the organization', () => {
+    const IGNORED = ['#12 [app 4/6] COPY cypress ./cypress', "find: 'cypress/e2e': No such file or directory", 'cannot reach the registry with key AKIAIOSFODNN7EXAMPLE'];
+    const FAILED: Blocked = { ...BUILD_FAILED, blockers: [{ ...BUILD_FAILED.blockers[0], bundle: { ...BUILD_FAILED.blockers[0].bundle!, services: [{ name: 'app', state: 'exited (1)', logTail: IGNORED }] } }] };
+    const REWRITTEN_FILES = [{ path: '.kodus/compose.yaml', content: 'services:\n  app:\n    build: { context: ., dockerfile: .kodus/Dockerfile }\n    volumes: [./cypress:/app/cypress:ro]\n' }];
+
+    const run = async (boots: Record<string, Boot>, answers: RecipeAuthorOutcome[], lessons = new InMemoryLessonStore()) => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env } = fakeEnv(boots);
+        const a = author(store, ...answers);
+        const rec = await service(store, env, { author: a.client, lessons: { store: lessons, approvedHosts: async () => [] } }).run(cmd());
+        return { rec, lessons: [...lessons.byId.values()] };
+    };
+
+    it('records what failed and what Kody changed, scoped to the organization', async () => {
+        const { rec, lessons } = await run(
+            { first: FAILED },
+            [submitted(FIRST), { status: 'submitted', recipe: SECOND, files: REWRITTEN_FILES, notes: 'The .dockerignore excluded cypress/, so ./cypress is mounted read-only into the e2e service.', usage: { inputTokens: 900, outputTokens: 80 } }],
+        );
+
+        expect(rec.state).toBe('active');
+        expect(lessons).toHaveLength(1);
+        const [l] = lessons;
+        expect(l).toMatchObject({
+            organizationId: 'org-1',
+            scope: 'repo',
+            repositoryId: 'repo-1',
+            signature: 'compose_up',
+            state: 'active',
+            repair: {
+                notes: 'The .dockerignore excluded cypress/, so ./cypress is mounted read-only into the e2e service.',
+                changed: ['.kodus/compose.yaml', '.kodus/workspace.yaml'],
+            },
+        });
+        expect(l.repair?.evidence).toEqual(expect.any(String));
+        // A secret in the failure's lines never reaches the lesson; neither does the repository's content.
+        expect(JSON.stringify(l)).not.toContain('AKIAIOSFODNN7EXAMPLE');
+        expect(JSON.stringify(l)).not.toContain('FROM ');
+    });
+
+    it('records nothing when the rewrite does not boot or the setup stays blocked', async () => {
+        const second = await run({ first: FAILED, second: blockedOn('toolchain', 'compose_up', 'compose_up: another way'), third: blockedOn('toolchain', 'compose_up', 'compose_up: yet another') }, [submitted(FIRST), submitted(SECOND), submitted(THIRD)]);
+        expect(second.rec.state).toBe('blocked');
+        expect(second.lessons).toEqual([]);
+        const nothing = await run({ first: 'ok' }, [submitted(FIRST)]);
+        expect(nothing.lessons).toEqual([]);
     });
 });

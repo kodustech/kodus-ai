@@ -1,3 +1,4 @@
+import { REPAIR_LESSON_LIMITS, lessonText } from '@libs/runtime/blockers/lessons';
 import type { RecipeAuthorLast } from '@libs/runtime/contracts/recipe-author';
 import { RECIPE_PATH } from '@libs/runtime/protocol/recipe';
 import { type EnvironmentSetupRepair, recipeDigest } from '@libs/runtime/run';
@@ -94,6 +95,10 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
     const digest = recipeDigest(out.recipe, out.files);
     if (failedDigests.has(digest)) return stop('identical', 'failed', `Kody answered a recipe that already failed in this setup, unchanged (${digest.slice(0, 19)})`);
     entry.recipeDigest = digest;
+    entry.learned = {
+        evidence: lessonText(causeLine(failure.evidence.join('\n')) ?? failure.evidence.at(-1) ?? '', REPAIR_LESSON_LIMITS.evidence),
+        changed: changedPaths({ recipe: failed.content, files: failed.files }, { recipe: out.recipe, files: out.files }),
+    };
     const checked = checkRecipe(run, out.recipe);
     if ('blocker' in checked) return stop('refused', 'failed', `Kody's new recipe was refused: ${checked.blocker.message}`);
     const detail = adoptRecipe(run, { path: RECIPE_PATH, content: out.recipe, origin: 'authored', notes: out.notes, files: out.files, adjusted: out.adjusted, authorVersion: out.authorVersion }, checked.recipe);
@@ -120,4 +125,15 @@ function sameFailure(a: EnvironmentSetupRepair['blocker'], b: EnvironmentSetupRe
     if (a.kind !== b.kind || a.signature !== b.signature) return false;
     if (a.cause || b.cause) return a.cause === b.cause;
     return a.signature !== 'compose_up' && a.title === b.title;
+}
+
+/** The paths Kody changed against the recipe that failed: its files that differ, are new or are gone, and the recipe's own when its text differs. */
+function changedPaths(was: { recipe: string; files?: ReadonlyArray<{ path: string; content: string }> }, now: { recipe: string; files?: ReadonlyArray<{ path: string; content: string }> }): string[] {
+    const before = new Map((was.files ?? []).map((f) => [f.path, f.content]));
+    const after = new Map((now.files ?? []).map((f) => [f.path, f.content]));
+    const paths = new Set<string>();
+    for (const [p, c] of after) if (before.get(p) !== c) paths.add(p);
+    for (const p of before.keys()) if (!after.has(p)) paths.add(p);
+    if (was.recipe.trim() !== now.recipe.trim()) paths.add(RECIPE_PATH);
+    return [...paths].sort().slice(0, REPAIR_LESSON_LIMITS.changedPaths).map((p) => lessonText(p, REPAIR_LESSON_LIMITS.changedPath));
 }

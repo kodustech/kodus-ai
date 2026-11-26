@@ -41,6 +41,7 @@ import {
     RUNTIME_ENVIRONMENT_SETUP_READER,
     RUNTIME_GIT_PORT,
     RUNTIME_EGRESS_READER,
+    RUNTIME_LESSON_READER,
     RUNTIME_LLM_USAGE_STORE,
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
     RUNTIME_SETTINGS_STORE,
@@ -53,6 +54,7 @@ import {
     type RuntimeEgressReader,
     type RuntimeEnvironmentSetupReader,
     type RuntimeGitPort,
+    type RuntimeLessonReader,
     type RuntimeLlmUsageStore,
     type RuntimeSettingsStore,
 } from '../../domain/ports';
@@ -61,6 +63,7 @@ import { RUNTIME_RECIPE_AUTHOR_RECEIPTS, type RecipeAuthorOutcome, type RecipeAu
 import { openSetupToken } from '../setup-token';
 import { type AuthoredFile, checkAuthoredSubmission } from '../recipe-author/authored-files-policy';
 import { GitRepoReader } from '../recipe-author/git-repo-reader';
+import { repairLessonLines } from '../recipe-author/repair-lessons';
 import { PULL_REQUEST_FOCUS_LIMITS, type PullRequestPaths } from '../recipe-author/pull-request-focus';
 import {
     authorRecipe,
@@ -190,7 +193,25 @@ export class RuntimeRecipeAuthorUseCase {
         @Optional()
         @Inject(RUNTIME_EGRESS_READER)
         private readonly egress?: Pick<RuntimeEgressReader, 'settings'>,
+        // What earlier repairs of the organization's recipes taught (never another organization's): absent, the author has none.
+        @Optional()
+        @Inject(RUNTIME_LESSON_READER)
+        private readonly lessons?: RuntimeLessonReader,
     ) {}
+
+    /**
+     * The lines of what earlier repairs of this organization's recipes taught (repair-lessons.ts), the ones of
+     * the failure that came back first. An unreadable store leaves them out: the author still runs.
+     */
+    private async repairLessons(organizationId: string, signature: string | undefined): Promise<string[]> {
+        if (!this.lessons) return [];
+        try {
+            return repairLessonLines(await this.lessons.listByOrganization(organizationId), { organizationId, ...(signature ? { signature } : {}) });
+        } catch (e) {
+            this.logger.warn({ message: 'Runtime recipe author: the organization lessons could not be read; the author runs without them', context: RuntimeRecipeAuthorUseCase.name, error: e instanceof Error ? e : undefined });
+            return [];
+        }
+    }
 
     /**
      * The repositories the author reads beside the primary: the environment's
@@ -495,6 +516,7 @@ export class RuntimeRecipeAuthorUseCase {
         // Unreadable (no read URL, a database down): the default, on.
         const recommendedEgress = this.egress ? await this.egress.settings(claims.organizationId).then((s) => s.recommendedEnabled, () => true) : true;
         const pullRequests = await this.openPullRequestPaths({ ...orgTeam, repositoryId: claims.repositoryId, repositoryName: product.repositoryName });
+        const lessons = await this.repairLessons(claims.organizationId, last?.failure?.signature);
         let result: Awaited<ReturnType<typeof authorRecipe>>;
         try {
             result = await authorRecipe(
@@ -511,6 +533,7 @@ export class RuntimeRecipeAuthorUseCase {
                     ...(recommendedEgress ? {} : { recommendedEgress: false }),
                     ...(pullRequests.length ? { pullRequests } : {}),
                     ...(previous ? { previous } : {}),
+                    ...(lessons.length ? { lessons } : {}),
                     maxTokens: reservation.tokens,
                     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(RECIPE_AUTHOR_TIMEOUT_MS)]) : AbortSignal.timeout(RECIPE_AUTHOR_TIMEOUT_MS),
                 },
