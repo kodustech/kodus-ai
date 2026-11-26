@@ -5,6 +5,7 @@ What blocked an environment and what fixes it (docs §4, ADR-015, ADR-018): the 
 ## Owns
 - The classifier: `catalog.ts` `classifyBlocker`, `classifyBlockerWithRule`, `BLOCKER_RULES` (the order is the policy), the card types (`ClassifiedBlocker`, `BlockerFixView`, `FixAction`, `RecipeChange`). The rules themselves: `rules/` ([its AGENTS.md](rules/AGENTS.md)).
 - Lessons: `lessons.ts` `deriveLessons` (born only from a clean boot right after a blocked one, with a change a catalog fix names), `lessonsFor`, `lessonIdFor`.
+- Repair lessons (`lessons.ts` `deriveRepairLesson`, written by the setup when a repair of Kody's recipe boots): an owner's decision (2026-11-25) departs from ADR-018 for them. They reach the recipe author of every repository of the same organization as soon as they are recorded, with no admin promotion, so the next repository with the same failure gets it right first; retiring one still removes it. They never cross organizations.
 - The learn loop's LLM step: `hypothesis.ts` `HypothesisSchema`, `parseHypothesisAnswer`, `MAX_HYPOTHESES_PER_BLOCKER`; the model picks one typed change among candidates computed from the evidence.
 - The recipe edit: `recipe-edit.ts` `applyRecipeChange`, `lineDiff` (one field under `services.compose`, every other byte kept, refused if loading both versions shows any other difference).
 - Lessons in the Runtime Postgres: `pg-lesson.store.ts` `PgLessonReads` (the API, read-only role) and `PgLessonStore` (the runtime-worker).
