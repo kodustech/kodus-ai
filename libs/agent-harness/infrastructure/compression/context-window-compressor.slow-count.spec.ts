@@ -39,4 +39,38 @@ describe('ContextWindowCompressor — slow count log', () => {
             worstCase: true,
         });
     });
+
+    it('measures parts by their serialized size and finds the largest wherever it is', () => {
+        logged.length = 0;
+        const parts = [{ type: 'text', text: 'z'.repeat(9_000) }];
+        const messages = [
+            { role: 'user', content: parts },
+            { role: 'assistant', content: 'short answer' },
+        ] as AgentMessage[];
+
+        new ContextWindowCompressor(1_000_000).maybeCompress(messages);
+
+        expect(logged[0]).toEqual({
+            messages: 2,
+            chars: JSON.stringify(parts).length + 'short answer'.length,
+            largestChars: JSON.stringify(parts).length,
+            largestRole: 'user',
+            worstCase: false,
+        });
+    });
+
+    it('names no largest message when every message is empty', () => {
+        logged.length = 0;
+        new ContextWindowCompressor(1_000_000).maybeCompress([
+            { role: 'user', content: '' },
+        ] as AgentMessage[]);
+
+        expect(logged[0]).toEqual({
+            messages: 1,
+            chars: 0,
+            largestChars: 0,
+            largestRole: '',
+            worstCase: false,
+        });
+    });
 });

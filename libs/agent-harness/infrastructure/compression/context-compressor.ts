@@ -646,16 +646,28 @@ export function clampMessagesToBudget(
     return hardTruncateToFit(work, budgetTokens, counts);
 }
 
-/** A model's reasoning part (AI SDK `reasoning`; Anthropic sends it as a signed `thinking` block). */
+/**
+ * A reasoning part signed by Anthropic (directly or through Bedrock): the only
+ * kind bound to the conversation before it. Other providers' reasoning stays:
+ * OpenAI's Responses API, for one, can require a reasoning item next to the
+ * function call it produced, so dropping it would trade one 400 for another.
+ */
 function isReasoningPart(part: unknown): boolean {
     if (!part || typeof part !== 'object') return false;
-    const type = (part as { type?: unknown }).type;
-    return type === 'reasoning' || type === 'redacted-reasoning';
+    const { type, providerOptions } = part as {
+        type?: unknown;
+        providerOptions?: Record<string, Record<string, unknown> | undefined>;
+    };
+    if (type !== 'reasoning' && type !== 'redacted-reasoning') return false;
+    return ['anthropic', 'bedrock'].some((provider) => {
+        const meta = providerOptions?.[provider];
+        return meta?.signature != null || meta?.redactedData != null;
+    });
 }
 
 /**
- * Drops the reasoning parts of every assistant message from the first message
- * a compression pass changed onward.
+ * Drops the signed reasoning parts of every assistant message from the first
+ * message a compression pass changed onward.
  *
  * Anthropic signs each thinking block with the conversation before it and
  * rejects a replayed block whose prefix changed: "Invalid `signature` in

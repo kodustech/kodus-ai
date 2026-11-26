@@ -88,6 +88,42 @@ describe('ContextWindowCompressor — thinking blocks after an edit', () => {
         expect(signatures(result!.messages)).toEqual(['sig-0', 'sig-1']);
     });
 
+    it('keeps reasoning that carries no Anthropic signature', () => {
+        const openAi = {
+            type: 'reasoning',
+            text: 'summary',
+            providerOptions: { openai: { itemId: 'rs_1' } },
+        };
+        const original: any[] = [
+            { role: 'user', content: 'head' },
+            { role: 'tool', content: 'long result' },
+            { role: 'assistant', content: [openAi, reasoning('sig-a')] },
+        ];
+        const edited = [original[0], { role: 'tool', content: 'cut' }, original[2]];
+        expect(withoutThinkingAfterFirstEdit(original, edited)[2]).toEqual({
+            role: 'assistant',
+            content: [openAi],
+        });
+    });
+
+    it('drops thinking signed through Bedrock as well', () => {
+        const bedrock = {
+            type: 'reasoning',
+            text: 't',
+            providerOptions: { bedrock: { signature: 'b-sig' } },
+        };
+        const original: any[] = [
+            { role: 'user', content: 'head' },
+            { role: 'tool', content: 'long result' },
+            { role: 'assistant', content: [bedrock, { type: 'text', text: 'ok' }] },
+        ];
+        const edited = [original[0], { role: 'tool', content: 'cut' }, original[2]];
+        expect(withoutThinkingAfterFirstEdit(original, edited)[2]).toEqual({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'ok' }],
+        });
+    });
+
     it('leaves the window alone when nothing was edited', () => {
         const messages = history(2) as any[];
         expect(withoutThinkingAfterFirstEdit(messages, messages)).toBe(messages);
