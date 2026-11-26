@@ -18,6 +18,7 @@ import { googleGeminiModelListing } from './listing';
 import type {
     ModelCapabilities,
     ProviderBuildConfig,
+    ProviderBuildOptions,
     ProviderModule,
     ProviderReasoningOptions,
     ReasoningEffort,
@@ -53,10 +54,14 @@ export const googleGeminiModule: ProviderModule = {
         };
     },
 
-    build(cfg: ProviderBuildConfig): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         return createGoogleGenerativeAI({
             apiKey: cfg.apiKey,
             ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
         })(cfg.model);
     },
 

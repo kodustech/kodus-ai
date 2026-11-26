@@ -25,6 +25,21 @@ import { PROACTIVE_HINT_META_KEY } from '@libs/mcp-server/types/mcp-tool.interfa
 import { buildProactiveBlock } from '../agents/conversation/conversation-prompt';
 import { connectMcpTools } from './mcp-tools';
 
+// The servers this suite starts on loopback are its own: allowed the way an
+// operator allows its private hosts (API_ALLOWED_PRIVATE_HOSTS,
+// libs/llm/gateway-address-guard.ts), which cloud mode otherwise refuses.
+const savedAllowedPrivateHosts = process.env.API_ALLOWED_PRIVATE_HOSTS;
+beforeAll(() => {
+    process.env.API_ALLOWED_PRIVATE_HOSTS = '127.0.0.1,localhost';
+});
+afterAll(() => {
+    if (savedAllowedPrivateHosts === undefined) {
+        delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+    } else {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = savedAllowedPrivateHosts;
+    }
+});
+
 // The tool builders only close over their services (used inside `execute`),
 // and listing tools never executes one.
 const stub = () => ({}) as never;
