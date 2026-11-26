@@ -58,7 +58,9 @@ import {
     resolveUltraTrio,
     ultraTrioRefusal,
 } from '@libs/ee/ultra-review/ultra-review-plan';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import {
+    ULTRA_REVIEW_NOT_ENABLED,
     ULTRA_REVIEW_PLAN_REQUIRED,
     ULTRA_REVIEW_PLAN_UNREADABLE,
     ultraTrioRefusalMessage,
@@ -99,6 +101,9 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         @Optional()
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService?: ILicenseService,
+        // Optional for the same reason: without it no Ultra review runs.
+        @Optional()
+        private readonly ultraReviewGate?: UltraReviewGate,
     ) {
         super();
     }
@@ -454,11 +459,18 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         const askedByCommand =
             context.requestedReviewMode === 'ultra' ||
             !!context.origin?.startsWith('command');
-        const planAccess = await ultraReviewPlanAccess(
-            this.licenseService,
-            context.organizationAndTeamData,
-            this.stageName,
-        );
+        // In alpha: an organization outside it gets no Ultra, whatever asked.
+        const enabled =
+            (await this.ultraReviewGate?.isEnabledFor(
+                context.organizationAndTeamData?.organizationId,
+            )) === true;
+        const planAccess = enabled
+            ? await ultraReviewPlanAccess(
+                  this.licenseService,
+                  context.organizationAndTeamData,
+                  this.stageName,
+              )
+            : undefined;
         const trio =
             planAccess === 'allowed'
                 ? resolveUltraTrio(storedConfig)
@@ -466,11 +478,13 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         const trioRefusal = trio ? ultraTrioRefusal(trio) : undefined;
 
         if (!trio || trio.ok !== true) {
-            const message = trioRefusal
-                ? ultraTrioRefusalMessage(trioRefusal)
-                : planAccess === 'unknown'
-                  ? ULTRA_REVIEW_PLAN_UNREADABLE
-                  : ULTRA_REVIEW_PLAN_REQUIRED;
+            const message = !enabled
+                ? ULTRA_REVIEW_NOT_ENABLED
+                : trioRefusal
+                  ? ultraTrioRefusalMessage(trioRefusal)
+                  : planAccess === 'unknown'
+                    ? ULTRA_REVIEW_PLAN_UNREADABLE
+                    : ULTRA_REVIEW_PLAN_REQUIRED;
             this.logger.log({
                 message: 'Ultra review refused — the review does not run',
                 context: this.stageName,
@@ -480,9 +494,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     repositoryId: context.repository?.id,
                     askedByCommand,
                     planAccess,
-                    reason:
-                        trioRefusal?.reason ??
-                        (planAccess === 'unknown' ? 'plan_unreadable' : 'plan'),
+                    reason: !enabled
+                        ? 'not_enabled'
+                        : (trioRefusal?.reason ??
+                          (planAccess === 'unknown'
+                              ? 'plan_unreadable'
+                              : 'plan')),
                 },
             });
             // Settings asking for it: told once per PR, and only when the

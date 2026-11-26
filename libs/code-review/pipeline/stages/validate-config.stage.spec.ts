@@ -12,6 +12,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { environment } from '@libs/ee/configs/environment';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
@@ -31,6 +32,7 @@ describe('ValidateConfigStage — v2 routing', () => {
     let mockOrganizationParametersService: any;
     let mockCodeManagementService: any;
     let validateOrganizationLicense: jest.Mock;
+    let ultraEnabled: jest.Mock;
 
     const TEAMS = {
         valid: true,
@@ -102,6 +104,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             createIssueComment: jest.fn().mockResolvedValue({}),
         };
         validateOrganizationLicense = jest.fn().mockResolvedValue(TEAMS);
+        ultraEnabled = jest.fn().mockResolvedValue(true);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -109,6 +112,10 @@ describe('ValidateConfigStage — v2 routing', () => {
                 {
                     provide: LICENSE_SERVICE_TOKEN,
                     useValue: { validateOrganizationLicense },
+                },
+                {
+                    provide: UltraReviewGate,
+                    useValue: { isEnabledFor: ultraEnabled },
                 },
                 {
                     provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
@@ -387,6 +394,34 @@ describe('ValidateConfigStage — v2 routing', () => {
 
                 expect(result.ultra).toBeDefined();
                 expect(result.reviewRoutingReason).toBe(reason);
+            },
+        );
+
+        it.each([
+            ['--ultra', 'ultra' as const],
+            ['the settings', undefined],
+        ])(
+            'outside the Ultra alpha, Ultra asked by %s runs no review, says why and reads no plan',
+            async (_, requested) => {
+                ultraEnabled.mockResolvedValue(false);
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    null,
+                );
+
+                const result = await stage.execute(ultraContext(requested));
+
+                expect(ultraEnabled).toHaveBeenCalledWith(
+                    result.organizationAndTeamData.organizationId,
+                );
+                expect(result.ultra).toBeUndefined();
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(comment()).toContain(
+                    'Ultra review is not available for this organization yet',
+                );
+                expect(validateOrganizationLicense).not.toHaveBeenCalled();
             },
         );
 
