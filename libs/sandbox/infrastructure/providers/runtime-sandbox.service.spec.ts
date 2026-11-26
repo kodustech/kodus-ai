@@ -22,7 +22,7 @@ import {
     setRuntimeSandboxReleaser,
 } from '@libs/sandbox/infrastructure/services/immediate-sandbox-cleanup';
 import { SandboxReadBudget } from '@libs/sandbox/infrastructure/providers/sandbox-read-budget';
-import { selectSandboxProvider } from '@libs/sandbox/modules/sandbox.module';
+import { selectSandboxProvider } from '@libs/sandbox/modules/select-sandbox-provider';
 
 const SEAL = 'ab'.repeat(32);
 const conf = (env: Record<string, string>) =>
