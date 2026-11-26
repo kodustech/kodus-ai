@@ -626,6 +626,59 @@ describe('PullRequestController', () => {
             );
         });
 
+        it('finds an Azure pull request, whose record names the repository without its project', async () => {
+            module
+                .get(INTEGRATION_CONFIG_SERVICE_TOKEN)
+                .findIntegrationConfigFormatted.mockResolvedValue([
+                    { id: 'azure-guid', name: 'api', organizationName: 'proj' },
+                ]);
+            mockPullRequestsService.find.mockResolvedValue([
+                makePrEntity({
+                    repository: { id: 'azure-guid', fullName: 'api' },
+                }),
+            ]);
+
+            const result = await controller.getSuggestionsByPullRequest(
+                undefined,
+                'azure-guid',
+                '42',
+                'json',
+                undefined,
+                undefined,
+                TEAM_KEY,
+            );
+
+            expect(result.prNumber).toBe(42);
+        });
+
+        it('refuses when pull requests on two servers share the repository id, full name and number', async () => {
+            mockPullRequestsService.find.mockResolvedValue([
+                makePrEntity({
+                    provider: 'GITLAB',
+                    repository: { id: 'repo-123', fullName: 'org/repo' },
+                }),
+                makePrEntity({
+                    provider: 'GITLAB',
+                    repository: { id: 'repo-123', fullName: 'org/repo' },
+                }),
+            ]);
+
+            await expect(
+                controller.getSuggestionsByPullRequest(
+                    undefined,
+                    'repo-123',
+                    '42',
+                    'json',
+                    undefined,
+                    undefined,
+                    TEAM_KEY,
+                ),
+            ).rejects.toThrow(NotFoundException);
+            expect(
+                mockGetPullRequestSuggestionsUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
         it('refuses a pull request recorded without its repository full name', async () => {
             mockPullRequestsService.findOne.mockResolvedValue(
                 makePrEntity({ repository: { id: 'repo-123' } }),

@@ -1,3 +1,4 @@
+import { createLogger } from '@libs/core/log/logger';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { JWT } from '@libs/core/infrastructure/config/types/jwt/jwt';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -121,6 +122,7 @@ const EXECUTION_STREAM_SCOPE_TTL_MS = 15_000;
 @ApiStandardResponses()
 @Controller('pull-requests')
 export class PullRequestController implements OnApplicationShutdown {
+    private readonly logger = createLogger(PullRequestController.name);
     private readonly jwtConfig: JWT;
     private readonly shutdown$ = new Subject<void>();
 
@@ -157,19 +159,20 @@ export class PullRequestController implements OnApplicationShutdown {
     }
 
     /**
-     * The lower-cased owner/name forms of each repository the key's
-     * workspace lists, by repository id, read once per lookup.
+     * The lower-cased names each repository the key's workspace lists goes
+     * by, by repository id, read once per lookup: owner/name forms, and the
+     * bare name Azure records a pull request's repository by.
      */
     private async keyWorkspaceRepositoryNames(
         organizationId: string,
         teamId: string,
-    ): Promise<Map<string, string[]>> {
+    ): Promise<Map<string, { full: string[]; bare: string[] }>> {
         const repositories =
             (await this.integrationConfigService.findIntegrationConfigFormatted<
                 Repositories[]
             >(IntegrationConfigKey.REPOSITORIES, { organizationId, teamId })) ??
             [];
-        const byId = new Map<string, string[]>();
+        const byId = new Map<string, { full: string[]; bare: string[] }>();
         for (const listed of repositories) {
             const names = [
                 listed.full_name,
@@ -178,10 +181,13 @@ export class PullRequestController implements OnApplicationShutdown {
                     : undefined,
                 listed.name,
             ]
-                .filter((name): name is string => !!name?.includes('/'))
+                .filter((name): name is string => !!name)
                 .map((name) => name.toLowerCase());
             const id = String(listed.id);
-            byId.set(id, [...(byId.get(id) ?? []), ...names]);
+            const known = byId.get(id) ?? { full: [], bare: [] };
+            known.full.push(...names.filter((name) => name.includes('/')));
+            known.bare.push(...names.filter((name) => !name.includes('/')));
+            byId.set(id, known);
         }
         return byId;
     }
@@ -192,14 +198,15 @@ export class PullRequestController implements OnApplicationShutdown {
      * record without one cannot be told apart and is refused.
      */
     private keyWorkspaceListsRepository(
-        listed: Map<string, string[]>,
+        listed: Map<string, { full: string[]; bare: string[] }>,
         repository: { id?: unknown; fullName?: string } | undefined,
     ): boolean {
         const fullName = repository?.fullName?.toLowerCase();
         if (repository?.id == null || !fullName) return false;
         const names = listed.get(String(repository.id));
         if (!names) return false;
-        return !names.length || names.includes(fullName);
+        if (!fullName.includes('/')) return names.bare.includes(fullName);
+        return !names.full.length || names.full.includes(fullName);
     }
 
     onApplicationShutdown() {
@@ -776,14 +783,28 @@ export class PullRequestController implements OnApplicationShutdown {
             organizationId,
             teamId,
         );
-        return (
-            candidates.find((candidate) =>
-                this.keyWorkspaceListsRepository(
-                    listed,
-                    candidate.toObject().repository,
-                ),
-            ) ?? null
+        const matching = candidates.filter((candidate) =>
+            this.keyWorkspaceListsRepository(
+                listed,
+                candidate.toObject().repository,
+            ),
         );
+        // Records keep no host: two that match alike cannot be told apart.
+        if (matching.length > 1) {
+            this.logger.warn({
+                message: 'team_key_pull_request_ambiguous',
+                context: PullRequestController.name,
+                metadata: {
+                    organizationId,
+                    teamId,
+                    repositoryId,
+                    prNumber,
+                    candidates: matching.length,
+                },
+            });
+            return null;
+        }
+        return matching[0] ?? null;
     }
 
     private async findPrEntity(params: {

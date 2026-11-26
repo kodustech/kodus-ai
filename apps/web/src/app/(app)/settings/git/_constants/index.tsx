@@ -73,7 +73,10 @@ export const connectionLabel = (
     const position = Math.max(
         0,
         unnamedAlike.findIndex(
-            (other) => other.connectionId === connection.connectionId,
+            (other) =>
+                other === connection ||
+                (!!other.connectionId &&
+                    other.connectionId === connection.connectionId),
         ),
     );
     // The (position + 1)th number no named connection already uses.

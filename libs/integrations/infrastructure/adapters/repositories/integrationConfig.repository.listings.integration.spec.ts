@@ -143,7 +143,8 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
             randomUUID(),
             randomUUID(),
         ];
-        const [auth, configA, configB, configC] = [
+        const [auth, configA, configB, configC, configD] = [
+            randomUUID(),
             randomUUID(),
             randomUUID(),
             randomUUID(),
@@ -182,7 +183,8 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
                 `INSERT INTO "integration_configs" ("uuid", "configKey", "configValue", "integration_id", "team_id")
                  VALUES ($1, 'repositories', '[{"id": 42}]'::jsonb, $4, $7),
                         ($2, 'repositories', '[{"id": 7}]'::jsonb, $5, $7),
-                        ($3, 'repositories', '[{"id": 42}]'::jsonb, $6, $8)`,
+                        ($3, 'repositories', '[{"id": 42}]'::jsonb, $6, $8),
+                        ($9, 'installation_github', '[{"id": 99}]'::jsonb, $4, $7)`,
                 [
                     configA,
                     configB,
@@ -192,6 +194,7 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
                     otherActive,
                     randomUUID(),
                     randomUUID(),
+                    configD,
                 ],
             );
         });
@@ -200,7 +203,7 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
             if (!ds) return;
             await ds.query(
                 `DELETE FROM "integration_configs" WHERE "uuid" = ANY($1::uuid[])`,
-                [[configA, configB, configC]],
+                [[configA, configB, configC, configD]],
             );
             await ds.query(
                 `DELETE FROM "integrations" WHERE "uuid" = ANY($1::uuid[])`,

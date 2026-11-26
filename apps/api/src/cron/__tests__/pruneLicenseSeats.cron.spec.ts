@@ -68,10 +68,32 @@ describe('PruneLicenseSeatsCronProvider', () => {
             [{ organizationId: 'org-1', teamId: 'team-1' }],
             [{ organizationId: 'org-2', teamId: 'team-2' }],
         ]);
-        expect(
-            connectionBilling.ensurePrimary.mock.invocationCallOrder[0],
-        ).toBeLessThan(autoRevokeUseCase.execute.mock.invocationCallOrder[0]);
-        expect(autoRevokeUseCase.execute).toHaveBeenCalledTimes(2);
+        expect(autoRevokeUseCase.execute.mock.calls).toEqual([
+            [
+                {
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                },
+            ],
+            [
+                {
+                    organizationAndTeamData: {
+                        organizationId: 'org-2',
+                        teamId: 'team-2',
+                    },
+                },
+            ],
+        ]);
+        // Each workspace's primary is settled before its own seats.
+        for (const index of [0, 1]) {
+            expect(
+                connectionBilling.ensurePrimary.mock.invocationCallOrder[index],
+            ).toBeLessThan(
+                autoRevokeUseCase.execute.mock.invocationCallOrder[index],
+            );
+        }
     });
 
     it('still sweeps the seats when settling the primary throws', async () => {

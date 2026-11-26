@@ -426,12 +426,37 @@ describe('CreateIntegrationUseCase — connections', () => {
                 organizationId: ORG,
                 integrationId: 'new-conn',
             });
-            expect(ignoreBots.execute).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    integrationId: 'new-conn',
-                    separateConnection: true,
-                }),
-            );
+            expect(ignoreBots.execute).toHaveBeenCalledWith({
+                organizationId: ORG,
+                teamId: TEAM,
+                integrationId: 'new-conn',
+                separateConnection: true,
+            });
+        });
+
+        it('grants no one and seeds no author lists when it cannot tell whether the connection is the first', async () => {
+            const { useCase, connectionAccess, connectionBilling, ignoreBots } =
+                build();
+            const listed = connectionBilling.workspaceConnections;
+            connectionBilling.workspaceConnections = jest.fn(async () => {
+                if (listed.mock.calls.length >= 2) {
+                    throw new Error('pg down');
+                }
+                return listed();
+            });
+
+            const result = await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(result).toMatchObject({ success: true });
+            expect(
+                connectionAccess.grantWorkspaceMembers,
+            ).not.toHaveBeenCalled();
+            expect(ignoreBots.claimConnectionLists).not.toHaveBeenCalled();
+            expect(ignoreBots.execute).not.toHaveBeenCalled();
         });
 
         it("leaves a reconnected connection's readers as they are", async () => {

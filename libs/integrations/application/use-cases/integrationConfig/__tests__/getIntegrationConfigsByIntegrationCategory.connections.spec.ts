@@ -129,8 +129,13 @@ describe('GetIntegrationConfigsByIntegrationCategoryUseCase — Git connections'
             });
 
         const find = read();
-        await run(find);
-        expect(find).toHaveBeenCalledTimes(9);
+        await expect(run(find)).resolves.toEqual([]);
+        expect(find.mock.calls.map(([filter]) => filter)).toEqual(
+            connections.map(({ uuid }) => ({
+                integration: { uuid },
+                team: { uuid: 'team-1' },
+            })),
+        );
         expect(peak).toBe(4);
 
         await expect(run(read('conn-7'))).rejects.toThrow('db down');

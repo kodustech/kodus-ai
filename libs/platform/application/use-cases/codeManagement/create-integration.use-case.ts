@@ -206,24 +206,34 @@ export class CreateIntegrationUseCase implements IUseCase {
             connected: true,
         });
 
-        this.ignoreBotsUseCase
-            .execute({
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-                integrationId:
-                    integrationId ?? organizationAndTeamData.integrationId,
-                separateConnection: separate,
-            })
-            .catch((error) => {
-                this.logger.error({
-                    message: 'Error ignoring bots',
-                    error: error,
-                    context: CreateIntegrationUseCase.name,
-                    metadata: {
-                        organizationAndTeamData: organizationAndTeamData,
-                    },
-                });
+        // Whose author lists a connection's bots go to is unknown until it
+        // is told whether the connection is the workspace's first.
+        if (separate === undefined) {
+            this.logger.warn({
+                message: 'pr_author_bots_not_seeded',
+                context: CreateIntegrationUseCase.name,
+                metadata: { ...workspace, integrationId },
             });
+        } else {
+            this.ignoreBotsUseCase
+                .execute({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    integrationId:
+                        integrationId ?? organizationAndTeamData.integrationId,
+                    separateConnection: separate,
+                })
+                .catch((error) => {
+                    this.logger.error({
+                        message: 'Error ignoring bots',
+                        error: error,
+                        context: CreateIntegrationUseCase.name,
+                        metadata: {
+                            organizationAndTeamData: organizationAndTeamData,
+                        },
+                    });
+                });
+        }
 
         this.authIntegrationService
             .findOne({
@@ -271,21 +281,33 @@ export class CreateIntegrationUseCase implements IUseCase {
      * The workspace's first connection is read by every member, as the
      * workspace was before connections existed. One added beside others
      * starts with owners only, and with author lists of its own. Answers
-     * whether the connection is one added beside others.
+     * whether the connection is one added beside others, or undefined when
+     * that could not be told: then no one is granted it.
      */
     private async settleNewConnectionReaders(
         workspace: { organizationId: string; teamId: string },
         integrationId: string,
         connectionsBefore: ReadonlySet<string>,
         separateConnection: boolean,
-    ): Promise<boolean> {
+    ): Promise<boolean | undefined> {
         if (connectionsBefore.has(integrationId)) return separateConnection;
+        let separate: boolean;
         try {
             // Two connections added at once to an empty workspace both read
             // it empty; only the oldest of them is its first.
-            const separate =
+            separate =
                 separateConnection ||
                 !(await this.isOldestConnection(workspace, integrationId));
+        } catch (error) {
+            this.logger.error({
+                message: 'connection_first_or_beside_unknown',
+                context: CreateIntegrationUseCase.name,
+                error,
+                metadata: { ...workspace, integrationId },
+            });
+            return undefined;
+        }
+        try {
             if (separate) {
                 if (!separateConnection) {
                     this.logger.warn({
@@ -298,31 +320,31 @@ export class CreateIntegrationUseCase implements IUseCase {
                     organizationId: workspace.organizationId,
                     integrationId,
                 });
-                return true;
+            } else {
+                const members =
+                    await this.connectionAccess.grantWorkspaceMembers(
+                        workspace.teamId,
+                        integrationId,
+                    );
+                this.logger.log({
+                    message: 'connection_granted_to_workspace_members',
+                    context: CreateIntegrationUseCase.name,
+                    metadata: {
+                        ...workspace,
+                        integrationId,
+                        members: members.length,
+                    },
+                });
             }
-            const members = await this.connectionAccess.grantWorkspaceMembers(
-                workspace.teamId,
-                integrationId,
-            );
-            this.logger.log({
-                message: 'connection_granted_to_workspace_members',
-                context: CreateIntegrationUseCase.name,
-                metadata: {
-                    ...workspace,
-                    integrationId,
-                    members: members.length,
-                },
-            });
-            return false;
         } catch (error) {
             this.logger.error({
                 message: 'Could not settle who reads the new Git connection',
                 context: CreateIntegrationUseCase.name,
                 error,
-                metadata: { ...workspace, integrationId, separateConnection },
+                metadata: { ...workspace, integrationId, separate },
             });
-            return separateConnection;
         }
+        return separate;
     }
 
     private async isOldestConnection(
