@@ -95,6 +95,7 @@ type stepOutput struct {
 	cacheMount bool
 	exited     bool
 	exitCode   int
+	segfaulted bool
 }
 
 func New() *Tracker { return NewAt(time.Now) }
@@ -122,7 +123,15 @@ type Failure struct {
 	// CacheMount: the step mounts a build cache (RUN --mount=type=cache),
 	// which a build's persisted state provides.
 	CacheMount bool
+	// Segfaulted: a line the step printed says a process of its command died
+	// of SIGSEGV, though the command itself exited with another status (a
+	// dpkg script under gVisor: dpkg fails and the RUN exits 100).
+	Segfaulted bool
 }
+
+// segfaultLine is how a shell, or a tool that ran a child, says the child died
+// of SIGSEGV.
+var segfaultLine = regexp.MustCompile(`\bSegmentation fault\b|\bexit status 139\b`)
 
 // errorLine is a line a failing tool prints when it says why: npm, pnpm,
 // node-gyp, apt, a compiler, a resolver error.
@@ -242,6 +251,9 @@ func (t *Tracker) printed(id int, line string) {
 		return
 	}
 	o := t.output(id)
+	if !o.segfaulted && segfaultLine.MatchString(line) {
+		o.segfaulted = true
+	}
 	if len(o.errors) < MaxErrorLines && errorLine.MatchString(line) && t.kept < maxKeptLines {
 		o.errors = append(o.errors, cleanLine(line))
 		t.kept++
@@ -271,7 +283,7 @@ func (t *Tracker) Failure() (Failure, bool) {
 		f.Step = "#" + strconv.Itoa(t.failedFirst)
 	}
 	if o := t.out[t.failedFirst]; o != nil {
-		f.ProcessExit, f.CacheMount, f.ExitCode = o.exited, o.cacheMount, o.exitCode
+		f.ProcessExit, f.CacheMount, f.ExitCode, f.Segfaulted = o.exited, o.cacheMount, o.exitCode, o.segfaulted
 		lines := o.errors
 		if len(lines) == 0 {
 			lines = o.tail

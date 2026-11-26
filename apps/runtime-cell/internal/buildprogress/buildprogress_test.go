@@ -264,6 +264,34 @@ func TestATrackerSaysWhenAProjectStepIsRunning(t *testing.T) {
 	}
 }
 
+// A RUN whose command reports a segfault among its lines (a dpkg script under
+// gVisor, the RUN itself exiting 100) is a segfault; one that only failed is not.
+func TestFailureSaysTheStepsCommandSegfaulted(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		want  bool
+	}{
+		{"shell says so", []string{"#8 21.32 Segmentation fault"}, true},
+		{"core dumped", []string{"#8 3.1 /bin/sh: line 1:    42 Segmentation fault      (core dumped) node build.js"}, true},
+		{"dpkg's script", []string{"#8 21.41  installed ca-certificates package post-installation script subprocess returned error exit status 139"}, true},
+		{"a plain failure", []string{"#8 2.0 npm ERR! code ELIFECYCLE", "#8 2.0 npm ERR! exit status 1"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := New()
+			tr.Line("#8 [deps 2/15] RUN apt-get install -y ca-certificates")
+			for _, l := range tc.lines {
+				tr.Line(l)
+			}
+			tr.Line(`#8 ERROR: process "/bin/sh -c apt-get install -y ca-certificates" did not complete successfully: exit code: 100`)
+			f, ok := tr.Failure()
+			if !ok || f.Segfaulted != tc.want || f.ExitCode != 100 {
+				t.Fatalf("%+v", f)
+			}
+		})
+	}
+}
+
 // A failed RUN's exit status is what BuildKit's error line says; a step that
 // did not exit has none.
 func TestFailureCarriesTheExitCodeOfTheStepsCommand(t *testing.T) {

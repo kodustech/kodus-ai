@@ -210,8 +210,10 @@ phases of `claim.progress` (which read one build's steps after another's) skip t
 **Two retries, each once.** A build that fails the way the host can cause runs again before the claim fails
 (`build.go`, `buildUnit` and `runBuildPhases`); the log says why in `build.retry reason=...`.
 - A RUN step that dies with exit 139 (SIGSEGV under gVisor; BuildKit's error line gives the status,
-  `buildprogress.Failure.ExitCode`) runs the build again as it was (`reason=segfault`). Only 139: any other status is
-  the code's failure, and so is a second 139.
+  `buildprogress.Failure.ExitCode`) runs the build again as it was (`reason=segfault`). So does a RUN step whose own
+  output says a process of it segfaulted (`Segmentation fault`, `exit status 139`: `buildprogress.Failure.Segfaulted`)
+  though the step exited otherwise, as `update-ca-certificates` inside `apt-get install` did on dev (dpkg failed, the RUN
+  exited 100). Any other failure is the code's, and so is a second segfault.
 - A builder killed at its memory limit (exit 137, `driver.ErrOutOfMemory`) in a claim that builds in more than one lane
   gets one more try with the claim to itself (`reason=oom_in_lane`): the build leaves its lane, waits until no other
   build of the claim runs (`buildLanes.takeAll`), and runs with the claim's whole memory instead of a lane's share.

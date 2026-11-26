@@ -1204,13 +1204,14 @@ func (d *Driver) overlayRetry(ctx context.Context, a *buildAttempt) (string, boo
 // exitSegfault is the status of a process ended by SIGSEGV (128 + 11).
 const exitSegfault = 139
 
-// segfaultRetry says whether a build whose RUN step died with exit 139 runs
-// again as it was, and why (or why not, when the failure is a segfault the
-// claim has no time to try again). A step that exited with any other status
-// is the code's failure and is not run twice.
+// segfaultRetry says whether a build whose RUN step died with exit 139, or
+// whose command said a process of it segfaulted (a dpkg script: the RUN exits
+// 100), runs again as it was, and why (or why not, when the failure is a
+// segfault the claim has no time to try again). Any other failing step is the
+// code's failure and is not run twice.
 func (d *Driver) segfaultRetry(ctx context.Context, a *buildAttempt) (string, bool) {
 	f, failed := a.steps.Failure()
-	if !failed || !f.ProcessExit || f.ExitCode != exitSegfault {
+	if !failed || !f.ProcessExit || (f.ExitCode != exitSegfault && !f.Segfaulted) {
 		return "", false
 	}
 	if deadline, ok := ctx.Deadline(); ok {

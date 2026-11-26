@@ -55,6 +55,37 @@ func TestABuildWhoseRunStepSegfaultsRunsAgainOnce(t *testing.T) {
 	}
 }
 
+// dev, 2026-11-26: update-ca-certificates segfaulted under gVisor inside an
+// apt-get install; dpkg turned the 139 into its own failure and the RUN exited
+// 100. The step's output names the segfault, so it builds once more too.
+func TestARunStepWhoseCommandSaysItSegfaultedRunsAgainOnce(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.buildOutput = []string{
+		"#8 [deps 2/15] RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates",
+		"#8 19.92 Updating certificates in /etc/ssl/certs...",
+		"#8 21.32 Segmentation fault",
+		"#8 21.41 dpkg: error processing package ca-certificates (--configure):",
+		"#8 21.41  installed ca-certificates package post-installation script subprocess returned error exit status 139",
+		"#8 21.75 E: Sub-process /usr/bin/dpkg returned an error code (1)",
+		"#8 ERROR: process \"/bin/sh -c apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates\" did not complete successfully: exit code: 100",
+	}
+	n := 0
+	docker.duringBuild = func(dockercli.BuildRun) {
+		n++
+		docker.buildErr = nil
+		if n == 1 {
+			docker.buildErr = errors.New("failed to solve: process did not complete successfully: exit code: 100")
+		}
+	}
+	err, logs := buildWithLogs(t, d, "claim-1")
+	if err != nil {
+		t.Fatalf("a build that passed on its second try failed: %v", err)
+	}
+	if n != 2 || !strings.Contains(logs, `"reason":"segfault"`) {
+		t.Fatalf("built %d times (want 2), log %s", n, logs)
+	}
+}
+
 // A segfault that stays is the build's failure after one more try, never a loop.
 func TestASegfaultThatRepeatsFailsAfterOneRetry(t *testing.T) {
 	d, docker := bakeDriver(t)
