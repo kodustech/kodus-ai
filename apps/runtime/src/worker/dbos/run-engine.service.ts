@@ -47,6 +47,10 @@ export const EXECUTION_QUEUE = 'runtime-executions';
 export const ADMISSION_WORKFLOW = 'runtimeAdmission';
 export const ADMISSION_FINALIZE_QUEUE = 'runtime-admission-finalizers';
 export const setupWorkflowId = (key: string) => `setup:${key}`;
+/** The workflow ids of one environment's own setups: the product's default key is `<environmentId>:<requestedAt>`. */
+const environmentSetupPrefix = (environmentId: string) => `setup:${environmentId}:`;
+/** How often a setup that waits for an earlier setup of its environment looks again. */
+export const SETUP_TURN_POLL_MS = 2_000;
 /** The queued Run a fork's gate starts once approved. */
 export const approvedRunWorkflowId = (runId: string) => `${runId}:run`;
 const runIdOfWorkflow = (workflowId: string) => workflowId.replace(/:run$/, '');
@@ -393,8 +397,33 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         );
     }
 
+    /**
+     * One live setup per environment: a setup that starts while an earlier one of the same environment is running
+     * waits for it to end, so the two never build at once (the later one builds on the first's cache) and the older
+     * record never lands last. Only a running earlier setup holds it back: one still queued does not, or it could
+     * hold the queue slot the running one needs. Setups with another kind of key (a template build) are not the
+     * environment's own.
+     */
+    private async waitForEarlierSetups(cmd: RuntimeEnvironmentSetupRequested): Promise<void> {
+        const me = setupWorkflowId(cmd.key);
+        const prefix = environmentSetupPrefix(cmd.environmentId);
+        if (!me.startsWith(prefix)) return;
+        await dbosStep('setup:turn', async () => {
+            for (;;) {
+                const mine = await DBOS.getWorkflowStatus(me);
+                const live = await DBOS.listWorkflows({ workflowIDPrefix: prefix, status: ['PENDING'], loadInput: false, loadOutput: false });
+                const earlier = live.filter((w) => w.workflowID !== me && !w.workflowID.endsWith(':admission-rejected') && (w.createdAt < (mine?.createdAt ?? Infinity) || (w.createdAt === mine?.createdAt && w.workflowID < me)));
+                if (!earlier.length) return;
+                const signal = DBOS.stepStatus?.cancelSignal;
+                if (signal?.aborted) throw signal.reason ?? Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
+                await new Promise((r) => setTimeout(r, SETUP_TURN_POLL_MS));
+            }
+        });
+    }
+
     private async executeSetupWorkflow(cmd: RuntimeEnvironmentSetupRequested, opts: SetupWorkflowOptions): Promise<unknown> {
         if (!this.setup) throw new Error('setup service unavailable');
+        await this.waitForEarlierSetups(cmd);
         if (!opts.admissionRef) return this.setup.run(cmd, dbosStep, () => DBOS.stepStatus?.cancelSignal, { admissionBlocker: opts.admissionBlocker });
         if (!this.admission) throw new Error('admission coordinator unavailable');
         const ref = opts.admissionRef;
