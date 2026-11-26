@@ -4,8 +4,10 @@ import type { SpecStats } from '@libs/runtime/suite';
 
 /**
  * runtime.runtime_suite_spec_stats (docs/runtime/e2e-suites.md section 6): the duration each spec of an environment
- * takes, an exponential average over about the last 10 passing runs. Only a passing spec moves it: a failed, skipped
- * or timed-out spec is usually short (a crash) and would pull the median down. The next plan balances by it.
+ * takes, an exponential average over about the last 10 runs. A passing and a failing spec both move it (a failing spec costs its
+ * shard its wall time, about 3 minutes against 45 seconds in a measured Cypress suite, and a plan blind to that sizes shards far
+ * too light); a skipped spec changes nothing, and one that never ran (`not_run`, `infra`) never reaches `record`. The next plan
+ * balances by it.
  */
 export const STATS_WINDOW = 10;
 
@@ -28,9 +30,9 @@ export class PgSuiteSpecStats {
         return Object.fromEntries(r.rows.map((x) => [x.spec as string, { p50Ms: x.p50_ms as number }]));
     }
 
-    /** Folds the passing specs of one run into their averages, atomically per spec (concurrent writers lose no sample). */
+    /** Folds the passed and failed specs of one run into their averages, atomically per spec (concurrent writers lose no sample). */
     async record(scope: { organizationId: string; environmentId: string }, sha: string, observed: readonly SpecObservation[]): Promise<void> {
-        const passed = observed.filter((o) => o.status === 'passed' && Number.isFinite(o.durationMs) && o.durationMs >= 0);
+        const passed = observed.filter((o) => (o.status === 'passed' || o.status === 'failed') && Number.isFinite(o.durationMs) && o.durationMs >= 0);
         if (passed.length === 0) return;
         // One row per spec in a statement (a spec twice in one batch would hit the same row twice).
         const latest = new Map(passed.map((o) => [o.spec, Math.round(o.durationMs)]));

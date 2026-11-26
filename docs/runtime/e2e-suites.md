@@ -186,13 +186,15 @@ fails, or more than 5,000 matches leave `mainSpecs` out, and a listing host list
 The engine then splits them:
 
 1. **Durations.** `runtime_suite_spec_stats(environment, spec) -> {p50Ms, lastMs, samples, lastSeenSha}`, an
-   exponential average of the last 10 passing runs, updated by every baseline and PR run. Failed or timed-out specs do
-   not update it (a crash is short). The stored time is **the wall time a spec costs a shard**, not the duration the
+   exponential average of the last 10 runs, updated by every baseline and PR run. A passed and a failed spec both update it (a
+   failing spec costs its shard its wall time, about 3 minutes against 45 seconds for a passing one in a measured Cypress
+   suite, and a plan that never saw it sizes shards far too light); a skipped spec does not, and a spec that never ran
+   (`not_run`, `infra`) is never recorded. The stored time is **the wall time a spec costs a shard**, not the duration the
    runner reports: a runner that starts per spec (Cypress opens its browser for each one, 50 s or more under gVisor) does
    not count that start in its own duration, and a plan from reported durations sizes shards at half what they take.
    When a run ends the engine takes each shard's wall time (claim ready to its last result), subtracts the durations the
-   shard reported and shares the rest among the specs that reported (`perSpecOverheadMs`); a passing spec is stored at
-   its duration plus that overhead (the first spec included; a failed or timed-out spec still stores nothing; a spec
+   shard reported and shares the rest among the specs that reported (`perSpecOverheadMs`); a passed or failed spec is stored at
+   its duration plus that overhead (the first spec included; a spec
    from the fresh host, or from a shard with nothing to measure, takes the average of the measured shards).
 2. **Balance.** Longest-processing-time-first onto N bins: sort specs by `p50Ms` descending, put each in the lightest
    bin. A spec with no stat gets the average of the known ones (the rule `cypress-split` uses for new specs, source

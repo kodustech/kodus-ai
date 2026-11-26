@@ -38,16 +38,20 @@ const SHA = 'a'.repeat(40);
         expect(p50Ms).toBeLessThan(20_000);
     });
 
-    it('a failed, skipped or timed-out spec changes nothing: a crash is short and would drag the median down', async () => {
+    it('a failed spec stores the wall time it cost its shard, like a passing one; a skipped spec changes nothing', async () => {
         await stats.record(scope, SHA, [{ spec: 'a.cy.ts', status: 'passed', durationMs: 10_000 }]);
         await stats.record(scope, SHA, [
-            { spec: 'a.cy.ts', status: 'failed', durationMs: 300 },
-            { spec: 'b.cy.ts', status: 'failed', durationMs: 300 },
+            { spec: 'a.cy.ts', status: 'failed', durationMs: 20_000 },
+            { spec: 'b.cy.ts', status: 'failed', durationMs: 180_000 },
             { spec: 'c.cy.ts', status: 'skipped', durationMs: 0 },
         ]);
-        expect(await stats.read(scope, ['a.cy.ts', 'b.cy.ts', 'c.cy.ts'])).toEqual({ 'a.cy.ts': { p50Ms: 10_000 } });
+        const read = await stats.read(scope, ['a.cy.ts', 'b.cy.ts', 'c.cy.ts']);
+        expect(read['b.cy.ts']).toEqual({ p50Ms: 180_000 });
+        expect(read['a.cy.ts'].p50Ms).toBeGreaterThan(10_000);
+        expect(read['a.cy.ts'].p50Ms).toBeLessThan(20_000);
+        expect(read).not.toHaveProperty('c.cy.ts');
         const { rows } = await pool.query('SELECT spec, samples FROM runtime.runtime_suite_spec_stats ORDER BY spec');
-        expect(rows).toEqual([{ spec: 'a.cy.ts', samples: 1 }]);
+        expect(rows).toEqual([{ spec: 'a.cy.ts', samples: 2 }, { spec: 'b.cy.ts', samples: 1 }]);
     });
 
     it('keeps every environment apart, and reads only the specs asked for', async () => {

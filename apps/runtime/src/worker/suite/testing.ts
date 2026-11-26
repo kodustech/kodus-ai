@@ -156,7 +156,7 @@ export class InMemorySuiteSpecStats implements Pick<PgSuiteSpecStats, 'read' | '
     }
     async record(scope: { organizationId: string; environmentId: string }, _sha: string, observed: readonly SpecObservation[]) {
         const alpha = 2 / (STATS_WINDOW + 1);
-        for (const o of new Map(observed.filter((x) => x.status === 'passed' && Number.isFinite(x.durationMs) && x.durationMs >= 0).map((x) => [x.spec, Math.round(x.durationMs)])) ) {
+        for (const o of new Map(observed.filter((x) => (x.status === 'passed' || x.status === 'failed') && Number.isFinite(x.durationMs) && x.durationMs >= 0).map((x) => [x.spec, Math.round(x.durationMs)])) ) {
             const key = `${scope.organizationId}|${scope.environmentId}|${o[0]}`;
             const prev = this.rows.get(key);
             this.rows.set(key, prev ? { p50Ms: Math.round(prev.p50Ms + alpha * (o[1] - prev.p50Ms)), samples: prev.samples + 1 } : { p50Ms: o[1], samples: 1 });

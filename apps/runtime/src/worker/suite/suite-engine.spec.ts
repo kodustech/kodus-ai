@@ -177,10 +177,10 @@ describe('the first pass of a suite run', () => {
         for (let i = 1; i < at.length; i++) expect(at[i] - at[i - 1]).toBeLessThanOrEqual(60_000);
     });
 
-    it('learns the durations of the specs that passed and nothing from the ones that failed', async () => {
+    it('learns the durations of the specs that passed and of the ones that failed: a failing spec costs its shard that time too', async () => {
         const w = world({ specs: { 'a.cy.ts': { ms: 2 * MIN }, 'b.cy.ts': { ms: 3 * MIN, pr: [{ fail: 'boom' }] } } }, { maxShards: 1 });
         await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts']));
-        expect(await w.stats.read({ organizationId: ORG, environmentId: ENV }, ['a.cy.ts', 'b.cy.ts'])).toEqual({ 'a.cy.ts': { p50Ms: 2 * MIN } });
+        expect(await w.stats.read({ organizationId: ORG, environmentId: ENV }, ['a.cy.ts', 'b.cy.ts'])).toEqual({ 'a.cy.ts': { p50Ms: 2 * MIN }, 'b.cy.ts': { p50Ms: 3 * MIN } });
     });
 
     it('releases every claim and ends its demand when it is done, however it ended', async () => {
