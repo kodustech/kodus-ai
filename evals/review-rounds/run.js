@@ -398,10 +398,11 @@ async function once(c, judgeKey) {
     if (!c.repeatCheckFault && checks.some((r) => r.model === 'failed')) {
         throw new Error('INFRA: the repeat check call failed');
     }
-    // A check that ran on a faulted case must have taken the fault, or the
-    // case measured a judged round instead of the no-verdict path.
-    if (c.repeatCheckFault && checks.length && !checks.some((r) => r.model === 'failed')) {
-        throw new Error('INFRA: the injected repeat-check fault did not reach the check');
+    // A faulted case measures the no-verdict path only when a failed check
+    // judged something: with no check (the finder raised nothing to compare)
+    // or a check that did not take the fault, it passes without measuring.
+    if (c.repeatCheckFault && !checks.some((r) => r.model === 'failed')) {
+        throw new Error('INFRA: not measured, the injected repeat-check fault never reached a check');
     }
 
     // What reaches the PR: each comment the stage hands to posting, at its
