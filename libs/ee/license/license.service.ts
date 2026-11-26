@@ -476,8 +476,8 @@ export class LicenseService implements ILicenseService {
             });
             // Only a connection with its own subscription keeps its own
             // plan: a licence row left by a failed seat call or an abandoned
-            // checkout does not stop it from taking the workspace plan. A
-            // connection billing says nothing about is not read as either.
+            // checkout does not stop it from taking the workspace plan. An
+            // entry billing does not fully describe is not read as either.
             const connections = (result?.connections ?? []) as Array<{
                 connectionId?: string;
                 ownSubscription?: boolean;
@@ -485,7 +485,9 @@ export class LicenseService implements ILicenseService {
             if (
                 connections.some(
                     (connection) =>
-                        typeof connection?.ownSubscription !== 'boolean',
+                        typeof connection?.ownSubscription !== 'boolean' ||
+                        typeof connection?.connectionId !== 'string' ||
+                        !connection.connectionId,
                 )
             ) {
                 this.logger.warn({
@@ -499,8 +501,7 @@ export class LicenseService implements ILicenseService {
                 primaryConnectionId: result?.primaryConnectionId ?? null,
                 ownLicenceConnectionIds: connections
                     .filter((connection) => connection.ownSubscription === true)
-                    .map((connection) => connection.connectionId)
-                    .filter((id): id is string => typeof id === 'string'),
+                    .map((connection) => connection.connectionId as string),
             };
         } catch (error) {
             this.logger.error({

@@ -196,5 +196,14 @@ describe('LicenseService per Git connection', () => {
         await expect(
             service.getConnectionLicenses(workspace),
         ).resolves.toBeNull();
+
+        // A subscription billing cannot tie to a connection.
+        get.mockResolvedValue({
+            primaryConnectionId: null,
+            connections: [{ ownSubscription: true }],
+        });
+        await expect(
+            service.getConnectionLicenses(workspace),
+        ).resolves.toBeNull();
     });
 });

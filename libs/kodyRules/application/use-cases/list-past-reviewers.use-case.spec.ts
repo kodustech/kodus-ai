@@ -93,6 +93,40 @@ describe('ListPastReviewersUseCase', () => {
         expect(codeManagementService.getListMembers).not.toHaveBeenCalled();
     });
 
+    it("answers the reviewers of the repository's current connection after it moves, not the cached ones of the previous", async () => {
+        // A cache that keeps what it is given, by key.
+        const cache = new Map<string, unknown>();
+        const { useCase, codeManagementService, cacheService } = build({
+            repos: [{ id: 'r1', name: 'api' }],
+            repositoryConnection: 'gh-a',
+            members: [{ id: 'gh-1', name: 'Ana' }],
+        });
+        cacheService.getFromCache.mockImplementation(async (key: string) =>
+            cache.has(key) ? cache.get(key) : null,
+        );
+        cacheService.addToCache.mockImplementation(
+            async (key: string, value: unknown) => {
+                cache.set(key, value);
+            },
+        );
+
+        const before = await useCase.execute({
+            teamId: 't1',
+            repositoryId: 'r1',
+        });
+        codeManagementService.connectionIdFor.mockResolvedValue('gl-b');
+        codeManagementService.getListMembers.mockResolvedValue([
+            { id: 'gl-7', name: 'Bruno' },
+        ]);
+        const after = await useCase.execute({
+            teamId: 't1',
+            repositoryId: 'r1',
+        });
+
+        expect(before.map(({ id }) => id)).toEqual(['gh-1']);
+        expect(after.map(({ id }) => id)).toEqual(['gl-7']);
+    });
+
     it("keys the cached list by the repository's connection", async () => {
         const { useCase, cacheService } = build({
             repos: [{ id: 'r1', name: 'api' }],

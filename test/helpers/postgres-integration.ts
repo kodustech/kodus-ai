@@ -1,7 +1,8 @@
 /**
  * A single-connection DataSource on the local Postgres for
  * *.integration.spec.ts files, or undefined when Postgres is not reachable
- * (the spec then skips). Any other setup error fails the spec.
+ * locally (the spec then skips). In CI, where the job starts Postgres, an
+ * unreachable one fails the spec, as does any other setup error.
  */
 require('dotenv').config();
 
@@ -71,7 +72,7 @@ export async function connectTestPostgres(options?: {
         await candidate.initialize();
     } catch (error) {
         await candidate.destroy().catch(() => undefined);
-        if (!isUnreachable(error)) throw error;
+        if (!isUnreachable(error) || process.env.CI) throw error;
         return undefined;
     }
     if (options?.replica) {
