@@ -2795,12 +2795,16 @@ describe('SecurityScanEngine: across slices and units', () => {
             ],
         } as any);
 
-        expect(result.findings).toEqual([
-            expect.objectContaining({
-                filePath: service,
-                occurrenceOf: 'fp-holder',
-            }),
-        ]);
+        // One finding, recorded as a place of that issue, under no identity
+        // of its own.
+        expect(
+            result.findings.map((f: any) => [
+                f.filePath,
+                f.startLine,
+                f.occurrenceOf,
+                f.storedAs,
+            ]),
+        ).toEqual([[service, 1, 'fp-holder', undefined]]);
         expect(
             llm.mock.calls.some(
                 ([req]: any) => req.runName === 'security-scan-root-cause',
@@ -2865,12 +2869,16 @@ describe('SecurityScanEngine: across slices and units', () => {
             onUnitDone,
         } as any);
 
-        expect(result.findings).toEqual([
-            expect.objectContaining({
-                filePath: service,
-                occurrenceOf: 'fp-carried',
-            }),
-        ]);
+        // One finding, recorded as a place of that issue, under no identity
+        // of its own.
+        expect(
+            result.findings.map((f: any) => [
+                f.filePath,
+                f.startLine,
+                f.occurrenceOf,
+                f.storedAs,
+            ]),
+        ).toEqual([[service, 1, 'fp-carried', undefined]]);
         expect(onUnitDone).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'done' }),
             [expect.objectContaining({ occurrenceOf: 'fp-carried' })],
@@ -3271,15 +3279,18 @@ describe('reproduction results that say nothing about the finding', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const reproduction = result.findings[0].reproduction!;
-        expect(reproduction).toEqual(
-            expect.objectContaining({
-                executed: true,
-                exitCode: 1,
-                inconclusive: true,
-            }),
-        );
-        expect(reproduction.reproduced).toBeUndefined();
+        // Run, but stopped on the dependency install: neither reproduced nor
+        // refuted.
+        expect(result.findings[0].reproduction).toEqual({
+            path: 'src/orders/idor.repro.spec.ts',
+            content:
+                'test("idor", async () => { expect(await readOrder("other-user")).toBeDefined(); })',
+            command: 'npx jest src/orders/idor.repro.spec.ts',
+            executed: true,
+            exitCode: 1,
+            inconclusive: true,
+            output: 'npm ERR! code EAI_AGAIN\nnpm ERR! request to https://registry.npmjs.org/jest failed',
+        });
     });
 
     it('attaches no test when the model wrote a placeholder', async () => {
@@ -3491,13 +3502,23 @@ describe('incremental scans', () => {
                 covered.push(...(entries ?? [])),
         } as any);
 
-        const authz = covered.filter((e) => e.vulnerabilityClass === 'authz');
-        expect(authz).toHaveLength(1);
-        expect(authz[0]).toMatchObject({ filePath: controller });
-        expect(authz[0].incomplete).toBeUndefined();
-        expect(
-            covered.find((e) => e.vulnerabilityClass === 'injection'),
-        ).toMatchObject({ filePath: controller, incomplete: true });
+        // Both classes recorded against the file's blob; only the one whose
+        // lens ended on an error is incomplete.
+        expect(covered).toEqual([
+            {
+                filePath: controller,
+                vulnerabilityClass: 'authz',
+                blob: BLOBS[controller],
+                evidence: [],
+            },
+            {
+                filePath: controller,
+                vulnerabilityClass: 'injection',
+                blob: BLOBS[controller],
+                evidence: [],
+                incomplete: true,
+            },
+        ]);
     });
 
     it('reads everything again in a full scan', async () => {

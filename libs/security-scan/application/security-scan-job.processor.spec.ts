@@ -1695,9 +1695,18 @@ describe('SecurityScanJobProcessor: one issue per root cause', () => {
 
         await processor.process('job-1');
 
-        expect(issuesService.foldScanIssueInto).toHaveBeenCalledWith(
-            expect.objectContaining({ fingerprint: 'fp-dos', into: 'fp-auth' }),
-        );
+        expect(issuesService.foldScanIssueInto.mock.calls).toEqual([
+            [
+                {
+                    organizationId: 'org-1',
+                    repositoryPlatform: scanRecord().repository.platform,
+                    repositoryHost: scanRecord().repository.host ?? '',
+                    repositoryId: 'repo-1',
+                    fingerprint: 'fp-dos',
+                    into: 'fp-auth',
+                },
+            ],
+        ]);
         const [{ fingerprints }] = issuesService.markScanIssuesConsolidated.mock
             .calls[0] as any;
         expect(fingerprints).toEqual(['fp-auth']);
