@@ -38,7 +38,6 @@ import {
     AlertTriangle,
     FolderX,
     HatGlasses,
-    InfoIcon,
     KeyRound,
     PowerIcon,
     Sparkles,
@@ -50,10 +49,7 @@ import { apiErrorMessage } from "src/core/utils/api-error";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 import { pluralize } from "src/core/utils/string";
-import {
-    TRIAL_DAYS,
-    TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED,
-} from "src/features/ee/subscription/_constants/trial";
+import { TrialTermsAlert } from "src/features/ee/subscription/_components/trial-terms-alert";
 
 import { StepIndicators } from "../_components/step-indicators";
 
@@ -369,27 +365,7 @@ export default function App() {
                             </div>
 
                             <div className="flex flex-col gap-4">
-                                <Alert variant="info">
-                                    <InfoIcon />
-                                    <AlertTitle>
-                                        Your first{" "}
-                                        {TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED}{" "}
-                                        PR reviews are on us
-                                    </AlertTitle>
-                                    <AlertDescription>
-                                        <p>
-                                            During your {TRIAL_DAYS}-day trial
-                                            we cover your first{" "}
-                                            {
-                                                TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED
-                                            }{" "}
-                                            PR reviews — no AI key needed. After
-                                            that, connect your AI key for
-                                            unlimited reviews (free, on any
-                                            plan).
-                                        </p>
-                                    </AlertDescription>
-                                </Alert>
+                                <TrialTermsAlert variant="repositories" />
 
                                 <FormControl.Root>
                                     <FormControl.Label htmlFor="select-repositories">

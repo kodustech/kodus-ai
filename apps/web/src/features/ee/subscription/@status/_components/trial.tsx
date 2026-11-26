@@ -10,7 +10,6 @@ import { ArrowUpCircle, KeyRoundIcon } from "lucide-react";
 
 import { PlanFact, PlanSheet } from "../../_components/plan-sheet";
 import { TrialCreditsSummary } from "../../_components/trial-credits-summary";
-import { TRIAL_DAYS } from "../../_constants/trial";
 import { useSubscriptionStatus } from "../../_hooks/use-subscription-status";
 import { getTrialCardState, getTrialCreditBalance } from "../../_utils/trial";
 
@@ -81,7 +80,7 @@ export const Trial = ({
                     ? "Your free reviews are used up. Connect your AI key to keep reviewing — unlimited, on any plan."
                     : expiring
                       ? `${days} left. Choose a plan to keep the Team features.`
-                      : `${days} left in your ${TRIAL_DAYS}-day trial of the Team features.`
+                      : `${days} left in your trial of the Team features.`
             }
             summaryClassName={
                 exhausted ? "text-alert" : expiring ? "text-warning" : undefined
