@@ -13,6 +13,7 @@ import { FindByOrganizationIdKodyRulesUseCase } from '@libs/kodyRules/applicatio
 
 import { KodyRulesTenantGuard } from '../guards/kody-rules-tenant.guard';
 import { KodyRulesController } from './kodyRules.controller';
+import { FindTeamKeyPullRequestUseCase } from '@libs/code-review/application/use-cases/pullRequests/find-team-key-pull-request.use-case';
 import { ParametersController } from './parameters.controller';
 import { PullRequestController } from './pullRequest.controller';
 
@@ -383,6 +384,12 @@ describe('workspace scope — suggestions with a team CLI key', () => {
             getPullRequestSuggestionsUseCase: { execute },
             eventEmitter: { emit: jest.fn() },
         });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
         return { controller, execute };
     };
 
@@ -423,6 +430,12 @@ describe('workspace scope — suggestions with a team CLI key', () => {
                 create: jest.fn().mockResolvedValue(undefined),
             },
         });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
 
         await controller.getSuggestionsByPullRequest(
             undefined,
@@ -489,6 +502,12 @@ describe('repository scope — execution events stream', () => {
             eventEmitter,
             shutdown$: new Subject<void>(),
         });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
 
         const received = firstValueFrom(
             controller.executionEvents().pipe(
@@ -526,6 +545,12 @@ describe('repository scope — execution events stream', () => {
             authorizationService,
             shutdown$: new Subject<void>(),
         });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
         let now = 1_000_000;
         const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
         const received: string[] = [];

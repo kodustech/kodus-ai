@@ -829,11 +829,17 @@ export class GithubService
                 'This GitHub installation is already connected to another Kodus organization.',
             );
         }
+        // Asked for a new connection while a connection of this workspace
+        // holds the installation (an intent left over from an earlier
+        // attempt): that connection is reconnected instead. One of another
+        // workspace is refused.
+        const teamId = params?.organizationAndTeamData?.teamId;
         if (
             params?.newConnection &&
             linked.some(
                 (integration) =>
-                    integration?.organization?.uuid === organizationId,
+                    integration?.organization?.uuid === organizationId &&
+                    integration?.team?.uuid !== teamId,
             )
         ) {
             throw new BadRequestException(

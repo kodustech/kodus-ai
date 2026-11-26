@@ -15,7 +15,7 @@ describe('AuthIntegrationRepository.find', () => {
         return { repository, find };
     };
 
-    it('filters authDetails by containment and loads the organization', async () => {
+    it('filters authDetails by containment and loads the organization and workspace', async () => {
         const { repository, find } = setup();
 
         await repository.find({
@@ -24,7 +24,7 @@ describe('AuthIntegrationRepository.find', () => {
         } as any);
 
         const options = find.mock.calls[0][0];
-        expect(options.relations).toEqual(['organization']);
+        expect(options.relations).toEqual(['organization', 'team']);
         expect(options.where.status).toBe(true);
         const condition = options.where.authDetails as FindOperator<unknown>;
         expect(condition).toBeInstanceOf(FindOperator);

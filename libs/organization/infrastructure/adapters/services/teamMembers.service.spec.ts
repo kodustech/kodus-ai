@@ -24,6 +24,10 @@ describe('TeamMemberService — deterministic logic', () => {
             repo as any,
             usersService as any,
             notificationService as any,
+            {
+                grantWorkspaceConnectionsWithin: jest.fn(),
+                forgetUsers: jest.fn(),
+            } as any,
         );
 
     beforeEach(() => {
@@ -752,6 +756,8 @@ describe('TeamMemberService — deterministic logic', () => {
                     organization: { uuid: 'org-1' },
                     team: { uuid: 'team-1' },
                 }),
+                // The member's grants are written in the insert's transaction.
+                { alsoWithin: expect.any(Function) },
             );
             expect(repo.update).not.toHaveBeenCalled();
             expect(sendInvitations).toHaveBeenCalledWith(
@@ -821,6 +827,8 @@ describe('TeamMemberService — deterministic logic', () => {
                     user: { uuid: 'u-1' },
                     team: { uuid: 'team-1' },
                 }),
+                // The member's grants are written in the insert's transaction.
+                { alsoWithin: expect.any(Function) },
             );
         });
 
@@ -933,6 +941,7 @@ describe('TeamMemberService — deterministic logic', () => {
             expect(usersService.register).not.toHaveBeenCalled();
             expect(repo.create).toHaveBeenCalledWith(
                 expect.objectContaining({ user: { uuid: 'u-1' } }),
+                { alsoWithin: expect.any(Function) },
             );
             expect(sendInvitations).toHaveBeenCalledWith(
                 [existing],

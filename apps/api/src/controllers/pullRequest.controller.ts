@@ -1,4 +1,3 @@
-import { createLogger } from '@libs/core/log/logger';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { JWT } from '@libs/core/infrastructure/config/types/jwt/jwt';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -103,12 +102,7 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
-import {
-    IIntegrationConfigService,
-    INTEGRATION_CONFIG_SERVICE_TOKEN,
-} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
-import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
-import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import { FindTeamKeyPullRequestUseCase } from '@libs/code-review/application/use-cases/pullRequests/find-team-key-pull-request.use-case';
 import { PullRequestSuggestionsResponseDto } from '../dtos/pull-request-suggestions-response.dto';
 import {
     PullRequestBackfillResponseDto,
@@ -122,7 +116,6 @@ const EXECUTION_STREAM_SCOPE_TTL_MS = 15_000;
 @ApiStandardResponses()
 @Controller('pull-requests')
 export class PullRequestController implements OnApplicationShutdown {
-    private readonly logger = createLogger(PullRequestController.name);
     private readonly jwtConfig: JWT;
     private readonly shutdown$ = new Subject<void>();
 
@@ -152,61 +145,9 @@ export class PullRequestController implements OnApplicationShutdown {
         private readonly configService: ConfigService,
         private readonly eventEmitter: EventEmitter2,
         private readonly authorizationService: AuthorizationService,
-        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
-        private readonly integrationConfigService: IIntegrationConfigService,
+        private readonly findTeamKeyPullRequestUseCase: FindTeamKeyPullRequestUseCase,
     ) {
         this.jwtConfig = this.configService.get<JWT>('jwtConfig');
-    }
-
-    /**
-     * The lower-cased names each repository the key's workspace lists goes
-     * by, by repository id, read once per lookup: owner/name forms, and the
-     * bare name Azure records a pull request's repository by.
-     */
-    private async keyWorkspaceRepositoryNames(
-        organizationId: string,
-        teamId: string,
-    ): Promise<Map<string, { full: string[]; bare: string[] }>> {
-        const repositories =
-            (await this.integrationConfigService.findIntegrationConfigFormatted<
-                Repositories[]
-            >(IntegrationConfigKey.REPOSITORIES, { organizationId, teamId })) ??
-            [];
-        const byId = new Map<string, { full: string[]; bare: string[] }>();
-        for (const listed of repositories) {
-            const names = [
-                listed.full_name,
-                listed.organizationName && listed.name
-                    ? `${listed.organizationName}/${listed.name}`
-                    : undefined,
-                listed.name,
-            ]
-                .filter((name): name is string => !!name)
-                .map((name) => name.toLowerCase());
-            const id = String(listed.id);
-            const known = byId.get(id) ?? { full: [], bare: [] };
-            known.full.push(...names.filter((name) => name.includes('/')));
-            known.bare.push(...names.filter((name) => !name.includes('/')));
-            byId.set(id, known);
-        }
-        return byId;
-    }
-
-    /**
-     * Whether the key's workspace lists the pull request's repository. Ids
-     * repeat across servers, so the recorded full name has to match too; a
-     * record without one cannot be told apart and is refused.
-     */
-    private keyWorkspaceListsRepository(
-        listed: Map<string, { full: string[]; bare: string[] }>,
-        repository: { id?: unknown; fullName?: string } | undefined,
-    ): boolean {
-        const fullName = repository?.fullName?.toLowerCase();
-        if (repository?.id == null || !fullName) return false;
-        const names = listed.get(String(repository.id));
-        if (!names) return false;
-        if (!fullName.includes('/')) return names.bare.includes(fullName);
-        return !names.full.length || names.full.includes(fullName);
     }
 
     onApplicationShutdown() {
@@ -705,7 +646,7 @@ export class PullRequestController implements OnApplicationShutdown {
                   prNumber,
                   organizationId,
               })
-            : await this.findKeyWorkspacePr({
+            : await this.findTeamKeyPullRequestUseCase.execute({
                   prUrl,
                   repositoryId,
                   prNumber,
@@ -750,61 +691,6 @@ export class PullRequestController implements OnApplicationShutdown {
         }
 
         return response;
-    }
-
-    /**
-     * A team key reads its own workspace's pull requests only. The same
-     * repository id and number can name a pull request on another server,
-     * so every match is checked against the workspace's repositories.
-     */
-    private async findKeyWorkspacePr(params: {
-        prUrl?: string;
-        repositoryId?: string;
-        prNumber?: string;
-        organizationId: string;
-        teamId?: string;
-    }) {
-        const { repositoryId, prNumber, organizationId, teamId } = params;
-        const parsedPrNumber = prNumber ? parseInt(prNumber, 10) : NaN;
-        const candidates =
-            !params.prUrl && repositoryId && !Number.isNaN(parsedPrNumber)
-                ? ((await this.pullRequestsService.find({
-                      'number': parsedPrNumber,
-                      organizationId,
-                      'repository.id': repositoryId,
-                  } as any)) ?? [])
-                : [];
-        if (!candidates.length) {
-            const found = await this.findPrEntity(params);
-            if (found) candidates.push(found);
-        }
-        if (!candidates.length || !teamId) return null;
-        const listed = await this.keyWorkspaceRepositoryNames(
-            organizationId,
-            teamId,
-        );
-        const matching = candidates.filter((candidate) =>
-            this.keyWorkspaceListsRepository(
-                listed,
-                candidate.toObject().repository,
-            ),
-        );
-        // Records keep no host: two that match alike cannot be told apart.
-        if (matching.length > 1) {
-            this.logger.warn({
-                message: 'team_key_pull_request_ambiguous',
-                context: PullRequestController.name,
-                metadata: {
-                    organizationId,
-                    teamId,
-                    repositoryId,
-                    prNumber,
-                    candidates: matching.length,
-                },
-            });
-            return null;
-        }
-        return matching[0] ?? null;
     }
 
     private async findPrEntity(params: {

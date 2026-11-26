@@ -20,6 +20,10 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/integration.interface';
+import {
+    recordedNameMatches,
+    repositoryNamesOf,
+} from '@libs/integrations/domain/integrations/utils/repository-names';
 
 /** Long enough for one request or cron step, short enough to see a reset. */
 const RESOLUTION_MEMO_TTL_MS = 5_000;
@@ -117,6 +121,50 @@ export class IntegrationService implements IIntegrationService {
 
     findById(uuid: string): Promise<IntegrationEntity> {
         return this.integrationRepository.findById(uuid);
+    }
+
+    /**
+     * The connection a provider's connect call rewrites: the one named; none
+     * when the caller adds a new one; else the workspace's only active
+     * connection of the platform (its oldest inactive one when none is
+     * active). With several active and none named it refuses: a connect that
+     * lost its intent would otherwise rewrite the oldest one's credentials.
+     */
+    async connectionToUpdate(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform: PlatformType,
+        newConnection?: boolean,
+    ): Promise<IntegrationEntity | undefined> {
+        const scope = {
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            platform,
+        };
+        if (organizationAndTeamData.integrationId) {
+            return this.findOne({
+                ...scope,
+                uuid: organizationAndTeamData.integrationId,
+            });
+        }
+        if (newConnection) return undefined;
+
+        const connections = (await this.find(scope)) ?? [];
+        const active = connections.filter((connection) => connection.status);
+        if (active.length > 1) {
+            this.logger.warn({
+                message: 'connection_to_update_ambiguous',
+                context: IntegrationService.name,
+                metadata: {
+                    ...organizationAndTeamData,
+                    platform,
+                    connections: active.length,
+                },
+            });
+            throw new BadRequestException(
+                'This workspace has several connections to this provider: reconnect one from its card in Settings > Git.',
+            );
+        }
+        return active[0] ?? connections[0];
     }
 
     // A write changes which connection answers; this process forgets its
@@ -375,12 +423,16 @@ export class IntegrationService implements IIntegrationService {
             })) ?? [];
 
         let matched = new Set(listings.map((listing) => listing.integrationId));
-        const fullName = repository.fullName?.toLowerCase();
+        const fullName = repository.fullName;
         if (matched.size > 1 && fullName) {
             const byFullName = new Set(
                 listings
-                    .filter((listing) =>
-                        fullNamesOf(listing.repository).includes(fullName),
+                    .filter(
+                        (listing) =>
+                            recordedNameMatches(
+                                repositoryNamesOf(listing.repository),
+                                fullName,
+                            ) === true,
                     )
                     .map((listing) => listing.integrationId),
             );
@@ -390,18 +442,3 @@ export class IntegrationService implements IIntegrationService {
         return candidates.filter((candidate) => matched.has(candidate.uuid));
     }
 }
-
-/** The owner/name forms a stored repository goes by, lower-cased. */
-const fullNamesOf = (repository: Record<string, unknown>): string[] =>
-    [
-        repository?.full_name,
-        repository?.organizationName && repository?.name
-            ? `${repository.organizationName}/${repository.name}`
-            : undefined,
-        repository?.name,
-    ]
-        .filter(
-            (name): name is string =>
-                typeof name === 'string' && name.includes('/'),
-        )
-        .map((name) => name.toLowerCase());

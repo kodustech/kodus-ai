@@ -21,6 +21,12 @@ export type ResolvedConnection = {
 export const INTEGRATION_SERVICE_TOKEN = Symbol.for('IntegrationService');
 
 export interface IIntegrationService extends IIntegrationRepository {
+    /** The connection a provider's connect call rewrites; refuses when several match. */
+    connectionToUpdate(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform: PlatformType,
+        newConnection?: boolean,
+    ): Promise<IntegrationEntity | undefined>;
     getPlatformAuthDetails<T>(
         organizationAndTeamData: OrganizationAndTeamData,
         platform: PlatformType,

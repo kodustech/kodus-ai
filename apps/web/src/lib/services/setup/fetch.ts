@@ -45,6 +45,8 @@ export function getConnectionsOnClient(teamId: string) {
             reviewEnabled?: boolean;
             /** Every Git connection of the workspace, those the member is not granted included. */
             workspaceConnectionCount?: number;
+            /** Billed on a subscription of its own; null when billing could not be read. */
+            ownSubscription?: boolean | null;
         }>
     >;
 }
@@ -66,6 +68,8 @@ export function getConnections(teamId: string) {
             reviewEnabled?: boolean;
             /** Every Git connection of the workspace, those the member is not granted included. */
             workspaceConnectionCount?: number;
+            /** Billed on a subscription of its own; null when billing could not be read. */
+            ownSubscription?: boolean | null;
         }>
     >;
 }

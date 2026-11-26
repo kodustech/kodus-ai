@@ -4282,16 +4282,12 @@ export class BitbucketCloudService implements Omit<
                 return checkRepos;
             }
 
-            const integration = params?.newConnection
-                ? undefined
-                : await this.integrationService.findOne({
-                      organization: {
-                          uuid: organizationAndTeamData.organizationId,
-                      },
-                      team: { uuid: organizationAndTeamData.teamId },
-                      ...connectionScope(organizationAndTeamData),
-                      platform: PlatformType.BITBUCKET,
-                  });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.BITBUCKET,
+                    params?.newConnection,
+                );
 
             const authDetails: BitbucketAuthDetail = {
                 username: username,

@@ -29,12 +29,15 @@ type DeleteMemberModalProps = {
     platformName: string;
     /** The Git connection to reset; the workspace's only one when absent. */
     connectionId?: string;
+    /** Billed on a subscription of its own; null when that could not be read. */
+    ownSubscription?: boolean | null;
 };
 
 export const ResetIntegrationModal = ({
     teamId,
     platformName,
     connectionId,
+    ownSubscription,
 }: DeleteMemberModalProps) => {
     const [enabled, setEnabled] = useState(false);
     const { invalidateQueries, resetQueries, generateQueryKey } =
@@ -176,6 +179,22 @@ export const ResetIntegrationModal = ({
                         Only this connection is removed. The workspace&apos;s
                         other Git connections and their repositories stay as
                         they are.
+                    </p>
+                )}
+
+                {ownSubscription === true && (
+                    <p className="text-danger text-sm">
+                        This connection has a subscription of its own. Removing
+                        it does not cancel that subscription: cancel it from
+                        Subscription first, or it keeps billing. Connecting
+                        again starts a new connection on the free plan.
+                    </p>
+                )}
+                {ownSubscription === null && (
+                    <p className="text-sm">
+                        Whether this connection has a subscription of its own
+                        could not be checked. Look at Subscription before
+                        removing it: removing does not cancel a subscription.
                     </p>
                 )}
 

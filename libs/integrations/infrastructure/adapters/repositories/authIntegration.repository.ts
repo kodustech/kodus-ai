@@ -113,7 +113,8 @@ export class AuthIntegrationRepository implements IAuthIntegrationRepository {
             );
 
             // Same matching as findOne: authDetails by JSON containment, and
-            // the organization loaded so callers can tell links apart.
+            // the organization and workspace loaded so callers can tell links
+            // apart.
             const findOptions: FindManyOptions<AuthIntegrationModel> = {
                 where: {
                     ...otherFilterAttributes,
@@ -129,7 +130,7 @@ export class AuthIntegrationRepository implements IAuthIntegrationRepository {
                           }
                         : {}),
                 },
-                relations: ['organization'],
+                relations: ['organization', 'team'],
             };
 
             const authIntegrations =

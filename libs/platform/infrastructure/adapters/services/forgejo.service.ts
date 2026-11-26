@@ -1147,16 +1147,12 @@ export class ForgejoService implements Omit<
             });
             if (!checkRepos.success) return checkRepos;
 
-            const integration = params.newConnection
-                ? undefined
-                : await this.integrationService.findOne({
-                      organization: {
-                          uuid: organizationAndTeamData.organizationId,
-                      },
-                      team: { uuid: organizationAndTeamData.teamId },
-                      ...connectionScope(organizationAndTeamData),
-                      platform: PlatformType.FORGEJO,
-                  });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.FORGEJO,
+                    params.newConnection,
+                );
 
             let integrationId = integration?.uuid;
             if (!integration) {

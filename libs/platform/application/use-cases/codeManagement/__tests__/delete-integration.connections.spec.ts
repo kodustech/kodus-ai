@@ -1,4 +1,3 @@
-import { ServiceUnavailableException } from '@nestjs/common';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),

@@ -324,6 +324,26 @@ describe('IntegrationService — connection lookups stay deterministic and fail 
         expect(result.ambiguous).toBe(false);
     });
 
+    it('breaks a repository id listed by two Azure connections with the bare name Azure records', async () => {
+        const { service } = makeService(
+            [
+                connection('az-a', PlatformType.AZURE_REPOS),
+                connection('az-b', PlatformType.AZURE_REPOS),
+            ],
+            {
+                'az-a': [{ id: '42', name: 'web', organizationName: 'proj' }],
+                'az-b': [{ id: '42', name: 'api', organizationName: 'proj' }],
+            },
+        );
+
+        const result = await service.resolveCodeManagementConnection(ORG_TEAM, {
+            repository: { id: '42', fullName: 'api' },
+        });
+
+        expect(result.integration?.uuid).toBe('az-b');
+        expect(result.ambiguous).toBe(false);
+    });
+
     it('stays ambiguous when the full name does not tell the listings apart', async () => {
         const { service } = makeService(
             [

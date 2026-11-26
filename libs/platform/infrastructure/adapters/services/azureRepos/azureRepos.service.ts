@@ -3223,16 +3223,12 @@ export class AzureReposService implements Omit<
                 return checkRepos;
             }
 
-            const integration = params?.newConnection
-                ? undefined
-                : await this.integrationService.findOne({
-                      organization: {
-                          uuid: organizationAndTeamData.organizationId,
-                      },
-                      team: { uuid: organizationAndTeamData.teamId },
-                      ...connectionScope(organizationAndTeamData),
-                      platform: PlatformType.AZURE_REPOS,
-                  });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.AZURE_REPOS,
+                    params?.newConnection,
+                );
 
             const integrationId = await this.handleIntegration(
                 integration,

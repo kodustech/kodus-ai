@@ -1427,16 +1427,12 @@ export class GitlabService implements Omit<
 
             if (!checkRepos.success) return checkRepos;
 
-            const integration = params?.newConnection
-                ? undefined
-                : await this.integrationService.findOne({
-                      organization: {
-                          uuid: params.organizationAndTeamData.organizationId,
-                      },
-                      team: { uuid: params.organizationAndTeamData.teamId },
-                      ...connectionScope(params.organizationAndTeamData),
-                      platform: PlatformType.GITLAB,
-                  });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    params.organizationAndTeamData,
+                    PlatformType.GITLAB,
+                    params?.newConnection,
+                );
 
             const integrationId = await this.handleIntegration(
                 integration,
@@ -1487,16 +1483,12 @@ export class GitlabService implements Omit<
 
             if (!checkRepos.success) return checkRepos;
 
-            const integration = params?.newConnection
-                ? undefined
-                : await this.integrationService.findOne({
-                      organization: {
-                          uuid: params.organizationAndTeamData.organizationId,
-                      },
-                      team: { uuid: params.organizationAndTeamData.teamId },
-                      ...connectionScope(params.organizationAndTeamData),
-                      platform: PlatformType.GITLAB,
-                  });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    params.organizationAndTeamData,
+                    PlatformType.GITLAB,
+                    params?.newConnection,
+                );
 
             const integrationId = await this.handleIntegration(
                 integration,

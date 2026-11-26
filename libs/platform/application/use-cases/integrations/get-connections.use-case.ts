@@ -8,6 +8,10 @@ import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import { CodeManagementService } from '../../../infrastructure/adapters/services/codeManagement.service';
 
 @Injectable()
@@ -22,6 +26,9 @@ export class GetConnectionsUseCase implements IUseCase {
 
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
+
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
     ) {}
 
     /** Every Git connection of the workspace, each with its own status. */
@@ -37,17 +44,31 @@ export class GetConnectionsUseCase implements IUseCase {
                     status: true,
                 })) ?? [];
 
-            const statuses = await Promise.allSettled(
-                connections.map((connection) =>
-                    this.codeManagementService.verifyConnection({
-                        organizationAndTeamData: {
-                            organizationId,
-                            teamId,
-                            integrationId: connection.uuid,
-                        },
-                    }),
+            if (!connections.length) return [];
+
+            const [statuses, licences] = await Promise.all([
+                Promise.allSettled(
+                    connections.map((connection) =>
+                        this.codeManagementService.verifyConnection({
+                            organizationAndTeamData: {
+                                organizationId,
+                                teamId,
+                                integrationId: connection.uuid,
+                            },
+                        }),
+                    ),
                 ),
-            );
+                // A connection billed on its own subscription keeps billing
+                // after a reset, so the reset says so first. Null when
+                // billing could not be read.
+                this.licenseService.getConnectionLicenses({
+                    organizationId,
+                    teamId,
+                }),
+            ]);
+            const ownSubscriptions = licences
+                ? new Set(licences.ownLicenceConnectionIds)
+                : null;
 
             return connections
                 .map((connection, index) => {
@@ -60,6 +81,9 @@ export class GetConnectionsUseCase implements IUseCase {
                         connectionId: connection.uuid,
                         connectionName: connection.name ?? null,
                         reviewEnabled: connection.reviewEnabled !== false,
+                        ownSubscription: ownSubscriptions
+                            ? ownSubscriptions.has(connection.uuid)
+                            : null,
                     };
                 })
                 .filter((connection) => connection);

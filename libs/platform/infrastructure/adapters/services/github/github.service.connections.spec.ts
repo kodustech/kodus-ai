@@ -49,11 +49,32 @@ describe('GitHub connections in one workspace', () => {
         svc.createUserOctokit = jest.fn().mockReturnValue({
             paginate: jest.fn().mockResolvedValue([{ id: 4242 }]),
         });
+        // The installation's links: those of the existing connections that
+        // hold it (this workspace), plus another workspace's when asked.
+        const existingLinks = (opts.existing ?? [])
+            .filter(
+                (connection) =>
+                    connection.authIntegration.authDetails.installationId ===
+                    4242,
+            )
+            .map(() => ({
+                organization: { uuid: ORG },
+                team: { uuid: 't1' },
+            }));
         svc.authIntegrationService = {
             find: jest.fn(async (filter: any) =>
-                opts.linkedInOrg &&
                 typeof filter.authDetails.installationId === 'number'
-                    ? [{ organization: { uuid: ORG } }]
+                    ? [
+                          ...existingLinks,
+                          ...(opts.linkedInOrg
+                              ? [
+                                    {
+                                        organization: { uuid: ORG },
+                                        team: { uuid: 'other-workspace' },
+                                    },
+                                ]
+                              : []),
+                      ]
                     : [],
             ),
         };

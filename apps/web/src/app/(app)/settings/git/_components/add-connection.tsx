@@ -11,6 +11,11 @@ import {
 } from "@components/ui/dialog";
 import { Input } from "@components/ui/input";
 import { magicModal } from "@components/ui/magic-modal";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@components/ui/tooltip";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { PlusIcon } from "lucide-react";
@@ -55,18 +60,39 @@ const AddConnectionModal = () => {
     );
 };
 
-export const AddConnectionButton = () => {
+/**
+ * `blockedReason`: why a connection cannot be added right now, said before
+ * the provider round trip rather than refused after it.
+ */
+export const AddConnectionButton = ({
+    blockedReason,
+}: {
+    blockedReason?: string;
+}) => {
     const canCreate = usePermission(Action.Create, ResourceType.GitSettings);
 
     if (!canCreate) return null;
 
-    return (
+    const button = (
         <Button
             size="sm"
             variant="helper"
             leftIcon={<PlusIcon />}
+            disabled={!!blockedReason}
             onClick={() => magicModal.show(() => <AddConnectionModal />)}>
             Add connection
         </Button>
+    );
+
+    if (!blockedReason) return button;
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                {/* A disabled button fires no hover events of its own. */}
+                <span tabIndex={0}>{button}</span>
+            </TooltipTrigger>
+            <TooltipContent>{blockedReason}</TooltipContent>
+        </Tooltip>
     );
 };

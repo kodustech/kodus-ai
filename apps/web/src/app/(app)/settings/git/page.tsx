@@ -211,7 +211,13 @@ export default async function GitSettings() {
                         {!severalConnections && (
                             <GitConnectedProvider connection={gitConnection} />
                         )}
-                        <AddConnectionButton />
+                        <AddConnectionButton
+                            blockedReason={
+                                repositorySelection.mode === "all"
+                                    ? "Turn off reviewing all repositories before adding another Git connection."
+                                    : undefined
+                            }
+                        />
                     </Page.HeaderActions>
                 )}
             </Page.Header>

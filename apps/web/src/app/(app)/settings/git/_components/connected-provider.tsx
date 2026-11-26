@@ -211,6 +211,7 @@ export const GitConnectedProvider = ({
                                     platformName={label}
                                     teamId={teamId}
                                     connectionId={connection.connectionId}
+                                    ownSubscription={connection.ownSubscription}
                                 />
                             ));
                         }}>

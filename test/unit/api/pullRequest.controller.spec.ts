@@ -24,6 +24,7 @@ import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adap
 import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { FindTeamKeyPullRequestUseCase } from '@libs/code-review/application/use-cases/pullRequests/find-team-key-pull-request.use-case';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
@@ -197,6 +198,8 @@ function buildProviders(eventEmitter: any) {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        // The real team-key lookup, over the mocked services.
+        FindTeamKeyPullRequestUseCase,
         // The team key's workspace lists the pull requests' repository.
         {
             provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -241,7 +244,8 @@ describe('PullRequestController', () => {
             status: STATUS.ACTIVE,
         });
         mockPullRequestsService.findOne.mockResolvedValue(makePrEntity());
-        mockPullRequestsService.find.mockResolvedValue([]);
+        // The team-key path reads every matching record.
+        mockPullRequestsService.find.mockResolvedValue([makePrEntity()]);
         mockCliDeviceService.validateOrRegisterDevice.mockResolvedValue({});
         mockAutomationExecutionService.create.mockResolvedValue({});
         mockGetPullRequestSuggestionsUseCase.execute.mockResolvedValue({
@@ -475,239 +479,67 @@ describe('PullRequestController', () => {
     // =========================================================================
 
     describe('GET /pull-requests/suggestions – PR resolution', () => {
+        // Which record a team key reads is the use case's
+        // (find-team-key-pull-request.use-case.spec.ts); here, that the
+        // controller answers with it, or 404 without one.
         beforeEach(() => {
             mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
         });
 
-        it('finds PR by URL', async () => {
-            const result = await controller.getSuggestionsByPullRequest(
-                PR_URL,
-                undefined,
-                undefined,
+        const byKey = (
+            prUrl: string | undefined,
+            repositoryId: string | undefined,
+            prNumber: string | undefined,
+        ) =>
+            controller.getSuggestionsByPullRequest(
+                prUrl,
+                repositoryId,
+                prNumber,
                 'json',
                 undefined,
                 undefined,
                 TEAM_KEY,
             );
 
-            expect(mockPullRequestsService.findOne).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    url: PR_URL,
-                    organizationId: ORG_ID,
-                }),
-            );
-            expect(result.prNumber).toBe(42);
-        });
+        it("answers the key workspace's pull request found by URL", async () => {
+            const result = await byKey(PR_URL, undefined, undefined);
 
-        it('falls back to parsing GitHub URL when direct lookup fails', async () => {
-            mockPullRequestsService.findOne
-                .mockResolvedValueOnce(null) // direct URL lookup fails
-                .mockResolvedValueOnce(makePrEntity()); // fullName + number succeeds
-
-            const result = await controller.getSuggestionsByPullRequest(
-                PR_URL,
-                undefined,
-                undefined,
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(mockPullRequestsService.findOne).toHaveBeenCalledTimes(2);
-            expect(result.prNumber).toBe(42);
-        });
-
-        it('finds PR by repositoryId + prNumber', async () => {
-            mockPullRequestsService.findOne.mockResolvedValueOnce(
-                makePrEntity(),
-            );
-
-            const result = await controller.getSuggestionsByPullRequest(
-                undefined,
-                'repo-123',
-                '42',
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(result.prNumber).toBe(42);
-        });
-
-        it('finds PR by repository fullName as repositoryId', async () => {
-            mockPullRequestsService.findOne
-                .mockResolvedValueOnce(null) // by repo.id fails
-                .mockResolvedValueOnce(makePrEntity()); // by fullName succeeds
-
-            const result = await controller.getSuggestionsByPullRequest(
-                undefined,
-                'org/repo',
-                '42',
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(mockPullRequestsService.findOne).toHaveBeenCalledTimes(2);
-            expect(result.prNumber).toBe(42);
-        });
-
-        it('throws 404 when PR is not found by URL', async () => {
-            mockPullRequestsService.findOne.mockResolvedValue(null);
-
-            await expect(
-                controller.getSuggestionsByPullRequest(
-                    'https://github.com/org/repo/pull/999',
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it('throws 404 when PR is not found by repoId + prNumber', async () => {
-            mockPullRequestsService.findOne.mockResolvedValue(null);
-
-            await expect(
-                controller.getSuggestionsByPullRequest(
-                    undefined,
-                    'repo-123',
-                    '999',
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it("picks the team key's own pull request when the same repository id and number exist on another server, reading the workspace's repositories once", async () => {
-            const listed = module.get(INTEGRATION_CONFIG_SERVICE_TOKEN);
-            listed.findIntegrationConfigFormatted.mockResolvedValue([
-                { id: 'repo-123', name: 'repo', organizationName: 'org' },
+            expect(mockPullRequestsService.find.mock.calls[0]).toEqual([
+                { url: PR_URL, organizationId: ORG_ID },
             ]);
-            mockPullRequestsService.find.mockResolvedValue([
-                makePrEntity({
-                    repository: { id: 'repo-123', fullName: 'elsewhere/repo' },
-                }),
-                makePrEntity({
-                    repository: { id: 'repo-123', fullName: 'org/repo' },
-                }),
-            ]);
-
-            const result = await controller.getSuggestionsByPullRequest(
-                undefined,
-                'repo-123',
-                '42',
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(result.prNumber).toBe(42);
-            expect(
-                mockGetPullRequestSuggestionsUseCase.execute,
-            ).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    pr: expect.objectContaining({
-                        repository: { id: 'repo-123', fullName: 'org/repo' },
-                    }),
-                }),
-            );
-            expect(listed.findIntegrationConfigFormatted).toHaveBeenCalledTimes(
-                1,
-            );
-        });
-
-        it('finds an Azure pull request, whose record names the repository without its project', async () => {
-            module
-                .get(INTEGRATION_CONFIG_SERVICE_TOKEN)
-                .findIntegrationConfigFormatted.mockResolvedValue([
-                    { id: 'azure-guid', name: 'api', organizationName: 'proj' },
-                ]);
-            mockPullRequestsService.find.mockResolvedValue([
-                makePrEntity({
-                    repository: { id: 'azure-guid', fullName: 'api' },
-                }),
-            ]);
-
-            const result = await controller.getSuggestionsByPullRequest(
-                undefined,
-                'azure-guid',
-                '42',
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
             expect(result.prNumber).toBe(42);
         });
 
-        it('refuses when pull requests on two servers share the repository id, full name and number', async () => {
-            mockPullRequestsService.find.mockResolvedValue([
-                makePrEntity({
-                    provider: 'GITLAB',
-                    repository: { id: 'repo-123', fullName: 'org/repo' },
-                }),
-                makePrEntity({
-                    provider: 'GITLAB',
-                    repository: { id: 'repo-123', fullName: 'org/repo' },
-                }),
-            ]);
+        it("answers the key workspace's pull request found by repository and number", async () => {
+            const result = await byKey(undefined, 'repo-123', '42');
 
-            await expect(
-                controller.getSuggestionsByPullRequest(
-                    undefined,
-                    'repo-123',
-                    '42',
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
-            ).rejects.toThrow(NotFoundException);
+            expect(mockPullRequestsService.find.mock.calls[0]).toEqual([
+                {
+                    'number': 42,
+                    'organizationId': ORG_ID,
+                    'repository.id': 'repo-123',
+                },
+            ]);
+            expect(result.prNumber).toBe(42);
+        });
+
+        it('throws 404 when no record of the key workspace is found', async () => {
+            mockPullRequestsService.find.mockResolvedValue([]);
+
+            await expect(byKey(PR_URL, undefined, undefined)).rejects.toThrow(
+                NotFoundException,
+            );
+            await expect(byKey(undefined, 'repo-123', '999')).rejects.toThrow(
+                NotFoundException,
+            );
             expect(
                 mockGetPullRequestSuggestionsUseCase.execute,
             ).not.toHaveBeenCalled();
         });
 
-        it('refuses a pull request recorded without its repository full name', async () => {
-            mockPullRequestsService.findOne.mockResolvedValue(
-                makePrEntity({ repository: { id: 'repo-123' } }),
-            );
-
-            await expect(
-                controller.getSuggestionsByPullRequest(
-                    PR_URL,
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
-            ).rejects.toThrow(NotFoundException);
-        });
-
         it('throws 404 when no identifier is provided', async () => {
             await expect(
-                controller.getSuggestionsByPullRequest(
-                    undefined,
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
+                byKey(undefined, undefined, undefined),
             ).rejects.toThrow(NotFoundException);
         });
     });

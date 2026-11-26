@@ -134,7 +134,12 @@ export const ruleAppliesToConnection = (
  * rules only when granted that connection; `null` reads every rule.
  */
 export const ruleVisibleToConnections = (
-    rule: { centralizedConfig?: IKodyRuleCentralizedConfig | null },
+    rule: {
+        centralizedConfig?: Pick<
+            IKodyRuleCentralizedConfig,
+            'connectionScoped' | 'sourceConnectionId'
+        > | null;
+    },
     connectionIds: ReadonlySet<string> | null | undefined,
 ): boolean => {
     const centralized = rule.centralizedConfig;
