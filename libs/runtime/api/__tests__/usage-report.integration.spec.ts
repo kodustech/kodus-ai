@@ -125,7 +125,7 @@ const ec = (d: Date) => d.toISOString();
         const r = await usage.execute({ user: owned, query: { month: '2026-11' } });
 
         expect(r.counts).toEqual({
-            runs: 3, runsListed: 3, setups: 1, sandboxSessions: 1,
+            runs: 3, runsListed: 3, prs: 2, setups: 1, sandboxSessions: 1,
             sandboxOperations: { total: 3, refused: 1, failed: 0, durationMs: 2_000, partial: false },
             claimsTruncated: false,
         });
