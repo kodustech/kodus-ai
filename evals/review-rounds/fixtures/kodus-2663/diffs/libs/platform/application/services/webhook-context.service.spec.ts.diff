@@ -12,7 +12,7 @@ index 99dd520e4..43f05c7c8 100644
 -                'gitlab-d.example',
 -            );
 -            const legacyConfigC = buildConfig(
--                'org-c',
+-                'org-old-c',
 -                'team-c',
 -                'gitlab-c.example',
 -            );
@@ -25,15 +25,15 @@ index 99dd520e4..43f05c7c8 100644
              );
  
              const result = await service.getContext(PlatformType.GITLAB, '93', {
--                host: 'gitlab-c.example',
+-                host: 'gitlab-old-c.example',
 +                host: 'gitlab-c.example',
              });
  
              expect(result?.organizationAndTeamData.organizationId).toBe(
--                'org-c',
+-                'org-old-c',
 +                'org-c',
              );
--            expect(result?.organizationAndTeamData.teamId).toBe('team-c');
+-            expect(result?.organizationAndTeamData.teamId).toBe('team-old-c');
 +            expect(result?.organizationAndTeamData.teamId).toBe('team-c');
          });
  
@@ -43,7 +43,7 @@ index 99dd520e4..43f05c7c8 100644
 -                'team-a',
 -                'GitLab-C.Example',
 -            );
--            const configB = buildConfig('org-b', 'team-b', 'gitlab-d.example');
+-            const configB = buildConfig('org-b', 'team-b', 'gitlab-old-d.example');
 +            const configA = buildConfig('org-a', 'team-a', 'GitLab-C.Example');
 +            const configB = buildConfig('org-b', 'team-b', 'gitlab-d.example');
  
@@ -52,7 +52,7 @@ index 99dd520e4..43f05c7c8 100644
              );
  
              const result = await service.getContext(PlatformType.GITLAB, '93', {
--                host: 'https://gitlab-c.example/initech/portal',
+-                host: 'https://gitlab-old-c.example/initech/old-portal',
 +                host: 'https://gitlab-c.example/initech/portal',
              });
  
@@ -62,7 +62,7 @@ index 99dd520e4..43f05c7c8 100644
          it('takes the config on the sending host beside a legacy config that stores no host', async () => {
              const configWithoutHost = buildConfig('org-legacy', 'team-legacy');
 -            const legacyConfigC = buildConfig(
--                'org-c',
+-                'org-old-c',
 -                'team-c',
 -                'gitlab-c.example',
 -            );
@@ -74,12 +74,12 @@ index 99dd520e4..43f05c7c8 100644
              );
  
              const result = await service.getContext(PlatformType.GITLAB, '93', {
--                host: 'gitlab-c.example',
+-                host: 'gitlab-old-c.example',
 +                host: 'gitlab-c.example',
              });
  
              expect(result?.organizationAndTeamData.organizationId).toBe(
--                'org-c',
+-                'org-old-c',
 +                'org-c',
              );
          });
