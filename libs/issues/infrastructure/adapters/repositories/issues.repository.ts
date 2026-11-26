@@ -1014,7 +1014,10 @@ function sameOccurrences(issue: { occurrences?: IIssueOccurrence[] }) {
  * The issue's severities as read: a write that works them out from them must
  * not land over a sighting that changed them in between.
  */
-function sameSeverity(issue: { severity?: string; ownSeverity?: string }) {
+function sameSeverity(issue: {
+    severity?: string;
+    ownSeverity?: string;
+}): Record<string, unknown> {
     return {
         severity: issue.severity ?? { $exists: false },
         ownSeverity: issue.ownSeverity ?? { $exists: false },
