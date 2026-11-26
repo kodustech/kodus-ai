@@ -137,7 +137,7 @@ product with the org's BYOK key, which never reaches the worker.
   waits 11 minutes, on a dispatcher whose headers timeout matches (`http-recipe-author.ts:15-16`, `:75-83`).
 - **Budget:** the run's tokens are reserved before it starts, under the setup's scope (`recipe-author.use-case.ts:264-272`);
   with less than 20k left it does not start (`:63`). The per-setup LLM budget is 1.2M tokens, three runs of 400k:
-  the first recipe and two repairs (`libs/runtime/api/infrastructure/runtime-api.config.ts:34-36`).
+  the first recipe and two repairs at the 400k cap (a third repair, the default since the repair budget went to 3, runs on what is left of it, and does not start under 20k; raise `RUNTIME_LLM_MAX_TOKENS_PER_SETUP` to give each of four runs the whole cap) (`libs/runtime/api/infrastructure/runtime-api.config.ts:34-36`).
 
 ## 4. The boot on the cell
 
@@ -214,7 +214,7 @@ claim's ceiling (`environment-setup.service.ts:214`). Under 500 is ready (`:807`
 ## 7. The repair loop inside a setup
 
 `RUNTIME_SETUP_AUTHOR_REPAIRS`: how many times one setup sends a failed boot of Kody's recipe back to Kody and
-boots the rewrite. Default 2, max 5, 0 turns it off (`libs/runtime/run/environment-setup.ts:215-218`,
+boots the rewrite. Default 3, max 5, 0 turns it off (`libs/runtime/run/environment-setup.ts:215-218`,
 `apps/runtime/src/shared/config.ts:307`).
 
 It runs only when all of these hold (`repairFailureOf`, `environment-setup.service.ts:191-200`; `repair`, `:661-667`):

@@ -15,7 +15,7 @@ and the Runtime screens, as Kodus uses them.
 - **Facts block**: what Kodus reads from the commit before Kody's author starts (package manager, lockfile,
   workspace globs, Dockerfiles, compose files), with no model, and puts in its first message.
 - **Repair**: inside one setup, Kody rewrites its own recipe after the boot failed on the recipe's account, and the
-  rewrite boots on a new claim (`RUNTIME_SETUP_AUTHOR_REPAIRS`, default 2).
+  rewrite boots on a new claim (`RUNTIME_SETUP_AUTHOR_REPAIRS`, default 3).
 - **Blocker**: why a setup or Run cannot go on: kind, signature, message, and with several repositories the alias.
   The catalog turns it into a card with a title, evidence lines and fixes.
 - **Probe**: one check the worker runs on a claim through the hub: an HTTP request, a command (exec) or an SQL

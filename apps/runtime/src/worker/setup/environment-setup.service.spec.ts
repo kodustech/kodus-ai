@@ -788,7 +788,7 @@ describe('setupOptionsFrom', () => {
     const options = (env: Record<string, string>) => setupOptionsFrom(loadSetupConfig(env));
 
     it('reads the dev overrides and refuses malformed ones', () => {
-        expect(options({})).toEqual({ devSha: undefined, devExpose: undefined, healthPath: undefined, authorRepairs: 2 });
+        expect(options({})).toEqual({ devSha: undefined, devExpose: undefined, healthPath: undefined, authorRepairs: 3 });
         expect(options({ RUNTIME_SETUP_DEV_SHA: SHA, RUNTIME_SETUP_EXPOSE: JSON.stringify(EXPOSE) })).toMatchObject({ devSha: SHA, devExpose: EXPOSE });
         expect(() => options({ RUNTIME_SETUP_DEV_SHA: 'main' })).toThrow('40-hex');
         expect(() => options({ RUNTIME_SETUP_EXPOSE: '[{"service":"app"}]' })).toThrow('RUNTIME_SETUP_EXPOSE');

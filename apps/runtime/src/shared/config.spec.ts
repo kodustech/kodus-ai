@@ -417,14 +417,14 @@ describe('runtime config', () => {
 describe('RUNTIME_SETUP_AUTHOR_REPAIRS', () => {
     const repairs = (value?: string) => loadSetupConfig(value === undefined ? {} : { RUNTIME_SETUP_AUTHOR_REPAIRS: value }).authorRepairs;
 
-    it('repairs a failed recipe of Kody twice in one setup when unset or empty', () => {
-        expect(repairs()).toBe(2);
-        expect(repairs('')).toBe(2);
+    it('repairs a failed recipe of Kody three times in one setup when unset or empty', () => {
+        expect(repairs()).toBe(3);
+        expect(repairs('')).toBe(3);
     });
 
     it('reads a whitespace-only value as unset, not as 0 (repairs stay on)', () => {
-        expect(repairs('  ')).toBe(2);
-        expect(repairs('\t\n')).toBe(2);
+        expect(repairs('  ')).toBe(3);
+        expect(repairs('\t\n')).toBe(3);
     });
 
     it('reads a padded number as that number', () => {
@@ -446,7 +446,7 @@ describe('RUNTIME_SETUP_AUTHOR_REPAIRS', () => {
 
     it('is what the worker config carries to the setup service', () => {
         expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX, RUNTIME_SETUP_AUTHOR_REPAIRS: '0' }).setup.authorRepairs).toBe(0);
-        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX }).setup.authorRepairs).toBe(2);
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX }).setup.authorRepairs).toBe(3);
     });
 });
 

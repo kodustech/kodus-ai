@@ -241,7 +241,7 @@ export interface EnvironmentSetupRepair {
 }
 
 /** How many times a setup rewrites Kody's recipe after its boot failed, unless the worker sets RUNTIME_SETUP_AUTHOR_REPAIRS. */
-export const SETUP_AUTHOR_REPAIRS_DEFAULT = 2;
+export const SETUP_AUTHOR_REPAIRS_DEFAULT = 3;
 /** The most RUNTIME_SETUP_AUTHOR_REPAIRS may ask: each repair is an author run and a boot from zero. */
 export const SETUP_AUTHOR_REPAIRS_MAX = 5;
 
