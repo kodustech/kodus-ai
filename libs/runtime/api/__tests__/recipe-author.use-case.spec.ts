@@ -2,7 +2,10 @@
 // resolveModelConfig: mock it to inject a scripted model (no key, no network).
 jest.mock('@libs/llm/model-invocation', () => ({ resolveModelConfig: jest.fn() }));
 
-import { RECIPE_AUTHOR_VERSION, recipeAuthorRevision } from '@libs/runtime/run/recipe-author-version';
+import { RECIPE_AUTHOR_REVISIONS, RECIPE_AUTHOR_VERSION, recipeAuthorRevision } from '@libs/runtime/run/recipe-author-version';
+
+/** The newest revision existing recipes must get: a revision that only helps new recipes asks for no rewrite. */
+const LATEST_REAUTHOR = Math.max(...RECIPE_AUTHOR_REVISIONS.filter((r) => r.reauthor).map((r) => r.version));
 import { declareMirrorBuildArgs } from '../application/recipe-author/authored-dockerfile-mirror';
 import { BadGatewayException, ConflictException, ForbiddenException, HttpException, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { MockLanguageModelV3 } from 'ai/test';
@@ -581,11 +584,11 @@ describe('POST /internal/runtime/recipe-author with the last setup\'s recipe (Re
     it('a recipe that predates a revision recipes must get is written again by Kody, from it, and may stay the same', async () => {
         const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: last().files } }]);
         const t = make({ files: repo });
-        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: last(), reauthor: { from: 1, to: RECIPE_AUTHOR_VERSION } } });
+        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: last(), reauthor: { from: 1, to: LATEST_REAUTHOR } } });
         expect(out).toMatchObject({ status: 'submitted', recipe: KODY_RECIPE, authorVersion: RECIPE_AUTHOR_VERSION });
         expect(out.status === 'submitted' && out.reused).toBeUndefined();
         expect(prompts[0]).toContain('written under older instructions than the ones above');
-        expect(prompts[0]).toContain(recipeAuthorRevision(RECIPE_AUTHOR_VERSION)!.reason);
+        expect(prompts[0]).toContain(recipeAuthorRevision(LATEST_REAUTHOR)!.reason);
         // The model ran, on the setup's budget.
         expect(t.usage.rows.length).toBeGreaterThan(0);
     });
