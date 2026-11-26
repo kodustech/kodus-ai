@@ -102,6 +102,8 @@ func (m *memDocker) DiskUsage(context.Context) (dockercli.DiskUsage, error) {
 	return m.diskUsage, nil
 }
 
+func (m *memDocker) BuilderPrune(context.Context, time.Duration) (int64, error) { return 0, nil }
+
 type memVolume struct {
 	labels map[string]string
 	data   string

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // DiskUsage is what Docker says its disk holds: each volume and each
@@ -78,4 +79,24 @@ func humanBytes(s string) int64 {
 		}
 	}
 	return 0
+}
+
+// BuilderPrune runs docker builder prune --all for the build cache not used for
+// olderThan or longer (all of it when zero) and returns the bytes it freed, read
+// from docker's "Total:" line. BuildKit keeps every record a running build holds.
+func (c CLI) BuilderPrune(ctx context.Context, olderThan time.Duration) (int64, error) {
+	args := []string{"builder", "prune", "--force", "--all"}
+	if olderThan > 0 {
+		args = append(args, "--filter", fmt.Sprintf("until=%dh", int64(olderThan.Hours())))
+	}
+	out, err := c.run(ctx, nil, args...)
+	if err != nil {
+		return 0, err
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(l), "Total:"); ok {
+			return humanBytes(strings.TrimSpace(v)), nil
+		}
+	}
+	return 0, nil
 }

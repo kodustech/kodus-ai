@@ -67,6 +67,9 @@ type composePort interface {
 	// DiskUsage measures every volume and writable layer (docker system
 	// df): the disk watchdog's per-claim measure, asked rarely.
 	DiskUsage(ctx context.Context) (dockercli.DiskUsage, error)
+	// BuilderPrune drops the host's build cache not used for olderThan (all
+	// when zero) that no running build holds, and returns the bytes freed.
+	BuilderPrune(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
 // inventoryPort is what finds the cell's containers, networks and images

@@ -81,12 +81,50 @@ func (a *Agent) checkDisk() bool {
 		}
 		return false
 	}
+	if free = a.reclaimBuildCache(context.Background(), free, w.MinFreeBytes); free >= w.MinFreeBytes {
+		return false
+	}
 	why := blockerErr(protocol.BlockerKindResources, "cell_disk_full", fmt.Errorf("the cell's Docker disk has %d MiB free, under its floor of %d MiB: the cell stopped its claims before the disk filled", free>>20, w.MinFreeBytes>>20))
 	a.log.Error("disk.low", "alarm", true, "freeBytes", free, "minFreeBytes", w.MinFreeBytes)
 	for _, c := range a.claims.All() {
 		a.stopForDisk(c, why, free)
 	}
 	return true
+}
+
+// pruneTiers are the ages of build cache the watchdog drops, oldest first: the
+// cache nobody used for a week, then a day, then an hour, then all that no live
+// build holds. It stops at the first that gives the room back.
+var pruneTiers = []time.Duration{7 * 24 * time.Hour, 24 * time.Hour, time.Hour, 0}
+
+// reclaimBuildCache drops build cache no live build holds, oldest first, until
+// free reaches want, and returns the free space measured again. A disk it
+// cannot read, or a driver with nothing to drop, returns free as it was.
+func (a *Agent) reclaimBuildCache(ctx context.Context, free, want uint64) uint64 {
+	p := a.cfg.Parts.BuildCache
+	w := a.cfg.DiskWatch
+	if p == nil || w == nil || w.Free == nil {
+		return free
+	}
+	for _, age := range pruneTiers {
+		pctx, cancel := context.WithTimeout(ctx, diskUsageTimeout)
+		freed, err := p.PruneBuildCache(pctx, age)
+		cancel()
+		if err != nil {
+			a.log.Warn("disk.prune_failed", "err", err)
+			return free
+		}
+		now, err := w.Free()
+		if err != nil {
+			return free
+		}
+		a.log.Warn("disk.build_cache_pruned", "olderThan", age.String(), "freedBytes", freed, "freeBytes", now)
+		free = now
+		if free >= want {
+			break
+		}
+	}
+	return free
 }
 
 // diskUsageTimeout bounds one measure of every claim's disk.
@@ -133,6 +171,9 @@ func (a *Agent) relieveDisk(free, floor uint64) {
 	}
 	a.goTracked(func(ctx context.Context) {
 		defer a.disk.busy.Store(false)
+		if free = a.reclaimBuildCache(ctx, free, 2*floor); free >= 2*floor {
+			return
+		}
 		mctx, cancel := context.WithTimeout(ctx, diskUsageTimeout)
 		usage, err := users.ClaimDiskUsage(mctx)
 		cancel()

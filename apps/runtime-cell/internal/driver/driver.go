@@ -735,6 +735,14 @@ type DiskUsageReader interface {
 	ClaimDiskUsage(ctx context.Context) (map[string]int64, error)
 }
 
+// BuildCachePruner drops the host's build cache that no live build holds
+// (BuildKit never removes a record a running build uses), the records not used
+// for olderThan or longer; zero drops all of them. It returns the bytes freed.
+// The disk watchdog calls it oldest first before it stops a claim.
+type BuildCachePruner interface {
+	PruneBuildCache(ctx context.Context, olderThan time.Duration) (int64, error)
+}
+
 // Diagnoser is a driver that can tell why a setup failed when its blocker
 // does not explain it: service states, the last log
 // lines of each service, the exposed ports and the disk. The agent redacts

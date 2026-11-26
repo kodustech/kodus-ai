@@ -213,3 +213,80 @@ func waitDiskLook(t *testing.T, h *harness) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+// prunerStub frees what it is told on each call, as docker builder prune does
+// for cache no build holds, and records the ages it was asked to drop.
+type prunerStub struct {
+	free  *atomic.Uint64
+	gain  uint64
+	asked []time.Duration
+}
+
+func (p *prunerStub) PruneBuildCache(_ context.Context, olderThan time.Duration) (int64, error) {
+	p.asked = append(p.asked, olderThan)
+	p.free.Add(p.gain)
+	return int64(p.gain), nil
+}
+
+// Stale build cache sits on the host while a claim that just became ready is
+// the one the watchdog would stop. Under the margin the cell first drops build
+// cache no live build holds, oldest first, measures again, and stops no claim
+// when that gave the room back.
+func TestStaleBuildCacheIsPrunedBeforeAClaimIsStoppedForDisk(t *testing.T) {
+	var free atomic.Uint64
+	free.Store(100 << 30)
+	users := &diskUsers{}
+	h := diskHarness(t, &free, readyComposer{})
+	h.a.cfg.Parts.DiskUsers = users
+	pr := &prunerStub{free: &free, gain: 8 << 30}
+	h.a.cfg.Parts.BuildCache = pr
+	for _, id := range []string{"claim-big", "claim-quiet"} {
+		if err := h.handle(id, protocol.MessageTypeClaimAcquire, diskAcquire(h)); err != nil {
+			t.Fatal(err)
+		}
+		h.conn.next(t, isReady)
+	}
+	set := func(m map[string]int64) { users.usage.Store(&m) }
+	set(map[string]int64{"claim-big": 1 << 30, "claim-quiet": 8 << 30})
+	free.Store(15 << 30) // booting a big image left the disk under the margin
+	h.a.checkDisk()
+	h.a.Wait()
+	set(map[string]int64{"claim-big": 4 << 30, "claim-quiet": 8<<30 + 1<<20})
+	free.Store(15 << 30)
+	h.a.checkDisk()
+	h.a.Wait()
+	if len(pr.asked) == 0 {
+		t.Fatal("the cell never pruned build cache under the margin")
+	}
+	if n := len(h.a.claims.All()); n != 2 {
+		t.Fatalf("a claim was stopped (%d left) although pruning gave the room back", n)
+	}
+}
+
+// When the prune frees too little, the claim that grew most is still stopped.
+func TestAClaimIsStillStoppedWhenPruningFreesTooLittle(t *testing.T) {
+	var free atomic.Uint64
+	free.Store(100 << 30)
+	users := &diskUsers{}
+	h := diskHarness(t, &free, readyComposer{})
+	h.a.cfg.Parts.DiskUsers = users
+	h.a.cfg.Parts.BuildCache = &prunerStub{free: &free, gain: 1 << 20}
+	for _, id := range []string{"claim-big", "claim-quiet"} {
+		if err := h.handle(id, protocol.MessageTypeClaimAcquire, diskAcquire(h)); err != nil {
+			t.Fatal(err)
+		}
+		h.conn.next(t, isReady)
+	}
+	set := func(m map[string]int64) { users.usage.Store(&m) }
+	set(map[string]int64{"claim-big": 1 << 30, "claim-quiet": 8 << 30})
+	free.Store(15 << 30)
+	h.a.checkDisk()
+	h.a.Wait()
+	set(map[string]int64{"claim-big": 4 << 30, "claim-quiet": 8<<30 + 1<<20})
+	free.Store(15 << 30)
+	h.a.checkDisk()
+	h.a.Wait()
+	if _, ok := h.a.claims.Get("claim-big"); ok {
+		t.Fatal("the claim that grew most still runs")
+	}
+}
