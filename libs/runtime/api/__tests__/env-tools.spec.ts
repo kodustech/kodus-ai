@@ -103,7 +103,7 @@ class FakeEnvSessionPort implements RuntimeEnvSessionPort {
 }
 
 function harness(
-    opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[]; membership?: InMemoryEnvironmentRepositories; heads?: Record<string, string> } = {},
+    opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[]; membership?: InMemoryEnvironmentRepositories; heads?: Record<string, string>; repoFiles?: Record<string, string> | 'unreadable' } = {},
 ) {
     const environments = opts.environments ?? [
         env(),
@@ -114,6 +114,7 @@ function harness(
         get: async (org: string, id: string) => environments.find((e) => e.organizationId === org && e.environmentId === id) ?? null,
         findByRepository: async (org: string, repo: string) => environments.find((e) => e.organizationId === org && e.repositoryId === repo) ?? null,
         listByOrganization: async (org: string) => environments.filter((e) => e.organizationId === org),
+        setSubmittedRecipe: async () => undefined,
     };
     const setupReads: Array<{ organizationId: string; environmentId: string }> = [];
     const views = {
@@ -131,7 +132,17 @@ function harness(
     const service = new RuntimeEnvToolsService(
         products,
         views,
-        { getDefaultBranchHead: async (r: { repositoryId: string }) => ({ status: 'ok', branch: 'main', sha: opts.heads?.[r.repositoryId] ?? SHA }) },
+        {
+            getDefaultBranchHead: async (r: { repositoryId: string }) => ({ status: 'ok', branch: 'main', sha: opts.heads?.[r.repositoryId] ?? SHA }),
+            readFileAtCommit: async (r: { path: string }) => {
+                if (opts.repoFiles === 'unreadable') throw new Error('git is down');
+                return opts.repoFiles?.[r.path] ?? null;
+            },
+            listFilesAtCommit: async () => {
+                if (opts.repoFiles === 'unreadable') throw new Error('git is down');
+                return Object.keys(opts.repoFiles ?? {});
+            },
+        } as any,
         {
             issue: async (r: { repositoryId: string }) => {
                 const token = r.repositoryId === 'repo-a' ? 'ghs_plain' : `ghs_${r.repositoryId}`;
@@ -465,6 +476,58 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         });
         expect(h.setupRequests[0].u).toEqual({ uuid: 'team-key:key-a' });
         expect(h.audit.rows.map((r) => r.kind)).toEqual(['env_fix', 'env_fix']);
+    });
+
+    describe('env_recipe_check reads the repository at its default-branch head', () => {
+        const RECIPE = 'version: 1\nservices:\n  compose:\n    files: [.kodus/compose.yaml]\n    public: app\n  expose:\n    - { service: app, port: 3000, kind: http }\n';
+        const dockerfile = { path: '.kodus/Dockerfile', content: 'FROM node:22-bookworm\nWORKDIR /app\nCOPY . .\nRUN npm ci\nCMD ["npm", "start"]\n' };
+        const compose = (context: string) => ({
+            path: '.kodus/compose.yaml',
+            content: `services:\n  app:\n    build:\n      context: ${context}\n      dockerfile: .kodus/Dockerfile\n    expose: ["3000"]\n`,
+        });
+
+        it('refuses a compose build context outside the repository root, which the boot refuses, before any setup', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}' } });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('..')] });
+            expect(check.ok).toBe(false);
+            expect(check.errors.join('\n')).toMatch(/build\.context: must be a directory of the repository, relative to its root/);
+            expect(check.readAt).toBe(SHA);
+        });
+
+        it('refuses a recipe that names a compose file the repository does not have at that commit', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}' } });
+            const recipe = RECIPE.replace('.kodus/compose.yaml', 'docker-compose.yml');
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe });
+            expect(check.ok).toBe(false);
+            expect(check.errors).toContain('services.compose.files: docker-compose.yml is not in the repository at this commit');
+        });
+
+        it('passes a recipe whose files the repository and the checks accept, saying which commit it read', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}', 'src/index.js': '' } });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });
+            expect(check).toMatchObject({ ok: true, errors: [], readAt: SHA });
+        });
+
+        it('warns, without refusing, of a slow Node monorepo install: advice the boot does not refuse', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{"workspaces":["apps/*"]}', 'package-lock.json': '{}', 'apps/a/package.json': '{}' } });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });
+            expect(check.ok).toBe(true);
+            expect(check.errors).toEqual([]);
+            expect(check.warnings.length).toBeGreaterThan(0);
+        });
+
+        it('is no verdict when the repository cannot be read: it passes what it can check and says it skipped the rest', async () => {
+            const h = harness({ repoFiles: 'unreadable' });
+            const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });
+            expect(check.ok).toBe(true);
+            expect(check.readAt).toBeUndefined();
+            expect(check.warnings.join(' ')).toMatch(/skipped/);
+        });
+
+        it('keeps submit as it was: a recipe the repository checks refuse is still sent when it parses', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}' } });
+            await expect(h.service.submitRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('..')] })).resolves.toMatchObject({ setupRequested: true });
+        });
     });
 
     it('env_recipe_guide tells the developer agent what Kody is told and what only the sandbox shows, and needs env:exec or env:fix', async () => {

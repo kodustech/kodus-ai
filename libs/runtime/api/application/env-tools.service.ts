@@ -63,7 +63,11 @@ import {
 } from '../domain/ports';
 import { membersOr, RuntimeEnvironmentMembers } from './environment-members.service';
 import { RuntimeSetupRequester } from './runtime-setup-requester.service';
+import { checkAuthoredSubmission } from './recipe-author/authored-files-policy';
+import { GitRepoReader } from './recipe-author/git-repo-reader';
 import { recipeAuthoringGuide } from './recipe-author/recipe-authoring-guide';
+import { withoutSuiteBlock } from './recipe-author/recipe-author.agent';
+import { directoryExistsCheck, fileExists, READ_LIMITS, RepoPathError } from './recipe-author/repo-reader';
 import { sealForRuntime } from './secret-sealer';
 import { ApplyBlockerFixUseCase, KODY_FIX_ORIGIN, KODY_FIX_PREFIX } from './use-cases/apply-blocker-fix.use-case';
 import { blockerGroups, EnvironmentViewBuilder, memoryFor, type RuntimeBlockerGroupView } from './use-cases/environments.use-cases';
@@ -96,6 +100,10 @@ export interface EnvBlockersView {
 export interface EnvRecipeCheckView {
     ok: boolean;
     errors: string[];
+    /** Advice that does not refuse the recipe (the Node build rules Kody's author follows): slow or fragile builds. */
+    warnings: string[];
+    /** The default-branch head the repository checks read; absent when they did not run (a warning says why). */
+    readAt?: string;
     environment: { environmentId: string; repositoryName: string };
     summary?: { public?: string; health?: string; expose: RecipeExpose[] };
 }
@@ -149,7 +157,7 @@ export class RuntimeEnvToolsService {
         private readonly products: Pick<ProductEnvironmentStore, 'get' | 'findByRepository' | 'listByOrganization' | 'setSubmittedRecipe'>,
         private readonly views: EnvironmentViewBuilder,
         @Inject(RUNTIME_GIT_PORT)
-        private readonly git: Pick<RuntimeGitPort, 'getDefaultBranchHead'>,
+        private readonly git: Pick<RuntimeGitPort, 'getDefaultBranchHead' | 'readFileAtCommit' | 'listFilesAtCommit'>,
         @Inject(RUNTIME_REPO_TOKEN_ISSUER)
         private readonly repoTokens: RuntimeRepoTokenIssuer,
         @Inject(RUNTIME_API_CONFIG)
@@ -547,14 +555,57 @@ export class RuntimeEnvToolsService {
         return { guide: recipeAuthoringGuide() };
     }
 
-    /** env_recipe_check: would Kodus boot this recipe; nothing is kept and nothing boots. */
+    /**
+     * The checks that read the repository, on its default-branch head: the ones Kody's own submissions pass
+     * (checkAuthoredSubmission, with the reader the recipe-author use case builds), so a recipe is refused here for what
+     * Kody's would be, before a 25 minute setup finds it: a compose file or a COPY source that is not there, a bind or a
+     * build context outside the repository root (compose paths are relative to it), a Dockerfile the cell refuses.
+     * `errors` are those checks; `warnings` are what only the Node build rules add (a slow or unpinned install), which
+     * Kody's author follows too but a boot does not refuse. A repository that cannot be read, or an environment of several
+     * repositories (whose paths are checked against their members), skips them with a warning: it is no verdict.
+     */
+    private async repositoryProblems(
+        env: ProductEnvironment,
+        recipe: string,
+        files: AuthoredFile[] | undefined,
+    ): Promise<{ errors: string[]; warnings: string[]; readAt?: string }> {
+        const skipped = (why: string) => ({ errors: [], warnings: [`The checks that read the repository were skipped: ${why}.`] });
+        if ((await membersOr(this.members, this.products).list(env)).length > 1) return skipped('this environment has several repositories');
+        const orgTeam = { organizationId: env.organizationId, teamId: env.teamId };
+        const head = await this.git.getDefaultBranchHead({ ...orgTeam, repositoryId: env.repositoryId, repositoryName: env.repositoryName }).catch(() => null);
+        if (!head || head.status !== 'ok') return skipped('Kodus could not read the default branch');
+        try {
+            const reader = new GitRepoReader(this.git, { ...orgTeam, repositoryId: env.repositoryId, repositoryName: env.repositoryName, sha: head.sha });
+            const read = (path: string) =>
+                reader.read(path, READ_LIMITS.fileBytes).catch((e: unknown) => {
+                    if (e instanceof RepoPathError) return null;
+                    throw e;
+                });
+            const exists = (path: string) => fileExists(reader, path);
+            const dirExists = await directoryExistsCheck(reader);
+            const text = withoutSuiteBlock(recipe).text;
+            const base = await checkAuthoredSubmission(text, files, exists, read, dirExists);
+            const full = await checkAuthoredSubmission(text, files, exists, read, dirExists, undefined, { nodeBuild: true });
+            const refused = new Set(base.errors);
+            return { errors: base.errors, warnings: full.errors.filter((e) => !refused.has(e)), readAt: head.sha };
+        } catch {
+            return skipped('Kodus could not read the repository');
+        }
+    }
+
+    /** env_recipe_check: would Kodus boot this recipe, on this repository; nothing is kept and nothing boots. */
     async checkRecipe(p: EnvKeyPrincipal, input: EnvTarget & { recipe?: unknown; files?: unknown }): Promise<EnvRecipeCheckView> {
         this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
         const env = await this.resolve(p, input);
-        const { errors, summary } = this.recipeProblems(input);
+        const { errors, summary, recipe, files } = this.recipeProblems(input);
+        // A recipe that does not parse has nothing the repository checks could read.
+        const repo = summary && recipe ? await this.repositoryProblems(env, recipe, files) : { errors: [], warnings: [] as string[] };
+        const all = [...errors, ...repo.errors];
         return {
-            ok: errors.length === 0,
-            errors,
+            ok: all.length === 0,
+            errors: all,
+            warnings: repo.warnings,
+            ...('readAt' in repo && repo.readAt ? { readAt: repo.readAt } : {}),
             environment: { environmentId: env.environmentId, repositoryName: env.repositoryName },
             ...(summary ? { summary } : {}),
         };

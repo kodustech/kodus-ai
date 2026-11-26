@@ -76,8 +76,13 @@ Four sources, first match wins:
 
 1. **Committed** in the repository (the paths above).
 2. **Submitted** by the developer's own coding agent with their own model: `kodus env recipe submit` (the
-   `kodus-runtime-setup` skill), the `/mcp/env` tool `env_recipe_submit`. The API checks it (parse, `.kodus/` build files
-   under Kody's bounds: `libs/runtime/api/application/env-tools.service.ts` `recipeProblems`), keeps it on the environment
+   `kodus-runtime-setup` skill), the `/mcp/env` tool `env_recipe_submit`. The API checks it: submit blocks on the parse and the `.kodus/` build files
+   under Kody's bounds (`libs/runtime/api/application/env-tools.service.ts` `recipeProblems`); `env_recipe_check` also reads the
+   repository at its default-branch head and runs the checks Kody's own submissions pass (`checkAuthoredSubmission`,
+   `repositoryProblems`: errors for what Kodus refuses, such as a compose file or COPY source that is not there, a compose path
+   outside the repository root, a Dockerfile the cell refuses; warnings for the Node build rules), and skips them with a
+   warning when the repository cannot be read or the environment has several repositories. Submit does not block on them:
+   they are stricter than the cell, a developer's own recipe may use what Kody never writes, and the boot is the proof, keeps it on the environment
    (`runtime_environments.submitted_recipe`) and asks for a setup that boots it with its files (`origin: 'submitted'`).
    It needs `env:fix` and is audited (`env_recipe_submit`). Kody never repairs it and the learn loop leaves it: the agent
    reads `env_status` (its `setupKey`) and `env_blockers` and sends another. Once it boots twice, the Runtime page offers

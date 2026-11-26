@@ -178,12 +178,20 @@ export function formatRecipeCheck(
     files: number,
 ): string[] {
     const where = `${recipePath}${files ? ` and ${files} build file${files === 1 ? '' : 's'} under .kodus/` : ''}`;
+    const warnings = (check.warnings ?? []).map((w) =>
+        chalk.yellow(`  warning: ${w}`),
+    );
+    const read = check.readAt
+        ? [chalk.dim(`  read the repository at ${check.readAt.slice(0, 7)}`)]
+        : [];
     if (!check.ok) {
         return [
             chalk.red(
                 `Kodus would refuse ${where} for ${check.environment.repositoryName}:`,
             ),
             ...check.errors.map((e) => `  - ${e}`),
+            ...warnings,
+            ...read,
         ];
     }
     const s = check.summary;
@@ -200,6 +208,8 @@ export function formatRecipeCheck(
               ]
             : []),
         ...(exposed ? [`  exposed: ${exposed}`] : []),
+        ...warnings,
+        ...read,
         'Send it to boot on a clean machine: kodus env recipe submit --wait',
     ];
 }

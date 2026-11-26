@@ -52,6 +52,9 @@ export type EnvRecipeInput = EnvTarget & {
 export type EnvRecipeCheck = {
     ok: boolean;
     errors: string[];
+    warnings?: string[];
+    /** The default-branch head the repository checks read. */
+    readAt?: string;
     environment: { environmentId: string; repositoryName: string };
     summary?: {
         public?: string;

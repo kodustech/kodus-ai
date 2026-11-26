@@ -225,7 +225,7 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
     {
         name: 'env_recipe_check',
         description:
-            "Check a recipe the developer's agent wrote (.kodus/workspace.yaml and its .kodus/ build files) the way Kodus checks one before it boots: `ok`, each error to fix, and what Kodus read from it (public service, health path, exposed services). Nothing is kept and nothing boots. Needs env:exec or env:fix.",
+            "Check a recipe the developer's agent wrote (.kodus/workspace.yaml and its .kodus/ build files) the way Kodus checks one before it boots: `ok`, each error to fix, `warnings` (advice that does not refuse it), and what Kodus read from it (public service, health path, exposed services). It reads the repository at its default-branch head (`readAt`): a compose file or COPY source that is not there, a compose path outside the repository root, a Dockerfile the cell refuses. Nothing is kept and nothing boots. Needs env:exec or env:fix.",
         inputSchema: {
             ...target,
             recipe: z.string().max(65_536).describe('The recipe text, version 1.'),

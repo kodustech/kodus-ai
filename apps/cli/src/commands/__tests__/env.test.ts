@@ -6,7 +6,12 @@ vi.mock('../../utils/team-key-auth.js', () => ({
 }));
 
 import { EnvService } from '../../services/env.service.js';
-import { envCommand, formatEnvFix, formatEnvStatus } from '../env.js';
+import {
+    envCommand,
+    formatEnvFix,
+    formatEnvStatus,
+    formatRecipeCheck,
+} from '../env.js';
 
 const STATUS: EnvStatus = {
     environment: {
@@ -175,6 +180,23 @@ describe('kodus env', () => {
         expect(out).toContain('failed step: [build 3/5] RUN npm run build');
         expect(out).toContain('error TS2322: line 0');
         expect(out).toContain('error TS2322: line 39');
+    });
+
+    it('prints the check errors, the warnings and the commit it read', () => {
+        const out = formatRecipeCheck(
+            {
+                ok: false,
+                errors: ['.kodus/compose.yaml services.app.build.context: must be a directory of the repository'],
+                warnings: ['.kodus/Dockerfile: the install runs after COPY . .'],
+                readAt: 'abcdef1234567',
+                environment: { environmentId: 'env-1', repositoryName: 'acme/shop' },
+            },
+            '.kodus/workspace.yaml',
+            2,
+        ).join('\n');
+        expect(out).toContain('must be a directory of the repository');
+        expect(out).toContain('warning: .kodus/Dockerfile');
+        expect(out).toContain('read the repository at abcdef1');
     });
 
     it('prints what a fix did', () => {
