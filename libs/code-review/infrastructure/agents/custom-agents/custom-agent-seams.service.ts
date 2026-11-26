@@ -740,6 +740,7 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                 warnings.push(
                     buildSandboxUnavailableWarning({
                         modelName: agent.models?.run || 'unknown',
+                        cause: context.sandboxUnavailableDetail,
                     }),
                 );
             }

@@ -30,6 +30,9 @@ import {
     amqpBrokerProbe,
     staleJobsCheck,
 } from './checks/broker.checks';
+import { databaseCheck } from './checks/database.checks';
+import { CrossProcessEventsBridge } from '@libs/core/workflow/infrastructure/cross-process-events.bridge';
+import { DistributedLockRepository } from '@libs/core/workflow/infrastructure/repositories/distributed-lock.repository';
 import { bootEnvCheck, configEnvCheck } from './checks/env.checks';
 import {
     DeliveredEvents,
@@ -165,6 +168,14 @@ export class SelfHostedDoctorService {
             bootEnvCheck,
             mongoCheck(() => this.pingMongo()),
             brokerCheck(amqpBrokerProbe),
+            databaseCheck({
+                locksReady: async () => {
+                    await new DistributedLockRepository(this.dataSource).isHeld(
+                        'doctor:probe',
+                    );
+                },
+                listen: () => CrossProcessEventsBridge.listenStatus(),
+            }),
             staleJobsCheck(this.dataSource),
             setupCheck,
             llmCheck({

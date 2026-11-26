@@ -48,6 +48,10 @@ import {
     GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
 } from '@libs/organization/application/use-cases/organizationParameters/get-cockpit-metrics-visibility.use-case';
 import { UpdateAutoLicenseAllowedUsersUseCase } from '@libs/platform/application/use-cases/codeManagement/update-auto-license-allowed-users.use-case';
+import {
+    GetFixedEgressIpUseCase,
+    SetFixedEgressIpUseCase,
+} from '@libs/platform/application/use-cases/codeManagement/egress-fixed-ip.use-cases';
 import { ICockpitMetricsVisibility } from '@libs/organization/domain/organizationParameters/interfaces/cockpit-metrics-visibility.interface';
 
 import {
@@ -59,6 +63,7 @@ import {
     Get,
     Inject,
     Post,
+    Put,
     Query,
     UseGuards,
 } from '@nestjs/common';
@@ -126,6 +131,8 @@ export class OrganizationParametersController {
         private readonly getCockpitMetricsVisibilityUseCase: GetCockpitMetricsVisibilityUseCase,
         private readonly ignoreBotsUseCase: IgnoreBotsUseCase,
         private readonly updateAutoLicenseAllowedUsersUseCase: UpdateAutoLicenseAllowedUsersUseCase,
+        private readonly getFixedEgressIpUseCase: GetFixedEgressIpUseCase,
+        private readonly setFixedEgressIpUseCase: SetFixedEgressIpUseCase,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -229,6 +236,46 @@ export class OrganizationParametersController {
 
         return await this.findByKeyOrganizationParametersUseCase.execute(key, {
             organizationId,
+        });
+    }
+
+    @Get('/fixed-egress-ip')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Get the fixed outbound IP setting',
+        description:
+            "Whether the organization's review sandboxes reach its Git host from Kodus's fixed IP, whether its plan includes that, and the IP to allowlist.",
+    })
+    public async getFixedEgressIp() {
+        return this.getFixedEgressIpUseCase.execute({
+            organizationId: this.request?.user?.organization?.uuid,
+        });
+    }
+
+    @Put('/fixed-egress-ip')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Turn the fixed outbound IP on or off',
+        description:
+            "Sends the organization's review sandboxes to its Git host from Kodus's fixed IP, for hosts behind an IP allowlist. Turning it on needs the Teams or Enterprise plan (or a trial).",
+    })
+    public async setFixedEgressIp(@Body() body: { enabled: boolean }) {
+        return this.setFixedEgressIpUseCase.execute({
+            organizationId: this.request?.user?.organization?.uuid,
+            enabled: body?.enabled,
+            actorUserId: this.request?.user?.uuid,
         });
     }
 
@@ -337,7 +384,7 @@ export class OrganizationParametersController {
     @ApiOperation({
         summary: 'Per-model UI capabilities',
         description:
-            "Provider-owned hints for the connect form: whether a model accepts sampling params (Temperature) and whether it can reason (and at which levels). Read straight from the provider module in the registry — never hand-coded in the web — so a community-contributed provider change flows to the UI automatically. `model` is a plain model id (not a secret), so it travels in the query string.",
+            'Provider-owned hints for the connect form: whether a model accepts sampling params (Temperature) and whether it can reason (and at which levels). Read straight from the provider module in the registry — never hand-coded in the web — so a community-contributed provider change flows to the UI automatically. `model` is a plain model id (not a secret), so it travels in the query string.',
     })
     public async modelCapabilities(
         @Query('provider') provider: string,
@@ -652,7 +699,6 @@ export class OrganizationParametersController {
             this.request?.user?.organization?.uuid,
         );
     }
-
 
     @Get('/cockpit-metrics-visibility')
     @UseGuards(PolicyGuard)

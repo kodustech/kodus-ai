@@ -8,7 +8,7 @@ import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import {
-    riskCriteriaSchema,
+    riskCriteriaInputSchema,
     riskReviewRoutingSchema,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
@@ -34,7 +34,7 @@ export function validateRiskApprovalSettings(input: unknown): ErrorObject[] {
     const config = input as Record<string, unknown>;
     const checks = [
         ['approvalPolicies', approvalPoliciesSchema],
-        ['riskCriteria', riskCriteriaSchema],
+        ['riskCriteria', riskCriteriaInputSchema],
         ['riskReviewRouting', riskReviewRoutingSchema],
     ] as const;
     const errors: ErrorObject[] = [];

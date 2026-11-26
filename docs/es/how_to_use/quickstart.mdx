@@ -38,7 +38,7 @@ Ten a mano una cuenta Git con acceso a los repositorios que quieres conectar. Pa
     Un servidor en tu propia red (GitHub Enterprise Server, en beta; GitLab autogestionado; Bitbucket Data Center; Forgejo) se conecta con un token y su URL. Las guías de token muestran dónde ingresarlos.
 
     <Note>
-      ¿Conectas Kodus Cloud a un servidor en tu propia red? Agrega primero a la lista de permitidos la IP de Kodus `52.55.217.197` en tu firewall.
+      ¿Conectas Kodus Cloud a un servidor en tu propia red? Agrega primero a la lista de permitidos la IP de Kodus `52.55.217.197` en tu firewall. En Teams y Enterprise, activa también **Fixed outbound IP** en **Organization > General**, para que Kody clone tu código desde esa IP. En los demás planes Kody clona desde una red compartida, que un servidor que solo acepta IPs permitidas rechaza.
     </Note>
   </Step>
 

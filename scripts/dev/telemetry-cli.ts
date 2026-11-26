@@ -32,6 +32,7 @@ import { SelfHostedBeaconModule } from '@libs/telemetry/modules/self-hosted-beac
 import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
 import { GLOBAL_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
 import type { IGlobalParametersService } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 @Module({
     imports: [
@@ -53,10 +54,10 @@ async function main(): Promise<void> {
         args.has('--force') ||
         /^(1|true|yes|on)$/i.test(process.env.KODUS_TELEMETRY_FORCE ?? '');
 
-    const ctx = await NestFactory.createApplicationContext(
-        TelemetryCliModule,
-        { logger: ['error', 'warn'] },
-    );
+    const ctx = await NestFactory.createApplicationContext(TelemetryCliModule, {
+        ...NEST_APP_OPTIONS,
+        logger: ['error', 'warn'],
+    });
 
     try {
         const beacon = ctx.get(SelfHostedBeaconService);
@@ -75,7 +76,9 @@ async function main(): Promise<void> {
                     GlobalParametersKey.TELEMETRY_STATE,
                     { ...existing.configValue, last_sent_day: null },
                 );
-                console.error('[telemetry-cli] cleared last_sent_day for forced send');
+                console.error(
+                    '[telemetry-cli] cleared last_sent_day for forced send',
+                );
             }
         }
 

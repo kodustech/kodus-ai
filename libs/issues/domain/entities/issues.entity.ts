@@ -10,6 +10,7 @@ import {
 import {
     IIssue,
     IIssueEvidence,
+    IIssueOccurrence,
     IIssueOwner,
     IssueSource,
 } from '../interfaces/issues.interface';
@@ -45,6 +46,9 @@ export class IssuesEntity implements Entity<IIssue> {
     public lastSeenCommitSha?: string;
     public lastSeenAt?: string;
     public resolvedAt?: string;
+    public occurrences?: IIssueOccurrence[];
+    public fingerprintAliases?: string[];
+    public duplicateOf?: string;
 
     constructor(issue: IIssue) {
         this.uuid = issue.uuid;
@@ -74,6 +78,9 @@ export class IssuesEntity implements Entity<IIssue> {
         this.lastSeenCommitSha = issue.lastSeenCommitSha;
         this.lastSeenAt = issue.lastSeenAt;
         this.resolvedAt = issue.resolvedAt;
+        this.occurrences = issue.occurrences;
+        this.fingerprintAliases = issue.fingerprintAliases;
+        this.duplicateOf = issue.duplicateOf;
     }
 
     public static create(issue: IIssue): IssuesEntity {
@@ -109,6 +116,9 @@ export class IssuesEntity implements Entity<IIssue> {
             lastSeenCommitSha: this.lastSeenCommitSha,
             lastSeenAt: this.lastSeenAt,
             resolvedAt: this.resolvedAt,
+            occurrences: this.occurrences,
+            fingerprintAliases: this.fingerprintAliases,
+            duplicateOf: this.duplicateOf,
         };
     }
 
@@ -141,6 +151,9 @@ export class IssuesEntity implements Entity<IIssue> {
             lastSeenCommitSha: this.lastSeenCommitSha,
             lastSeenAt: this.lastSeenAt,
             resolvedAt: this.resolvedAt,
+            occurrences: this.occurrences,
+            fingerprintAliases: this.fingerprintAliases,
+            duplicateOf: this.duplicateOf,
         };
     }
 }

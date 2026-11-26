@@ -207,6 +207,7 @@
                                 "group": "Deploy with Docker",
                                 "pages": [
                                     "en/how_to_deploy/deploy_kodus/generic_vm",
+                                    "en/how_to_deploy/deploy_kodus/postgres_pooler",
                                     "en/how_to_deploy/deploy_kodus/sandbox",
                                     "en/how_to_deploy/deploy_kodus/analytics_worker",
                                     "en/how_to_deploy/deploy_kodus/reverse_proxy",
@@ -568,6 +569,7 @@
                                 "group": "Despliegue con Docker",
                                 "pages": [
                                     "es/how_to_deploy/deploy_kodus/generic_vm",
+                                    "es/how_to_deploy/deploy_kodus/postgres_pooler",
                                     "es/how_to_deploy/deploy_kodus/sandbox",
                                     "es/how_to_deploy/deploy_kodus/analytics_worker",
                                     "es/how_to_deploy/deploy_kodus/reverse_proxy",
@@ -929,6 +931,7 @@
                                 "group": "Implantar com Docker",
                                 "pages": [
                                     "pt-BR/how_to_deploy/deploy_kodus/generic_vm",
+                                    "pt-BR/how_to_deploy/deploy_kodus/postgres_pooler",
                                     "pt-BR/how_to_deploy/deploy_kodus/sandbox",
                                     "pt-BR/how_to_deploy/deploy_kodus/analytics_worker",
                                     "pt-BR/how_to_deploy/deploy_kodus/reverse_proxy",
@@ -1290,6 +1293,7 @@
                                 "group": "Dockerでデプロイ",
                                 "pages": [
                                     "ja/how_to_deploy/deploy_kodus/generic_vm",
+                                    "ja/how_to_deploy/deploy_kodus/postgres_pooler",
                                     "ja/how_to_deploy/deploy_kodus/sandbox",
                                     "ja/how_to_deploy/deploy_kodus/analytics_worker",
                                     "ja/how_to_deploy/deploy_kodus/reverse_proxy",
@@ -1651,6 +1655,7 @@
                                 "group": "使用 Docker 部署",
                                 "pages": [
                                     "zh/how_to_deploy/deploy_kodus/generic_vm",
+                                    "zh/how_to_deploy/deploy_kodus/postgres_pooler",
                                     "zh/how_to_deploy/deploy_kodus/sandbox",
                                     "zh/how_to_deploy/deploy_kodus/analytics_worker",
                                     "zh/how_to_deploy/deploy_kodus/reverse_proxy",

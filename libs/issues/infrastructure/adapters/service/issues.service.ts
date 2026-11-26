@@ -6,6 +6,8 @@ import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issu
 import {
     IIssuesRepository,
     ISSUES_REPOSITORY_TOKEN,
+    AddScanOccurrenceParams,
+    FoldScanIssueParams,
     MarkScanFindingsSeenParams,
     OpenScanFinding,
     OpenScanFindingArea,
@@ -16,7 +18,9 @@ import {
 } from '@libs/issues/domain/contracts/issues.repository';
 import { IIssuesService } from '@libs/issues/domain/contracts/issues.service.contract';
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
-import { IIssue } from '@libs/issues/domain/interfaces/issues.interface';
+import {
+    IIssue,
+} from '@libs/issues/domain/interfaces/issues.interface';
 import { IContributingSuggestion } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -167,6 +171,22 @@ export class IssuesService implements IIssuesService {
         params: MarkScanFindingsSeenParams,
     ): Promise<{ sighted: number; reopened: number }> {
         return this.issuesRepository.markScanFindingsSeen(params);
+    }
+
+    async addScanFindingOccurrence(
+        params: AddScanOccurrenceParams,
+    ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome } | null> {
+        return this.issuesRepository.addScanFindingOccurrence(params);
+    }
+
+    async foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean> {
+        return this.issuesRepository.foldScanIssueInto(params);
+    }
+
+    async markScanIssuesConsolidated(
+        params: ScanRepositoryScope & { fingerprints: string[]; at: string },
+    ): Promise<void> {
+        return this.issuesRepository.markScanIssuesConsolidated(params);
     }
 
     async changedSince(organizationId: string, since: Date): Promise<boolean> {

@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CreatePrLevelCommentsStage } from './create-pr-level-comments.stage';
@@ -126,23 +127,21 @@ const buildStages = () => {
                 };
             },
         ),
-        createLineComments: jest.fn(
-            async (...args: any[]) => {
-                const lineComments = args[3];
-                // arg 10 (index 9) is the reviewed commit the stage pins into
-                // the posting call — the context's pull request head sha.
-                posted.anchors.push(args[9]);
-                posted.inline.push(...lineComments);
-                return {
-                    lastAnalyzedCommit: { sha: 'head' },
-                    commits: [],
-                    commentResults: lineComments.map((comment) => ({
-                        comment,
-                        deliveryStatus: 'sent',
-                    })),
-                };
-            },
-        ),
+        createLineComments: jest.fn(async (...args: any[]) => {
+            const lineComments = args[3];
+            // arg 10 (index 9) is the reviewed commit the stage pins into
+            // the posting call — the context's pull request head sha.
+            posted.anchors.push(args[9]);
+            posted.inline.push(...lineComments);
+            return {
+                lastAnalyzedCommit: { sha: 'head' },
+                commits: [],
+                commentResults: lineComments.map((comment) => ({
+                    comment,
+                    deliveryStatus: 'sent',
+                })),
+            };
+        }),
     };
     const suggestionService = {
         resolveImplementedSuggestionsOnPlatform: jest.fn(),
@@ -162,15 +161,11 @@ const buildStages = () => {
             // The signature is (number, repositoryId, repositoryName,
             // suggestions, organizationAndTeamData): the mock has to skip the
             // name too, or the suggestions slot receives it (#2076 review).
-            async (
-                _n: any,
-                _r: any,
-                _name: any,
-                suggestions: any[],
-            ) => {
+            async (_n: any, _r: any, _name: any, suggestions: any[]) => {
                 saved.prLevel.push(...suggestions);
             },
         ),
+        newSuggestionId: jest.fn(() => crypto.randomUUID()),
         aggregateAndSaveDataStructure: jest.fn(
             async (_pr: any, _repo: any, _files: any, prioritized: any[]) => {
                 saved.fileLevel.push(...prioritized);

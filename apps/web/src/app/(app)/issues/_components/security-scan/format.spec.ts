@@ -240,3 +240,48 @@ describe("formatOwner", () => {
         ).toBe("Jane Doe");
     });
 });
+
+describe("deep scan v2 wording", () => {
+    it("says how many files an incremental scan left unchanged", () => {
+        expect(
+            formatScanCoverage({
+                unitsTotal: 10,
+                unitsDone: 10,
+                unitsFailed: 0,
+                unitsSkippedByBudget: 0,
+                examinedFiles: [],
+                languages: [],
+                unchangedFiles: 42,
+            }),
+        ).toBe(
+            "10/10 areas examined · 42 files unchanged since an earlier scan",
+        );
+    });
+
+    it("counts what verification refuted and what was folded as duplicates", () => {
+        expect(
+            formatScanOutcome({
+                created: 3,
+                stillOpen: 0,
+                reopened: 0,
+                dismissed: 0,
+                resolved: 0,
+                refuted: 5,
+                consolidated: 2,
+            }),
+        ).toBe("3 new · 5 refuted on verification · 2 folded as duplicates");
+    });
+
+    it("reads a test that never reached the code as a test to run, not a verdict", () => {
+        expect(
+            reproductionStatus({
+                executed: true,
+                inconclusive: true,
+                exitCode: 127,
+            }),
+        ).toEqual({
+            label: "Could not run in the sandbox: a test to run",
+            tone: "neutral",
+        });
+    });
+});

@@ -24,7 +24,13 @@ const input = {
             patch: '@@ -1 +1 @@\n-old\n+new',
         },
     ] as any,
-    teamInstructions: 'Treat auth changes as consequential.',
+    rules: [
+        {
+            id: 'auth',
+            name: 'Authentication',
+            instructions: 'Treat auth changes as consequential.',
+        },
+    ],
 };
 
 beforeEach(() => {
@@ -53,7 +59,7 @@ it.each([
             tokens: 2048,
         });
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The provider accepted the complete input.',
         } as any);
 
@@ -76,7 +82,7 @@ it.each([
     async (model, repetitions) => {
         const body = 'documentation '.repeat(repetitions);
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The provider accepted the complete input.',
         } as any);
 
@@ -97,7 +103,7 @@ it.each([
 
 it('enforces trusted model windows while leaving routing aliases to the provider', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'The provider accepted the complete input.',
     } as any);
     for (const [model, repetitions] of [
@@ -165,16 +171,20 @@ it('classifies provider overflow after deferring a partial model match', async (
     });
 });
 
-it.each(['title', 'body', 'teamInstructions'])(
+it.each(['title', 'body', 'rules'])(
     'checks the complete prompt when %s exceeds the configured model input window',
     async (field) => {
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The patch alone looks harmless.',
         } as any);
+        const long = 'documentation '.repeat(5000);
         const result = await assessApprovalRisk({
             ...input,
-            [field]: 'documentation '.repeat(5000),
+            [field]:
+                field === 'rules'
+                    ? [{ id: 'docs', name: 'Docs', instructions: long }]
+                    : long,
             modelSlot: {
                 provider: 'openai',
                 model: 'gpt-4o-mini',
@@ -197,7 +207,7 @@ it.each([
     'uses the configured %i-token input window for the same complete diff',
     async (maxInputTokens, level, calls) => {
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The complete documentation diff preserves behavior.',
         } as any);
         const result = await assessApprovalRisk({
@@ -225,7 +235,7 @@ it.each([
 
 it('does not substitute a fixed input ceiling for an unknown model window', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'The configured provider accepted the complete input.',
     } as any);
     const body = 'documentation '.repeat(200_000);
@@ -259,7 +269,7 @@ it.each([1, 51])(
             patch: `@@ -0,0 +1,2 @@\n+${padding}\n+end-of-file-${index}`,
         }));
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The complete documentation diff preserves behavior.',
         } as any);
 
@@ -278,11 +288,14 @@ it.each([1, 51])(
     },
 );
 
-it.each(['low', 'medium', 'high'])(
+it.each([
+    ['low', []],
+    ['medium', ['auth']],
+])(
     'bounds a long %s rationale without invalidating its judgment',
-    async (level) => {
+    async (level, matchedRules) => {
         (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
-            schema.parse({ level, reason: 'x'.repeat(10_000) }),
+            schema.parse({ matchedRules, reason: 'x'.repeat(10_000) }),
         );
         const result = await assessApprovalRisk(input);
         expect(result.level).toBe(level);
@@ -337,10 +350,11 @@ it.each([507, 510, 563, 691])(
             'x',
         );
         (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
-            schema.parse({ level: 'high', reason }),
+            schema.parse({ matchedRules: ['auth'], reason }),
         );
         expect(await assessApprovalRisk(input)).toMatchObject({
-            level: 'high',
+            level: 'medium',
+            matchedRules: [{ id: 'auth', name: 'Authentication' }],
             reason,
             reviewedHeadSha: input.headSha,
         });
@@ -349,9 +363,10 @@ it.each([507, 510, 563, 691])(
 );
 
 it.each([
-    { level: 'safe', reason: 'A sufficiently long explanation.' },
-    { level: 'low' },
-    { level: 'low', reason: '        ' },
+    { level: 'low', reason: 'A sufficiently long explanation.' },
+    { matchedRules: [] },
+    { matchedRules: [], reason: '        ' },
+    { matchedRules: 'auth', reason: 'A sufficiently long explanation.' },
 ])('keeps invalid output unknown: %j', async (output) => {
     (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
         schema.parse(output),
@@ -364,7 +379,7 @@ it.each([
 
 it('uses the production model slot and includes area evidence and coverage', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'medium',
+        matchedRules: ['kodus-shared-contract'],
         reason: 'Authentication flow needs a human review.',
     });
     const areaMap = {
@@ -399,6 +414,7 @@ it('uses the production model slot and includes area evidence and coverage', asy
         modelSlot: { provider: 'openai', model: 'gpt-test' } as any,
     });
 
+    // An id the model made up still counts as risk, but is never named.
     expect(result).toEqual({
         level: 'medium',
         reason: 'Authentication flow needs a human review.',
@@ -411,216 +427,6 @@ it('uses the production model slot and includes area evidence and coverage', asy
     expect(request.user).toContain('"prsWithCompleteFiles":8');
 });
 
-it.each([
-    ['src/status.ts', '+// never return null here'],
-    ['src/status.ts', '+/** @return the risk level */'],
-    ['src/status.ts', '+const note = "if (disabled) return null";'],
-    ['src/status.ts', "+const note = 'throw new Error()';"],
-    ['src/status.ts', '+const note = `if (disabled) return null`;'],
-    ['src/status.ts', '+const note = /return\\s+null/;'],
-    ['src/status.py', '+# return None'],
-    ['src/status.py', '+note = f"return {name}"'],
-    ['src/status.py', '+note = r"return text"'],
-    ['src/status.py', '+note = b"return bytes"'],
-    ['src/status.rs', '+let note = b"return bytes";'],
-    ['src/status.py', '+note = f"{{return placeholder}}"'],
-    [
-        'src/status.tsx',
-        "--- a/return.tsx\n+++ b/return.tsx\n@@ -1 +1 @@\n+const title = <p>don't</p>;",
-    ],
-    [
-        'src/status.ts',
-        '--- a/return.ts\n+++ b/return.ts\n@@ -1 +1 @@\n+const count = 1;',
-    ],
-])(
-    'does not treat prose or literals in %s as control flow: %s',
-    async (filename, patch) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior unchanged.',
-        });
-        expect(
-            (
-                await assessApprovalRisk({
-                    ...input,
-                    files: [{ filename, status: 'modified', patch } as any],
-                })
-            ).level,
-        ).toBe('low');
-    },
-);
-
-it.each([
-    '+// added test coverage',
-    '+/* tests go here */',
-    '+   ',
-    '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n+// test coverage',
-    '--- a/test.ts\n+++ b/test.ts\n',
-    '+++ b/test.ts\n',
-    'diff --git a/test.ts b/test.ts\nold mode 100644\nnew mode 100755\n',
-])(
-    'does not count a test-only comment or whitespace as coverage: %s',
-    async (patch) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior unchanged.',
-        });
-        expect(
-            (
-                await assessApprovalRisk({
-                    ...input,
-                    files: [
-                        {
-                            filename: 'src/status.ts',
-                            status: 'modified',
-                            patch: '+return allowAccess();',
-                        },
-                        {
-                            filename: 'src/status.spec.ts',
-                            status: 'modified',
-                            patch,
-                        },
-                    ] as any,
-                })
-            ).level,
-        ).toBe('medium');
-    },
-);
-
-it.each([
-    ['tests/StatusTests.cs', '+var fixture = @"test fixture";'],
-    ['tests/status_test.rs', '+let fixture = r#"return test fixture"#;'],
-])(
-    'does not accept unverifiable %s text as test evidence',
-    async (filename, patch) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior unchanged.',
-        });
-        expect(
-            (
-                await assessApprovalRisk({
-                    ...input,
-                    files: [
-                        {
-                            filename: 'src/status.ts',
-                            status: 'modified',
-                            patch: '+return authorize();',
-                        },
-                        { filename, status: 'modified', patch },
-                    ] as any,
-                })
-            ).level,
-        ).toBe('medium');
-    },
-);
-
-it('keeps code after a JS private member visible to the control-flow guard', async () => {
-    (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior unchanged.',
-    });
-    expect(
-        (
-            await assessApprovalRisk({
-                ...input,
-                files: [
-                    {
-                        filename: 'src/status.ts',
-                        status: 'modified',
-                        patch: '+this.#access = true; return true;',
-                    },
-                ] as any,
-            })
-        ).level,
-    ).toBe('medium');
-});
-
-it.each([
-    '+const text = `value: ${(() => { return authorize(); })()}`;',
-    '+const ratio = "value" / count; return authorize();',
-    '@@ -1 +1,2 @@\n+if\n+(authorize());',
-    '@@ -1 +1,2 @@\n+if /* permission check */\n+(authorize());',
-    '@@ -1 +1,3 @@\n+if\n+/* permission check */\n+(authorize());',
-    '++value; return authorize();',
-    '+++value; return authorize();',
-    '@@ -1 +1 @@\n+++ value; return authorize();',
-    '--- a/status.ts\n+++ b/status.ts\n@@ -1 +1 @@\n+++value; return authorize();',
-])('keeps executable code visible around literals: %s', async (patch) => {
-    (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior unchanged.',
-    });
-    expect(
-        (
-            await assessApprovalRisk({
-                ...input,
-                files: [
-                    { filename: 'src/status.ts', status: 'modified', patch },
-                ] as any,
-            })
-        ).level,
-    ).toBe('medium');
-});
-
-it.each([
-    ['src/status.py', '+count //= 2; return authorize()'],
-    ['src/status.go', '+text := `ends with a backslash\\`; return authorize()'],
-    ['src/status.py', '+text = f"{allow if (ready) else deny}"'],
-    ['src/status.py', '+text = f"\\{allow if (ready) else deny}"'],
-    ['src/status.py', '+text = f"{f\'{allow if (ready) else deny}\'}"'],
-])('keeps executable code visible in %s fragments', async (filename, patch) => {
-    (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior unchanged.',
-    });
-    expect(
-        (
-            await assessApprovalRisk({
-                ...input,
-                files: [{ filename, status: 'modified', patch }] as any,
-            })
-        ).level,
-    ).toBe('medium');
-});
-
-it.each([
-    ['src/status.cs', '+var text = @"path\\"; return Authorize();'],
-    [
-        'src/AuthService.cs',
-        '+var response = $"Authorized: {new Func<bool>(() => { return Authorize(user); })()}";',
-    ],
-    ['src/status.rs', "+fn authorize<'a>() { return true; }"],
-    ['src/return.ts', '--- a/return.ts\n+++ b/return.ts\n'],
-    ['src/return.ts', '+++ b/return.ts\n'],
-    ['src/status.ts', '+++ value; return authorize();'],
-    [
-        'src/status.ts',
-        'diff --git a/status.ts b/status.ts\nold mode 100644\nnew mode 100755\n',
-    ],
-    ['src/status.py', '+"""\n+if (disabled) return None\n+"""'],
-    [
-        'src/status.tsx',
-        "+const title = <p>don't</p>; return authorize(); const footer = <p>don't</p>;",
-    ],
-])(
-    'keeps unverifiable %s fragments unknown rather than asserting a code signal',
-    async (filename, patch) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior unchanged.',
-        });
-        expect(
-            (
-                await assessApprovalRisk({
-                    ...input,
-                    files: [{ filename, status: 'modified', patch }] as any,
-                })
-            ).level,
-        ).toBe('unknown');
-    },
-);
-
 it('returns unknown when the model fails, so approval cannot proceed', async () => {
     (LLM.run as jest.Mock).mockRejectedValue(new Error('timeout'));
 
@@ -630,185 +436,48 @@ it('returns unknown when the model fails, so approval cannot proceed', async () 
     });
 });
 
-it('keeps ambiguous JSX quotes unknown instead of masking executable control flow', async () => {
-    (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior unchanged.',
-    });
+it('holds unshown code on the legacy approval path without asking the model', async () => {
     const result = await assessApprovalRisk({
         ...input,
         files: [
+            ...input.files,
             {
-                filename: 'src/status.tsx',
-                status: 'modified',
-                patch: "+const title = <p>don't change it</p>;\n+return authorize();\n+const footer = <p>don't change it</p>;",
+                filename: 'src/auth/generated.ts',
+                status: 'added',
+                additions: 4000,
+                deletions: 0,
             } as any,
         ],
     });
-    expect(result.level).toBe('unknown');
+
+    expect(result).toMatchObject({
+        level: 'unknown',
+        reason: 'Kody could not read the diff of `src/auth/generated.ts`: the Git provider did not return it.',
+    });
+    expect(LLM.run).not.toHaveBeenCalled();
 });
 
-it.each([
-    ['PricingService.cs', '+        if (preco == 0) return 0m;'],
-    [
-        'EmailService.cs',
-        '+        if (IsNullOrWhiteSpace(destinatario)) return false;',
-    ],
-])(
-    'holds an untested control-flow guard in %s even if the model says low',
-    async (filename, addedLine) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior unchanged.',
-        });
-
-        const result = await assessApprovalRisk({
-            ...input,
-            files: [
-                {
-                    filename,
-                    status: 'modified',
-                    patch: `@@ -1 +1 @@\n${addedLine}`,
-                } as any,
-            ],
-        });
-
-        expect(result.level).toBe('medium');
-        expect(result.reason).toContain('without test evidence');
-    },
-);
-
-it('allows a low judgment when the PR includes a test for the control-flow change', async () => {
+it('lists an unshown asset out of band on the legacy approval path', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior is covered by the added test.',
+        matchedRules: [],
+        reason: 'Only a logo was added.',
     });
-
     const result = await assessApprovalRisk({
         ...input,
         files: [
+            ...input.files,
             {
-                filename: 'src/EmailService.cs',
-                patch: '@@ -1 +1 @@\n+if (missing) return false;',
-            } as any,
-            {
-                filename: 'tests/EmailServiceTests.cs',
-                patch: '@@ -1 +1 @@\n+test',
+                filename: 'public/logo.png',
+                status: 'added',
+                additions: 0,
+                deletions: 0,
             } as any,
         ],
     });
 
     expect(result.level).toBe('low');
-});
-
-it.each([
-    'tests/EmailServiceTests.cs',
-    'test_email.py',
-    'email_test.go',
-    'EmailServiceTest.java',
-    'test_email.rs',
-])('recognizes added test evidence in %s', async (testPath) => {
-    (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior is covered by a changed test.',
-    });
-
-    const result = await assessApprovalRisk({
-        ...input,
-        files: [
-            {
-                filename: 'src/EmailService.cs',
-                status: 'modified',
-                patch: '@@ -1 +1 @@\n+if (missing) return false;',
-            } as any,
-            {
-                filename: testPath,
-                status: 'modified',
-                patch: '@@ -1 +1 @@\n+assert behavior',
-            } as any,
-        ],
-    });
-
-    expect(result.level).toBe('low');
-});
-
-it.each([
-    ['test_status.py', '+assert render() == f"Hello {name}"'],
-    ['test_status.py', '+assert render() == rf"Hello {name}"'],
-    ['test_status.py', '+assert read() == b"data"'],
-    ['test_status.py', '+assert read() == u"text"'],
-    ['test_status.py', '+assert read() == r"abc"'],
-    ['test_status.py', '+assert read() == rb"abc"'],
-    ['tests/status_test.rs', '+assert_eq!(read(), b"bytes");'],
-])(
-    'keeps assertions around prefixed literals in %s',
-    async (filename, patch) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior covered by tests.',
-        });
-        const result = await assessApprovalRisk({
-            ...input,
-            files: [
-                {
-                    filename: 'src/status.ts',
-                    status: 'modified',
-                    patch: '+return authorize();',
-                },
-                { filename, status: 'modified', patch },
-            ] as any,
-        });
-        expect(result.level).toBe('low');
-    },
-);
-
-it.each([
-    ['test_status.py', '+b"placeholder"'],
-    ['test_status.py', '+f"placeholder"'],
-    ['test_status.py', '+f"{{return placeholder}}"'],
-    ['tests/status_test.rs', '+b"placeholder"'],
-])(
-    'does not count a literal prefix alone as test evidence in %s',
-    async (filename, patch) => {
-        (LLM.run as jest.Mock).mockResolvedValue({
-            level: 'low',
-            reason: 'Behavior unchanged.',
-        });
-        const result = await assessApprovalRisk({
-            ...input,
-            files: [
-                {
-                    filename: 'src/status.ts',
-                    status: 'modified',
-                    patch: '+return authorize();',
-                },
-                { filename, status: 'modified', patch },
-            ] as any,
-        });
-        expect(result.level).toBe('medium');
-    },
-);
-
-it.each([
-    { status: 'removed', patch: '@@ -1 +0 @@\n-assert behavior' },
-    { status: 'modified', patch: '@@ -1 +0 @@\n-assert behavior' },
-])('does not count deleted test evidence (%p)', async (testChange) => {
-    (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior unchanged.',
-    });
-
-    const result = await assessApprovalRisk({
-        ...input,
-        files: [
-            {
-                filename: 'src/EmailService.cs',
-                status: 'modified',
-                patch: '@@ -1 +1 @@\n+if (missing) return false;',
-            } as any,
-            { filename: 'tests/EmailServiceTests.cs', ...testChange } as any,
-        ],
-    });
-
-    expect(result.level).toBe('medium');
+    expect(
+        JSON.parse((LLM.run as jest.Mock).mock.calls[0][0].user)
+            .filesWithoutDiff,
+    ).toEqual(['public/logo.png']);
 });

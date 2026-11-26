@@ -78,8 +78,9 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
         // doesn't expose the token across module boundaries. @Global so
         // double-registration is idempotent.
         WorkflowCoreModule,
-        // ScheduleModule.forRoot() is idempotent across the dependency
-        // graph — Nest only registers the scheduler once. Importing it
+        // ScheduleModule.forRoot() is registered once only because every
+        // entry point boots with NEST_APP_OPTIONS (Nest 11 otherwise makes
+        // each forRoot() its own instance and runs every @Cron twice). Importing it
         // here means the notifications module's @Cron-driven worker
         // runs even in deployments that don't pull in CronModule.
         ScheduleModule.forRoot(),

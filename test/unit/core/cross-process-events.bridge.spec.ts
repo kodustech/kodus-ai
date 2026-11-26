@@ -67,12 +67,20 @@ describe('CrossProcessEventsBridge', () => {
 
     const makeBridge = (query = jest.fn().mockResolvedValue(undefined)) => {
         const eventEmitter = { emit: jest.fn() };
-        const dataSource = { query, options: {} };
+        const dataSource = {
+            query,
+            options: {},
+            // One transaction on one connection: the manager runs on the
+            // same mocked query so specs see every statement in order.
+            transaction: jest.fn(async (work: (m: any) => Promise<void>) =>
+                work({ query }),
+            ),
+        };
         const bridge = new CrossProcessEventsBridge(
             dataSource as any,
             eventEmitter as any,
         );
-        return { bridge, eventEmitter, query };
+        return { bridge, eventEmitter, query, dataSource };
     };
 
     const payload = {
@@ -239,45 +247,49 @@ describe('CrossProcessEventsBridge', () => {
         expect(query.mock.calls[0][0]).toContain('CREATE TABLE IF NOT EXISTS');
     });
 
-    it('sweep runs DELETE on the primary; no-op when inert or not ready', async () => {
-        // With advisory lock (added for multi-instance safety) the
-        // sweep issues 3 queries: try_advisory_lock → DELETE →
-        // advisory_unlock. First mock says "we got the lock" so DELETE
-        // proceeds.
-        const query = jest
+    it('sweep deletes expired rows on the primary, holding the cross-instance lock in the same transaction; no-op when inert or not ready', async () => {
+        const { bridge, query, dataSource } = makeBridge();
+        // The transaction's own connection, apart from the pool: a lock and
+        // DELETE sent as two pool statements would land here never.
+        const inTransaction = jest
             .fn()
-            .mockResolvedValueOnce([{ locked: true }]) // pg_try_advisory_lock
-            .mockResolvedValueOnce(undefined) // DELETE
-            .mockResolvedValueOnce(undefined); // pg_advisory_unlock
-        const { bridge } = makeBridge(query);
+            .mockResolvedValueOnce([{ locked: true }]) // transaction-scoped lock
+            .mockResolvedValueOnce(undefined); // DELETE
+        dataSource.transaction = jest.fn(
+            async (work: (m: any) => Promise<void>) =>
+                work({ query: inTransaction }),
+        );
 
         // Not ready → skip everything.
         await bridge.sweepExpiredRows();
-        expect(query).not.toHaveBeenCalled();
+        expect(dataSource.transaction).not.toHaveBeenCalled();
 
         (bridge as any).infraReady = true;
         await bridge.sweepExpiredRows();
-        expect(query).toHaveBeenCalledTimes(3);
-        expect(query.mock.calls[0][0]).toContain('pg_try_advisory_lock');
-        expect(query.mock.calls[1][0]).toContain('DELETE FROM kodus_cross_process_events');
-        expect(query.mock.calls[1][0]).toContain("interval '60 minutes'");
-        expect(query.mock.calls[2][0]).toContain('pg_advisory_unlock');
+        expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+        expect(query).not.toHaveBeenCalled();
+        expect(inTransaction).toHaveBeenCalledTimes(2);
+        expect(inTransaction.mock.calls[0][0]).toContain('pg_try_advisory_xact_lock');
+        expect(inTransaction.mock.calls[1][0]).toContain('DELETE FROM kodus_cross_process_events');
+        expect(inTransaction.mock.calls[1][0]).toContain("interval '60 minutes'");
     });
 
-    it('sweep skips DELETE when another task holds the advisory lock', async () => {
+    it('sweep skips DELETE when another task holds the lock', async () => {
+        const { bridge, query, dataSource } = makeBridge();
         // Simulate: the other instance got the lock first.
-        const query = jest
+        const inTransaction = jest
             .fn()
             .mockResolvedValueOnce([{ locked: false }]);
-        const { bridge } = makeBridge(query);
+        dataSource.transaction = jest.fn(
+            async (work: (m: any) => Promise<void>) =>
+                work({ query: inTransaction }),
+        );
         (bridge as any).infraReady = true;
 
         await bridge.sweepExpiredRows();
 
-        // Only the lock probe ran; DELETE was skipped, no unlock
-        // needed (we don't hold the lock).
-        expect(query).toHaveBeenCalledTimes(1);
-        expect(query.mock.calls[0][0]).toContain('pg_try_advisory_lock');
+        expect(inTransaction).toHaveBeenCalledTimes(1);
+        expect(query).not.toHaveBeenCalled();
     });
 
     it('polling fallback anchors to MAX(id) on first tick (no cold replay)', async () => {
@@ -478,6 +490,206 @@ describe('CrossProcessEventsBridge', () => {
         // Row was seen (watermark advanced), but NOT re-emitted.
         expect((bridge as any).pollLastSeenId).toBe(51n);
         expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('a malformed direct connection leaves events on polling instead of crashing the process', async () => {
+        const previous = process.env.DATABASE_DIRECT_URL;
+        process.env.DATABASE_DIRECT_URL = 'preview-disabled';
+        try {
+            const query = jest
+                .fn()
+                .mockResolvedValueOnce(undefined) // CREATE TABLE IF NOT EXISTS
+                .mockResolvedValueOnce([{ max: '100' }]) // first tick anchors
+                .mockResolvedValueOnce([
+                    {
+                        id: '101',
+                        envelope: {
+                            instanceId: 'other-instance',
+                            name: 'pull-request.closed',
+                            payload: { pullRequestNumber: 7 },
+                        },
+                        created_at: new Date(),
+                    },
+                ]);
+            const { bridge, eventEmitter } = makeBridge(query);
+
+            await expect((bridge as any).connect()).resolves.toBeUndefined();
+            expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                'unknown',
+            );
+
+            // No LISTEN connection was ever made; polling still delivers.
+            await bridge.pollFallback();
+            await bridge.pollFallback();
+            expect(eventEmitter.emit).toHaveBeenCalledWith(
+                'pull-request.closed',
+                expect.objectContaining({ pullRequestNumber: 7 }),
+            );
+        } finally {
+            if (previous === undefined) delete process.env.DATABASE_DIRECT_URL;
+            else process.env.DATABASE_DIRECT_URL = previous;
+        }
+    });
+
+    describe('LISTEN self-test', () => {
+        const nonceOf = (query: jest.Mock, call: number) =>
+            query.mock.calls[call][1][1] as string;
+        // Advances fake time in small steps until the query ran `calls`
+        // times, so the retried probe is still waiting for its NOTIFY.
+        const untilCalls = async (query: jest.Mock, calls: number) => {
+            for (let i = 0; i < 240 && query.mock.calls.length < calls; i++) {
+                await jest.advanceTimersByTimeAsync(500);
+            }
+        };
+
+        it("a self-test that fails after a reconnect leaves the new connection's probe and status alone", async () => {
+            let failOld!: (error: Error) => void;
+            const query = jest
+                .fn()
+                .mockImplementationOnce(
+                    () =>
+                        new Promise((_, reject) => {
+                            failOld = reject;
+                        }),
+                )
+                .mockResolvedValueOnce([]);
+            const { bridge } = makeBridge(query);
+            const oldClient = {};
+            const newClient = {};
+
+            (bridge as any).client = oldClient;
+            const oldProbe = (bridge as any).verifyListenDelivery(oldClient);
+            // Reconnect: the new connection starts its own probe.
+            (bridge as any).client = newClient;
+            const newProbe = (bridge as any).verifyListenDelivery(newClient);
+            await new Promise((r) => setImmediate(r));
+
+            // The status the new connection set; the old probe must not
+            // overwrite it when it fails.
+            (bridge as any).listenHealth = { status: 'pending' };
+            failOld(new Error('pool closed'));
+            await oldProbe;
+            expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                'pending',
+            );
+            (bridge as any).pendingProbe(nonceOf(query, 1));
+            await newProbe;
+
+            expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                'delivering',
+            );
+        });
+
+        it('a self-test whose NOTIFY cannot be sent tries again and reports delivery once the pool answers', async () => {
+            jest.useFakeTimers();
+            try {
+                // Right after a Postgres restart the LISTEN connection is
+                // back while the pool (PgBouncer) still refuses logins.
+                const query = jest
+                    .fn()
+                    .mockRejectedValueOnce(
+                        new Error('server login has been failing'),
+                    )
+                    .mockResolvedValueOnce([]);
+                const { bridge } = makeBridge(query);
+                const client = {};
+                (bridge as any).client = client;
+
+                await (bridge as any).verifyListenDelivery(client);
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'unknown',
+                );
+
+                await untilCalls(query, 2);
+                expect(query).toHaveBeenCalledTimes(2);
+                (bridge as any).pendingProbe(nonceOf(query, 1));
+                await jest.advanceTimersByTimeAsync(0);
+
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'delivering',
+                );
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('a failed self-test stops trying once its connection was replaced', async () => {
+            jest.useFakeTimers();
+            try {
+                const query = jest
+                    .fn()
+                    .mockRejectedValue(new Error('pool closed'));
+                const { bridge } = makeBridge(query);
+                const oldClient = {};
+                (bridge as any).client = oldClient;
+
+                await (bridge as any).verifyListenDelivery(oldClient);
+                (bridge as any).client = {};
+                await jest.advanceTimersByTimeAsync(120_000);
+
+                expect(query).toHaveBeenCalledTimes(1);
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it("a pending retry of the old connection does not hold back the new connection's retry", async () => {
+            jest.useFakeTimers();
+            try {
+                const query = jest
+                    .fn()
+                    .mockRejectedValueOnce(new Error('pool closed'))
+                    .mockRejectedValueOnce(new Error('pool closed'))
+                    .mockResolvedValueOnce([]);
+                const { bridge } = makeBridge(query);
+                const oldClient = {};
+                const newClient = {};
+                (bridge as any).client = oldClient;
+                await (bridge as any).verifyListenDelivery(oldClient);
+                (bridge as any).client = newClient;
+                await (bridge as any).verifyListenDelivery(newClient);
+
+                await untilCalls(query, 3);
+                expect(query).toHaveBeenCalledTimes(3);
+                (bridge as any).pendingProbe(nonceOf(query, 2));
+                await jest.advanceTimersByTimeAsync(0);
+
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'delivering',
+                );
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('the self-test deadline starts when the NOTIFY is sent, not while it waits for a pool connection', async () => {
+            jest.useFakeTimers();
+            try {
+                // The pool takes longer than the whole deadline to hand
+                // out a connection.
+                const query = jest.fn(
+                    () =>
+                        new Promise((resolve) =>
+                            setTimeout(() => resolve([]), 6_000),
+                        ),
+                );
+                const { bridge } = makeBridge(query as any);
+                const client = {};
+                (bridge as any).client = client;
+
+                const probe = (bridge as any).verifyListenDelivery(client);
+                await jest.advanceTimersByTimeAsync(6_000);
+                await jest.advanceTimersByTimeAsync(100);
+                (bridge as any).pendingProbe(nonceOf(query as any, 0));
+                await probe;
+
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'delivering',
+                );
+            } finally {
+                jest.useRealTimers();
+            }
+        });
     });
 
     it('inert (duplicate) instance does not forward or start LISTEN', async () => {

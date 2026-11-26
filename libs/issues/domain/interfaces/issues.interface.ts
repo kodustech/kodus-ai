@@ -33,12 +33,22 @@ export interface IIssueReproduction {
     exitCode?: number;
     /** True only when the test ran and its result shows the vulnerability. */
     reproduced?: boolean;
+    /**
+     * It ran but could not exercise the code (a dependency it could not
+     * install offline, a missing runner): no verdict either way.
+     */
+    inconclusive?: boolean;
     output?: string;
 }
 
 export interface IIssueEvidence {
     attackPath: { file: string; line: number; note: string }[];
     reproduction?: IIssueReproduction;
+    /**
+     * The deployment or configuration fact the finding depends on, when the
+     * scan's verifier could not read it in the code.
+     */
+    assumption?: string;
 }
 
 export interface IIssue {
@@ -85,4 +95,43 @@ export interface IIssue {
     resolvedAt?: string;
     consecutiveScanMisses?: number;
     lastMissedScanId?: string;
+    /**
+     * Other places of the same root cause a scan folded into this issue: the
+     * route, the handler and the query of one missing check, or the same
+     * unsafe setting repeated. One fix, one issue.
+     */
+    occurrences?: IIssueOccurrence[];
+    /**
+     * The severity of the issue's own finding, without its occurrences:
+     * `severity` is the worst of this and theirs, so a place that leaves
+     * takes its severity with it.
+     */
+    ownSeverity?: SeverityLevel;
+    /**
+     * The identities of those places: a scan that finds one again sights
+     * this issue instead of opening another.
+     */
+    fingerprintAliases?: string[];
+    /**
+     * Set on an issue a scan found to be another issue's root cause and
+     * folded into it: the fingerprint of the issue that holds it now.
+     */
+    duplicateOf?: string;
+    /** When this issue was last compared with the others for a shared root cause. */
+    consolidatedAt?: string;
+}
+
+export interface IIssueOccurrence {
+    fingerprint: string;
+    title: string;
+    cwe?: string;
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    symbol?: string;
+    severity?: string;
+    vulnerabilityClass?: string;
+    lastSeenScanId?: string;
+    /** When a scan last saw this place: a scan that started later prunes it. */
+    lastSeenAt?: string;
 }

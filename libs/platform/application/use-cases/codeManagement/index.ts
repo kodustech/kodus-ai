@@ -29,6 +29,10 @@ import {
     SetRepositorySelectionUseCase,
 } from './repository-selection.use-cases';
 import { SyncAllRepositoriesUseCase } from './sync-all-repositories.use-case';
+import {
+    GetFixedEgressIpUseCase,
+    SetFixedEgressIpUseCase,
+} from './egress-fixed-ip.use-cases';
 
 export default [
     CarryReviewCheckToMergeQueueUseCase,
@@ -60,4 +64,6 @@ export default [
     GetRepositorySelectionUseCase,
     SetRepositorySelectionUseCase,
     PreviewAllRepositoriesUseCase,
+    GetFixedEgressIpUseCase,
+    SetFixedEgressIpUseCase,
 ];

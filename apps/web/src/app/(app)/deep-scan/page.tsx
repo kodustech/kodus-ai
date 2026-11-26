@@ -22,6 +22,7 @@ import {
 } from "./_components/findings-list";
 import { ScanHistoryButton } from "./_components/scan-history";
 import { ScanStatusBanner } from "./_components/scan-status-banner";
+import { SchedulesButton } from "./_components/schedules-dialog";
 import { SeveritySummary } from "./_components/severity-summary";
 
 /**
@@ -87,6 +88,7 @@ export default function DeepScanPage() {
 
                 <div className="flex shrink-0 items-center gap-2">
                     <ScanHistoryButton scans={scans} />
+                    <SchedulesButton />
                     <RunSecurityScanButton />
                 </div>
             </Page.Header>

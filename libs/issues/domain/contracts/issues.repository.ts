@@ -4,7 +4,10 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { IssuesEntity } from '../entities/issues.entity';
-import { IIssue } from '../interfaces/issues.interface';
+import {
+    IIssue,
+    IIssueOccurrence,
+} from '../interfaces/issues.interface';
 import { IContributingSuggestion } from '../interfaces/kodyIssuesManagement.interface';
 
 export const ISSUES_REPOSITORY_TOKEN = Symbol.for('IssuesRepository');
@@ -82,6 +85,27 @@ export interface OpenScanFinding extends OpenScanFindingArea {
     startLine: number;
     endLine: number;
     attackPath?: { file: string; line: number; note: string }[];
+    symbol?: string;
+    /** Places folded into this issue: found again, they are this issue. */
+    fingerprintAliases?: string[];
+    /** Last compared with the other open issues for a shared root cause. */
+    consolidatedAt?: string;
+    lastSeenAt?: string;
+}
+
+/** One more place of an issue's root cause, found by a scan. */
+export interface AddScanOccurrenceParams extends ScanRepositoryScope {
+    /** The issue the place belongs to. */
+    holderFingerprint: string;
+    occurrence: IIssueOccurrence;
+    scanId: string;
+}
+
+/** An open issue found to be another's root cause, folded into it. */
+export interface FoldScanIssueParams extends ScanRepositoryScope {
+    fingerprint: string;
+    /** The issue that stays. */
+    into: string;
 }
 
 export interface ResolveUnseenScanFindingsParams extends ScanRepositoryScope {
@@ -188,4 +212,23 @@ export interface IIssuesRepository {
     resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,
     ): Promise<number>;
+
+    /**
+     * Records a place of the same root cause on the issue that holds it, and
+     * that the scan saw the issue there. Null when no such issue exists.
+     */
+    addScanFindingOccurrence(
+        params: AddScanOccurrenceParams,
+    ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome } | null>;
+
+    /**
+     * Folds an open issue into the one it shares a root cause with: its place
+     * becomes an occurrence there, and it is dismissed as a duplicate.
+     */
+    foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean>;
+
+    /** Records that these issues were compared with the others just now. */
+    markScanIssuesConsolidated(
+        params: ScanRepositoryScope & { fingerprints: string[]; at: string },
+    ): Promise<void>;
 }

@@ -2,11 +2,14 @@ import {
     BadRequestException,
     Body,
     Controller,
+    Delete,
     ForbiddenException,
     Get,
     Inject,
     Param,
+    Patch,
     Post,
+    Put,
     Query,
     UseGuards,
 } from '@nestjs/common';
@@ -18,7 +21,14 @@ import {
     ApiPropertyOptional,
     ApiTags,
 } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import {
+    IsBoolean,
+    IsIn,
+    IsNumber,
+    IsOptional,
+    IsPositive,
+    IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
@@ -43,6 +53,7 @@ import {
     DEEP_SCAN_NOT_ENABLED_MESSAGE,
     DeepScanGate,
 } from '@libs/security-scan/application/deep-scan.gate';
+import { SecurityScanSchedulesUseCase } from '@libs/security-scan/application/security-scan-schedules.use-case';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
@@ -75,6 +86,85 @@ export class StartSecurityScanDto {
     @IsNumber()
     @IsPositive()
     maxTokens?: number;
+
+    @ApiPropertyOptional({
+        enum: ['incremental', 'full'],
+        description:
+            'incremental (default): read only what changed since earlier scans concluded, or was never read. full: read the whole repository again.',
+    })
+    @IsOptional()
+    @IsIn(['incremental', 'full'])
+    mode?: 'incremental' | 'full';
+
+    @ApiPropertyOptional({
+        description:
+            "A model of the organization's AI providers (its id) to run this scan on. Defaults to the Deep scan routing.",
+    })
+    @IsOptional()
+    @IsString()
+    modelId?: string;
+}
+
+export class SaveSecurityScanScheduleDto {
+    @ApiProperty()
+    @IsString()
+    teamId: string;
+
+    @ApiProperty({ description: "The repository's id on the git provider." })
+    @IsString()
+    repositoryId: string;
+
+    @ApiProperty({ enum: ['daily', 'weekly'] })
+    @IsIn(['daily', 'weekly'])
+    cadence: 'daily' | 'weekly';
+
+    @ApiPropertyOptional({ description: 'Spend limit for each run, in USD.' })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @IsPositive()
+    maxUsd?: number;
+
+    @ApiPropertyOptional({
+        description:
+            'Spend limit for each run in tokens, for a model without a known price.',
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @IsPositive()
+    maxTokens?: number;
+
+    @ApiPropertyOptional({ enum: ['incremental', 'full'] })
+    @IsOptional()
+    @IsIn(['incremental', 'full'])
+    mode?: 'incremental' | 'full';
+
+    @ApiPropertyOptional({
+        description:
+            "A model of the organization's AI providers (its id). Defaults to the Deep scan routing.",
+    })
+    @IsOptional()
+    @IsString()
+    modelId?: string;
+
+    @ApiPropertyOptional({
+        description:
+            'false pauses the schedule without deleting it, true resumes it. Omitted, the schedule keeps its state (a new one starts enabled).',
+    })
+    @IsOptional()
+    @IsBoolean()
+    enabled?: boolean;
+}
+
+export class SetScheduleEnabledDto {
+    @ApiProperty()
+    @IsString()
+    teamId: string;
+
+    @ApiProperty({ description: 'false pauses the schedule, true resumes it.' })
+    @IsBoolean()
+    enabled: boolean;
 }
 
 // A scan spends the organization's model budget on one repository.
@@ -82,6 +172,14 @@ const canStartScan = checkRepoPermissions({
     action: Action.Create,
     resource: ResourceType.SecurityScan,
     repo: { key: { body: 'repositoryId' } },
+});
+
+// A schedule spends the organization's model budget on one repository, on a
+// clock: the same grant as starting a scan, on that repository.
+const canScheduleScan = checkRepoPermissions({
+    action: Action.Create,
+    resource: ResourceType.SecurityScan,
+    repo: { key: { body: 'repositoryId', params: 'repositoryId' } },
 });
 
 // The scans list says which repositories were scanned and what each found,
@@ -113,6 +211,7 @@ export class SecurityScansController {
         private readonly cancelSecurityScan: CancelSecurityScanUseCase,
         private readonly authorizationService: AuthorizationService,
         private readonly deepScanGate: DeepScanGate,
+        private readonly schedules: SecurityScanSchedulesUseCase,
     ) {}
 
     /** The caller's organization, once the deep scan is enabled for it. */
@@ -167,6 +266,8 @@ export class SecurityScansController {
                 userId: this.request.user?.uuid,
                 email: this.request.user?.email,
             },
+            mode: body.mode,
+            modelId: body.modelId,
         });
     }
 
@@ -187,6 +288,114 @@ export class SecurityScansController {
             (await this.visibleRepositories()) ?? undefined,
             Number.isInteger(asked) && asked > 0 ? asked : undefined,
         );
+    }
+
+    @Get('schedules')
+    @ApiOperation({
+        summary: 'List deep scan schedules',
+        description:
+            'The schedules of the repositories you can see: cadence, limit, mode, model, next and last run.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canReadScans)
+    async listSchedules() {
+        return this.schedules.list(
+            await this.organizationId(),
+            (await this.visibleRepositories()) ?? undefined,
+        );
+    }
+
+    @Put('schedules')
+    @ApiOperation({
+        summary: "Schedule a repository's deep scan",
+        description:
+            'Creates or replaces the repository schedule: daily or weekly, within a spend limit per run. Incremental by default: each run reads only what changed.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canScheduleScan)
+    async saveSchedule(@Body() body: SaveSecurityScanScheduleDto) {
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [body.repositoryId],
+        });
+        return this.schedules.save({
+            organizationAndTeamData: {
+                organizationId: await this.organizationId(),
+                teamId: body.teamId,
+            },
+            repositoryId: body.repositoryId,
+            cadence: body.cadence,
+            budget: {
+                ...(body.maxUsd !== undefined ? { maxUsd: body.maxUsd } : {}),
+                ...(body.maxTokens !== undefined
+                    ? { maxTokens: body.maxTokens }
+                    : {}),
+            },
+            mode: body.mode,
+            modelId: body.modelId,
+            enabled: body.enabled,
+            requestedBy: {
+                userId: this.request.user?.uuid,
+                email: this.request.user?.email,
+            },
+        });
+    }
+
+    @Patch('schedules/:repositoryId')
+    @ApiOperation({
+        summary: "Pause or resume a repository's deep scan schedule",
+        description:
+            'Changes only whether it runs. Resumed, it runs at its next time from now.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canScheduleScan)
+    async setScheduleEnabled(
+        @Param('repositoryId') repositoryId: string,
+        @Body() body: SetScheduleEnabledDto,
+    ) {
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [repositoryId],
+        });
+        return this.schedules.setEnabled(
+            {
+                organizationId: await this.organizationId(),
+                teamId: body.teamId,
+            },
+            repositoryId,
+            body.enabled,
+        );
+    }
+
+    @Delete('schedules/:repositoryId')
+    @ApiOperation({
+        summary: "Remove a repository's deep scan schedule",
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canScheduleScan)
+    async removeSchedule(
+        @Param('repositoryId') repositoryId: string,
+        @Query('teamId') teamId: string,
+    ) {
+        if (!teamId) {
+            throw new BadRequestException('teamId is required');
+        }
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [repositoryId],
+        });
+        return {
+            removed: await this.schedules.remove(
+                { organizationId: await this.organizationId(), teamId },
+                repositoryId,
+            ),
+        };
     }
 
     @Post(':id/cancel')

@@ -154,6 +154,32 @@ function activateTeam(teamId: string): void {
     );
 }
 
+/**
+ * Turns direct sandbox egress on for the preview (`sandbox_egress`), so the
+ * fixed outbound IP card in Organization settings > General is shown, as it
+ * is once Kodus Cloud rolls it out. Written only when absent: a value set by
+ * hand on the preview is kept. Same path as `activateTeam`: SQL against the
+ * environment's own throwaway database, credentials from the container.
+ */
+function seedSandboxEgress(): void {
+    const sql = `insert into global_parameters (uuid, "configKey", "configValue", description) select gen_random_uuid(), 'sandbox_egress', '{"directByDefault": true, "fixedIp": "52.55.217.197"}'::jsonb, 'preview: fixed outbound IP card shown' where not exists (select 1 from global_parameters where "configKey" = 'sandbox_egress')`;
+    const out = execFileSync(
+        'docker',
+        [
+            'exec',
+            '-i',
+            'db_postgres',
+            'sh',
+            '-c',
+            'PGPASSWORD=$POSTGRES_PASSWORD psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"',
+        ],
+        { encoding: 'utf8', input: sql, stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    console.log(
+        `seed:preview: sandbox egress rollout ready (${out.trim().split('\n').pop()})`,
+    );
+}
+
 /** Give the preview's Teams trial its normal minimum of five review seats. */
 function ensurePreviewTrialSeats(organizationId: string, teamId: string): void {
     const uuid =
@@ -223,6 +249,14 @@ async function main(): Promise<void> {
     }
 
     await waitForApi();
+    // After the API is up, so its migrations created the enum value.
+    try {
+        seedSandboxEgress();
+    } catch (error: any) {
+        console.warn(
+            `seed:preview: could not turn on sandbox egress (${error?.message ?? error}) — the fixed outbound IP card stays hidden`,
+        );
+    }
 
     const res = await fetch(`${API}/auth/signUp`, {
         method: 'POST',

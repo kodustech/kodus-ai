@@ -634,8 +634,11 @@ kodus config remote set . riskAssessmentActive true
 kodus config remote set . reviewMode balanced
 kodus config remote set . riskReviewRouting.riskFound heavy
 kodus config remote unset . riskReviewRouting.riskFound
+kodus config remote risk-rules .
 kodus config remote risk-preview . --pr 123 --json
 ```
+
+`risk-rules` lists the risk rules in effect at a scope, with their ids: Kodus's rules as the team left them, then the team's own.
 
 Use `set . riskCriteria '<JSON array>'` and `set . approvalPolicies '<JSON array>'` to replace the list at that scope. `riskCriteria '[]'` uses standard risk assessment, and `approvalPolicies '[]'` disables all approval policies at the scope. Use `unset` at repository and directory scope to restore inheritance. The automatic approval switch is `pullRequestApprovalActive`.
 

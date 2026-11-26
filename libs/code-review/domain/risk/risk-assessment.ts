@@ -1,4 +1,5 @@
 import { prRiskDescriptionKey } from './risk-configuration';
+import { publicName } from '../public-name';
 
 /** A risk judgment belongs to one repository, PR, diff and configuration. */
 export interface RiskSnapshot {
@@ -22,6 +23,8 @@ export type RiskAssessmentResult =
           reason: string;
           snapshot: RiskSnapshot;
           areaMapVersion?: string;
+          /** The risk rules the change fell under; names come from config. */
+          rules?: Array<{ id: string; name: string }>;
       }
     | {
           status: 'unavailable';
@@ -116,6 +119,20 @@ export function riskSnapshotMismatch(
     return undefined;
 }
 
+/**
+ * Names the rules that held the PR, so the team knows what to change; never
+ * the model's rationale (#2400).
+ */
+function riskFoundReason(risk: RiskAssessmentResult | undefined): string {
+    const names =
+        risk?.status === 'assessed'
+            ? [...new Set((risk.rules ?? []).map((rule) => rule.name))]
+            : [];
+    return names.length
+        ? `Risk rule${names.length > 1 ? 's' : ''}: ${names.map(publicName).join(', ')}.`
+        : 'Risk was identified in this PR.';
+}
+
 /** Approval is a consumer: enabling risk makes a verified no-risk result mandatory. */
 export function riskApprovalVeto(
     riskEnabled: boolean,
@@ -123,8 +140,12 @@ export function riskApprovalVeto(
     current: CurrentRiskSnapshot,
 ): string | undefined {
     if (!riskEnabled) return undefined;
+    // Unavailable reasons are Kody's own text (at most a quoted file path),
+    // never model or provider prose; without one every hold reads like an outage.
+    if (risk?.status === 'unavailable')
+        return `Risk assessment is unavailable: ${risk.reason}`;
     return (
         riskSnapshotMismatch(risk, current) ??
-        (hasConfirmedRisk(risk) ? 'Risk was identified in this PR.' : undefined)
+        (hasConfirmedRisk(risk) ? riskFoundReason(risk) : undefined)
     );
 }

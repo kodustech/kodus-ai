@@ -32,13 +32,31 @@ describe("getTrialCardState", () => {
 });
 
 describe("trial subscription helpers", () => {
-    it("uses the base managed review allowance when billing has not returned live credits", () => {
+    it("reports no allowance of its own when billing has not returned live credits", () => {
         expect(getTrialCreditBalance()).toEqual({
-            total: 5,
+            total: 0,
             used: 0,
-            remaining: 5,
+            remaining: 0,
             hasLiveData: false,
             percentUsed: 0,
+        });
+    });
+
+    it("does not invent a balance from a used count alone", () => {
+        expect(getTrialCreditBalance({ used: 3 })).toMatchObject({
+            hasLiveData: false,
+            total: 0,
+            remaining: 0,
+            percentUsed: 0,
+        });
+    });
+
+    it("derives the total from used + remaining when billing omits it", () => {
+        expect(getTrialCreditBalance({ used: 2, remaining: 5 })).toMatchObject({
+            total: 7,
+            used: 2,
+            remaining: 5,
+            hasLiveData: true,
         });
     });
 
