@@ -139,7 +139,7 @@ describe('IssuesRepository — security-scan findings', () => {
 
         // Its own issue is refreshed with this scan's sighting, not merged
         // into the holder as one more place.
-        expect(outcome).not.toBe('merged');
+        expect(outcome).toBe('still_open');
         const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [
             any,
             any,
