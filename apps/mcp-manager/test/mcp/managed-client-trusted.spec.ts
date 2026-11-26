@@ -45,7 +45,7 @@ describe('which MCP clients are dialed without the address check', () => {
 
     it('a managed server with its own public URL is judged', async () => {
         const server = await managedServer('linear-default');
-        expect(server.trusted).not.toBe(true);
+        expect(server.trusted).toBe(false);
     });
 
     it('a custom server an org typed is judged', () => {
@@ -54,6 +54,6 @@ describe('which MCP clients are dialed without the address check', () => {
             authType: MCPIntegrationAuthType.NONE,
             protocol: 'http',
         } as any);
-        expect(adapter.mock.calls.at(-1)[0].servers[0].trusted).not.toBe(true);
+        expect(adapter.mock.calls.at(-1)[0].servers[0].trusted).toBe(false);
     });
 });

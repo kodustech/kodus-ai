@@ -232,7 +232,10 @@ describe('a clone is pinned to the address that was judged', () => {
                 'http://169.254.169.254/r.git',
                 resolver('1.1.1.1'),
             ),
-        ).rejects.toThrow(/169\.254\.169\.254/);
+        ).rejects.toHaveProperty(
+            'message',
+            'Git server host "169.254.169.254" resolves to a private or reserved address (169.254.169.254); the call was not sent.',
+        );
     });
 
     it('a URL git does not fetch over http(s) has nothing to pin', async () => {
@@ -329,9 +332,11 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
         await gitFetch(`http://git.pinned.test:${port}/g/r.git`, config).catch(
             () => undefined,
         );
-        expect(
-            reached.some((r) => r.startsWith('GET /g/r.git/info/refs')),
-        ).toBe(true);
+        // What git asks after that depends on its version (the dumb-protocol
+        // fallback); the first request is what reached past the dead ::1.
+        expect(reached[0]).toBe(
+            'GET /g/r.git/info/refs?service=git-upload-pack',
+        );
     });
 
     it('cloud: every answer is still judged before any is pinned', async () => {
@@ -340,7 +345,10 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
                 'https://git.example.com/r.git',
                 resolver(['140.82.112.3', 4], ['10.4.0.9', 4]),
             ),
-        ).rejects.toThrow(/resolves to a private or reserved address/);
+        ).rejects.toHaveProperty(
+            'message',
+            'Git server host "git.example.com" resolves to a private or reserved address; the call was not sent.',
+        );
     });
 
     describe('through a proxy curl resolves nothing, so nothing is pinned', () => {
@@ -374,9 +382,9 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
                         NO_PROXY: 'localhost,.corp.example',
                     },
                 ),
-            ).resolves.toContainEqual([
-                'http.curloptResolve',
-                'git.corp.example:443:140.82.112.3',
+            ).resolves.toEqual([
+                ['http.curloptResolve', 'git.corp.example:443:140.82.112.3'],
+                ['http.followRedirects', 'false'],
             ]);
         });
 
@@ -388,7 +396,10 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
                     'Git server',
                     { http_proxy: 'http://proxy.corp:3128' },
                 ),
-            ).resolves.toHaveLength(2);
+            ).resolves.toEqual([
+                ['http.curloptResolve', 'git.corp.example:443:140.82.112.3'],
+                ['http.followRedirects', 'false'],
+            ]);
         });
 
         it('the metadata address typed as the host is refused even so', async () => {
@@ -403,7 +414,10 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
                         ALL_PROXY: 'http://p:3128',
                     },
                 ),
-            ).rejects.toThrow(/169\.254\.169\.254/);
+            ).rejects.toHaveProperty(
+                'message',
+                'Git server host "169.254.169.254" resolves to a private or reserved address (169.254.169.254); the call was not sent.',
+            );
         });
     });
 
@@ -425,7 +439,7 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
             pinnedGitFetchConfig('https://git.corp/r.git', async () => {
                 throw new Error('getaddrinfo ENOTFOUND');
             }),
-        ).rejects.toThrow(/ENOTFOUND/);
+        ).rejects.toHaveProperty('message', 'getaddrinfo ENOTFOUND');
     });
 
     describe('a redirect is followed with every hop judged', () => {
@@ -484,17 +498,30 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
                 'Authorization: Basic c2VjcmV0',
                 run,
             ).catch(() => undefined);
-            const byGit = targetSeen.filter((r) => r.ua.startsWith('git/2'));
-            expect(byGit.map((r) => r.url)).toContainEqual(
-                expect.stringMatching(/^\/moved\/r\.git\/info\/refs/),
-            );
-            // The probe carried the token to the host it was given for only.
-            expect(redirectorAuth).toContain('Basic c2VjcmV0');
+            // git and the probe gave the token to the host it was given for;
+            // the host it moved to was asked by both, without it.
+            expect(redirectorAuth).toEqual([
+                'Basic c2VjcmV0',
+                'Basic c2VjcmV0',
+            ]);
             expect(
-                targetSeen
-                    .filter((r) => r.ua === 'git/kodus')
-                    .map((r) => r.auth),
-            ).toEqual([undefined]);
+                targetSeen.map((r) => ({
+                    by: r.ua === 'git/kodus' ? 'probe' : 'git',
+                    url: r.url,
+                    auth: r.auth,
+                })),
+            ).toEqual([
+                {
+                    by: 'probe',
+                    url: '/moved/r.git/info/refs?service=git-upload-pack',
+                    auth: undefined,
+                },
+                {
+                    by: 'git',
+                    url: '/moved/r.git/info/refs?service=git-upload-pack',
+                    auth: undefined,
+                },
+            ]);
         });
 
         it('a redirect to the metadata service is refused, git never dials it', async () => {
@@ -713,8 +740,8 @@ describe('connecting a self-managed server that is refused says why', () => {
                 (e: unknown) => e,
             );
             expect(err).toBeInstanceOf(BadRequestException);
-            expect((err as Error).message).toMatch(
-                /resolves to a private or reserved address/,
+            expect((err as Error).message).toBe(
+                'The git server URL resolves to a private or reserved address. Point it at a server reachable on the public internet.',
             );
             expect(reached).toEqual([]);
         },
@@ -741,8 +768,8 @@ describe('connecting a self-managed server that is refused says why', () => {
                 () => undefined,
                 (e: unknown) => e,
             );
-        expect((err as Error).message).toMatch(
-            /resolves to a private or reserved address/,
+        expect((err as Error).message).toBe(
+            'Git server host "gitlab.attacker.test" resolves to a private or reserved address; the call was not sent.',
         );
         expect(reached).toEqual([]);
     });

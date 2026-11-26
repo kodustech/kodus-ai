@@ -1309,8 +1309,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Bedrock region', () =>
         'refuses %s',
         async (region) => {
             const { useCase, createOrUpdateConfig } = buildUseCase();
-            await expect(saveByok(useCase, bedrock(region))).rejects.toThrow(
-                /not an AWS region/,
+            await expect(
+                saveByok(useCase, bedrock(region)),
+            ).rejects.toHaveProperty(
+                'message',
+                `The AWS region "${region}" of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.`,
             );
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         },
@@ -1321,7 +1324,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Bedrock region', () =>
         async (region) => {
             const { useCase, createOrUpdateConfig } = buildUseCase();
             await saveByok(useCase, bedrock(region));
-            expect(createOrUpdateConfig).toHaveBeenCalled();
+            expect(createOrUpdateConfig).toHaveBeenCalledTimes(1);
         },
     );
 });
@@ -1357,7 +1360,10 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex key type', () =
                     credential_source: { url: 'http://169.254.169.254/x' },
                 }),
             ),
-        ).rejects.toThrow(/only a service account key/);
+        ).rejects.toHaveProperty(
+            'message',
+            'The Vertex key is a "external_account" credential; only a service account key (type "service_account") is accepted, so the call was not sent.',
+        );
         expect(createOrUpdateConfig).not.toHaveBeenCalled();
     });
 
@@ -1367,7 +1373,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex key type', () =
             useCase,
             vertex({ type: 'service_account', project_id: 'proj-test-123' }),
         );
-        expect(createOrUpdateConfig).toHaveBeenCalled();
+        expect(createOrUpdateConfig).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -1403,8 +1409,11 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex location', () =
         'refuses %s',
         async (location) => {
             const { useCase, createOrUpdateConfig } = buildUseCase();
-            await expect(saveByok(useCase, vertexAt(location))).rejects.toThrow(
-                /not a Vertex location/,
+            await expect(
+                saveByok(useCase, vertexAt(location)),
+            ).rejects.toHaveProperty(
+                'message',
+                `The location "${location}" of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.`,
             );
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         },
@@ -1420,6 +1429,6 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex location', () =
     ])('accepts %s', async (location) => {
         const { useCase, createOrUpdateConfig } = buildUseCase();
         await saveByok(useCase, vertexAt(location));
-        expect(createOrUpdateConfig).toHaveBeenCalled();
+        expect(createOrUpdateConfig).toHaveBeenCalledTimes(1);
     });
 });

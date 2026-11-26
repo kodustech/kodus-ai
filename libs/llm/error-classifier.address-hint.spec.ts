@@ -23,8 +23,9 @@ describe('the message for a refused BYOK base URL', () => {
         const msg = classifyLLMError(
             refused('llm.lan', '10.0.0.4'),
         ).friendlyMessage;
-        expect(msg).toMatch(/public provider endpoint/);
-        expect(msg).not.toMatch(/API_ALLOWED_PRIVATE_HOSTS/);
+        expect(msg).toBe(
+            'The base URL of this model resolves to a private or reserved address, so the call was not sent. Point it at a public provider endpoint.',
+        );
     });
 
     it('self-hosted: names the operator allowance, and that http is fine there', () => {
@@ -33,8 +34,9 @@ describe('the message for a refused BYOK base URL', () => {
             refused('localhost', '127.0.0.1'),
             'openai_compatible',
         ).friendlyMessage;
-        expect(msg).toMatch(/API_ALLOWED_PRIVATE_HOSTS/);
-        expect(msg).toMatch(/http/);
+        expect(msg).toBe(
+            'The base URL of this model (openai_compatible) resolves to a private or reserved address, so the call was not sent. Point it at a public provider endpoint. On a self-hosted install, the operator can allow a gateway on its own network with API_ALLOWED_PRIVATE_HOSTS (host[:port], IP or range); a host named there may use http.',
+        );
     });
 
     it('self-hosted: the metadata service is never offered the allowance', () => {
@@ -42,6 +44,9 @@ describe('the message for a refused BYOK base URL', () => {
         const msg = classifyLLMError(
             refused('169.254.169.254', '169.254.169.254'),
         ).friendlyMessage;
-        expect(msg).not.toMatch(/API_ALLOWED_PRIVATE_HOSTS/);
+        // The cloud sentence, with no allowance after it.
+        expect(msg).toBe(
+            'The base URL of this model resolves to a private or reserved address, so the call was not sent. Point it at a public provider endpoint.',
+        );
     });
 });

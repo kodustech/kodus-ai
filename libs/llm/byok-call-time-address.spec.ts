@@ -227,7 +227,9 @@ describe('a Bedrock region is a region, not a host', () => {
             expect(requests).toEqual([]);
             const info = classifyLLMError(error, 'amazon_bedrock');
             expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
-            expect(info.friendlyMessage).toMatch(/not an AWS region/);
+            expect(info.friendlyMessage).toBe(
+                `The AWS region "${template.replace('PORT', String(port))}" of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.`,
+            );
         },
     );
 });
@@ -265,7 +267,9 @@ describe('a Vertex BYOK key is a service account key', () => {
         expect(requests).toEqual([]);
         const info = classifyLLMError(error, 'google_vertex');
         expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
-        expect(info.friendlyMessage).toMatch(/service account/);
+        expect(info.friendlyMessage).toBe(
+            'The Vertex key is a "external_account" credential; only a service account key (type "service_account") is accepted, so the call was not sent.',
+        );
     });
 
     it('a service account key still builds', () => {
@@ -318,7 +322,9 @@ describe('a Vertex location is a location, not a host', () => {
             expect(requests).toEqual([]);
             const info = classifyLLMError(error, 'google_vertex');
             expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
-            expect(info.friendlyMessage).toMatch(/not a Vertex location/);
+            expect(info.friendlyMessage).toBe(
+                `The location "${template.replace('PORT', String(port))}" of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.`,
+            );
         },
     );
 

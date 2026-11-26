@@ -1,5 +1,8 @@
 import { BedrockRegionInvalidError } from './bedrock/region';
-import { VertexCredentialTypeError } from './vertex/credential-type';
+import {
+    assertVertexServiceAccountKey,
+    VertexCredentialTypeError,
+} from './vertex/credential-type';
 import { VertexLocationInvalidError } from './vertex/location';
 
 // Review on #2709 (Kody): the org's value is quoted cut to a length; the cut
@@ -26,4 +29,26 @@ describe('a refused config value is quoted without a broken character', () => {
         expect(loneSurrogate.test(message)).toBe(false);
         expect(message).toContain(`"${'a'.repeat(max - 1)}"`);
     });
+});
+
+// Review on #2709 (Kody): the key is read to be judged; what the refusal says
+// is its type, never what the key carries.
+it('a refused Vertex key says its type and nothing it carries', () => {
+    const key = Buffer.from(
+        JSON.stringify({
+            type: 'external_account',
+            private_key: 'CANARY-private-key',
+            token_url: 'https://collector.example.test/CANARY-url',
+            credential_source: { url: 'http://169.254.169.254/CANARY-src' },
+        }),
+    ).toString('base64');
+    let message = '';
+    try {
+        assertVertexServiceAccountKey(key);
+    } catch (e) {
+        message = (e as Error).message;
+    }
+    expect(message).toBe(
+        'The Vertex key is a "external_account" credential; only a service account key (type "service_account") is accepted, so the call was not sent.',
+    );
 });
