@@ -634,7 +634,7 @@ export function integrationRequestGuard(
  */
 export function gitProxyFor(
     url: URL,
-    env: NodeJS.ProcessEnv = process.env,
+    env: Record<string, string | undefined> = process.env,
 ): string | undefined {
     const pick = (...names: string[]) =>
         names.map((n) => env[n]).find((v) => !!v && v.trim() !== '');
@@ -679,7 +679,7 @@ export async function pinnedGitFetchConfig(
     ) => Promise<Array<{ address: string; family: number }>> = (host) =>
         dns.promises.lookup(host, { all: true }),
     label = 'Git server',
-    env: NodeJS.ProcessEnv = process.env,
+    env: Record<string, string | undefined> = process.env,
 ): Promise<Array<[string, string]>> {
     let url: URL;
     try {
