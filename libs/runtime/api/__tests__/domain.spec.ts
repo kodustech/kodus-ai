@@ -166,8 +166,8 @@ describe('Budget', () => {
         const cfg = loadRuntimeApiConfig({});
         expect(cfg.llmBudget.perRun).toBe(200_000);
         const setup = setupBudgetLimits(withOrgBudget(cfg.llmBudget, 3_000_000));
-        expect(setup).toMatchObject({ perRun: 1_200_000, perPullRequest: Number.MAX_SAFE_INTEGER, perOrgPerDay: 3_000_000 });
-        expect(decideBudget({ run: 210_000, pullRequest: 0, orgToday: 0 }, setup)).toEqual({ allowed: true, remaining: 990_000 });
+        expect(setup).toMatchObject({ perRun: 1_600_000, perPullRequest: Number.MAX_SAFE_INTEGER, perOrgPerDay: 3_000_000 });
+        expect(decideBudget({ run: 210_000, pullRequest: 0, orgToday: 0 }, setup)).toEqual({ allowed: true, remaining: 1_390_000 });
         // An operator can still lower it, and without the knob a setup keeps the Run's ceiling.
         expect(setupBudgetLimits(loadRuntimeApiConfig({ RUNTIME_LLM_MAX_TOKENS_PER_SETUP: '250000' }).llmBudget).perRun).toBe(250_000);
         expect(setupBudgetLimits(limits).perRun).toBe(100);

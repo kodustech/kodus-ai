@@ -341,7 +341,7 @@ public service is another app is refused." A deterministic check (`checkAuthored
 build or start mentions neither the target's path nor its package name (`--filter <name>`, `nx build <name>`,
 `WORKDIR`/`COPY` of its path, a compose `working_dir`); it goes back as a tool error naming the line, as the other
 checks do. The step limit stays 16: the author no longer explores a whole monorepo to choose, it reads one app. Budget
-per setup stays 1.2M tokens.
+per setup stays 1.6M tokens.
 
 **Setups per app, cached and reused.** Each app has its own environment: its own default-branch setup, bake, build state,
 exported cache and pool (pool size defaults to 0 for an app environment; the org raises it). The install layer is
@@ -355,7 +355,7 @@ so apps do not share it either.
 workspace graph (apps only), one click each, which creates the environment and asks for its setup. For the first Run of
 a PR that touches an app with no environment, the trigger does not create one on its own (setup is an admin's opt-in:
 `turnOnIfUnset`, "Set up is the opt-in"): the comment lists the apps the PR touches that have none, with the link.
-Reason: a setup spends model tokens (up to 1.2M) and machine minutes.
+Reason: a setup spends model tokens (up to 1.6M) and machine minutes.
 
 **What the customer sees when an app cannot boot.** Each environment's setup already ends in a typed blocker with a card
 (`libs/runtime/blockers/catalog.ts`). Added: the Run's comment has one line per touched app, always:

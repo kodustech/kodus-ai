@@ -136,8 +136,8 @@ product with the org's BYOK key, which never reaches the worker.
 - **Run limit:** 10 minutes for the whole run (`recipe-author.use-case.ts:72-78`, applied at `:320`). The worker
   waits 11 minutes, on a dispatcher whose headers timeout matches (`http-recipe-author.ts:15-16`, `:75-83`).
 - **Budget:** the run's tokens are reserved before it starts, under the setup's scope (`recipe-author.use-case.ts:264-272`);
-  with less than 20k left it does not start (`:63`). The per-setup LLM budget is 1.2M tokens, three runs of 400k:
-  the first recipe and two repairs at the 400k cap (a third repair, the default since the repair budget went to 3, runs on what is left of it, and does not start under 20k; raise `RUNTIME_LLM_MAX_TOKENS_PER_SETUP` to give each of four runs the whole cap) (`libs/runtime/api/infrastructure/runtime-api.config.ts:34-36`).
+  with less than 20k left it does not start (`:63`). The per-setup LLM budget is 1.6M tokens, four runs of 400k:
+  the first recipe and the three repairs at the 400k cap (`libs/runtime/api/infrastructure/runtime-api.config.ts:78`).
 
 ## 4. The boot on the cell
 

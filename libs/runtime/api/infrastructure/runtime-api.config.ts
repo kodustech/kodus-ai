@@ -75,7 +75,7 @@ export function loadRuntimeApiConfig(env: NodeJS.ProcessEnv = process.env): Runt
             perOrgPerDay: int(env.RUNTIME_LLM_MAX_TOKENS_PER_ORG_DAY, 5_000_000),
             // The recipe author reads up to RECIPE_AUTHOR_LIMITS.maxTokens (400k) per run; a setup may run it
             // three times (the first recipe and RUNTIME_SETUP_AUTHOR_REPAIRS rewrites after a failed build).
-            perSetup: int(env.RUNTIME_LLM_MAX_TOKENS_PER_SETUP, 1_200_000),
+            perSetup: int(env.RUNTIME_LLM_MAX_TOKENS_PER_SETUP, 1_600_000),
         },
         // Off unless the deployment's plan sets a default; an admin may go up to the ceiling.
         pool: (() => {
