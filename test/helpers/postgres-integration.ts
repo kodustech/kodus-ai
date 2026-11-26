@@ -72,7 +72,8 @@ export async function connectTestPostgres(options?: {
         await candidate.initialize();
     } catch (error) {
         await candidate.destroy().catch(() => undefined);
-        if (!isUnreachable(error) || process.env.CI) throw error;
+        const inCi = process.env.CI === 'true' || process.env.CI === '1';
+        if (!isUnreachable(error) || inCi) throw error;
         return undefined;
     }
     if (options?.replica) {

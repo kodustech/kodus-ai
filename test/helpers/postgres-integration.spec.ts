@@ -28,15 +28,22 @@ describe('connectTestPostgres', () => {
         else process.env.CI = ci;
     });
 
-    it('answers no connection, so the spec skips, when Postgres is not reachable locally', async () => {
-        delete process.env.CI;
+    it.each([undefined, 'false', '0'])(
+        'answers no connection, so the spec skips, when Postgres is not reachable locally (CI=%s)',
+        async (value) => {
+            if (value === undefined) delete process.env.CI;
+            else process.env.CI = value;
 
-        await expect(connectTestPostgres()).resolves.toBeUndefined();
-    });
+            await expect(connectTestPostgres()).resolves.toBeUndefined();
+        },
+    );
 
-    it('fails when Postgres is not reachable in CI', async () => {
-        process.env.CI = 'true';
+    it.each(['true', '1'])(
+        'fails when Postgres is not reachable in CI (CI=%s)',
+        async (value) => {
+            process.env.CI = value;
 
-        await expect(connectTestPostgres()).rejects.toBe(refused);
-    });
+            await expect(connectTestPostgres()).rejects.toBe(refused);
+        },
+    );
 });
