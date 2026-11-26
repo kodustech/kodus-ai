@@ -9,6 +9,7 @@ import {
     Res,
     UseGuards,
 } from '@nestjs/common';
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { narrowParameterToConnections } from '@libs/organization/domain/parameters/utils/narrow-parameter-to-connections';
 import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
@@ -108,6 +109,8 @@ export class ParametersController {
         private readonly codeBaseConfigService: ICodeBaseConfigService,
 
         private readonly connectionAccess: ConnectionAccessService,
+
+        private readonly connectionScope: CentralizedConfigConnectionScope,
     ) {}
 
     //#region Parameters
@@ -603,11 +606,14 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
+        // The web names no Git connection: the sync runs on the one the
+        // workspace's config belongs to, reading only its repositories.
         const result = await this.centralizedConfigSyncUseCase.execute({
-            organizationAndTeamData: {
-                organizationId,
-                teamId: body.teamId,
-            },
+            organizationAndTeamData:
+                await this.connectionScope.workspaceConfigScope({
+                    organizationId,
+                    teamId: body.teamId,
+                }),
         });
 
         return result;
@@ -639,9 +645,16 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
+        // Only the repositories of the connection the workspace's config
+        // belongs to, as a sync of that config would read them.
+        const scoped = await this.connectionScope.workspaceConfigScope({
+            organizationId,
+            teamId,
+        });
         const archive = await this.centralizedConfigDownloadZipUseCase.execute(
             this.request.user,
             teamId,
+            await this.connectionScope.downloadScope(scoped),
         );
 
         response.set({

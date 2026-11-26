@@ -1,5 +1,6 @@
 import { ParametersKey } from '@libs/core/domain/enums';
 
+import { CentralizedConfigConnectionScope } from '../../services/centralized-config-connection-scope.service';
 import { CentralizedConfigInitUseCase } from '../centralized-config-init.use-case';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -37,11 +38,29 @@ describe('CentralizedConfigInitUseCase per Git connection', () => {
                 .fn()
                 .mockResolvedValue({ prUrl: 'https://example.test/pr/1' }),
         };
+        const connectionScope = new CentralizedConfigConnectionScope(
+            {
+                find: jest.fn().mockResolvedValue([{ uuid: 'gl-b' }]),
+            } as any,
+            {
+                findAllOfTeamByConfigKey: jest.fn().mockResolvedValue([
+                    {
+                        integration: { uuid: 'gl-b' },
+                        configValue: [
+                            { id: 'repo-gl-1' },
+                            { id: 'repo-gl-config' },
+                        ],
+                    },
+                ]),
+            } as any,
+            parametersService as any,
+        );
         const useCase = new CentralizedConfigInitUseCase(
             parametersService as any,
             createOrUpdateParameters as any,
             download as any,
             prService as any,
+            connectionScope,
         );
         return { useCase, createOrUpdateParameters, download, prService };
     };

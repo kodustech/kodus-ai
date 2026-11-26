@@ -23,6 +23,7 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
     let mockOrganizationParametersService: {
         findByKey: jest.Mock;
         createOrUpdateConfig: jest.Mock;
+        mergeConfigValue: jest.Mock;
     };
     let mockPruneUseCase: { execute: jest.Mock };
 
@@ -47,6 +48,7 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
         mockOrganizationParametersService = {
             findByKey: jest.fn().mockResolvedValue(configValue()),
             createOrUpdateConfig: jest.fn().mockResolvedValue(undefined),
+            mergeConfigValue: jest.fn().mockResolvedValue(undefined),
         };
 
         mockPruneUseCase = {
@@ -114,19 +116,11 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
                 dryRun: true,
             });
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).toHaveBeenCalledWith(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                expect.objectContaining({
-                    enabled: true,
-                    ignoredUsers: ['ignored-1'],
-                    allowedUsers: ['allowed-1'],
-                    autoRevokeRemovedUsers: true,
-                    pendingRevocations: {
-                        'gone-1': NOW.toISOString(),
-                    },
-                }),
-                organizationAndTeamData,
+                organizationAndTeamData.organizationId,
+                { pendingRevocations: { 'gone-1': NOW.toISOString() } },
             );
         });
 
@@ -178,11 +172,11 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
                 gitIds: ['gone-1'],
             });
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).toHaveBeenCalledWith(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                expect.objectContaining({ pendingRevocations: {} }),
-                organizationAndTeamData,
+                organizationAndTeamData.organizationId,
+                { pendingRevocations: {} },
             );
         });
 
@@ -224,13 +218,11 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
 
             expect(result.pending).toEqual(['gone-1']);
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).toHaveBeenCalledWith(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                expect.objectContaining({
-                    pendingRevocations: { 'gone-1': NOW.toISOString() },
-                }),
-                organizationAndTeamData,
+                organizationAndTeamData.organizationId,
+                { pendingRevocations: { 'gone-1': NOW.toISOString() } },
             );
         });
 
@@ -264,7 +256,7 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
             // and the next run retries it.
             expect(result.pending).toEqual(['gone-1']);
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).not.toHaveBeenCalled();
         });
     });
@@ -291,7 +283,7 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
             expect(result.revoked).toEqual([]);
             expect(mockPruneUseCase.execute).toHaveBeenCalledTimes(1);
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).not.toHaveBeenCalled();
         });
 
@@ -312,16 +304,16 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
             await useCase.execute({ organizationAndTeamData });
 
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).toHaveBeenCalledWith(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                expect.objectContaining({
-                    autoRevokeRemovedUsers: false,
-                    ignoredUsers: ['ignored-1', 'added-mid-sweep'],
-                    pendingRevocations: { 'gone-1': NOW.toISOString() },
-                }),
-                organizationAndTeamData,
+                organizationAndTeamData.organizationId,
+                { pendingRevocations: { 'gone-1': NOW.toISOString() } },
             );
+            // Only the timers are written: the settings saved meanwhile stay.
+            expect(
+                mockOrganizationParametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
         });
 
         // Reaching the write proves the config existed, so an empty re-read means
@@ -336,7 +328,7 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
 
             expect(result.status).toBe('ok');
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).not.toHaveBeenCalled();
         });
 
@@ -350,7 +342,7 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
             await useCase.execute({ organizationAndTeamData });
 
             expect(
-                mockOrganizationParametersService.createOrUpdateConfig,
+                mockOrganizationParametersService.mergeConfigValue,
             ).not.toHaveBeenCalled();
         });
     });

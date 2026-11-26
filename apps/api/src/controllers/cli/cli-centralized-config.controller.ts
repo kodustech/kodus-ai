@@ -18,12 +18,7 @@ import {
     ApiOperation,
     ApiTags,
 } from '@nestjs/swagger';
-import {
-    IIntegrationService,
-    INTEGRATION_SERVICE_TOKEN,
-} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
-import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
-import { connectionDownloadScope } from '@libs/centralized-config/utils/connection-download-scope';
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import { Response } from 'express';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { finished } from 'stream/promises';
@@ -71,8 +66,7 @@ export class CliCentralizedConfigController {
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
         private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
-        @Inject(INTEGRATION_SERVICE_TOKEN)
-        private readonly integrationService: IIntegrationService,
+        private readonly connectionScope: CentralizedConfigConnectionScope,
     ) {}
 
     @Get('/status')
@@ -124,7 +118,7 @@ export class CliCentralizedConfigController {
         this.ensureRepositoryConfigCapability(authContext);
 
         const workspace = this.toOrganizationAndTeamData(authContext);
-        const connections = await this.connectionsOf(workspace);
+        const connections = await this.connectionScope.connectionsOf(workspace);
 
         const statusOf = async (context: OrganizationAndTeamData) => {
             const parameter = await this.parametersService.findByKey(
@@ -138,7 +132,13 @@ export class CliCentralizedConfigController {
         };
 
         if (connectionId || connections.length < 2) {
-            return statusOf(this.scopeTo(workspace, connections, connectionId));
+            return statusOf(
+                this.connectionScope.scopeTo(
+                    workspace,
+                    connections,
+                    connectionId,
+                ),
+            );
         }
 
         return {
@@ -207,12 +207,15 @@ export class CliCentralizedConfigController {
             throw new BadRequestException('repositoryId is required');
         }
 
-        const connections = await this.connectionsOf(workspace);
-        const context = this.scopeTo(
+        const connections = await this.connectionScope.connectionsOf(workspace);
+        const context = this.connectionScope.scopeTo(
             workspace,
             connections,
             body.connectionId ??
-                this.connectionListing(connections, body.repositoryId),
+                this.connectionScope.connectionListing(
+                    connections,
+                    body.repositoryId,
+                ),
         );
         await this.ensureCodeManagementIntegration(context);
 
@@ -277,9 +280,9 @@ export class CliCentralizedConfigController {
         this.ensureRepositoryConfigCapability(authContext);
 
         const workspace = this.toOrganizationAndTeamData(authContext);
-        const context = this.scopeTo(
+        const context = this.connectionScope.scopeTo(
             workspace,
-            await this.connectionsOf(workspace),
+            await this.connectionScope.connectionsOf(workspace),
             connectionId,
         );
         await this.ensureCodeManagementIntegration(context);
@@ -326,9 +329,9 @@ export class CliCentralizedConfigController {
         this.ensureRepositoryConfigCapability(authContext);
 
         const workspace = this.toOrganizationAndTeamData(authContext);
-        const context = this.scopeTo(
+        const context = this.connectionScope.scopeTo(
             workspace,
-            await this.connectionsOf(workspace),
+            await this.connectionScope.connectionsOf(workspace),
             connectionId,
         );
 
@@ -375,8 +378,12 @@ export class CliCentralizedConfigController {
         this.ensureRepositoryConfigCapability(authContext);
 
         const workspace = this.toOrganizationAndTeamData(authContext);
-        const connections = await this.connectionsOf(workspace);
-        const context = this.scopeTo(workspace, connections, connectionId);
+        const connections = await this.connectionScope.connectionsOf(workspace);
+        const context = this.connectionScope.scopeTo(
+            workspace,
+            connections,
+            connectionId,
+        );
 
         const archive = await this.centralizedConfigDownloadZipUseCase.execute(
             this.buildCliUser(authContext),
@@ -384,7 +391,10 @@ export class CliCentralizedConfigController {
             {
                 skipAuthorization: true,
                 organizationId: context.organizationId,
-                ...(await this.downloadScope(context, connections)),
+                ...(await this.connectionScope.downloadScope(
+                    context,
+                    connections,
+                )),
             },
         );
 
@@ -494,103 +504,6 @@ export class CliCentralizedConfigController {
         }
 
         return repository;
-    }
-
-    /** The workspace's Git connections, each with the repository ids it lists. */
-    private async connectionsOf(
-        context: OrganizationAndTeamData,
-    ): Promise<Array<{ integrationId: string; repositoryIds: string[] }>> {
-        // Every active connection counts, saved repositories or not.
-        const [connections, configs] = await Promise.all([
-            this.integrationService.find({
-                organization: { uuid: context.organizationId },
-                team: { uuid: context.teamId },
-                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                status: true,
-            }),
-            this.integrationConfigService.findAllOfTeamByConfigKey(
-                IntegrationConfigKey.REPOSITORIES,
-                context,
-            ),
-        ]);
-        const repositoriesOf = new Map(
-            (configs ?? [])
-                .filter((config) => config?.integration?.uuid)
-                .map((config) => [
-                    config.integration.uuid,
-                    (Array.isArray(config.configValue)
-                        ? (config.configValue as Repositories[])
-                        : []
-                    ).map((repository) => String(repository.id)),
-                ]),
-        );
-        return (connections ?? []).map((connection) => ({
-            integrationId: connection.uuid,
-            repositoryIds: repositoriesOf.get(connection.uuid) ?? [],
-        }));
-    }
-
-    /**
-     * Scopes a call to one Git connection: the one named, or the only one.
-     * A workspace with several has to name it.
-     */
-    private scopeTo(
-        workspace: OrganizationAndTeamData,
-        connections: Array<{ integrationId: string }>,
-        connectionId?: string,
-    ): OrganizationAndTeamData {
-        if (connectionId) {
-            if (!connections.some((c) => c.integrationId === connectionId)) {
-                throw new BadRequestException(
-                    'This Git connection is not in the workspace.',
-                );
-            }
-            return { ...workspace, integrationId: connectionId };
-        }
-        if (connections.length > 1) {
-            throw new BadRequestException(
-                `This workspace has several Git connections. Pass connectionId, one of: ${connections
-                    .map((c) => c.integrationId)
-                    .join(', ')}.`,
-            );
-        }
-        return workspace;
-    }
-
-    /** The one connection that lists a repository; ambiguous or unknown answers none. */
-    private connectionListing(
-        connections: Array<{ integrationId: string; repositoryIds: string[] }>,
-        repositoryId: string,
-    ): string | undefined {
-        if (connections.length < 2) return undefined;
-        const listing = connections.filter((c) =>
-            c.repositoryIds.includes(String(repositoryId)),
-        );
-        return listing.length === 1 ? listing[0].integrationId : undefined;
-    }
-
-    /**
-     * A connection other than the one the workspace's centralized config is
-     * on exports only its own repositories, without the workspace defaults.
-     */
-    private async downloadScope(
-        context: OrganizationAndTeamData,
-        connections: Array<{ integrationId: string; repositoryIds: string[] }>,
-    ): Promise<{
-        repositoryIds?: string[];
-        includeWorkspaceDefaults?: boolean;
-    }> {
-        if (!context.integrationId) return {};
-        const parameter = await this.parametersService.findByKey(
-            ParametersKey.CENTRALIZED_CONFIG,
-            context,
-        );
-        return connectionDownloadScope(
-            context.integrationId,
-            connections.find((c) => c.integrationId === context.integrationId)
-                ?.repositoryIds ?? [],
-            parameter?.configValue,
-        );
     }
 
     private buildCliUser(context: {

@@ -7,6 +7,12 @@ import { IParameters } from '../interfaces/parameters.interface';
 export const PARAMETERS_REPOSITORY_TOKEN = Symbol.for('ParametersRepository');
 
 export interface IParametersRepository {
+    /** Writes `next` only while the row still holds `expected`; false otherwise. */
+    compareAndSetConfigValue(
+        uuid: string,
+        expected: unknown,
+        next: unknown,
+    ): Promise<boolean>;
     find<K extends ParametersKey>(
         filter?: Partial<IParameters<K>>,
     ): Promise<ParametersEntity<K>[]>;

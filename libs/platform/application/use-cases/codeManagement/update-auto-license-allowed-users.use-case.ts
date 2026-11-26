@@ -87,10 +87,13 @@ export class UpdateAutoLicenseAllowedUsersUseCase {
 
         config.allowedUsers = Array.from(merged);
 
-        return this.organizationParametersService.createOrUpdateConfig(
+        // Only the organization's allowed list is written, merged into the
+        // stored value.
+        await this.organizationParametersService.mergeConfigValue(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-            config,
-            organizationAndTeamData,
+            organizationAndTeamData.organizationId,
+            { allowedUsers: config.allowedUsers },
         );
+        return true;
     }
 }

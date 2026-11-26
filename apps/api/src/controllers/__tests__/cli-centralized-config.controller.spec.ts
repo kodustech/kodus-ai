@@ -1,3 +1,4 @@
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import {
     BadRequestException,
     ForbiddenException,
@@ -102,7 +103,11 @@ describe('CliCentralizedConfigController', () => {
             centralizedConfigInitUseCase as any,
             centralizedConfigSyncUseCase as any,
             centralizedConfigDownloadZipUseCase as any,
-            integrationService as any,
+            new CentralizedConfigConnectionScope(
+                integrationService as any,
+                integrationConfigService as any,
+                parametersService as any,
+            ),
         );
     });
 

@@ -73,6 +73,8 @@ import {
     ApiQuery,
     ApiTags,
 } from '@nestjs/swagger';
+import { UpdateAuthorFiltersDto } from '../dtos/author-filters.dto';
+import { UpdateAuthorFiltersUseCase } from '@libs/organization/application/use-cases/organizationParameters/update-author-filters.use-case';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import {
@@ -127,6 +129,8 @@ export class OrganizationParametersController {
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
+
+        private readonly updateAuthorFiltersUseCase: UpdateAuthorFiltersUseCase,
     ) {}
 
     @Post('/create-or-update')
@@ -740,6 +744,29 @@ export class OrganizationParametersController {
         return await this.ignoreBotsUseCase.execute({
             organizationId,
             teamId: body.teamId,
+        });
+    }
+
+    @Post('/author-filters')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Set the PR author filters',
+        description:
+            "Sets one Git connection's ignored and allowed PR authors, or the organization's when no connection is named. Nothing else stored with them changes.",
+    })
+    @ApiNoContentResponse({ description: 'Filters saved' })
+    public async updateAuthorFilters(@Body() body: UpdateAuthorFiltersDto) {
+        await this.updateAuthorFiltersUseCase.execute({
+            user: this.request?.user,
+            connectionId: body.connectionId,
+            ignoredUsers: body.ignoredUsers,
+            allowedUsers: body.allowedUsers,
         });
     }
 

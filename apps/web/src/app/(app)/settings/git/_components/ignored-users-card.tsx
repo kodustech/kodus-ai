@@ -12,11 +12,8 @@ import {
 } from "@components/ui/card";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
-import {
-    OrganizationParametersAutoAssignConfig,
-    OrganizationParametersConfigKey,
-} from "@services/parameters/types";
+import { updateAuthorFilters } from "@services/organizationParameters/fetch";
+import { OrganizationParametersAutoAssignConfig } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { Check, ChevronsUpDown } from "lucide-react";
@@ -89,34 +86,13 @@ export const IgnoredUsersCard = ({
         ResourceType.GitSettings,
     );
 
-    // Always merge into the stored config: it also carries the auto-revoke
-    // settings, the pending-revocation timers written by the cron, and the
-    // record of which bots were auto-ignored. Replacing it wholesale drops
-    // them and lets an ignored bot be seeded back on the next discovery run.
-    // A connection's change goes to its own lists, started from the ones it
-    // read until now.
+    // Only this connection's lists (or the organization's) are sent; the
+    // server merges them into what is stored now, so the revocation timers,
+    // the bots seeded meanwhile and the other connections' lists stay.
     const saveAutoAssignConfig = (patch: {
         ignoredUsers: string[];
         allowedUsers: string[];
-    }) =>
-        createOrUpdateOrganizationParameter(
-            OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-            connectionId
-                ? {
-                      enabled: false,
-                      ignoredUsers: [],
-                      ...autoLicenseAssignmentConfig,
-                      connections: {
-                          ...autoLicenseAssignmentConfig?.connections,
-                          [connectionId]: { ...lists, ...patch },
-                      },
-                  }
-                : {
-                      enabled: false,
-                      ...autoLicenseAssignmentConfig,
-                      ...patch,
-                  },
-        );
+    }) => updateAuthorFilters({ connectionId, ...patch });
 
     const [handleIgnoredUsersChange, { loading: isSavingIgnoredUsers }] =
         useAsyncAction(async () => {

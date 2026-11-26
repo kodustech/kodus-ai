@@ -5,7 +5,7 @@ jest.mock('@libs/core/log/logger', () => ({
 }));
 
 describe('UpdateAutoLicenseAllowedUsersUseCase', () => {
-    it('adds the current user without dropping the rest of the stored settings', async () => {
+    it('adds the current user, writing only the allowed list', async () => {
         const stored = {
             enabled: true,
             ignoredUsers: ['bot-1'],
@@ -17,7 +17,7 @@ describe('UpdateAutoLicenseAllowedUsersUseCase', () => {
         };
         const organizationParametersService = {
             findByKey: jest.fn().mockResolvedValue({ configValue: stored }),
-            createOrUpdateConfig: jest.fn().mockResolvedValue(true),
+            mergeConfigValue: jest.fn().mockResolvedValue(undefined),
         };
         const codeManagementService = {
             getCurrentUser: jest.fn().mockResolvedValue({ id: 42 }),
@@ -35,7 +35,9 @@ describe('UpdateAutoLicenseAllowedUsersUseCase', () => {
         });
 
         expect(
-            organizationParametersService.createOrUpdateConfig.mock.calls[0][1],
-        ).toEqual({ ...stored, allowedUsers: ['5', '42'] });
+            organizationParametersService.mergeConfigValue,
+        ).toHaveBeenCalledWith('auto_license_assignment', 'org-1', {
+            allowedUsers: ['5', '42'],
+        });
     });
 });

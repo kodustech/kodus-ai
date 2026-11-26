@@ -26,6 +26,7 @@ const build = (configValue: unknown = stored) => {
         findOne: jest.fn(async () => entity),
         update: jest.fn(async () => entity),
         create: jest.fn(async (x: unknown) => x),
+        compareAndSetConfigValue: jest.fn(async () => true),
     };
     return { service: new ParametersService(repository as any), repository };
 };
@@ -83,7 +84,7 @@ describe('ParametersService centralized config per Git connection', () => {
             },
         );
 
-        expect(repository.update.mock.calls[0][1].configValue).toEqual({
+        expect(repository.compareAndSetConfigValue.mock.calls[0][2]).toEqual({
             enabled: true,
             repository: { id: 'r-gh', name: 'acme/config' },
             integrationId: 'gh-a',
@@ -108,11 +109,68 @@ describe('ParametersService centralized config per Git connection', () => {
             { organizationId: 'org-1', teamId: 'team-1' },
         );
 
-        expect(repository.update.mock.calls[0][1].configValue).toEqual({
+        expect(repository.compareAndSetConfigValue.mock.calls[0][2]).toEqual({
             enabled: false,
             repository: { id: 'r-gh', name: 'acme/config' },
             integrationId: 'gh-a',
             connections: stored.connections,
         });
+    });
+
+    it("writes only over the value it read, so a connection's concurrent save is kept", async () => {
+        const { service, repository } = build();
+        const savedMeanwhile = {
+            ...stored,
+            connections: {
+                ...stored.connections,
+                'fj-c': { enabled: true, repository: { id: 'r-fj' } },
+            },
+        };
+        repository.findOne
+            .mockResolvedValueOnce(
+                ParametersEntity.create({
+                    uuid: 'p-1',
+                    configKey: ParametersKey.CENTRALIZED_CONFIG,
+                    configValue: stored as any,
+                    team: { uuid: 'team-1' } as any,
+                    active: true,
+                    version: 1,
+                }),
+            )
+            .mockResolvedValueOnce(
+                ParametersEntity.create({
+                    uuid: 'p-1',
+                    configKey: ParametersKey.CENTRALIZED_CONFIG,
+                    configValue: savedMeanwhile as any,
+                    team: { uuid: 'team-1' } as any,
+                    active: true,
+                    version: 1,
+                }),
+            );
+        repository.compareAndSetConfigValue
+            .mockResolvedValueOnce(false)
+            .mockResolvedValueOnce(true);
+
+        await service.createOrUpdateConfig(
+            ParametersKey.CENTRALIZED_CONFIG,
+            { enabled: true, repository: { id: 'r-gl3', name: 'g/c3' } },
+            {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                integrationId: 'gl-b',
+            },
+        );
+
+        const [, expected, next] =
+            repository.compareAndSetConfigValue.mock.calls[1];
+        expect(expected).toEqual(savedMeanwhile);
+        expect(next.connections).toEqual({
+            'gl-b': {
+                enabled: true,
+                repository: { id: 'r-gl3', name: 'g/c3' },
+            },
+            'fj-c': { enabled: true, repository: { id: 'r-fj' } },
+        });
+        expect(repository.update).not.toHaveBeenCalled();
     });
 });

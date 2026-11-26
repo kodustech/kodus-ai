@@ -1485,6 +1485,17 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#updateAuthorFilters",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/author-filters",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#updateAutoLicenseAllowedUsers",
     "httpMethod": "POST",
     "urlPath": "/organization-parameters/auto-license/allowed-users",

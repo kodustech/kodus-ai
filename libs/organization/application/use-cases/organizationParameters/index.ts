@@ -7,6 +7,7 @@ export * from './get-llm-config-status.use-case';
 export * from './get-models-by-provider.use-case';
 export * from './get-model-capabilities.use-case';
 export * from './ignore-bots.use-case';
+export * from './update-author-filters.use-case';
 export * from './test-byok-connection.use-case';
 export * from './test-byok-model.use-case';
 export * from './list-model-overrides.use-case';

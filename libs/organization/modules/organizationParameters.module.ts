@@ -12,6 +12,8 @@ import { DeleteByokConfigUseCase } from '../application/use-cases/organizationPa
 import { GetLLMConfigStatusUseCase } from '../application/use-cases/organizationParameters/get-llm-config-status.use-case';
 import { GetByokProvidersUseCase } from '../application/use-cases/organizationParameters/get-byok-providers.use-case';
 import { IgnoreBotsUseCase } from '../application/use-cases/organizationParameters/ignore-bots.use-case';
+import { UpdateAuthorFiltersUseCase } from '../application/use-cases/organizationParameters/update-author-filters.use-case';
+import { ConnectionAccessModule } from '@libs/identity/modules/connection-access.module';
 import {
     GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
     GetCockpitMetricsVisibilityUseCase,
@@ -44,6 +46,7 @@ import {
         // The Kodus provider gate reads the org's release track.
         forwardRef(() => OrganizationModule),
         ProviderModule,
+        ConnectionAccessModule,
     ],
     providers: [
         {
@@ -65,6 +68,7 @@ import {
         GetByokProvidersUseCase,
         { provide: KODUS_PROVIDER_GATE_TOKEN, useClass: KodusProviderGate },
         IgnoreBotsUseCase,
+        UpdateAuthorFiltersUseCase,
         GetModelsByProviderUseCase,
         GetModelCapabilitiesUseCase,
         TestByokConnectionUseCase,
@@ -81,6 +85,7 @@ import {
         GetLLMConfigStatusUseCase,
         GetByokProvidersUseCase,
         IgnoreBotsUseCase,
+        UpdateAuthorFiltersUseCase,
         GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
         GetModelsByProviderUseCase,
         GetModelCapabilitiesUseCase,

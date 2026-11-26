@@ -1,4 +1,4 @@
-import { connectionDownloadScope } from '@libs/centralized-config/utils/connection-download-scope';
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import { createLogger } from '@libs/core/log/logger';
 import { ParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -23,6 +23,7 @@ export class CentralizedConfigInitUseCase implements IUseCase {
         private readonly createOrUpdateParametersUseCase: CreateOrUpdateParametersUseCase,
         private readonly centralizedConfigDownloadUseCase: CentralizedConfigDownloadUseCase,
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
+        private readonly connectionScope: CentralizedConfigConnectionScope,
     ) {}
 
     async execute(params: {
@@ -117,7 +118,9 @@ export class CentralizedConfigInitUseCase implements IUseCase {
                         params.skipAuthorizationForDownload ?? false,
                     organizationId: organizationAndTeamData.organizationId,
                     markRulesAsPendingWithSourcePath: true,
-                    ...(await this.downloadScope(organizationAndTeamData)),
+                    ...(await this.connectionScope.downloadScope(
+                        organizationAndTeamData,
+                    )),
                 },
             );
 
@@ -230,31 +233,6 @@ export class CentralizedConfigInitUseCase implements IUseCase {
             return 'The repository or its default branch could not be found. Confirm the repository still exists and is connected to Kodus.';
         }
         return `Reason: ${detail}`;
-    }
-
-    /**
-     * With several Git connections, the export holds only this connection's
-     * repositories; a connection's own config also leaves out the workspace
-     * defaults, which its sync would not apply.
-     */
-    private async downloadScope(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<{
-        repositoryIds?: string[];
-        includeWorkspaceDefaults?: boolean;
-    }> {
-        if (!organizationAndTeamData.integrationId) return {};
-        const current = await this.parametersService.findByKey(
-            ParametersKey.CENTRALIZED_CONFIG,
-            organizationAndTeamData,
-        );
-        return connectionDownloadScope(
-            organizationAndTeamData.integrationId,
-            await this.centralizedConfigPrService.repositoryIdsOf(
-                organizationAndTeamData,
-            ),
-            current?.configValue,
-        );
     }
 
     private async checkIfCentralizedConfigEnabled(
