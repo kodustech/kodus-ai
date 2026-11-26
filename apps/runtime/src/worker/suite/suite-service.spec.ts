@@ -169,6 +169,23 @@ describe('running a suite as a workflow', () => {
         expect(listed.demand.requested.flat()).toContain(LIST_HOST_SHARD);
     });
 
+    // dev, 2026-11-26: the product minted tokens for 3 shards while the worker planned 4; shard 3's host came up, its acquire
+    // found no token left and the host was ended unused, its 19 specs left to the other shards.
+    it('plans no more shards than the command has download tokens for, beside the listing host (and the fresh and main hosts of a PR run)', async () => {
+        const main = ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts', 'cypress/e2e/c.cy.ts', 'cypress/e2e/d.cy.ts'];
+        const unbounded = RECIPE.replace('  shards: 1\n', '');
+        const shardsAsked = (demand: { requested: number[][] }) => [...new Set(demand.requested.flat())].filter((s) => s < LIST_HOST_SHARD).sort();
+
+        const baseline = world({ recipe: unbounded, main });
+        await baseline.service.run(request({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined, moreRepoTokens: ['sealed:v1:t1', 'sealed:v1:t2'] }), passthrough);
+        expect(shardsAsked(baseline.demand)).toEqual([0, 1]);
+        expect(baseline.cell.starts.flatMap((s) => s.specs).sort()).toEqual(main);
+
+        const pr = world({ recipe: unbounded, main });
+        await pr.service.run(request({ moreRepoTokens: ['sealed:v1:t1', 'sealed:v1:t2', 'sealed:v1:t3', 'sealed:v1:t4'] }), passthrough);
+        expect(shardsAsked(pr.demand)).toEqual([0, 1]);
+    });
+
     it('a baseline is the whole suite on main, recorded for the baseline request, which is marked started', async () => {
         const w = world();
         const out = await w.service.run(request({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined }), passthrough);

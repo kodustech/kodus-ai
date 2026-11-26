@@ -111,6 +111,16 @@ interface Started {
 }
 
 /**
+ * The shard ceiling the command's download tokens can pay for. The product mints one per claim: the listing host and each shard
+ * for a baseline, plus the fresh host and main's host for every other mode (`suite-baseline-requests.service.ts`,
+ * `suite-inputs.service.ts` `tokensFor`). A shard planned past them gets its host and then no token, so the plan never asks for it.
+ */
+export function shardsTokensAllow(mode: RuntimeSuiteRequested['mode'], tokens: number, maxShards: number): number {
+    const besideShards = mode === 'baseline' ? 1 : 3;
+    return Math.max(1, Math.min(maxShards, tokens - besideShards));
+}
+
+/**
  * The body of the `runtime.suite` workflow (docs/runtime/e2e-suites.md section 11): read the recipe's suite block, list the
  * specs of main on a template host, put the PR's added and removed specs on the list, and run the engine. Two steps, so a
  * replay takes the recipe it read the first time. The engine is idempotent by suite run (a finished run is answered, a
@@ -226,7 +236,7 @@ export class SuiteService {
             ...(this.d.headroom ? { headroom: this.d.headroom } : {}),
         });
         const out = await engine.run(cmd, {
-            config: s.suite.config,
+            config: { ...s.suite.config, maxShards: shardsTokensAllow(cmd.mode, tokens.length, s.suite.config.maxShards) },
             specs,
             mainHistory: mainHistoryOf(cmd),
             ...(deadlineAt !== undefined && Number.isFinite(deadlineAt) ? { deadlineAt } : {}),
