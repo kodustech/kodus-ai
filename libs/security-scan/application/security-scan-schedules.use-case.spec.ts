@@ -406,6 +406,10 @@ describe('SecurityScanSchedulesUseCase', () => {
                 uuid: 'sch-other-host',
                 repository: { ...repositoryKey, host: 'git.acme.io' },
             }),
+            schedule({
+                uuid: 'sch-other-platform',
+                repository: { ...repositoryKey, platform: 'GITLAB' },
+            }),
         ]);
 
         const got = await useCase.list('org-1', ['repo-1']);
