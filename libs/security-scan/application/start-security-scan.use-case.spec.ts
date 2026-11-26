@@ -140,6 +140,22 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it('starts its own plan when asked to read everything again, or on another model', async () => {
+        const full = useCaseWith(stopped);
+        await full.start({ mode: 'full' });
+        expect(full.scans.create.mock.calls[0][0].units).toEqual([]);
+        expect(full.scans.create.mock.calls[0][0].progress).toEqual([]);
+
+        // The last scan ran on another model: its conclusions are not this model's.
+        const other = useCaseWith({ ...stopped, modelName: 'anthropic:claude-opus' });
+        await other.start();
+        expect(other.scans.create.mock.calls[0][0].units).toEqual([]);
+
+        const same = useCaseWith({ ...stopped, modelName: 'fireworks:deepseek' });
+        await same.start();
+        expect(same.scans.create.mock.calls[0][0].units.map((u: any) => u.id)).toEqual(['a', 'b', 'c']);
+    });
+
     it('carries a finished unit without what it examined, so it never supplies a miss of the new scan', async () => {
         const examined = [
             { vulnerabilityClass: 'injection', filePaths: ['src/a.ts'] },

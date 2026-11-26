@@ -27,6 +27,10 @@ export class SecurityScanCoverageModel extends CoreDocument {
     @Prop({ type: [Object], default: [] })
     public evidence: Array<{ file: string; blob: string }>;
 
+    /** The class was assigned but not read to the end: it never holds. */
+    @Prop({ type: Boolean, default: false })
+    public incomplete?: boolean;
+
     @Prop({ type: String })
     public scanId?: string;
 

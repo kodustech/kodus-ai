@@ -191,6 +191,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                     vulnerabilityClass: 1,
                     blob: 1,
                     evidence: 1,
+                    incomplete: 1,
                     scanId: 1,
                     commitSha: 1,
                 },
@@ -202,6 +203,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             vulnerabilityClass: d.vulnerabilityClass as VulnClass,
             blob: d.blob,
             evidence: d.evidence ?? [],
+            ...(d.incomplete ? { incomplete: true } : {}),
             scanId: d.scanId,
             commitSha: d.commitSha,
         }));
@@ -234,6 +236,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                             vulnerabilityClass: entry.vulnerabilityClass,
                             blob: entry.blob,
                             evidence: entry.evidence,
+                            incomplete: !!entry.incomplete,
                             scanId: entry.scanId,
                             commitSha: entry.commitSha,
                             modelName: entry.modelName,

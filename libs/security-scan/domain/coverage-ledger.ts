@@ -15,6 +15,12 @@ export interface CoverageEntry {
     vulnerabilityClass: VulnClass;
     blob: string;
     evidence: Array<{ file: string; blob: string }>;
+    /**
+     * The class was assigned to the file but its lens did not read to the
+     * end (a provider error, the limit): no conclusion, so it never holds and
+     * the next scan reads the class there again.
+     */
+    incomplete?: boolean;
     scanId?: string;
     commitSha?: string;
     modelName?: string;
@@ -27,26 +33,72 @@ export type SecurityScanMode = 'incremental' | 'full';
 /** The most evidence files one conclusion records. */
 export const MAX_EVIDENCE_FILES = 40;
 
+const holdsAt = (
+    entry: CoverageEntry,
+    blobs: ReadonlyMap<string, string>,
+): boolean =>
+    !entry.incomplete &&
+    blobs.get(normalizeScanPath(entry.filePath)) === entry.blob &&
+    entry.evidence.every(
+        (e) => blobs.get(normalizeScanPath(e.file)) === e.blob,
+    );
+
 /**
- * The files whose every recorded conclusion still holds at these blobs: the
- * file itself and every file its conclusions leaned on are unchanged. A file
- * with no conclusion on record is not among them.
+ * Per file, the classes whose recorded conclusion still holds at these
+ * blobs: the file and every file the conclusion leaned on are unchanged, and
+ * the class was read to the end.
+ */
+export function heldClasses(
+    entries: readonly CoverageEntry[],
+    blobs: ReadonlyMap<string, string>,
+): Map<string, Set<VulnClass>> {
+    const state = new Map<string, Map<VulnClass, boolean>>();
+    for (const entry of entries) {
+        const file = normalizeScanPath(entry.filePath);
+        const classes = state.get(file) ?? new Map<VulnClass, boolean>();
+        classes.set(
+            entry.vulnerabilityClass,
+            (classes.get(entry.vulnerabilityClass) ?? true) &&
+                holdsAt(entry, blobs),
+        );
+        state.set(file, classes);
+    }
+    const held = new Map<string, Set<VulnClass>>();
+    for (const [file, classes] of state) {
+        held.set(
+            file,
+            new Set([...classes].filter(([, ok]) => ok).map(([c]) => c)),
+        );
+    }
+    return held;
+}
+
+/**
+ * The files an incremental scan leaves out: every conclusion on record still
+ * holds, and every class the map ties the file to (`classesOf`) is among
+ * them. A class that failed on the last read, or one the lenses gained
+ * since, keeps the file in. A file with no conclusion on record is not among
+ * them.
  */
 export function unchangedFiles(
     entries: readonly CoverageEntry[],
     blobs: ReadonlyMap<string, string>,
+    classesOf: (file: string) => readonly VulnClass[] | undefined = () =>
+        undefined,
 ): Set<string> {
-    const holds = new Map<string, boolean>();
+    const recorded = new Map<string, Set<VulnClass>>();
     for (const entry of entries) {
         const file = normalizeScanPath(entry.filePath);
-        const still =
-            blobs.get(file) === entry.blob &&
-            entry.evidence.every(
-                (e) => blobs.get(normalizeScanPath(e.file)) === e.blob,
-            );
-        holds.set(file, (holds.get(file) ?? true) && still);
+        const classes = recorded.get(file) ?? new Set<VulnClass>();
+        classes.add(entry.vulnerabilityClass);
+        recorded.set(file, classes);
     }
-    return new Set([...holds].filter(([, ok]) => ok).map(([file]) => file));
+    const out = new Set<string>();
+    for (const [file, held] of heldClasses(entries, blobs)) {
+        if (held.size !== recorded.get(file)?.size) continue;
+        if ((classesOf(file) ?? []).every((c) => held.has(c))) out.add(file);
+    }
+    return out;
 }
 
 /**

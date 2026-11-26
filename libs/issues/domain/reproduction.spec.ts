@@ -21,4 +21,9 @@ describe('isPlaceholderTest', () => {
         expect(isPlaceholderTest(body, 'npx jest db.spec.ts')).toBe(false);
         expect(isPlaceholderTest(body)).toBe(false);
     });
+
+    it.each(['pytest', 'phpunit', 'rspec', 'vitest', 'jest'])('keeps a test run by the bare runner %s', (command) => {
+        const body = 'def test_leaks(client):\n    assert client.get("/orders/2").status_code == 200';
+        expect(isPlaceholderTest(body, command)).toBe(false);
+    });
 });

@@ -279,8 +279,12 @@ export class IssuesRepository implements IIssuesRepository {
             repositoryHost: finding.repository.host ?? '',
             repositoryId: finding.repository.id,
         };
+        // Followed only while the issue stays dismissed as a duplicate: one a
+        // person reopened is its own issue again, sighted on its own.
         const holder =
-            existing?.duplicateOf ??
+            (existing?.status === IssueStatus.DISMISSED
+                ? existing.duplicateOf
+                : undefined) ??
             (existing
                 ? undefined
                 : (
@@ -382,6 +386,7 @@ export class IssuesRepository implements IIssuesRepository {
             title?: string;
             startLine?: number;
             endLine?: number;
+            occurrences?: IIssueOccurrence[];
         },
         finding: ScanFindingUpsert,
         now: string,
@@ -455,7 +460,12 @@ export class IssuesRepository implements IIssuesRepository {
             filePath: normalizeScanPath(finding.filePath),
             title: finding.title,
             description: finding.description,
-            severity: finding.severity,
+            // As severe as its worst place: its own sighting does not undo
+            // the severity of a place folded into it.
+            severity: (existing.occurrences ?? []).reduce<string>(
+                (worst, o) => moreSevere(worst, o.severity ?? ''),
+                finding.severity,
+            ) as SeverityLevel,
             language: finding.language,
             cwe: finding.cwe,
             vulnerabilityClass: finding.vulnerabilityClass,
@@ -818,6 +828,7 @@ export class IssuesRepository implements IIssuesRepository {
                 filePath: { $in: e.filePaths.map(normalizeScanPath) },
             }));
         if (!where.length) {
+            await this.pruneUnseenOccurrences(params);
             return resolved;
         }
 
@@ -855,7 +866,52 @@ export class IssuesRepository implements IIssuesRepository {
             },
         );
 
+        await this.pruneUnseenOccurrences(params);
         return resolved + (result?.modifiedCount ?? 0);
+    }
+
+    /**
+     * Drops from open issues the places this scan shows are gone: a place
+     * whose file left the branch, and a place of a class this scan read in
+     * its file without finding it again. Found again later, it comes back as
+     * an occurrence; its alias keeps routing it to the same issue.
+     */
+    private async pruneUnseenOccurrences(
+        params: ResolveUnseenScanFindingsParams,
+    ): Promise<void> {
+        const scope = {
+            ...scanScope(params),
+            status: IssueStatus.OPEN,
+            occurrences: { $exists: true, $ne: [] },
+        };
+        if (params.trackedFiles?.length) {
+            const tracked = new Set(params.trackedFiles.map(normalizeScanPath));
+            const places: string[] = await this.issuesModel
+                .distinct('occurrences.filePath', scope)
+                .exec();
+            const gone = places.filter(
+                (path) => !!path && !tracked.has(normalizeScanPath(path)),
+            );
+            if (gone.length) {
+                await this.issuesModel.updateMany(scope, {
+                    $pull: { occurrences: { filePath: { $in: gone } } },
+                });
+            }
+        }
+        for (const area of params.examined) {
+            if (!area.filePaths.length) continue;
+            await this.issuesModel.updateMany(scope, {
+                $pull: {
+                    occurrences: {
+                        vulnerabilityClass: area.vulnerabilityClass,
+                        filePath: {
+                            $in: area.filePaths.map(normalizeScanPath),
+                        },
+                        lastSeenScanId: { $ne: params.scanId },
+                    },
+                },
+            });
+        }
     }
 }
 

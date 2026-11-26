@@ -70,6 +70,41 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(filter).toEqual(expect.objectContaining({ lastSeenScanId: 'scan-1' }));
     });
 
+    it('keeps a holder as severe as its worst folded place when its own sighting is milder', async () => {
+        const model = modelWith({
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            lastSeenScanId: 'scan-1',
+            occurrences: [{ fingerprint: 'fp-a', severity: 'critical', filePath: 'src/a.ts' }],
+        });
+        const repository = new IssuesRepository(model as any);
+
+        await repository.upsertScanFinding({ ...finding, severity: SeverityLevel.MEDIUM } as any);
+
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        expect(update.$set.severity).toBe('critical');
+    });
+
+    it('sights a folded duplicate a person reopened as its own issue, not on the holder', async () => {
+        const model = modelWith({
+            _id: 'i-a',
+            fingerprint: 'fp-1',
+            status: IssueStatus.OPEN,
+            duplicateOf: 'fp-holder',
+            lastSeenScanId: 'scan-1',
+        });
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding(finding);
+
+        // Its own issue is refreshed with this scan's sighting, not merged
+        // into the holder as one more place.
+        expect(outcome).not.toBe('merged');
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        expect(update.$set.lastSeenScanId).toBe('scan-2');
+        expect(update.$set.occurrences).toBeUndefined();
+    });
+
     it('creates an open security-scan issue the first time a finding is seen', async () => {
         const model = modelWith(null);
         const repository = new IssuesRepository(model as any);
@@ -434,9 +469,11 @@ describe('IssuesRepository — security-scan findings', () => {
         });
 
         expect(model.distinct).toHaveBeenCalledWith('filePath', unseen);
-        // Not a model miss: no earlier miss is needed.
-        expect(model.updateMany.mock.calls).toHaveLength(1);
-        expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
+        // Not a model miss: no earlier miss is needed. (The other write
+        // prunes the gone file's places from the issues that list them.)
+        const resolutions = model.updateMany.mock.calls.filter((c: any) => !c[1].$pull);
+        expect(resolutions).toHaveLength(1);
+        expect((resolutions[0] as unknown[])[0]).toEqual({
             ...unseen,
             filePath: { $in: ['src/gone.ts'] },
         });
@@ -731,6 +768,35 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
             repository.markScanFindingsSeen({ ...scope, fingerprints: [], scanId: 'scan-2' }),
         ).resolves.toEqual({ sighted: 0, reopened: 0 });
         expect(updateMany).not.toHaveBeenCalled();
+    });
+});
+
+describe('pruning places a scan shows are gone', () => {
+    it('drops places of a class read again without them, and places whose file left the branch', async () => {
+        const updateMany = jest.fn(async () => ({ modifiedCount: 0 }));
+        const distinct = jest.fn(() => exec(['src/orders/kept.ts', 'src/gone.ts']));
+        const repository = new IssuesRepository({ updateMany, distinct } as any);
+
+        await repository.resolveUnseenScanFindings({
+            organizationId: 'org-1',
+            repositoryPlatform: PlatformType.GITHUB,
+            repositoryHost: 'github.com',
+            repositoryId: 'repo-1',
+            scanId: 'scan-3',
+            scanStartedAt: '2026-11-25T00:00:00.000Z',
+            trackedFiles: ['src/orders/kept.ts'],
+            examined: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders/kept.ts'] }],
+        } as any);
+
+        const pulls = updateMany.mock.calls.map((c: any) => c[1].$pull?.occurrences).filter(Boolean);
+        expect(pulls).toContainEqual({ filePath: { $in: ['src/gone.ts'] } });
+        expect(pulls).toContainEqual({
+            vulnerabilityClass: 'authz',
+            filePath: { $in: ['src/orders/kept.ts'] },
+            lastSeenScanId: { $ne: 'scan-3' },
+        });
+        const [scope] = updateMany.mock.calls.find((c: any) => c[1].$pull) as any;
+        expect(scope).toMatchObject({ 'repository.id': 'repo-1', 'status': IssueStatus.OPEN });
     });
 });
 

@@ -8,6 +8,7 @@
 import {
     BadRequestException,
     HttpException,
+    HttpStatus,
     Inject,
     Injectable,
     NotFoundException,
@@ -35,6 +36,9 @@ const logger = createLogger('SecurityScanSchedules');
 
 export const SCHEDULE_NOT_FOUND_MESSAGE =
     'This repository has no deep scan schedule.';
+
+/** How long a run that found no room waits before trying again. */
+const BUSY_RETRY_MS = 30 * 60 * 1000;
 
 /** Most scheduled scans one cron run starts; the rest stay due for the next. */
 export const MAX_SCHEDULED_STARTS_PER_RUN = 20;
@@ -100,6 +104,23 @@ export class SecurityScanSchedulesUseCase {
             input.organizationAndTeamData,
             input.repositoryId,
         );
+        // An edit is not a new run: the next run stays where it was while
+        // the cadence is the same, and a new cadence counts from the last
+        // run (a weekly one, a week after it).
+        const existing = await this.schedules.find(
+            input.organizationAndTeamData.organizationId,
+            repositoryKey,
+        );
+        const next =
+            existing && existing.cadence === input.cadence
+                ? existing.nextRunAt
+                : nextRunAt(
+                      input.cadence,
+                      now,
+                      existing?.lastRunAt
+                          ? new Date(existing.lastRunAt)
+                          : undefined,
+                  ).toISOString();
         return this.schedules.save(
             input.organizationAndTeamData.organizationId,
             repositoryKey,
@@ -112,7 +133,7 @@ export class SecurityScanSchedulesUseCase {
                 // Omitted, the stored state stays (editing a paused schedule
                 // does not resume it); a new schedule starts enabled.
                 enabled: input.enabled,
-                nextRunAt: nextRunAt(input.cadence, now).toISOString(),
+                nextRunAt: next,
                 createdBy: input.requestedBy,
             },
         );
@@ -220,8 +241,31 @@ export class SecurityScanSchedulesUseCase {
                 });
                 started++;
             } catch (error) {
-                // Said to the person who set it: a running scan, a model or
-                // a repository no longer there.
+                // No room now (the organization's share of running scans is
+                // taken, or this repository is being scanned): the run waits
+                // a little and tries again instead of losing its turn, or the
+                // same schedules would lose it every day.
+                const busy =
+                    error instanceof HttpException &&
+                    (error.getStatus() === HttpStatus.TOO_MANY_REQUESTS ||
+                        error.getStatus() === HttpStatus.CONFLICT);
+                const retryAt = new Date(now.getTime() + BUSY_RETRY_MS);
+                if (busy && retryAt < next) {
+                    const deferred = await this.schedules
+                        .claim(schedule.uuid, next.toISOString(), retryAt)
+                        .catch(() => false);
+                    if (deferred) {
+                        await this.schedules
+                            .recordError(
+                                schedule.uuid,
+                                `${(error as HttpException).message} It tries again at ${retryAt.toISOString().slice(11, 16)} UTC.`,
+                            )
+                            .catch(() => undefined);
+                        continue;
+                    }
+                }
+                // Said to the person who set it: a model or a repository no
+                // longer there.
                 const message =
                     error instanceof HttpException
                         ? error.message

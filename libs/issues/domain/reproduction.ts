@@ -13,6 +13,11 @@ export function isPlaceholderTest(
     return (
         body.length < 40 ||
         (command !== undefined &&
-            (run.length < 4 || /^[A-Z_]+$|^placeholder$/i.test(run)))
+            (run.length < 4 ||
+                // A bare placeholder word: shouting case ("TODO", "RUN_ME")
+                // or "placeholder" in any case. A real runner ("pytest",
+                // "jest") is lowercase and passes.
+                /^[A-Z_]+$/.test(run) ||
+                /^placeholder$/i.test(run)))
     );
 }

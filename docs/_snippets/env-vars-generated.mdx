@@ -382,7 +382,7 @@
 | --- | --- | --- | --- | --- |
 | `API_CRON_CLASSIFY_ORPHANED_SESSIONS` | – | cron | ⚙️ Both | Reclassifies orphaned (no-PR) review sessions every 15 minutes. Cloud-only feature. |
 | `API_CRON_SSO_TEST_SESSION_CLEANUP` | – | cron | ☁️ Cloud | Daily cleanup of expired SSO test sessions (1 AM UTC). |
-| `API_CRON_DEEP_SCAN_SCHEDULES` | – | cron | ☁️ Cloud | Deep scan schedules: starts the scans due and files finished runs' new findings in the plugin a schedule names (every 15 minutes). |
+| `API_CRON_DEEP_SCAN_SCHEDULES` | – | cron | ☁️ Cloud | Deep scan schedules: starts the scans that are due (every 15 minutes). |
 | `API_CRON_STALE_REVIEW_WATCHDOG` | – | cron | ⚙️ Both | Reaps code review executions stuck IN_PROGRESS (process died mid-review) and finalizes their orphaned platform check runs. |
 | `API_CRON_PRUNE_LICENSE_SEATS` | – | cron | ⚙️ Both | Daily sweep (4 AM) that releases license seats still held by users who left the git organization. Only acts on orgs that opted in via the auto_license_assignment parameter, and skips any org whose member list could not be fetched, so a provider outage never mass-revokes seats. |
 | `API_CRON_SYNC_ALL_REPOSITORIES` | – | cron | ⚙️ Both | Cadence of the sync that adds new repositories to teams that review every repository their git integration can see. A repository created on the provider is set up within one interval. |

@@ -199,10 +199,17 @@ export class StartSecurityScanUseCase {
             );
         }
 
-        const resumed = await this.resumablePlan(
-            orgTeam.organizationId,
-            repositoryKey,
-        );
+        // A scan asked to read everything again, or one on another model,
+        // starts its own plan: carrying on would keep the areas the last
+        // scan's model already concluded.
+        const resumed =
+            input.mode === 'full'
+                ? null
+                : await this.resumablePlan(
+                      orgTeam.organizationId,
+                      repositoryKey,
+                      model.modelName,
+                  );
         const fullName =
             repository.full_name ||
             (repository.name.includes('/')
@@ -442,6 +449,7 @@ export class StartSecurityScanUseCase {
     private async resumablePlan(
         organizationId: string,
         repository: ScanRepositoryKey,
+        modelName: string,
     ): Promise<Pick<
         SecurityScanRecord,
         'units' | 'progress' | 'coverage' | 'planCommitSha' | 'reported'
@@ -456,6 +464,9 @@ export class StartSecurityScanUseCase {
             (last?.status === SecurityScanStatus.COMPLETED &&
                 (last.progress ?? []).some((p) => p.state === 'failed'));
         if (!last?.units?.length || !unfinished) {
+            return null;
+        }
+        if (last.modelName && last.modelName !== modelName) {
             return null;
         }
         // Areas that failed (a provider outage) run again, with the rest.

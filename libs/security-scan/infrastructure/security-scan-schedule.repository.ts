@@ -57,6 +57,8 @@ export interface ISecurityScanScheduleRepository {
         uuid: string,
         run: { lastRunAt: string; lastScanId?: string; lastError?: string },
     ): Promise<void>;
+    /** Says why a due run has not started yet, leaving its last run as is. */
+    recordError(uuid: string, lastError: string): Promise<void>;
 }
 
 const sameRepository = (repository: ScanRepositoryKey) => ({
@@ -191,6 +193,10 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
             { $set: { nextRunAt } },
         );
         return (result?.modifiedCount ?? 0) > 0;
+    }
+
+    async recordError(uuid: string, lastError: string): Promise<void> {
+        await this.model.updateOne({ _id: uuid }, { $set: { lastError } });
     }
 
     async recordRun(

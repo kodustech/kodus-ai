@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 
 import { SecurityScanSchedulesUseCase } from './security-scan-schedules.use-case';
 import { DEEP_SCAN_NOT_ENABLED_MESSAGE } from './deep-scan.gate';
@@ -30,6 +30,7 @@ function setup() {
         findDue: jest.fn(async () => [schedule()]),
         claim: jest.fn(async () => true),
         recordRun: jest.fn(async () => undefined),
+        recordError: jest.fn(async () => undefined),
     };
     const start = {
         repositoryKeyOf: jest.fn(async () => repositoryKey),
@@ -94,16 +95,36 @@ describe('SecurityScanSchedulesUseCase', () => {
         expect(start.execute).not.toHaveBeenCalled();
     });
 
+    it('tries again in 30 minutes when there is no room, instead of losing its turn', async () => {
+        for (const busy of [
+            new ConflictException('A security scan of this repository is already running.'),
+            new HttpException('This organization already has 3 deep scans queued or running.', HttpStatus.TOO_MANY_REQUESTS),
+        ]) {
+            const { useCase, schedules, start } = setup();
+            start.execute.mockRejectedValue(busy);
+
+            expect(await useCase.runDue(now)).toBe(0);
+
+            // Claimed to tomorrow, then handed back to now + 30 minutes.
+            expect(schedules.claim).toHaveBeenLastCalledWith(
+                'sch-1',
+                '2026-11-25T03:00:00.000Z',
+                new Date('2026-11-24T03:31:00.000Z'),
+            );
+            expect(schedules.recordError).toHaveBeenCalledWith('sch-1', expect.stringContaining('It tries again at 03:31 UTC.'));
+            expect(schedules.recordRun).not.toHaveBeenCalled();
+        }
+    });
+
     it('says why a due scan did not start, and waits for its next time', async () => {
         const { useCase, schedules, start } = setup();
-        start.execute.mockRejectedValue(
-            new ConflictException('A security scan of this repository is already running.'),
-        );
+        start.execute.mockRejectedValue(new BadRequestException('The model picked for this scan is not in your AI providers any more.'));
 
         expect(await useCase.runDue(now)).toBe(0);
+        expect(schedules.claim).toHaveBeenCalledTimes(1);
         expect(schedules.recordRun).toHaveBeenCalledWith('sch-1', {
             lastRunAt: now.toISOString(),
-            lastError: 'A security scan of this repository is already running.',
+            lastError: 'The model picked for this scan is not in your AI providers any more.',
         });
     });
 
@@ -144,7 +165,7 @@ describe('SecurityScanSchedulesUseCase', () => {
         );
     });
 
-    it('leaves the stored state alone when saved without saying, without reading it first', async () => {
+    it('leaves the stored state alone when saved without saying, in the write itself', async () => {
         const { useCase, schedules } = setup();
         const input = {
             organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
@@ -153,10 +174,12 @@ describe('SecurityScanSchedulesUseCase', () => {
             budget: { maxUsd: 5 },
         };
 
+        // A paused schedule on record: its state is never copied from the read.
+        schedules.find.mockResolvedValue(schedule({ enabled: false }));
+
         await useCase.save(input);
         await useCase.save({ ...input, enabled: false });
 
-        expect(schedules.find).not.toHaveBeenCalled();
         expect(schedules.save.mock.calls[0][2].enabled).toBeUndefined();
         expect(schedules.save.mock.calls[1][2]).toMatchObject({ enabled: false });
     });
@@ -209,6 +232,25 @@ describe('SecurityScanSchedulesUseCase', () => {
             'm-unpriced',
         );
         expect(schedules.save).not.toHaveBeenCalled();
+    });
+
+    it('keeps the next run when an edit leaves the cadence as it was, so an edit is not a paid run', async () => {
+        const { useCase, schedules } = setup();
+        schedules.find.mockResolvedValue(
+            schedule({ cadence: 'weekly', lastRunAt: '2026-11-23T03:00:00.000Z', nextRunAt: '2026-11-30T03:00:00.000Z' }),
+        );
+        const input = {
+            organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+            repositoryId: 'repo-1',
+            budget: { maxUsd: 20 },
+        };
+
+        await useCase.save({ ...input, cadence: 'weekly' }, now);
+        await useCase.save({ ...input, cadence: 'daily' }, now);
+
+        expect(schedules.save.mock.calls[0][2].nextRunAt).toBe('2026-11-30T03:00:00.000Z');
+        // A new cadence counts from now on: daily, the next 03:00.
+        expect(schedules.save.mock.calls[1][2].nextRunAt).toBe('2026-11-25T03:00:00.000Z');
     });
 
     it('refuses a schedule without a spend limit', async () => {

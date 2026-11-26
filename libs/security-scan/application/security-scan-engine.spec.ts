@@ -2980,6 +2980,62 @@ describe('incremental scans', () => {
         expect(result.unchangedFiles).toBe(0);
     });
 
+    it('reads again, on a file whose conclusions hold, only the class whose lens did not finish', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'incremental',
+            coverage: [
+                ...ledger(),
+                // Assigned last time, its lens ended on a provider error.
+                { filePath: controller, vulnerabilityClass: 'injection', blob: BLOBS[controller], evidence: [], incomplete: true },
+            ],
+        } as any);
+
+        const onController = runLens.mock.calls
+            .filter(([input]: any) => input.userPrompt.includes(controller))
+            .map(([input]: any) => input.agentName);
+        expect(result.unchangedFiles).toBe(0);
+        expect(onController).toContain('security-scan-injection');
+        expect(onController).not.toContain('security-scan-authz');
+    });
+
+    it('records a class of the unit that was not read to the end as incomplete', async () => {
+        const runLens = jest.fn(async (input: any) => {
+            await bill(1000, 100, input.usageRunName);
+            const cls = input.agentName.replace('security-scan-', '');
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: cls === 'injection' ? 'error' : 'completed',
+            } as any;
+        });
+        const covered: any[] = [];
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [{ id: 'c', file: controller, relatedFiles: [], language: 'typescript', classes: ['authz', 'injection'], priority: 90, reasons: [] }],
+            onUnitDone: async (_p: any, _f: any, _s: any, entries: any[]) => covered.push(...(entries ?? [])),
+        } as any);
+
+        expect(covered.find((e) => e.vulnerabilityClass === 'authz')?.incomplete).toBeUndefined();
+        expect(covered.find((e) => e.vulnerabilityClass === 'injection')).toMatchObject({ filePath: controller, incomplete: true });
+    });
+
     it('reads everything again in a full scan', async () => {
         const runLens = fakeLens(() => []);
         const engine = new SecurityScanEngine({

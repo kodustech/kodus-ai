@@ -1,5 +1,6 @@
 import {
     coverageEntryOf,
+    heldClasses,
     parseStagedListing,
     unchangedFiles,
 } from './coverage-ledger';
@@ -65,6 +66,37 @@ describe('unchangedFiles', () => {
             blobs,
         );
         expect(got.size).toBe(0);
+    });
+});
+
+describe('unchangedFiles: per class', () => {
+    const authz = { filePath: 'src/a.ts', vulnerabilityClass: 'authz' as const, blob: 'a1', evidence: [] };
+
+    it('keeps a file whose class was assigned but not read to the end', () => {
+        const got = unchangedFiles(
+            [authz, { ...authz, vulnerabilityClass: 'injection' as const, incomplete: true }],
+            blobs,
+        );
+        expect([...got]).toEqual([]);
+    });
+
+    it('keeps a file the map ties to a class with no conclusion on record', () => {
+        expect([...unchangedFiles([authz], blobs, () => ['authz', 'ssrf'])]).toEqual([]);
+        expect([...unchangedFiles([authz], blobs, () => ['authz'])]).toEqual(['src/a.ts']);
+    });
+});
+
+describe('heldClasses', () => {
+    it('lists per file only the classes whose conclusion holds', () => {
+        const held = heldClasses(
+            [
+                { filePath: 'src/a.ts', vulnerabilityClass: 'authz', blob: 'a1', evidence: [] },
+                { filePath: 'src/a.ts', vulnerabilityClass: 'injection', blob: 'a1', evidence: [], incomplete: true },
+                { filePath: 'src/a.ts', vulnerabilityClass: 'ssrf', blob: 'old', evidence: [] },
+            ],
+            blobs,
+        );
+        expect([...(held.get('src/a.ts') ?? [])]).toEqual(['authz']);
     });
 });
 

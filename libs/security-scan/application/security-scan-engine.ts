@@ -53,6 +53,7 @@ import { boundedEnvInt } from '../domain/env-limits';
 import {
     coverageEntryOf,
     parseStagedListing,
+    heldClasses,
     unchangedFiles,
     type CoverageEntry,
     type SecurityScanMode,
@@ -377,12 +378,15 @@ export class SecurityScanEngine {
         const existingFiles = new Set(listing);
         // Each tracked file's blob: what a conclusion is tied to.
         const blobs = await this.blobsOf(params.sandbox);
-        const unchanged =
+        const incremental =
             params.mode === 'incremental' &&
-            params.coverage?.length &&
-            blobs.size
-                ? unchangedFiles(params.coverage, blobs)
-                : new Set<string>();
+            !!params.coverage?.length &&
+            blobs.size > 0;
+        // Per file, the classes an earlier scan concluded and still hold:
+        // those are not read again, the rest of the file's classes are.
+        const held = incremental
+            ? heldClasses(params.coverage!, blobs)
+            : new Map<string, Set<VulnClass>>();
         const languages = detectLanguages(listing);
 
         // Collected on every run, a continuation too: the lenses read its
@@ -421,6 +425,16 @@ export class SecurityScanEngine {
             });
             throw new ScanFailure(SCAN_MAP_FAILED_MESSAGE);
         }
+        // A file leaves the plan only when every class the map ties it to
+        // still holds: a class whose lens failed last time, or one the lenses
+        // gained since, brings it back.
+        const unchanged = incremental
+            ? unchangedFiles(
+                  params.coverage!,
+                  blobs,
+                  (file) => surface.files[file]?.classes,
+              )
+            : new Set<string>();
         const hitsByFile = new Map<string, SurfaceHit[]>();
         for (const hit of surface.hits) {
             const list = hitsByFile.get(hit.file);
@@ -468,18 +482,21 @@ export class SecurityScanEngine {
             const readable = unchanged.size
                 ? new Set(listing.filter((f) => !unchanged.has(f)))
                 : existingFiles;
-            units = withRevisits(
-                await this.plan(
-                    params,
-                    toRead,
-                    listing.filter((f) => readable.has(f)),
+            units = withoutHeldClasses(
+                withRevisits(
+                    await this.plan(
+                        params,
+                        toRead,
+                        listing.filter((f) => readable.has(f)),
+                        readable,
+                        languages,
+                    ),
+                    (params.revisit ?? []).filter(
+                        (r) => !unchanged.has(r.filePath),
+                    ),
                     readable,
-                    languages,
                 ),
-                (params.revisit ?? []).filter(
-                    (r) => !unchanged.has(r.filePath),
-                ),
-                readable,
+                held,
             );
             // Candidates the plan does not hold: past its limit, or crowded
             // out by files the planner added. Only files a lens would read
@@ -709,10 +726,13 @@ export class SecurityScanEngine {
                 );
             }
             findings.push(...result.findings);
-            // Only a class read to the end is a conclusion that holds.
+            // Only a class read to the end is a conclusion that holds; a class
+            // of the unit that was not is recorded as incomplete, so an
+            // earlier conclusion of it no longer keeps the file out.
+            const examinedHere = new Set(result.examinedClasses ?? []);
             const covered = blobs.size
-                ? (result.examinedClasses ?? [])
-                      .map((vulnerabilityClass) =>
+                ? [
+                      ...[...examinedHere].map((vulnerabilityClass) =>
                           coverageEntryOf({
                               file: unit.file,
                               vulnerabilityClass,
@@ -724,8 +744,21 @@ export class SecurityScanEngine {
                               ],
                               blobs,
                           }),
-                      )
-                      .filter((e): e is CoverageEntry => !!e)
+                      ),
+                      ...unit.classes
+                          .filter((c) => !examinedHere.has(c))
+                          .map((vulnerabilityClass) => {
+                              const entry = coverageEntryOf({
+                                  file: unit.file,
+                                  vulnerabilityClass,
+                                  evidence: [],
+                                  blobs,
+                              });
+                              return entry
+                                  ? { ...entry, incomplete: true }
+                                  : null;
+                          }),
+                  ].filter((e): e is CoverageEntry => !!e)
                 : [];
             await params.onUnitDone?.(
                 unitProgress,
@@ -2362,6 +2395,23 @@ function withFingerprint(
 }
 
 /** The surface without these files: what an incremental plan may hold. */
+/**
+ * The plan without the classes an earlier scan concluded for each unit's
+ * file and that still hold; a unit left with none is dropped.
+ */
+function withoutHeldClasses(
+    units: ScanUnit[],
+    held: ReadonlyMap<string, ReadonlySet<VulnClass>>,
+): ScanUnit[] {
+    if (!held.size) return units;
+    return units.flatMap((unit) => {
+        const done = held.get(unit.file);
+        if (!done?.size) return [unit];
+        const classes = unit.classes.filter((c) => !done.has(c));
+        return classes.length ? [{ ...unit, classes }] : [];
+    });
+}
+
 function withoutFiles(
     surface: SurfaceMap,
     files: ReadonlySet<string>,
