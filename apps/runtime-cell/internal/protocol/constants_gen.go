@@ -45,6 +45,7 @@ const (
 	FeatureSuite                 = "suite"
 	FeatureExecService           = "execService"
 	FeatureSkipBake              = "skipBake"
+	FeatureServiceStates         = "serviceStates"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -89,6 +90,7 @@ var CellFeatures = []string{
 	FeatureSuite,
 	FeatureExecService,
 	FeatureSkipBake,
+	FeatureServiceStates,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):
@@ -112,6 +114,7 @@ var HubAcceptedFeatures = []string{
 	FeatureBakeShare,
 	FeatureSandboxPool,
 	FeatureBuildStateDiskFacts,
+	FeatureServiceStates,
 }
 
 // ClaimScopedTypeNames is CLAIM_SCOPED_TYPES (libs/runtime/protocol/envelope.ts): the message types that act on one claim, whose envelope must name it (claimId).

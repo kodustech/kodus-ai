@@ -9,6 +9,7 @@ import { safeFailure } from '@libs/runtime/telemetry/failure';
 import { AdmissionCapacityLostError } from '../env/admission-errors';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
 import { checkClaimLease, ClaimLeaseUnavailableError, type ClaimLeaseFailed, throwClaimLeaseFailure } from '../env/claim-liveness';
+import type { ExitedService } from '@libs/runtime/protocol';
 import { HEALTH_RETRY_INTERVAL_SECONDS, notAnsweringYet, readyProbe, readyTarget } from '../env/ready-check';
 import { stableStepId } from '../run/step-id';
 import { isCancellation } from '../workflow-cancellation';
@@ -427,6 +428,9 @@ export async function readyCheck(
             if (Number.isFinite(ceilingMs)) waitMs = Math.max(0, Math.min(waitMs, ceilingMs - startedAt));
         }
         if (!notAnsweringYet(out)) break;
+        // The public service ran and stopped: no wait brings it back, so the check ends here with what the cell read of it.
+        const exited = exitedService(out, target.service);
+        if (exited) return { state: 'failed', blocker: exitedBlocker(target, exited) };
         // The next try would start past the wait: stop here.
         if (Date.parse(t.finishedAt) + HEALTH_RETRY_INTERVAL_SECONDS * 1_000 - startedAt >= waitMs) break;
     }
@@ -448,6 +452,22 @@ export async function readyCheck(
         };
     }
     return { state: 'done', path, status };
+}
+
+/** The public service as a probe that got no answer found it: exited, with the exit code and the tail of its log. */
+function exitedService(out: Awaited<ReturnType<EnvironmentRuntime['probe']>> | undefined, service: string): ExitedService | undefined {
+    const services = out === undefined ? undefined : 'services' in out ? out.services : undefined;
+    return services?.find((s) => s.name === service);
+}
+
+/** The blocker of a public service that exited: its exit code and last log lines, never a longer wait (its own signature, so the card proposes none). */
+function exitedBlocker(target: { service: string; port: number; path: string }, exited: ExitedService): Omit<EnvironmentSetupBlocker, 'at'> {
+    const tail = exited.logTail.slice(-10).join('\n');
+    return {
+        kind: 'not_ready',
+        signature: `setup:not_ready_exited:${target.service}:${target.port}${target.path}`,
+        message: blockerMessage(`${target.service} exited with code ${exited.exitCode} before it answered GET ${target.path} on port ${target.port} (${exited.state}).${tail ? `\nLast log lines:\n${tail}` : ''}`),
+    };
 }
 
 /** Polls the boot's progress into the record until stopped; best effort, never failing the setup. */

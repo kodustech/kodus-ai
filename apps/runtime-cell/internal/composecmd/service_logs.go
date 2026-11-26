@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -52,6 +53,41 @@ func ServiceLogs(ctx context.Context, r LogRunner, project string, since, until 
 	}
 	if len(errs) > 0 && len(out) == 0 {
 		return nil, fmt.Errorf("service logs: %w", errors.Join(errs...))
+	}
+	return out, nil
+}
+
+// ExitedRunner runs the two commands ExitedServices needs: Ps and the last
+// lines of one service's log. dockercli.CLI is one.
+type ExitedRunner interface {
+	ComposePs(ctx context.Context, project string) ([]byte, error)
+	ComposeLogs(ctx context.Context, project, service string, lines int) ([]byte, error)
+}
+
+// ExitedServices is each service of project that has exited, with its exit
+// code and the last tail lines of its log (raw: the caller redacts and caps
+// them). A service whose log cannot be read still counts, with no lines.
+func ExitedServices(ctx context.Context, r ExitedRunner, project string, tail int) ([]driver.ExitedService, error) {
+	raw, err := r.ComposePs(ctx, project)
+	if err != nil {
+		return nil, fmt.Errorf("exited services: ps: %w", err)
+	}
+	states, err := ParseComposePs(raw)
+	if err != nil {
+		return nil, fmt.Errorf("exited services: ps: %w", err)
+	}
+	var out []driver.ExitedService
+	for _, s := range states {
+		if !s.Exited {
+			continue
+		}
+		e := driver.ExitedService{Name: s.Service, State: s.State, ExitCode: s.ExitCode}
+		if b, err := r.ComposeLogs(ctx, project, s.Service, tail); err == nil {
+			if text := strings.TrimRight(string(b), "\n"); text != "" {
+				e.Log = strings.Split(text, "\n")
+			}
+		}
+		out = append(out, e)
 	}
 	return out, nil
 }

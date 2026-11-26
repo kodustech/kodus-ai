@@ -111,6 +111,7 @@ type everyPart struct {
 	driver.SpareKeeper
 	driver.DiskUsageReader
 	driver.BuildCachePruner
+	driver.ExitedServiceReader
 }
 
 // The cell wraps its driver before the agent reads its parts: every part the

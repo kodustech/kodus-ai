@@ -29,3 +29,18 @@ func (d *Driver) ServiceLogs(ctx context.Context, _ string, ref driver.MachineRe
 }
 
 var _ driver.ServiceLogReader = (*Driver)(nil)
+
+// ExitedServices is driver.ExitedServiceReader: the services of the claim's
+// compose project that have exited, with their exit code and the tail of their log.
+func (d *Driver) ExitedServices(ctx context.Context, ref driver.MachineRef, tail int) ([]driver.ExitedService, error) {
+	if driver.Role(ref.Tags[driver.TagRole]) != driver.RoleWorkload {
+		return nil, fmt.Errorf("dockergvisor: %s is not a workload", ref.MachineID)
+	}
+	if _, err := d.owned(ctx, ref.MachineID); err != nil {
+		return nil, err
+	}
+	project, _ := d.projectOf(ref.MachineID)
+	return composecmd.ExitedServices(ctx, d.d, project, tail)
+}
+
+var _ driver.ExitedServiceReader = (*Driver)(nil)

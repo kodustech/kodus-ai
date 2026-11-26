@@ -74,6 +74,9 @@ type Parts struct {
 	// BuildCache drops build cache no live build holds, so the disk watchdog
 	// gives the room back before it stops a claim; nil: it drops none.
 	BuildCache BuildCachePruner
+	// ExitedServices names the services that exited, for a probe that got no
+	// answer; nil: the cell announces no serviceStates feature.
+	ExitedServices ExitedServiceReader
 }
 
 // Bakes says the driver builds environment images (image.bake).

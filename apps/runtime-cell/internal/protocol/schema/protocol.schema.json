@@ -3845,6 +3845,44 @@
           ],
           "additionalProperties": false
         },
+        "services": {
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "state": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "exitCode": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "logTail": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 2048
+                }
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "exitCode",
+              "logTail"
+            ],
+            "additionalProperties": false
+          }
+        },
         "browserExploration": {
           "type": "object",
           "properties": {

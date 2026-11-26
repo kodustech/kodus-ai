@@ -245,8 +245,9 @@ export class StepDispatcher {
         if ('code' in r) return r;
         // OOM or a crash on the machine reaches the gate as vmHealth, not as a lost transport.
         const vmHealth = r.body.vmHealth;
-        if (!r.body.probe) return vmHealth === 'ok' ? { code: 'transport_lost', stepId } : { code: 'vm_unhealthy', stepId, vmHealth };
-        return { ...r.body.probe, vmHealth };
+        const services = r.body.services;
+        if (!r.body.probe) return vmHealth === 'ok' ? { code: 'transport_lost', stepId, ...(services ? { services } : {}) } : { code: 'vm_unhealthy', stepId, vmHealth };
+        return { ...r.body.probe, vmHealth, ...(services ? { services } : {}) };
     }
 
     /** Exploration is base-only, separately negotiated, and never a replay probe. */

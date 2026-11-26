@@ -356,6 +356,10 @@ func (a *Agent) hello(trim bool) *protocol.HelloBody {
 		if feature == protocol.FeatureBakeShare && !caps.ShareBakes {
 			continue
 		}
+		// Only a driver that reads which of the project's services exited can say it.
+		if feature == protocol.FeatureServiceStates && a.cfg.Parts.ExitedServices == nil {
+			continue
+		}
 		// Only a driver that runs the project's own containers can target one.
 		if feature == protocol.FeatureExecService && !caps.ExecService {
 			continue

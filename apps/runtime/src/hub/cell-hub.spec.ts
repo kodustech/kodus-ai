@@ -491,6 +491,34 @@ describe('CellHub', () => {
         expect(Date.now() - started).toBeLessThan(1_000);
     });
 
+    // A probe that got no answer carries the services that exited (feature serviceStates): the ready
+    // check reads them to end at once on an app that died.
+    it('hands the exited services of a probe that got no answer to the caller, with or without the probe result', async () => {
+        const { hub, connect, acquireOn } = setup();
+        const c = await connect('cell-a');
+        const claim: any = await acquireOn(c, 'cell-a');
+        const services = [{ name: 'api', state: 'Exited (1) 2 seconds ago', exitCode: 1, logTail: ['seed failed'] }];
+
+        const unanswered = hub.probe(ref(claim.claimId), probe);
+        await tick();
+        await tick();
+        await tick();
+        const first = c.sock.last('probe.run');
+        await c.onMessage(frame('cell-a', 'ack', {}, { re: first.id }));
+        const stepId = first.body.stepId;
+        await c.onMessage(frame('cell-a', 'step.result', { stepId, executor: 'observer', imageId: 'img-1', vmHealth: 'ok', probe: { stepId, executor: 'observer', imageId: 'img-1', requests: [], durationMs: 1, transport: 'lost' }, services }, { claimId: claim.claimId }));
+        expect(await unanswered).toMatchObject({ vmHealth: 'ok', services });
+
+        const lost = hub.probe(ref(claim.claimId), probe);
+        await tick();
+        await tick();
+        await tick();
+        const second = c.sock.last('probe.run');
+        await c.onMessage(frame('cell-a', 'ack', {}, { re: second.id }));
+        await c.onMessage(frame('cell-a', 'step.result', { stepId: second.body.stepId, executor: 'observer', imageId: 'img-1', vmHealth: 'ok', services }, { claimId: claim.claimId }));
+        expect(await lost).toEqual({ code: 'transport_lost', stepId: second.body.stepId, services });
+    });
+
     it('a step in flight when the connection drops becomes transport lost, never resent', async () => {
         const { hub, connect, acquireOn } = setup();
         const c = await connect('cell-a');

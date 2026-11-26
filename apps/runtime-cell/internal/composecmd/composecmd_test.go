@@ -174,3 +174,33 @@ func TestServiceLogs(t *testing.T) {
 		})
 	}
 }
+
+// A ready check ends at once on a service that exited; it keeps waiting on one still
+// starting. The cell tells them apart by compose ps: only a container that ran and
+// stopped is exited, with the code it exited with and the tail of its log.
+type exitedRunner struct {
+	ps   string
+	logs map[string]string
+}
+
+func (r exitedRunner) ComposePs(context.Context, string) ([]byte, error) { return []byte(r.ps), nil }
+func (r exitedRunner) ComposeLogs(_ context.Context, _, service string, _ int) ([]byte, error) {
+	return []byte(r.logs[service]), nil
+}
+
+func TestOnlyAServiceThatExitedIsReportedWithItsExitCodeAndLogTail(t *testing.T) {
+	r := exitedRunner{
+		ps: `{"Service":"api","State":"exited","Status":"Exited (3) 4 seconds ago","ExitCode":3}` + "\n" +
+			`{"Service":"db","State":"running","Status":"Up 2 minutes","ExitCode":0}` + "\n" +
+			`{"Service":"worker","State":"created","Status":"Created","ExitCode":0}`,
+		logs: map[string]string{"api": "migrating\nseed failed: no such table\n", "db": "ready\n"},
+	}
+	got, err := ExitedServices(context.Background(), r, "m-1", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "api" || got[0].ExitCode != 3 || got[0].State != "Exited (3) 4 seconds ago" ||
+		len(got[0].Log) != 2 || got[0].Log[1] != "seed failed: no such table" {
+		t.Fatalf("exited %+v", got)
+	}
+}
