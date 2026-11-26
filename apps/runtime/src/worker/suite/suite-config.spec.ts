@@ -37,4 +37,12 @@ describe('the suite block of a recipe as the engine reads it', () => {
         expect(suiteConfigOf(recipeWith(`${base}  service: e2e\n`))!.config.service).toBe('e2e');
         expect(suiteConfigOf(recipeWith(base))!.config).not.toHaveProperty('service');
     });
+
+    it('takes the shard ceiling only from a recipe the repository holds: an authored or inferred one gets the limit of the suite', () => {
+        const recipe = recipeWith('suite:\n  runner: cypress\n  command: npx cypress run --spec "{specs}"\n  specs: "cypress/e2e/**/*.cy.ts"\n  shards: 3\n');
+        expect(suiteConfigOf(recipe, { origin: 'repository' })!.config.maxShards).toBe(3);
+        expect(suiteConfigOf(recipe, { origin: undefined })!.config.maxShards).toBe(3);
+        expect(suiteConfigOf(recipe, { origin: 'authored' })!.config.maxShards).toBe(16);
+        expect(suiteConfigOf(recipe, { origin: 'inferred' })!.config.maxShards).toBe(16);
+    });
 });

@@ -165,6 +165,15 @@ function resolvedSize(d: {
 /** The suite block (docs/runtime/e2e-suites.md section 3): the repository's own e2e suite, run by the worker. */
 export const SUITE_RUNNERS = ['cypress', 'playwright'] as const;
 export const SUITE_LIMITS = { commandBytes: 1024, env: 16, artifacts: 8, ignore: 32, shards: 16, maxTimeoutSeconds: 7200 } as const;
+/**
+ * The most hosts a suite spreads over. `suite.shards` is the customer's cost ceiling only when the customer committed the
+ * recipe in the repository; a recipe the environment booted (Kody's or Kodus's) never sets it, so the limit of the suite
+ * applies and the engine sizes the shards from the measured wall time. The worker (its engine) and the product (one download
+ * token per shard) both ask here, so they cannot disagree.
+ */
+export function suiteShardCeiling(declared: number | undefined, committedByCustomer: boolean): number {
+    return committedByCustomer && declared !== undefined ? declared : SUITE_LIMITS.shards;
+}
 /** Where a runner writes its result files when the recipe names no `results.junit`. */
 export const DEFAULT_SUITE_RESULTS_GLOB = 'results/*.xml';
 const RecipeSuiteSchema = z.strictObject({

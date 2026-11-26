@@ -1,4 +1,6 @@
-import { DEFAULT_SUITE_RESULTS_GLOB, type Recipe, SUITE_LIMITS } from '@libs/runtime/protocol/recipe';
+import { DEFAULT_SUITE_RESULTS_GLOB, suiteShardCeiling, type Recipe } from '@libs/runtime/protocol/recipe';
+
+import type { SetupRecipeOrigin } from '@libs/runtime/contracts/runtime-commands';
 
 import type { SuiteConfig } from './suite-engine';
 
@@ -18,8 +20,11 @@ export interface ResolvedSuite {
     baseline: boolean;
 }
 
-/** Undefined when the recipe declares no suite: the feature is off for that environment. */
-export function suiteConfigOf(recipe: Pick<Recipe, 'suite'>): ResolvedSuite | undefined {
+/**
+ * Undefined when the recipe declares no suite: the feature is off for that environment. `origin` is the setup recipe's: only a
+ * recipe the repository holds (`repository`, or none recorded) sets `shards` as a ceiling; an authored or inferred one gets the limit.
+ */
+export function suiteConfigOf(recipe: Pick<Recipe, 'suite'>, opts: { origin?: SetupRecipeOrigin } = {}): ResolvedSuite | undefined {
     const s = recipe.suite;
     if (!s) return undefined;
     return {
@@ -31,7 +36,7 @@ export function suiteConfigOf(recipe: Pick<Recipe, 'suite'>): ResolvedSuite | un
             env: s.env,
             resultsGlob: s.results?.junit ?? DEFAULT_RESULTS_GLOB,
             shardTimeoutMs: s.timeoutSeconds?.shard !== undefined ? s.timeoutSeconds.shard * 1000 : DEFAULT_SHARD_TIMEOUT_MS,
-            maxShards: s.shards ?? SUITE_LIMITS.shards,
+            maxShards: suiteShardCeiling(s.shards, opts.origin !== 'authored' && opts.origin !== 'inferred'),
             ...(s.results?.artifacts.length ? { artifacts: s.results.artifacts } : {}),
             gate: s.gate,
         },

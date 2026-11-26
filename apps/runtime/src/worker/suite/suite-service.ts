@@ -158,7 +158,7 @@ export class SuiteService {
         const setup = await this.d.setups.get(cmd.environmentId);
         const content = setup?.organizationId === cmd.organizationId && setup.recipe?.state === 'found' ? setup.recipe.content : undefined;
         const parsed = content ? parseRecipe(content) : undefined;
-        const suite = parsed?.ok ? suiteConfigOf(parsed.recipe) : undefined;
+        const suite = parsed?.ok ? suiteConfigOf(parsed.recipe, { origin: setup?.recipe?.origin }) : undefined;
         if (!suite || !setup) return { status: 'off', reason: 'no_suite' };
         if (cmd.mode === 'baseline' && !suite.baseline) return { status: 'off', reason: 'baseline_disabled' };
         const recipe = recipeForClaimOf(setup.recipe);

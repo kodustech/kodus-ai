@@ -79,13 +79,19 @@ suite:
   command: npx cypress run --browser chrome --spec "{specs}"   # {specs}: comma list the engine fills
   cwd: apps/dashboard
   specs: "cypress/e2e/**/*.cy.ts" # glob, relative to cwd; the engine lists it at the PR sha
-  shards: 3                       # a ceiling; the engine may use fewer for a small spec list
+  shards: 3                       # a cost ceiling, honored only in a recipe committed in the repository (see below); the engine may use fewer
   service: e2e                    # compose service the command runs in (it has node and the browser), or `image:`
   timeout: { shard: 25m, spec: 5m, total: 40m }
   env: { BASE_URL: "http://web:3000" }   # plain values only; secrets stay in the environment's sealed secrets
   results: { junit: "results/*.xml", artifacts: ["cypress/screenshots", "cypress/videos"] }
   baseline: true                  # false: no main baseline run (CI mode only repositories)
 ```
+
+`suite.shards` is the customer's cost ceiling only when the customer committed the recipe in the repository. A recipe the environment
+booted (Kody's `authored` or Kodus's `inferred`, recorded on the setup) never sets it: the inference does not write it (a CI matrix
+entry is a runner, not a Runtime host) and a value found there is ignored, so the limit of the suite (`SUITE_LIMITS.shards`, 16) is the
+ceiling and the engine sizes the shards from the measured wall time (section 6). The worker (`suiteConfigOf`) and the product
+(`suiteOfRecipeAt`, one download token per shard) both apply `suiteShardCeiling` (`libs/runtime/protocol/recipe.ts`), so they agree.
 
 Rules:
 
@@ -195,7 +201,7 @@ The engine then splits them:
 3. **Shard count.** `N = clamp(ceil(totalMs / targetShardMs), 1, suite.shards, pool headroom)` with `targetShardMs` of
    8 min: a small suite is not spread over 3 hosts that each pay a PR build. The target is cut to 80% of the shard cap
    and, in Run mode, of the time left to the Run's deadline (`shardTargetMs`), so a plan never gives a shard more work
-   than it may use; `suite.shards` stays the ceiling, and a suite that does not fit even there is the recipe's to widen.
+   than it may use; `suite.shards` (committed recipes only) stays the ceiling, and a suite that does not fit even there is the recipe's to widen.
 6. **A shard that boots late.** A shard's specs are `pending` until its command starts. A shard that has finished its own
    specs takes half of the pending specs (every other one, longest first) and runs them in its claim, which holds the PR
    build, while its cap and the Run's deadline leave time; the late shard then runs what is left, and when siblings took

@@ -1,5 +1,5 @@
 import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
-import { parseRecipe, SUITE_LIMITS, type RecipeSuite } from '@libs/runtime/protocol/recipe';
+import { parseRecipe, suiteShardCeiling, type RecipeSuite } from '@libs/runtime/protocol/recipe';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
 import type { RuntimeGitPort } from '../domain/ports';
@@ -23,7 +23,7 @@ export function environmentRecipeAt(setup: SuiteSetup, sha: string): string | un
 
 /**
  * The e2e suite the environment's recipe declares at `sha`, as far as the product needs it to mint the right number of download
- * tokens: the shard ceiling, and whether a baseline is asked for. Undefined when the recipe at that commit declares no suite (or
+ * tokens: the shard ceiling (the recipe's `shards` only for a committed recipe, the limit of the suite for an environment one), and whether a baseline is asked for. Undefined when the recipe at that commit declares no suite (or
  * none can be read), so nothing is minted for a suite that cannot run. The first recipe found wins, as for a setup (§6).
  */
 export async function suiteOfRecipeAt(
@@ -35,7 +35,7 @@ export async function suiteOfRecipeAt(
     const found = await suiteSourceAt(git, repo, sha, setup);
     const suite = found?.suite;
     return suite && found
-        ? { shards: suite.shards ?? SUITE_LIMITS.shards, baseline: suite.baseline, specs: suite.specs, ...(suite.cwd !== undefined ? { cwd: suite.cwd } : {}), source: found.source }
+        ? { shards: suiteShardCeiling(suite.shards, found.source === 'repository'), baseline: suite.baseline, specs: suite.specs, ...(suite.cwd !== undefined ? { cwd: suite.cwd } : {}), source: found.source }
         : undefined;
 }
 
