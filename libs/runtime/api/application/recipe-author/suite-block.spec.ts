@@ -42,12 +42,14 @@ const suiteOf = (text: string): NonNullable<Recipe['suite']> => {
 };
 
 describe('the suite block the author writes from CI (e2e-suites.md section 3)', () => {
-    it('turns a cypress job with a 3-way matrix and --record --parallel into a block with {specs}, 3 shards and no Cloud flags', async () => {
+    it('turns a cypress job with a 3-way matrix and --record --parallel into a block with {specs} and no Cloud flags, and no `shards` (a CI matrix entry is not a Runtime host)', async () => {
         const ev = await evidence({ '.github/workflows/e2e.yml': CYPRESS_MATRIX, 'cypress.config.ts': CONFIG });
         const out = appendSuiteBlock(BASE, ev);
-        expect(out.suiteKeys).toEqual(expect.arrayContaining(['runner', 'command', 'specs', 'shards', 'results']));
+        expect(out.suiteKeys).toEqual(expect.arrayContaining(['runner', 'command', 'specs', 'results']));
+        expect(out.suiteKeys).not.toContain('shards');
         const suite = suiteOf(out.recipe);
-        expect(suite).toMatchObject({ runner: 'cypress', specs: 'cypress/e2e/**/*.cy.ts', shards: 3 });
+        expect(suite).toMatchObject({ runner: 'cypress', specs: 'cypress/e2e/**/*.cy.ts' });
+        expect(suite.shards).toBeUndefined();
         expect(suite.command).toContain('{specs}');
         expect(suite.command).not.toMatch(/--record|--parallel|--key|--group/);
         expect(suite.results?.junit).toBe(DEFAULT_SUITE_RESULTS_GLOB);
@@ -88,11 +90,11 @@ describe('the suite block the author writes from CI (e2e-suites.md section 3)', 
         expect(appendSuiteBlock(has, ev)).toEqual({ recipe: has, suiteKeys: [] });
     });
 
-    it('caps shards at the schema ceiling and keeps a playwright command with its own reporter', async () => {
+    it('writes no shards even for a wide matrix and keeps a playwright command with its own reporter', async () => {
         const wf = `jobs:\n  pw:\n    strategy:\n      matrix:\n        shard: [${Array.from({ length: 18 }, (_, i) => i + 1).join(',')}]\n    steps:\n      - run: npx playwright test --reporter=list\n`;
         const ev = await evidence({ '.github/workflows/pw.yml': wf, 'playwright.config.ts': "export default { testDir: './e2e' };" });
         const suite = suiteOf(appendSuiteBlock(BASE, ev).recipe);
-        expect(suite.shards).toBe(16);
+        expect(suite.shards).toBeUndefined();
         expect(suite.command).toBe('npx playwright test --reporter=list {specs}');
     });
 });

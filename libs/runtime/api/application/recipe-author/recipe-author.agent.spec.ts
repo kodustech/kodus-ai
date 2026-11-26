@@ -191,9 +191,9 @@ describe('authorRecipe with an e2e workflow', () => {
     it('appends the suite block the CI evidence is certain of, and reports its keys', async () => {
         scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
         const r = await run({ ...FILES, '.github/workflows/e2e.yml': WF, 'cypress.config.ts': CFG });
-        expect(r).toMatchObject({ status: 'submitted', suiteInferred: expect.arrayContaining(['runner', 'command', 'specs', 'shards']) });
-        const suite = (parseRecipe((r as { recipe: string }).recipe) as { recipe: { suite: { shards: number; command: string } } }).recipe.suite;
-        expect(suite.shards).toBe(3);
+        expect(r).toMatchObject({ status: 'submitted', suiteInferred: expect.arrayContaining(['runner', 'command', 'specs']) });
+        const suite = (parseRecipe((r as { recipe: string }).recipe) as { recipe: { suite: { shards?: number; command: string } } }).recipe.suite;
+        expect(suite.shards).toBeUndefined();
         expect(suite.command).toContain('{specs}');
         expect(suite.command).not.toMatch(/--record|--parallel/);
     });

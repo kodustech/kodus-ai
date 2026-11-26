@@ -43,7 +43,7 @@ export function suiteBlockOf(evidence: Pick<CiEvidence, 'suiteCandidate' | 'suit
     const suite: Record<string, unknown> = { runner: c.runner, command };
     if (c.cwd) suite.cwd = c.cwd;
     suite.specs = c.specs;
-    if (c.matrixSize && c.matrixSize > 1) suite.shards = Math.min(c.matrixSize, SUITE_LIMITS.shards);
+    // Never `shards`: a CI matrix entry is a runner, not a Runtime host. The engine sizes the shards from the suite's measured wall time.
     if (Object.keys(env).length) suite.env = env;
     // The service Kody wrote for a Cypress suite (authored-dockerfile-e2e.ts): the app's own image has no Cypress app or browser.
     if (opts.service && c.runner === 'cypress') suite.service = opts.service;

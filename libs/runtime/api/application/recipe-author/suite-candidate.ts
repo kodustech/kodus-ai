@@ -19,7 +19,7 @@ export interface SuiteCandidate {
     runner: (typeof SUITE_RUNNERS)[number];
     /** The command with the Cypress Cloud flags and expressions removed, the spec list as {specs}. */
     command: string;
-    /** `strategy.matrix` size (or the --shard total): the ceiling for `shards`. */
+    /** `strategy.matrix` size (or the --shard total): evidence only: never written as `suite.shards` (a CI runner is not a Runtime host). */
     matrixSize?: number;
     cwd?: string;
     /** From cypress.config.* specPattern or playwright.config.* testDir; absent when none states one. */

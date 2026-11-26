@@ -97,7 +97,7 @@ Rules:
   job names, run commands (cut to 140 chars, 10 per job), env var NAMES, never values (`ci-evidence.ts:21-24`). Today
   it returns a text summary capped at 4096 chars. It must also return a structured `suiteCandidate`: the runner
   (regex on `cypress|playwright` already in `BOOTS_APP`, line 28), the command with the Cloud flags and expressions
-  removed, the matrix size (`strategy.matrix` or the `--parallel` group count), the spec glob (from
+  removed, the matrix size (`strategy.matrix` or the `--parallel` group count; evidence only, the block never carries `shards`: a CI runner is not a Runtime host and the engine sizes the shards itself), the spec glob (from
   `cypress.config.*` / `playwright.config.*` read as facts, not executed) and the env names. The author writes the
   block with `origin: inferred` like an inferred recipe; the user edits it in the recipe editor, and the web shows
   which keys were inferred. If nothing is certain the block is absent and the feature is off (no guess).
