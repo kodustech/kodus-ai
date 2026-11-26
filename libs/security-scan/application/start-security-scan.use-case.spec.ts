@@ -11,8 +11,11 @@ jest.mock('./scan-model', () => ({
 
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import {
+    MAX_ACTIVE_SCANS_PER_ORGANIZATION,
+    SCAN_MODEL_NOT_FOUND_MESSAGE,
     SCAN_QUEUE_UNAVAILABLE_MESSAGE,
     StartSecurityScanUseCase,
+    TOO_MANY_ACTIVE_SCANS_MESSAGE,
 } from './start-security-scan.use-case';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 
@@ -35,6 +38,8 @@ function useCaseWith(
     const scans = {
         failStale: jest.fn(async () => 0),
         findActive: jest.fn(async () => null),
+        countActive: jest.fn(async () => 0),
+        findOldestActiveIds: jest.fn(async () => ['scan-2']),
         findLatest: jest.fn(async () => last),
         create: jest.fn(async (scan: any) => ({ uuid: 'scan-2', ...scan })),
         update: jest.fn(async () => null),
@@ -72,11 +77,12 @@ function useCaseWith(
         { getConfig: jest.fn(async () => null) } as any,
         queueProbe as any,
     );
-    const start = () =>
+    const start = (extra: Record<string, unknown> = {}) =>
         useCase.execute({
             organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
             repositoryId: 'repo-1',
             budget: { maxUsd: 5 },
+            ...extra,
         } as any);
     return {
         scans,
@@ -103,6 +109,7 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         ],
         coverage: { languages: ['typescript'], examinedFiles: ['src/a.ts'] },
         commitSha: 'plan-sha',
+        modelName: 'fireworks:deepseek',
     };
 
     it('carries on with the areas the scan stopped at its limit had not reached', async () => {
@@ -132,6 +139,35 @@ describe('StartSecurityScanUseCase — running again continues', () => {
                 unitsDone: 1,
             }),
         );
+    });
+
+    it('starts its own plan when asked to read everything again, or on another model', async () => {
+        const full = useCaseWith(stopped);
+        await full.start({ mode: 'full' });
+        expect(full.scans.create.mock.calls[0][0].units).toEqual([]);
+        expect(full.scans.create.mock.calls[0][0].progress).toEqual([]);
+
+        // The last scan ran on another model: its conclusions are not this model's.
+        const other = useCaseWith({
+            ...stopped,
+            modelName: 'anthropic:claude-opus',
+        });
+        await other.start();
+        expect(other.scans.create.mock.calls[0][0].units).toEqual([]);
+
+        // No model on record: nothing says it is this one.
+        const unknown = useCaseWith({ ...stopped, modelName: undefined });
+        await unknown.start();
+        expect(unknown.scans.create.mock.calls[0][0].units).toEqual([]);
+
+        const same = useCaseWith({
+            ...stopped,
+            modelName: 'fireworks:deepseek',
+        });
+        await same.start();
+        expect(
+            same.scans.create.mock.calls[0][0].units.map((u: any) => u.id),
+        ).toEqual(['a', 'b', 'c']);
     });
 
     it('carries a finished unit without what it examined, so it never supplies a miss of the new scan', async () => {
@@ -492,5 +528,130 @@ describe('StartSecurityScanUseCase — a duplicate key on create', () => {
         scans.create.mockRejectedValueOnce(error);
 
         await expect(start()).rejects.toBe(error);
+    });
+});
+
+describe('StartSecurityScanUseCase — how the scan runs', () => {
+    it('is incremental unless asked to read everything again', async () => {
+        const { scans, start } = useCaseWith(null);
+
+        await start();
+        await start({ mode: 'full' });
+
+        expect(scans.create.mock.calls[0][0].mode).toBe('incremental');
+        expect(scans.create.mock.calls[1][0].mode).toBe('full');
+    });
+
+    it('runs on the model picked for it, and records it for the job slices that run it', async () => {
+        (resolveScanModel as jest.Mock).mockResolvedValueOnce({
+            model: {
+                modelName: 'anthropic:claude-opus',
+                slot: {
+                    provider: 'anthropic',
+                    model: 'claude-opus',
+                    byokModelId: 'm-opus',
+                },
+            },
+            rates: { input: { default: 1e-6 }, output: { default: 2e-6 } },
+        });
+        const { scans, start } = useCaseWith(null);
+
+        await start({ modelId: 'm-opus' });
+
+        expect(resolveScanModel).toHaveBeenLastCalledWith(
+            expect.objectContaining({ modelId: 'm-opus' }),
+        );
+        expect(scans.create.mock.calls[0][0]).toMatchObject({
+            modelId: 'm-opus',
+            modelName: 'anthropic:claude-opus',
+        });
+    });
+
+    it('refuses a picked model that is no longer configured, instead of running on another', async () => {
+        // The pick resolves to the routing's model when its id is gone.
+        const { scans, start } = useCaseWith(null);
+
+        await expect(start({ modelId: 'm-deleted' })).rejects.toThrow(
+            SCAN_MODEL_NOT_FOUND_MESSAGE,
+        );
+        expect(scans.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('StartSecurityScanUseCase — a share of the workers per organization', () => {
+    it("starts nothing past the organization's limit of running scans", async () => {
+        const { scans, start, jobQueue } = useCaseWith(null);
+        scans.countActive.mockResolvedValue(MAX_ACTIVE_SCANS_PER_ORGANIZATION);
+
+        const error = await start().catch((e) => e);
+
+        expect(error.message).toBe(TOO_MANY_ACTIVE_SCANS_MESSAGE);
+        expect(error.getStatus()).toBe(429);
+        expect(scans.create).not.toHaveBeenCalled();
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('gives the place back when another start of the organization took it first', async () => {
+        const { scans, start, jobQueue } = useCaseWith(null);
+        scans.findOldestActiveIds.mockResolvedValue([
+            'scan-a',
+            'scan-b',
+            'scan-c',
+        ]);
+
+        const error = await start().catch((e) => e);
+
+        expect(error.getStatus()).toBe(429);
+        expect(scans.update).toHaveBeenCalledWith(
+            'scan-2',
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: TOO_MANY_ACTIVE_SCANS_MESSAGE,
+            }),
+        );
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
+    });
+});
+
+describe('StartSecurityScanUseCase — a unit the limit stopped halfway', () => {
+    it('carries the lenses it read to the end as inherited, and runs again one cut short', async () => {
+        const { scans, start } = useCaseWith({
+            status: SecurityScanStatus.STOPPED_BY_BUDGET,
+            modelName: 'fireworks:deepseek',
+            units: [
+                unit('a'),
+                { ...unit('b'), classes: ['authz', 'injection', 'ssrf'] },
+            ],
+            progress: [
+                { unitId: 'a', state: 'done', findings: 0 },
+                {
+                    unitId: 'b',
+                    state: 'skipped_budget',
+                    findings: 1,
+                    // ssrf ran but was cut short.
+                    lensesRun: ['authz', 'ssrf'],
+                    lensesExamined: ['authz'],
+                },
+            ],
+            reported: [],
+            coverage: { languages: ['typescript'] },
+            commitSha: 'plan-sha',
+        });
+
+        await start();
+
+        const created = scans.create.mock.calls[0][0];
+        expect(created.progress).toEqual([
+            { unitId: 'a', state: 'done', findings: 0 },
+            {
+                unitId: 'b',
+                state: 'pending',
+                findings: 0,
+                lensesRun: ['authz'],
+                lensesExamined: [],
+                lensesInherited: ['authz'],
+            },
+        ]);
+        expect(created.coverage.unitsDone).toBe(1);
     });
 });

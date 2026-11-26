@@ -61,6 +61,11 @@ export const formatScanCoverage = (
     if (coverage.unitsFailed > 0) {
         parts.push(`${coverage.unitsFailed} failed`);
     }
+    if (coverage.unchangedFiles) {
+        parts.push(
+            `${coverage.unchangedFiles} ${coverage.unchangedFiles === 1 ? "file" : "files"} unchanged since an earlier scan`,
+        );
+    }
     if (coverage.filesBeyondPlan) {
         parts.push(
             `${coverage.filesBeyondPlan} ${coverage.filesBeyondPlan === 1 ? "file" : "files"} past the plan's limit not examined`,
@@ -87,6 +92,8 @@ export const formatScanOutcome = (
         [outcome.reopened, "reopened"],
         [outcome.resolved, "resolved"],
         [outcome.dismissed, "dismissed"],
+        [outcome.refuted ?? 0, "refuted on verification"],
+        [outcome.consolidated ?? 0, "folded as duplicates"],
     ] as const;
 
     const nonZero = parts.filter(([count]) => count > 0);
@@ -168,10 +175,21 @@ type Reproduction = NonNullable<
 >;
 
 export const reproductionStatus = (
-    reproduction: Pick<Reproduction, "executed" | "reproduced" | "exitCode">,
+    reproduction: Pick<
+        Reproduction,
+        "executed" | "reproduced" | "exitCode" | "inconclusive"
+    >,
 ): { label: string; tone: "danger" | "warning" | "neutral" } => {
     if (reproduction.executed === true && reproduction.reproduced === true) {
         return { label: "Reproduced in an isolated sandbox", tone: "danger" };
+    }
+
+    // It never reached the code: a dependency or the test runner was missing.
+    if (reproduction.executed === true && reproduction.inconclusive === true) {
+        return {
+            label: "Could not run in the sandbox: a test to run",
+            tone: "neutral",
+        };
     }
 
     // A test that did not pass here most often needed what the sandbox does

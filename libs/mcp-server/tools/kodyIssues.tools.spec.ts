@@ -93,6 +93,20 @@ describe('KodyIssuesTools listKodyIssues', () => {
         });
     });
 
+    it("lists only a deep scan's open findings when asked", async () => {
+        await tools.listKodyIssues().execute({
+            organizationId: 'org-1',
+            source: 'security_scan',
+            status: 'open',
+        } as any);
+
+        expect(issuesService.findByFilters).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            source: 'security_scan',
+            status: 'open',
+        });
+    });
+
     it('omits the repository filter when no repositoryName is given', async () => {
         await tools.listKodyIssues().execute({ organizationId: 'org-1' });
 

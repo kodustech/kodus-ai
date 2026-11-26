@@ -195,11 +195,23 @@ async function main() {
                 r.repo_id,
                 result.findings.map((f) => ({ file: f.filePath, cwe: f.cwe, line: f.startLine })),
             );
+            // What the independent check refuted, scored the same way: a
+            // refuted real vulnerability is recall the check cost.
+            const refutedScored = scoreRepository(
+                r.repo_id,
+                (result.refuted ?? []).map(({ finding: f }) => ({ file: f.filePath, cwe: f.cwe, line: f.startLine })),
+            );
             const out = {
                 id: r.repo_id,
                 repo,
                 commit: r.commit_sha,
                 ...scored,
+                refuted: {
+                    total: (result.refuted ?? []).length,
+                    real: refutedScored.tp,
+                    list: (result.refuted ?? []).map(({ finding: f, rationale }) => ({ file: f.filePath, line: f.startLine, cwe: f.cwe, title: f.title, rationale: String(rationale).slice(0, 300) })),
+                },
+                modelCalls: result.modelCalls,
                 raw: { findings: result.findings.length, tp: raw.tp, fp: raw.fp },
                 surface: { errors: result.surfaceErrors ?? [] },
                 coverage: {
@@ -210,7 +222,7 @@ async function main() {
                 spend,
                 ms: Date.now() - started,
             };
-            console.log(`${r.repo_id}: TP ${out.tp}/${out.real} · FP ${out.fp} · raw ${out.raw.tp}/${out.raw.findings} · ${out.coverage.done}/${out.coverage.units} units · $${spend.usd.toFixed(2)}`);
+            console.log(`${r.repo_id}: TP ${out.tp}/${out.real} · FP ${out.fp} · raw ${out.raw.tp}/${out.raw.findings} · refuted ${out.refuted.total} (${out.refuted.real} real) · ${out.coverage.done}/${out.coverage.units} units · $${spend.usd.toFixed(2)}`);
             return out;
         } catch (error) {
             // Not run: its vulnerabilities count as misses (strict micro).

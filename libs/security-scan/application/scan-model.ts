@@ -41,11 +41,17 @@ export async function resolveScanModel(params: {
     permissionValidationService: PermissionValidationService;
     pricingResolver: Pick<PricingResolver, 'resolve'>;
     pricingOverrides?: ManualPricingOverrides;
+    /**
+     * A model of the organization's BYOK config picked for this scan: wins
+     * over the routing while it exists, the routing's model once deleted.
+     */
+    modelId?: string;
 }): Promise<ResolvedScanModel> {
     const { byokConfig, main } = await resolveReviewAgentModel(
         { organizationAndTeamData: params.organizationAndTeamData },
         params.permissionValidationService,
         LLM_TASK.securityScan,
+        params.modelId,
     );
 
     const priceKey = byokConfig
