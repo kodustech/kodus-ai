@@ -214,6 +214,44 @@ describe('repeatCandidates', () => {
         expect(repeatCandidates(finding, [applied])).toEqual([]);
     });
 
+    it('takes a name from the prose only in code shape, not as a plain English word', () => {
+        const applied = earlier({
+            suggestionId: 'log-the-failure',
+            relevantFile: 'src/jobs/sync.ts',
+            outcome: 'implemented',
+            existingCode: 'catch (err) {}',
+            improvedCode: 'catch (err) { logger.warn({ message, context }); }',
+            suggestionContent: 'Report the failure.',
+        });
+        const prose = (suggestionContent: string): RepeatCheckFinding => ({
+            label: 'bug',
+            relevantFile: 'src/api/orders.ts',
+            suggestionContent,
+        });
+        const offered = (finding: RepeatCheckFinding) =>
+            repeatCandidates(finding, [applied]).map((c) => c.suggestionId);
+
+        expect(
+            offered(
+                prose(
+                    'The order handler swallows a failed payment; log it with context.',
+                ),
+            ),
+        ).toEqual([]);
+        expect(
+            offered(
+                prose(
+                    'The handler passes `context` from the request into the log.',
+                ),
+            ),
+        ).toEqual(['log-the-failure']);
+        expect(
+            offered(
+                prose('A failed payment calls logger() with the card number.'),
+            ),
+        ).toEqual(['log-the-failure']);
+    });
+
     it('reads a Rust change past its lifetimes', () => {
         const applied = earlier({
             suggestionId: 'first-or-none',

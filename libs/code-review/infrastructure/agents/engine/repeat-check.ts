@@ -256,8 +256,23 @@ function touchesAppliedCode(
 
 type FindingNames = { named: Set<string>; inCode: Set<string> };
 
+/** Names the prose gives in code shape: backticked, camelCase, snake_case or
+ *  called. A plain word such as "context" or "timeout" is English, and would
+ *  pull in every applied change that added a variable of that name. */
+function codeShapedNames(text: string): Set<string> {
+    const names = new Set<string>();
+    for (const span of text.match(/`[^`\n]+`/g) ?? [])
+        identifiers(span).forEach((name) => names.add(name));
+    for (const name of identifiers(text))
+        if (/[a-z0-9][A-Z]|[A-Za-z0-9]_[A-Za-z0-9]|\$/.test(name))
+            names.add(name);
+    for (const [, name] of text.matchAll(/([A-Za-z_$][A-Za-z0-9_$]*)\(/g))
+        if (name.length >= MIN_IDENTIFIER) names.add(name);
+    return names;
+}
+
 const findingNames = (finding: RepeatCheckFinding): FindingNames => ({
-    named: identifiers(
+    named: codeShapedNames(
         `${finding.suggestionContent ?? ''} ${finding.oneSentenceSummary ?? ''}`,
     ),
     inCode: codeIdentifiers(finding.existingCode, finding.relevantFile),
