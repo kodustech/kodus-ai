@@ -243,7 +243,8 @@ func (p *preparation) code() error {
 	p.root = p.repo
 	p.phases.started("fetch")
 	p.markFetched(acq.RepoToken)
-	if _, err := tarball.FetchExtractRevoke(p.ctx, tarball.FetchOptions{URL: url, Token: acq.RepoToken, Dest: p.repo, WorkDir: dir, Extractor: a.cfg.Extractor, Revoker: a.cfg.Revoker}); err != nil {
+	st, err := tarball.FetchExtractRevoke(p.ctx, tarball.FetchOptions{URL: url, Token: acq.RepoToken, Dest: p.repo, WorkDir: dir, Extractor: a.cfg.Extractor, Revoker: a.cfg.Revoker})
+	if err != nil {
 		// The extractor refused an entry of the repository (a link out of it, a
 		// .git entry): the repository's to change, not a retry.
 		if refusedArchive(err) {
@@ -251,6 +252,7 @@ func (p *preparation) code() error {
 		}
 		return blockerErr(protocol.BlockerKindPlatform, "repo_fetch", err)
 	}
+	p.logSkippedLinks(st, "")
 	return p.checkout()
 }
 

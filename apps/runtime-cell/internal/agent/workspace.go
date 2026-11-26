@@ -77,14 +77,26 @@ func (p *preparation) fetchWorkspace(workDir, url string) error {
 			}
 		}
 		p.markFetched(m.Token)
-		if _, err := tarball.FetchExtractRevoke(p.ctx, tarball.FetchOptions{URL: src, Token: m.Token, Dest: m.Dir, WorkDir: workDir, Extractor: a.cfg.Extractor, Revoker: a.cfg.Revoker}); err != nil {
+		st, err := tarball.FetchExtractRevoke(p.ctx, tarball.FetchOptions{URL: src, Token: m.Token, Dest: m.Dir, WorkDir: workDir, Extractor: a.cfg.Extractor, Revoker: a.cfg.Revoker})
+		if err != nil {
 			if refusedArchive(err) {
 				return blockerErr(protocol.BlockerKindToolchain, "repo_refused", inRepository(m.Alias, err))
 			}
 			return blockerErr(protocol.BlockerKindPlatform, "repo_fetch", inRepository(m.Alias, err))
 		}
+		p.logSkippedLinks(st, m.Alias)
 	}
 	return nil
+}
+
+// logSkippedLinks names the links to an absolute path the extractor left out
+// of a repository (alias empty for a claim of one repository): never created,
+// so a build that needed one fails on the missing path, and this says why.
+func (p *preparation) logSkippedLinks(st tarball.Stats, alias string) {
+	if len(st.SkippedLinks) == 0 {
+		return
+	}
+	p.c.Log.Warn("repo.links_skipped", "reason", "absolute_target", "repository", alias, "links", st.SkippedLinks)
 }
 
 func (p *preparation) markFetched(token string) {

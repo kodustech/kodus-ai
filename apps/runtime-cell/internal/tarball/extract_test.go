@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -77,7 +78,6 @@ func TestExtractGood(t *testing.T) {
 // S-05: every hostile shape refuses the whole archive and leaves dest empty.
 func TestExtractRefusesHostileRepos(t *testing.T) {
 	cases := map[string][]entry{
-		"symlink out":      {{name: "p/", typ: tar.TypeDir}, {name: "p/etc", typ: tar.TypeSymlink, linkname: "/etc"}},
 		"relative symlink": {{name: "p/a", typ: tar.TypeSymlink, linkname: "../../.."}},
 		"hard link":        {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "p/b", typ: tar.TypeLink, linkname: "/etc/passwd"}},
 		"dot dot":          {{name: "p/../../evil", typ: tar.TypeReg, body: "x"}},
@@ -134,6 +134,39 @@ func TestExtractRefusesHostileRepos(t *testing.T) {
 				t.Fatalf("dest not empty after refusal: %v", left)
 			}
 		})
+	}
+}
+
+// dev, 2026-11-26: a design partner's repository had a link to a path on one
+// developer's laptop (dashboard/dashboard -> /Users/<dev>/.../node_modules/
+// dashboard), committed by mistake and dangling on every other machine; the
+// whole repository was refused. A link to an absolute path is never created:
+// it is left out and named, and the rest of the repository is extracted. A
+// file the archive puts where the link was is an ordinary file inside dest.
+func TestExtractLeavesOutLinksToAnAbsolutePath(t *testing.T) {
+	dest := t.TempDir()
+	st, err := Extract(bytes.NewReader(archive(t,
+		entry{name: "o-r-abc/", typ: tar.TypeDir},
+		entry{name: "o-r-abc/src/main.go", typ: tar.TypeReg, body: "package main"},
+		entry{name: "o-r-abc/dashboard/dashboard", typ: tar.TypeSymlink, linkname: "/Users/dev/app/node_modules/dashboard"},
+		entry{name: "o-r-abc/etc", typ: tar.TypeSymlink, linkname: "/etc"},
+		entry{name: "o-r-abc/etc/passwd", typ: tar.TypeReg, body: "inside"},
+	)), dest, Limits{})
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if want := []string{"dashboard/dashboard", "etc"}; !reflect.DeepEqual(st.SkippedLinks, want) {
+		t.Fatalf("skipped %v, want %v", st.SkippedLinks, want)
+	}
+	if _, err := os.Lstat(filepath.Join(dest, "dashboard", "dashboard")); !os.IsNotExist(err) {
+		t.Fatalf("the link was created: %v", err)
+	}
+	fi, err := os.Lstat(filepath.Join(dest, "etc"))
+	if err != nil || !fi.IsDir() {
+		t.Fatalf("etc is not a plain directory inside dest: %v %v", fi, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dest, "etc", "passwd")); err != nil || string(b) != "inside" {
+		t.Fatalf("etc/passwd: %q %v", b, err)
 	}
 }
 
@@ -194,7 +227,7 @@ func (c *countRevoker) Revoke(context.Context, string) error { c.n.Add(1); retur
 
 func TestFetchRevokesOnEveryPath(t *testing.T) {
 	good := archive(t, entry{name: "p/a.txt", typ: tar.TypeReg, body: "hi"})
-	bad := archive(t, entry{name: "p/l", typ: tar.TypeSymlink, linkname: "/"})
+	bad := archive(t, entry{name: "p/l", typ: tar.TypeSymlink, linkname: "../.."})
 	var seenAuth atomic.Value
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seenAuth.Store(r.Header.Get("Authorization"))

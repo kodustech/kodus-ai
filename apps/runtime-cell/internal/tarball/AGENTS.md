@@ -13,7 +13,7 @@ How a repository reaches the cell without git (S-05): the commit's tarball is do
 
 ## Rules and limits
 - The token is revoked on every path, a refused archive and a failed download included; a revocation that never works fails the fetch, so a valid token is never let go silently ([`../../AGENTS.md`](../../AGENTS.md) "Untrusted input": every download token of a claim is revoked).
-- A symlink is kept only when it resolves inside the destination; any other symlink, a hard link, a device, a `..` or absolute path, or a `.git` entry refuses the whole archive and leaves the destination empty.
+- A symlink is kept only when it resolves inside the destination. A symlink to an absolute path is never created: it is left out and named in `Stats.SkippedLinks` (the agent logs `repo.links_skipped`), since a repository can carry one by mistake (dev, 2026-11-26: a design partner's link to a path on one developer's laptop refused the whole repository). Any other symlink that leaves the destination, a hard link, a device, a `..` or absolute path, or a `.git` entry refuses the whole archive and leaves the destination empty.
 - The child runs with `PATH=/usr/bin:/bin` only and dies with its parent (`Pdeathsig`).
 - `Revoke` sleeps with `time.Sleep` between tries rather than a `clock.Clock`; tests shorten `revokeBackoff`.
 

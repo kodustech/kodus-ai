@@ -43,13 +43,22 @@ type Stats struct {
 	// Prefix is the single top-level directory the forge puts every entry
 	// under (owner-repo-sha/), stripped on extraction.
 	Prefix string
+	// SkippedLinks are the first maxSkippedLinks links to an absolute path
+	// the archive held, relative to dest: never created, left out.
+	SkippedLinks []string
 }
+
+// maxSkippedLinks bounds the links to an absolute path Stats names.
+const maxSkippedLinks = 20
 
 // Extract reads a gzip tarball and writes it under dest, which must be an
 // empty directory. A symlink is kept only when it resolves inside dest
-// (confinedSymlink, S-05); any other symlink, a hard link, a device, a path
-// with "..", an absolute path or a .git entry refuses the whole archive and
-// leaves dest empty.
+// (confinedSymlink, S-05). A symlink to an absolute path is never created: it
+// is left out and named in Stats.SkippedLinks, since a repository can carry
+// one by mistake (a path on a developer's laptop, dangling on every other
+// machine) and nothing it points at is the cell's to give. Any other symlink
+// that leaves dest, a hard link, a device, a path with "..", an absolute
+// path or a .git entry refuses the whole archive and leaves dest empty.
 func Extract(r io.Reader, dest string, lim Limits) (st Stats, err error) {
 	if lim.MaxFiles == 0 {
 		lim = DefaultLimits
@@ -156,7 +165,13 @@ func Extract(r io.Reader, dest string, lim Limits) (st Stats, err error) {
 			case strings.ContainsRune(t, 0) || strings.Contains(t, `\`):
 				return st, &RefusedError{h.Name, "symlink target with NUL or backslash"}
 			case strings.HasPrefix(t, "/"):
-				return st, &RefusedError{h.Name, "symlink to an absolute path"}
+				// Never created: nothing outside dest is reachable through it,
+				// and an entry the archive puts at the same path later is an
+				// ordinary file or directory inside dest.
+				if len(st.SkippedLinks) < maxSkippedLinks {
+					st.SkippedLinks = append(st.SkippedLinks, rel)
+				}
+				continue
 			}
 			if dir := path.Dir(rel); dir != "." {
 				if err := mkdirAll(root, dir); err != nil {
