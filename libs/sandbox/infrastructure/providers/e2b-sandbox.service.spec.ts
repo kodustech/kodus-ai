@@ -170,6 +170,9 @@ describe('buildE2BRemoteCommands', () => {
             | { stdout: string; stderr?: string; exitCode: number }
             | Error,
         chunks: Array<string | { stderr: string }> = [],
+        // E2B streams output while the command runs, after `run` returned the
+        // handle; `late` delivers the chunks then instead of before.
+        { late = false }: { late?: boolean } = {},
     ) => {
         const kill = jest.fn().mockResolvedValue(true);
         const out = chunks.filter((c): c is string => typeof c === 'string');
@@ -177,19 +180,23 @@ describe('buildE2BRemoteCommands', () => {
             .filter((c): c is { stderr: string } => typeof c !== 'string')
             .map((c) => c.stderr);
         const run = jest.fn(async (_cmd: string, opts: any) => {
-            for (const c of chunks) {
-                if (typeof c === 'string') opts.onStdout?.(c);
-                else opts.onStderr?.(c.stderr);
-            }
+            const deliver = () => {
+                for (const c of chunks) {
+                    if (typeof c === 'string') opts.onStdout?.(c);
+                    else opts.onStderr?.(c.stderr);
+                }
+            };
+            if (!late) deliver();
             return {
                 kill,
                 stdout: out.join(''),
                 stderr: err.join(''),
                 exitCode: undefined,
-                wait: () =>
-                    outcome instanceof Error
-                        ? Promise.reject(outcome)
-                        : Promise.resolve(outcome),
+                wait: async () => {
+                    if (late) deliver();
+                    if (outcome instanceof Error) throw outcome;
+                    return outcome;
+                },
             };
         });
         return { run, kill };
@@ -657,6 +664,94 @@ describe('buildE2BRemoteCommands', () => {
                 maxChars: 2_000_000,
             });
             expect(JSON.stringify(warn.mock.calls)).not.toContain('SECRET_CANARY');
+        });
+
+        it('stops a command whose output arrives after run returned', async () => {
+            const line = 'z'.repeat(99) + '\n';
+            const chunks = Array.from({ length: 3 }, () => line.repeat(10_000));
+            const { run, kill } = backgroundRun(
+                exitError(chunks.join(''), '', -1),
+                chunks,
+                { late: true },
+            );
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('git show abc');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            expect(res.truncated).toBe(true);
+            expect(res.stdout).toBe(line.repeat(20_000).slice(0, -1));
+        });
+
+        it('leaves a small streamed output alone: no kill, no flag, no log', async () => {
+            const { run, kill } = backgroundRun(
+                { stdout: 'a\nb\n', stderr: '', exitCode: 0 },
+                ['a\n', 'b\n'],
+                { late: true },
+            );
+            const warn = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                logger: { warn } as any,
+            });
+
+            const res = await rc.exec('ls');
+
+            expect(kill).not.toHaveBeenCalled();
+            expect(warn).not.toHaveBeenCalled();
+            expect(res).toEqual({ stdout: 'a\nb\n', stderr: '', exitCode: 0 });
+        });
+
+        it('does not stop an output of exactly the cap', async () => {
+            const exact = 'q'.repeat(2_000_000);
+            const { run, kill } = backgroundRun(
+                { stdout: exact, stderr: '', exitCode: 0 },
+                [exact],
+            );
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat exact.txt');
+
+            expect(kill).not.toHaveBeenCalled();
+            expect(res).toEqual({ stdout: exact, stderr: '', exitCode: 0 });
+        });
+
+        it('re-throws a stream error when nothing was stopped', async () => {
+            const { run } = backgroundRun(new Error('sandbox gone'), ['x\n']);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            await expect(rc.exec('ls')).rejects.toThrow('sandbox gone');
+        });
+
+        it('logs the program alone, cut at 40 characters and at shell operators', async () => {
+            const big = 'w'.repeat(2_000_001);
+            const cases: Array<[string, string]> = [
+                ['cat;rm -rf / --token=SECRET', 'cat'],
+                [`${'p'.repeat(60)} arg`, 'p'.repeat(40)],
+                ['  grep|head', 'grep'],
+            ];
+            for (const [command, program] of cases) {
+                const { run } = backgroundRun(exitError(big, '', -1), [big]);
+                const warn = jest.fn();
+                const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                    logger: { warn } as any,
+                });
+                await rc.exec(command);
+                expect(warn).toHaveBeenCalledWith({
+                    message: '[SANDBOX-EXEC] command stopped after 2000000 output characters',
+                    context: undefined,
+                    metadata: { program, maxChars: 2_000_000 },
+                });
+            }
+        });
+
+        it('keeps a head that starts with a newline and has no other', async () => {
+            const text = '\n' + 'a'.repeat(2_000_005);
+            const { run } = backgroundRun(exitError(text, '', -1), [text]);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat odd.txt');
+
+            expect(res.stdout).toBe('\n' + 'a'.repeat(1_999_999));
         });
 
         it('counts stderr toward the cap', async () => {
