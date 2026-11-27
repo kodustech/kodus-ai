@@ -82,6 +82,53 @@ describe('findFile — resilient to a missing fd binary', () => {
     });
 });
 
+describe('findFile — a find walk the exec cap stopped', () => {
+    // The E2B template has no fd. On a large monorepo, `find -iname '*.test.ts'`
+    // passes the 2M exec cap and is stopped (exit -1). The listDir fallback
+    // filters by a literal substring, so it answered "No files matching
+    // \"*.test.ts\"" and the agent could report missing tests.
+    it('answers with the first 30 files of the walk', async () => {
+        const found = Array.from({ length: 40_000 }, (_, i) => `pkg/m${i}/a.test.ts`);
+        const listDir = jest.fn(async () => 'pkg/m0/a.test.ts');
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : {
+                          // Cut mid-line, as the cap cuts.
+                          stdout: found.join('\n').slice(0, 2_000_000),
+                          stderr: '',
+                          exitCode: -1,
+                          truncated: true,
+                      },
+            listDir,
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({
+            pattern: '*.test.ts',
+        });
+
+        expect(out).toBe(found.slice(0, 30).join('\n'));
+        expect(listDir).not.toHaveBeenCalled();
+    });
+
+    it('still falls back when a stopped walk printed nothing', async () => {
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : { stdout: '', stderr: '', exitCode: -1, truncated: true },
+            listDir: async () => 'src/foo.ts\nsrc/bar.ts',
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({
+            pattern: 'foo',
+        });
+
+        expect(out).toBe('src/foo.ts');
+    });
+});
+
 describe('readFile — clear signal when a read produces no content', () => {
     it('surfaces a near-miss suggestion when the path does not exist (read throws)', async () => {
         const remote = makeRemote({

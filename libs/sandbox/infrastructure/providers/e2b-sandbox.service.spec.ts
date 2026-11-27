@@ -175,6 +175,7 @@ describe('buildE2BRemoteCommands', () => {
         { late = false }: { late?: boolean } = {},
     ) => {
         const kill = jest.fn().mockResolvedValue(true);
+        const disconnect = jest.fn().mockResolvedValue(undefined);
         const out = chunks.filter((c): c is string => typeof c === 'string');
         const err = chunks
             .filter((c): c is { stderr: string } => typeof c !== 'string')
@@ -189,6 +190,7 @@ describe('buildE2BRemoteCommands', () => {
             if (!late) deliver();
             return {
                 kill,
+                disconnect,
                 stdout: out.join(''),
                 stderr: err.join(''),
                 exitCode: undefined,
@@ -199,7 +201,7 @@ describe('buildE2BRemoteCommands', () => {
                 },
             };
         });
-        return { run, kill };
+        return { run, kill, disconnect };
     };
 
     describe('runCmd normalization', () => {
@@ -681,6 +683,62 @@ describe('buildE2BRemoteCommands', () => {
             expect(kill).toHaveBeenCalledTimes(1);
             expect(res.truncated).toBe(true);
             expect(res.stdout).toBe(line.repeat(20_000).slice(0, -1));
+        });
+
+        // E2B 2.46.1: a killed command's stream keeps delivering what the
+        // sandbox already produced, and `wait()` settles only on the stream's
+        // end. Only `disconnect()` ends the wait early (it then rejects).
+        it('drops the stream once stopped instead of waiting for all the output', async () => {
+            const line = 'w'.repeat(99) + '\n';
+            const chunk = line.repeat(10_000); // 1 MB
+            let received = 0;
+            let dropped!: (err: Error) => void;
+            const kill = jest.fn().mockResolvedValue(true);
+            const disconnect = jest.fn(async () =>
+                dropped(new Error('Process exited without a result')),
+            );
+            const run = jest.fn(async (_cmd: string, opts: any) => {
+                const handle: any = {
+                    kill,
+                    disconnect,
+                    exitCode: undefined,
+                    get stdout() {
+                        return chunk.repeat(received);
+                    },
+                    stderr: '',
+                    wait: () =>
+                        new Promise((resolve, reject) => {
+                            // The rest of a 424 MB answer, still streaming.
+                            const timer = setInterval(() => {
+                                received++;
+                                opts.onStdout?.(chunk);
+                                if (received === 400) {
+                                    clearInterval(timer);
+                                    resolve({ stdout: handle.stdout, stderr: '', exitCode: 0 });
+                                }
+                            }, 0);
+                            dropped = (err) => {
+                                clearInterval(timer);
+                                reject(err);
+                            };
+                        }),
+                };
+                return handle;
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('git show abc');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            expect(disconnect).toHaveBeenCalledTimes(1);
+            // Stopped on the third megabyte, not after all 400.
+            expect(received).toBe(3);
+            expect(res).toEqual({
+                stdout: line.repeat(20_000).slice(0, -1),
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
         });
 
         it('leaves a small streamed output alone: no kill, no flag, no log', async () => {

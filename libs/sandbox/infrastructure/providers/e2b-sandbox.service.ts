@@ -283,8 +283,16 @@ export function buildE2BRemoteCommands(
         };
         // Filled once `run` returns; onStdout can fire before that.
         const started: { handle?: CommandHandle } = {};
+        // `kill()` ends the process, not the stream: E2B keeps appending the
+        // output already produced to the handle, and `wait()` settles only
+        // when the stream ends (30 s and 30 MB on a real sandbox).
+        // `disconnect()` drops the stream, so `wait()` rejects at once and the
+        // stopped branch below returns the head.
         const stop = () => {
-            void started.handle?.kill().catch(() => undefined);
+            const handle = started.handle;
+            if (!handle) return;
+            void handle.kill().catch(() => undefined);
+            void handle.disconnect().catch(() => undefined);
         };
         const handle = await sandbox.commands.run(cmd, {
             background: true,

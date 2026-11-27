@@ -1115,12 +1115,16 @@ export function buildAgentTools(
                                     ? safePattern
                                     : `*${safePattern}*`;
                             const findCmd = `find '${safePath}' -type f -iname '${globPattern}'`;
-                            const { stdout, exitCode } =
+                            const { stdout, exitCode, truncated } =
                                 await remoteCommands.exec(findCmd);
                             // Same guard as fd: only return on a clean exit so a
                             // find error (or missing binary) falls through to the
                             // listDir fallback instead of being returned as data.
-                            if (exitCode === 0 && stdout.trim()) {
+                            // A walk the exec cap stopped (exit -1) found more
+                            // than 30 files already: the listDir fallback below
+                            // filters literally and would answer "No files
+                            // matching" for a glob such as *.test.ts.
+                            if ((exitCode === 0 || truncated) && stdout.trim()) {
                                 const lines = stdout.trim().split('\n');
                                 return lines.slice(0, 30).join('\n');
                             }
