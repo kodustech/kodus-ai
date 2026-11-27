@@ -104,6 +104,19 @@ describe('CodeReviewConfigLogHandler', () => {
             expect(data[0].description).toContain('Run on Draft');
         });
 
+        it('logs turning conversation.implicitReplies off', async () => {
+            await callHandler(
+                { conversation: { implicitReplies: true } },
+                { conversation: { implicitReplies: false } },
+            );
+
+            const data = extractChangedData(mockUnified.saveLogEntry);
+            expect(data).toHaveLength(1);
+            expect(data[0].description).toEqual(
+                'User user@test.com changed Implicit Replies from enabled to disabled',
+            );
+        });
+
         it('detects languageResultPrompt string change', async () => {
             await callHandler(
                 { languageResultPrompt: 'English' },

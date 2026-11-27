@@ -79,6 +79,12 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
     'enableCommittableSuggestions': {
         actionDescription: 'Committable Suggestions',
     },
+    // Only keys listed here reach /user-logs. Without this one, toggling
+    // conversation.implicitReplies (#2576) changes the stored setting and
+    // leaves the activity log empty.
+    'conversation.implicitReplies': {
+        actionDescription: 'Implicit Replies',
+    },
     //#endregion
 
     //#region Suggestion Control
