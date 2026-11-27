@@ -318,3 +318,16 @@ failure at grant, push or pull leaves today's cold build; the token is in memory
 - Measure on one large monorepo (section 9): `runtime_image_store_shard_total` (pulled over all outcomes is the hit rate),
   `runtime_image_store_shard_time` (kind pull against build), `runtime_claim_boot_phase{phase=build, consumer=suite}`, and the machine minutes per claim.
 
+
+## 13. First deploy on the dev boat pool (27/11)
+
+- Machine: boat sandbox `kodus-image-store-dev`, `default` type, no auto-stop, `registry:2` (2.8.3) on its disk, port 5000 hosted by boat
+  as a public HTTPS URL. The TLS certificate is boat's edge (a public root), so section 11 step 5 holds with no CA in the cell; the registry
+  itself speaks HTTP behind the edge. Auth is the hub token only: no token is a 401.
+- The libtrust key id the hub computes is accepted by a real registry (section 12's unverified item is closed): push of config, layer and
+  manifest, then pull by digest with a second token, byte for byte.
+- Refused with 401: a shard pushing, a PR claim writing `main`, another org's token reading or writing this org's repository, no token,
+  and a token signed by another key.
+- Not usable yet: the remote build cache. The cell's `-gvisor-build-cache-remote` sends basic auth from an auth file, which a token-auth
+  registry refuses (section 12 step 3 is the fix). The flag also lives in the cell's own config, which a boat host takes from its cell base
+  snapshot, not from the pool file, so turning it on means a new base.
