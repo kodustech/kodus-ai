@@ -124,16 +124,16 @@ export function blockerGroups(
         const at = r.bootFailure!.at;
         add(deniedHostsBlockerInput(hosts, at), at, r.prNumber);
     }
-    // A blocker is fixed once something that boots the environment succeeded after its last sighting: the latest setup that
-    // finished active (it boots the default branch with the recipe as it is now), or, for a blocker of one pull request, a
-    // later Run of that same pull request that booted. A security_violation is never cleared by a success: it is a verdict
+    // A blocker is fixed once something that boots the environment succeeded after its last sighting. One seen by a setup (or on
+    // main) is cleared by the latest setup that finished active. One seen on a pull request's Run (lastPr) is cleared only by a later
+    // Run of that same pull request that booted: a setup of main says nothing about the pull request's own code. A security_violation is never cleared by a success: it is a verdict
     // about code, not about the environment's boot. Decided from the records the view already reads.
     const setupOkAt = setup?.state === 'active' ? setup.finishedAt : undefined;
     const before = (a: string | undefined, b: string | undefined) => !!a && !!b && Date.parse(a) < Date.parse(b);
     for (const g of groups.values()) {
         if (g.kind === 'security_violation' || !g.lastAt) continue;
         const sameRunBootedAt = g.lastPr === undefined ? undefined : runs.filter((x) => x.prNumber === g.lastPr && BOOTED_STATES.has(x.state) && before(g.lastAt, x.requestedAt)).map((x) => x.requestedAt!).sort().at(-1);
-        const clearedAt = [before(g.lastAt, setupOkAt) ? setupOkAt : undefined, sameRunBootedAt].filter((x): x is string => !!x).sort().at(-1);
+        const clearedAt = [g.lastPr === undefined && before(g.lastAt, setupOkAt) ? setupOkAt : undefined, sameRunBootedAt].filter((x): x is string => !!x).sort().at(-1);
         if (clearedAt) {
             g.state = 'fixed';
             g.resolvedAt = clearedAt;

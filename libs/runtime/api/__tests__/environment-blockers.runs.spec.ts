@@ -73,13 +73,13 @@ describe('a blocker that a later success cleared', () => {
 
     // Behavior: the environment's latest setup finished active after the blocker was last seen, so the blocker is reported fixed, with the moment.
     it('is fixed when the latest setup finished active after its last sighting', () => {
-        const [g] = blockerGroups(setup({}), [timedOut]);
+        const [g] = blockerGroups(setup({ blockers: [{ kind: 'resources', signature: 'boot_timeout', message: 'm', at: '2026-11-17T00:10:00.000Z' }] }), []);
         expect(g).toMatchObject({ signature: 'boot_timeout', state: 'fixed', resolvedAt: '2026-11-17T06:00:00.000Z' });
     });
 
     // Behavior: a setup that did not succeed clears nothing.
     it('stays open when the latest setup did not finish active', () => {
-        const [g] = blockerGroups(setup({ state: 'blocked' }), [timedOut]);
+        const [g] = blockerGroups(setup({ state: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: 'm', at: '2026-11-17T00:10:00.000Z' }] }), []);
         expect(g.state).toBe('open');
     });
 
@@ -97,10 +97,18 @@ describe('a blocker that a later success cleared', () => {
         expect(blockerGroups(null, [timedOut, other])[0].state).toBe('open');
     });
 
+    // Behavior: a failure seen on a pull request's Run stays open after main's setup succeeds.
+    it('keeps a pull request failure open when only main\'s setup succeeded', () => {
+        const npm = run({ runId: 'p', prNumber: 9, reason: 'npm ci: ENOTFOUND registry', requestedAt: '2026-11-17T00:00:00.000Z', finishedAt: '2026-11-17T00:10:00.000Z' });
+        const [g] = blockerGroups(setup({}), [npm]);
+        expect(g).toMatchObject({ signature: 'npm ci: ENOTFOUND registry', state: 'open' });
+        expect(g.resolvedAt).toBeUndefined();
+    });
+
     // Behavior: the open blockers come before the fixed ones, whatever their counts.
     it('lists the open blockers before the fixed ones', () => {
         const newer = run({ runId: 'n', prNumber: 8, reason: 'missing_env:API_KEY', requestedAt: '2026-11-17T07:00:00.000Z', finishedAt: '2026-11-17T07:10:00.000Z' });
-        const groups = blockerGroups(setup({}), [timedOut, { ...timedOut, runId: 'a2' }, newer]);
+        const groups = blockerGroups(setup({ blockers: [{ kind: 'resources', signature: 'boot_timeout', message: 'm', at: '2026-11-17T00:10:00.000Z' }, { kind: 'resources', signature: 'boot_timeout', message: 'm', at: '2026-11-17T00:20:00.000Z' }] }), [newer]);
         expect(groups.map((g) => [g.signature, g.state])).toEqual([['API_KEY', 'open'], ['boot_timeout', 'fixed']]);
     });
 });
