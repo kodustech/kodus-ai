@@ -310,6 +310,9 @@ export interface ISuggestionByPR {
     /** The changed file a finding named without a line (#2420): it is posted
      *  at PR level, and this keeps where it pointed. Absent when it named none. */
     relevantFile?: string;
+    /** The finding's claim before formatting; what the repeat check of the
+     *  next round compares (#2420). */
+    repeatClaim?: string;
     suggestionContent: string;
     fullExplanation?: string;
     oneSentenceSummary: string;

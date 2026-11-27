@@ -2405,6 +2405,9 @@ export class SuggestionService implements ISuggestionService {
                         ...(suggestion.relevantFile && {
                             relevantFile: suggestion.relevantFile,
                         }),
+                        ...(suggestion.repeatClaim && {
+                            repeatClaim: suggestion.repeatClaim,
+                        }),
                         suggestionContent: suggestion.suggestionContent,
                         fullExplanation: suggestion.fullExplanation,
                         oneSentenceSummary: suggestion.oneSentenceSummary,

@@ -366,19 +366,14 @@ function plausibleRepeat(
         // and stored that way, without lines (#2420). File and rule do not
         // pin the occurrence (a prefix and a suffix violation share both), so
         // as for PR-level history only the same claim is held without a verdict.
-        // The stored text opens with the file citation the PR-level comment
-        // needed (agent-review.stage.ts `cite`); the claim is what follows it.
+        // The posted text is rewritten by the formatter, cited and linked, so
+        // the record keeps the claim as this check saw it.
         const claim = finding.suggestionContent?.trim();
-        const cited = `\`${earlier.relevantFile}\` — `;
-        const earlierClaim = earlier.suggestionContent?.trim() ?? '';
         return (
             isRule(finding) &&
             sharesRule(finding, earlier) &&
             !!claim &&
-            claim ===
-                (earlierClaim.startsWith(cited)
-                    ? earlierClaim.slice(cited.length).trim()
-                    : earlierClaim)
+            claim === earlier.claim?.trim()
         );
     }
     return (

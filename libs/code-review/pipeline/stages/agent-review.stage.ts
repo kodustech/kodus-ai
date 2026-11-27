@@ -1780,6 +1780,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 telemetryMeta,
             );
             let severityNormalized = repeatCheck.kept;
+            for (const s of severityNormalized) {
+                if (
+                    s.label === 'kody_rules' &&
+                    s.relevantFile &&
+                    !s.relevantLinesStart &&
+                    s.suggestionContent
+                ) {
+                    s.repeatClaim = s.suggestionContent;
+                }
+            }
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -2512,6 +2522,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         // repeat check of the next round compares a finding
                         // with the comments on the same file (#2420).
                         ...(s.relevantFile && { relevantFile: s.relevantFile }),
+                        ...(s.repeatClaim && { repeatClaim: s.repeatClaim }),
                         // Any finding that named a file has to say WHERE,
                         // since a PR-level comment carries no anchor of
                         // its own — true whether it's fileAnchored

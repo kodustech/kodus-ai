@@ -108,6 +108,14 @@ describe('decision records read the full explanation', () => {
             } as any).relevantFile,
         ).toBe('src/CheckinReport.cs');
         expect(
+            toRecordFromPrLevel({
+                id: 'p-5',
+                relevantFile: 'src/CheckinReport.cs',
+                repeatClaim: 'Lacks the prefix.',
+                suggestionContent: '`src/CheckinReport.cs` — Rewritten.',
+            } as any).claim,
+        ).toBe('Lacks the prefix.');
+        expect(
             toRecordFromPrLevel({ id: 'p-4', suggestionContent: 'x' } as any),
         ).not.toHaveProperty('relevantFile');
     });

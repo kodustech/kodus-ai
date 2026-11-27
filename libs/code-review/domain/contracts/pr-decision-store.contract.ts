@@ -41,6 +41,10 @@ export interface PrDecisionRecord {
     readonly relevantLinesStart?: number;
     readonly relevantLinesEnd?: number;
     readonly suggestionContent: string;
+    /** The claim before formatting, for a rule finding posted PR-level with
+     *  a file and no line (#2420): the posted text is rewritten, cited and
+     *  linked, so an identical repost is matched on this instead. */
+    readonly claim?: string;
     /** 'bug' | 'security' | 'performance' | 'kody_rules' | ... — surfaced to the
      *  verifier so a security-labeled prior decision can be weighed differently
      *  than a style one. Always 'kody_rules' for a rule-based finding — does

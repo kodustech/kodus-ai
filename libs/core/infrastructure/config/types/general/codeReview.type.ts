@@ -242,6 +242,13 @@ export type CodeSuggestion = {
      * list, so executeStage renders it after the formatter runs.
      */
     kodyRuleOtherLocations?: string[];
+    /**
+     * The claim of a Kody Rule finding that named a file and no line, as the
+     * repeat check saw it, before the formatter, the file citation and the
+     * rule link rewrite the text (#2420). It is posted PR-level, and the next
+     * round's repeat check compares against this, not the posted comment.
+     */
+    repeatClaim?: string;
     /** Merged finding locations, rendered after the content formatter. */
     alsoFoundIn?: string[];
     /** The custom agent that produced the finding (#2172); drives its tag. */

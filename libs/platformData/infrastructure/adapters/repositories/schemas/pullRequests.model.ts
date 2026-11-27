@@ -191,6 +191,7 @@ export class PullRequestsModel extends CoreDocument {
     public prLevelSuggestions: Array<{
         id: string;
         relevantFile?: string;
+        repeatClaim?: string;
         suggestionContent: string;
         fullExplanation?: string;
         oneSentenceSummary: string;

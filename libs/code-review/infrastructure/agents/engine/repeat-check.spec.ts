@@ -607,9 +607,11 @@ describe('checkRepeats', () => {
             relevantLinesEnd: undefined,
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-d'],
-            // Stored as posted: the PR-level comment cites the file first.
+            // Stored as production writes it: the posted text is formatted,
+            // cited and linked; the claim is kept apart.
             suggestionContent:
-                '`qa2420/CheckinReport.cs` — CheckinReport.cs does not start with the qa2420_ prefix.',
+                '`qa2420/CheckinReport.cs` — The file name lacks the required prefix.\n\nKody rule violation: [File prefix](https://rules/d)',
+            claim: 'CheckinReport.cs does not start with the qa2420_ prefix.',
         });
         const again = {
             label: 'kody_rules',
