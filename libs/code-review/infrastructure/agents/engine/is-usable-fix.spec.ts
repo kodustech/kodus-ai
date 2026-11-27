@@ -1,4 +1,8 @@
-import { checkFix, isUsableFix } from './is-usable-fix';
+import {
+    checkFix,
+    isUsableFix,
+    withoutCommentsOrStrings,
+} from './is-usable-fix';
 
 describe('checkFix', () => {
     describe('no anchor code (PR-level / whole-file findings)', () => {
@@ -383,5 +387,55 @@ describe('checkFix', () => {
             expect(checkFix(existing, bareFix)).toBeNull();
         });
 
+    });
+});
+
+describe('withoutCommentsOrStrings', () => {
+    const names = (code: string, language?: string) =>
+        withoutCommentsOrStrings(code, language).match(/[A-Za-z_]\w*/g) ?? [];
+
+    it('opens no string at a quote inside a comment', () => {
+        const code = [
+            "// don't retry here",
+            'const attempts = maxAttempts;',
+            "log('done');",
+        ].join('\n');
+        expect(names(code)).toEqual([
+            'const',
+            'attempts',
+            'maxAttempts',
+            'log',
+        ]);
+    });
+
+    it('opens no comment inside a string, and follows an escaped newline', () => {
+        const code = [
+            "const url = 'https://host/#anchor';",
+            "const msg = 'first line \\",
+            "still the string';",
+            'send(msg);',
+        ].join('\n');
+        expect(names(code)).toEqual([
+            'const',
+            'url',
+            'const',
+            'msg',
+            'send',
+            'msg',
+        ]);
+    });
+
+    it('ends an unclosed quote at its line', () => {
+        expect(names("const it's = 1;\nnext();")).toEqual([
+            'const',
+            'it',
+            'next',
+        ]);
+    });
+
+    it('reads a Rust lifetime as code and a char literal as a string', () => {
+        expect(
+            names("fn head<'a>(xs: &'a [u8]) -> char { 'x' }", 'rust'),
+        ).toEqual(['fn', 'head', 'a', 'xs', 'a', 'u8', 'char']);
     });
 });
