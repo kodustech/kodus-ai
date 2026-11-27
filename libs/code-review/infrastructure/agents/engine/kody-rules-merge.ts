@@ -52,24 +52,36 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
         (b.suggestionContent?.length || 0) - (a.suggestionContent?.length || 0);
 
     for (const [ruleUuid, group] of groupsByRuleUuid) {
-        // A finding without a file, or with a file but no line, names no
-        // location to list and is posted PR-level (#2420).
+        // Only a finding posted inline has a location to list. One without a
+        // file, without a line (#2420), or file-anchored outside the diff is
+        // posted PR-level, so it is never folded into an inline one's "Also
+        // found in" nor absorbs one.
         const lined = group.filter(
-            (s) => !!s.relevantFile && !!s.relevantLinesStart,
+            (s) =>
+                !!s.relevantFile && !!s.relevantLinesStart && !s.fileAnchored,
         );
-        const lineLess = group.filter((s) => !lined.includes(s));
-
-        if (lineLess.length > 1) {
-            onMerge?.({
-                ruleUuid,
-                scope: 'pr',
-                collapsed: lineLess.length,
-                otherLocations: 0,
-            });
+        // PR-level findings collapse per file: a file-name rule broken by
+        // two files is two violations, each kept on its own record.
+        const prLevelByFile = new Map<string, T[]>();
+        for (const s of group) {
+            if (lined.includes(s)) continue;
+            const key = s.relevantFile ?? '';
+            prLevelByFile.set(key, [...(prLevelByFile.get(key) ?? []), s]);
         }
+        const prLevel = [...prLevelByFile.values()].map((same) => {
+            if (same.length > 1) {
+                onMerge?.({
+                    ruleUuid,
+                    scope: 'pr',
+                    collapsed: same.length,
+                    otherLocations: 0,
+                });
+            }
+            return [...same].sort(byDetail)[0];
+        });
+
         if (lined.length <= 1) {
-            result.push(...lined);
-            if (lineLess.length) result.push([...lineLess].sort(byDetail)[0]);
+            result.push(...lined, ...prLevel);
             continue;
         }
 
@@ -101,8 +113,7 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
             collapsed: lined.length,
             otherLocations: otherLocations.length,
         });
-        result.push(keep);
-        if (lineLess.length) result.push([...lineLess].sort(byDetail)[0]);
+        result.push(keep, ...prLevel);
     }
 
     return result;

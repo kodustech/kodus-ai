@@ -614,17 +614,22 @@ describe('checkRepeats', () => {
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-d'],
             relevantFile: 'qa2420/CheckinReport.cs',
+            suggestionContent: old.suggestionContent,
+        };
+        // Same rule and file, a different violation: no verdict, so posted.
+        const suffix = {
+            ...again,
             suggestionContent:
-                'CheckinReport.cs does not start with the required qa2420_ prefix.',
+                'CheckinReport.cs does not end with the _report suffix.',
         };
         runSpy.mockRejectedValue(new Error('provider 500'));
 
-        const result = await checkRepeats([again], [old], {
+        const result = await checkRepeats([again, suffix], [old], {
             organizationId: 'org-1',
             byokConfig: slot,
         });
 
-        expect(result.kept).toEqual([]);
+        expect(result.kept).toEqual([suffix]);
         expect(result.withheld).toEqual([again]);
     });
 

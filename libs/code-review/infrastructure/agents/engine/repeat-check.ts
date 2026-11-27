@@ -363,12 +363,15 @@ function plausibleRepeat(
     const oldStart = earlier.relevantLinesStart;
     if (!start && !oldStart) {
         // A rule finding that names the file and no line is posted PR-level
-        // and stored that way, without lines (#2420). Without lines the file
-        // and the rule are the place, and the text says it is the same claim.
+        // and stored that way, without lines (#2420). File and rule do not
+        // pin the occurrence (a prefix and a suffix violation share both), so
+        // as for PR-level history only the same claim is held without a verdict.
+        const claim = finding.suggestionContent?.trim();
         return (
             isRule(finding) &&
             sharesRule(finding, earlier) &&
-            contentSimilarity(finding, earlier) >= 0.4
+            !!claim &&
+            claim === earlier.suggestionContent?.trim()
         );
     }
     return (

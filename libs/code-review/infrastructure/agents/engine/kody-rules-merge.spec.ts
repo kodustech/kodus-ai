@@ -124,11 +124,13 @@ describe('mergeKodyRuleFindings', () => {
             (merge) => merges.push(merge),
         );
 
-        expect(out).toHaveLength(2);
+        expect(out).toHaveLength(3);
         expect(out[0].kodyRuleOtherLocations).toEqual(['c.ts:5-6']);
-        expect(out[1].suggestionContent).toBe('lines but no file');
+        expect(out.slice(1).map((s) => s.suggestionContent)).toEqual([
+            'no line cited',
+            'lines but no file',
+        ]);
         expect(merges).toEqual([
-            expect.objectContaining({ scope: 'pr', collapsed: 2 }),
             expect.objectContaining({ scope: 'file', otherLocations: 1 }),
         ]);
     });
@@ -163,5 +165,44 @@ describe('mergeKodyRuleFindings', () => {
         ]);
         expect(out[1].relevantLinesStart).toBeUndefined();
         expect(out[1].kodyRuleOtherLocations).toBeUndefined();
+    });
+
+    // Kody review on #2751: a file-name rule broken by two files is two
+    // violations, and a file-anchored finding is posted PR-level, so neither
+    // may be folded into one record.
+    it('keeps one PR-level finding per file and never folds a file-anchored one inline', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'a.cs',
+                relevantLinesStart: 4,
+                suggestionContent: 'inline',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.cs',
+                relevantLinesStart: 90,
+                fileAnchored: true,
+                suggestionContent: 'outside the diff, the longest text of all',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'c.cs',
+                suggestionContent: 'c.cs lacks the prefix',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'd.cs',
+                suggestionContent: 'd.cs lacks the prefix',
+            },
+        ]);
+
+        expect(out.map((s) => s.relevantFile)).toEqual([
+            'a.cs',
+            'b.cs',
+            'c.cs',
+            'd.cs',
+        ]);
+        expect(out[0].kodyRuleOtherLocations).toBeUndefined();
     });
 });
