@@ -2,6 +2,8 @@ import {
     reviewModeOfExecution,
     agentReviewMode,
     isHeavyReview,
+    isUltraReview,
+    lastReviewModeOf,
     resolveRiskReviewMode,
 } from './review-mode';
 import type { RiskAssessmentResult } from './risk/risk-assessment';
@@ -150,5 +152,63 @@ describe('reviewModeOfExecution', () => {
             reviewModeOfExecution({ lastAnalyzedCommit: {} }),
         ).toBeUndefined();
         expect(reviewModeOfExecution(undefined)).toBeUndefined();
+    });
+});
+
+describe('ultra mode', () => {
+    it("routes risk to Ultra when the team set it, the gate being the caller's", () => {
+        const routing = { noRisk: 'heavy', riskFound: 'ultra' } as const;
+        const snapshot = {
+            organizationId: 'org',
+            repositoryId: 'repo',
+            prNumber: 5,
+            baseSha: 'base',
+            headSha: 'head',
+            assessmentKey: 'key',
+        };
+        expect(
+            resolveRiskReviewMode({
+                currentHeadSha: 'head',
+                heavyAllowed: false,
+                routing,
+                risk: {
+                    status: 'assessed',
+                    riskIdentified: true,
+                    reason: 'Evidence.',
+                    snapshot,
+                },
+            }),
+        ).toBe('ultra');
+    });
+
+    it('is asked by the command over settings, never on a fast review', () => {
+        expect(isUltraReview('ultra', 'balanced')).toBe(true);
+        expect(isUltraReview(undefined, 'ultra')).toBe(true);
+        expect(isUltraReview('heavy', 'ultra')).toBe(false);
+        expect(isUltraReview(undefined, 'fast')).toBe(false);
+    });
+
+    it('is not a heavy review: its runs route their own models', () => {
+        expect(isHeavyReview('ultra', 'balanced')).toBe(false);
+        expect(isHeavyReview(undefined, 'ultra')).toBe(false);
+    });
+
+    it('reads an Ultra execution as ultra on the Pull Requests screen', () => {
+        expect(
+            reviewModeOfExecution({
+                lastAnalyzedCommit: { sha: 'abc' },
+                reviewMode: 'ultra',
+            }),
+        ).toBe('ultra');
+    });
+});
+
+describe('lastReviewModeOf', () => {
+    it('reads the stored mode, then the heavy flag, then balanced', () => {
+        expect(lastReviewModeOf({ reviewMode: 'ultra' })).toBe('ultra');
+        expect(lastReviewModeOf({ reviewMode: 'heavy' })).toBe('heavy');
+        expect(lastReviewModeOf({ heavy: true })).toBe('heavy');
+        expect(lastReviewModeOf({})).toBe('balanced');
+        expect(lastReviewModeOf(undefined)).toBe('balanced');
     });
 });

@@ -25,6 +25,7 @@ import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
+    assertValidPrKey,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -52,9 +53,10 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         findExpired: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
         retire: jest.fn().mockResolvedValue(undefined),
-        setKillAt: jest.fn().mockResolvedValue(undefined),
+        setKillAt: jest.fn().mockResolvedValue(true),
         clearKillAt: jest.fn().mockResolvedValue(undefined),
         findReadyToKill: jest.fn().mockResolvedValue([]),
+        detachIdle: jest.fn(async (id: string) => id),
         claimCleanup: jest.fn().mockResolvedValue(null),
         completeCleanup: jest.fn().mockResolvedValue(true),
         failCleanup: jest.fn().mockResolvedValue(true),
@@ -1803,6 +1805,15 @@ describe('SandboxLeaseManager', () => {
     describe('sandbox usage', () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
 
+        // A release waits for the holder's commands to stay quiet for 1s
+        beforeEach(() => {
+            jest.useFakeTimers({
+                doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'],
+            });
+        });
+        afterEach(() => jest.useRealTimers());
+        const goQuiet = () => jest.advanceTimersByTimeAsync(1_000);
+
         const acquireCreated = async () => {
             leaseRepo.upsertAcquire.mockResolvedValue({
                 _id: prKey,
@@ -1859,6 +1870,7 @@ describe('SandboxLeaseManager', () => {
             expect(firstUsedAt).toBeInstanceOf(Date);
             expect(sandbox.usage?.().firstUsedAt).toBe(firstUsedAt);
             expect(lastUsedAt).toBeInstanceOf(Date);
+            await goQuiet();
 
             releasedWith(0);
             await manager.release(leaseId, { idleMs: 30_000 });
@@ -1903,7 +1915,16 @@ describe('SandboxLeaseManager', () => {
             );
         });
 
-        it('a command still running at the release does not stamp after it', async () => {
+        const settle = async () => {
+            for (let i = 0; i < 5; i++) {
+                await new Promise((r) => setImmediate(r));
+            }
+        };
+
+        // An orchestrator that times out returns with an agent command still
+        // running: the checkout must outlive it, and the caller (the
+        // pipeline's end) must not wait for it (#2628)
+        it('gives the sandbox back only once a command still running settles, without making the caller wait', async () => {
             const { sandbox, leaseId } = await acquireCreated();
             const provided = await (sandboxProvider.createSandboxWithRepo.mock
                 .results[0].value as Promise<SandboxInstance>);
@@ -1915,11 +1936,240 @@ describe('SandboxLeaseManager', () => {
             const reading = sandbox.readFile('src/a.ts');
             releasedWith(0);
             await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().releasedAt).toBeInstanceOf(Date);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+            expect((manager as any).prKeySlots.has(prKey)).toBe(true);
+
             finish('content');
             await reading;
+            await settle();
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
 
+            await goQuiet();
+
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+            expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
+            expect((manager as any).prKeySlots.has(prKey)).toBe(false);
             expect(sandbox.usage?.().firstUsedAt).toBeInstanceOf(Date);
             expect(sandbox.usage?.().lastUsedAt).toBeUndefined();
+        });
+
+        it('waits for a command started after the release too', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let first!: () => void;
+            let second!: () => void;
+            (provided.run as jest.Mock)
+                .mockReturnValueOnce(new Promise<any>((r) => (first = r)))
+                .mockReturnValueOnce(new Promise<any>((r) => (second = r)));
+
+            const a = sandbox.run('sleep 8; cat a.ts');
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            const b = sandbox.run('cat b.ts');
+
+            first();
+            await a;
+            await settle();
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            second();
+            await b;
+            await goQuiet();
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        it('a second release of the same lease decrements nothing', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finish!: () => void;
+            (provided.run as jest.Mock).mockReturnValueOnce(
+                new Promise<any>((r) => (finish = r)),
+            );
+            const running = sandbox.run('sleep 8');
+
+            releasedWith(0);
+            await Promise.all([
+                manager.release(leaseId, { idleMs: 30_000 }),
+                manager.release(leaseId, { idleMs: 30_000 }),
+            ]);
+            finish();
+            await running;
+            await goQuiet();
+
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        it('gives the sandbox back after the cap when a command never settles', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            (provided.run as jest.Mock).mockReturnValueOnce(
+                new Promise(() => {}),
+            );
+            void sandbox.run('hangs');
+            const warn = (manager as any).logger.warn as jest.Mock;
+
+            jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+            try {
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+                await settle();
+                expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+                jest.advanceTimersByTime(6 * 60 * 1000);
+                await settle();
+            } finally {
+                jest.useRealTimers();
+            }
+
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+            const gaveUp = warn.mock.calls.filter(
+                ([entry]) =>
+                    entry.message ===
+                    `SandboxLeaseManager: release gave up waiting for the holder's running commands leaseId="${leaseId}" prKey="${prKey}"`,
+            );
+            expect(gaveUp).toHaveLength(1);
+            expect(gaveUp[0][0].metadata).toEqual({
+                leaseId,
+                prKey,
+                running: 1,
+                stillRunning: 1,
+                waitedMs: 6 * 60 * 1000,
+            });
+        });
+
+        it('releases at once when the holder has been quiet', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await sandbox.run('git status');
+            await goQuiet();
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        // A tool can run two commands back to back (an outline-first read
+        // reads the file, then reads it again): a running count of 0 between
+        // them is not the holder being done (#2628)
+        it('keeps the sandbox through a tool that runs two commands back to back', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finishFirst!: (content: string) => void;
+            let finishSecond!: (content: string) => void;
+            (provided.readFile as jest.Mock)
+                .mockReturnValueOnce(
+                    new Promise<string>((resolve) => (finishFirst = resolve)),
+                )
+                .mockReturnValueOnce(
+                    new Promise<string>((resolve) => (finishSecond = resolve)),
+                );
+
+            const tool = (async () => {
+                await sandbox.readFile('a.ts');
+                return sandbox.readFile('a.ts');
+            })();
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            finishFirst('first');
+            await settle();
+            // The second read runs 800ms: past where the first one's quiet
+            // window would have ended
+            await jest.advanceTimersByTimeAsync(800);
+            finishSecond('again');
+            await expect(tool).resolves.toBe('again');
+
+            await jest.advanceTimersByTimeAsync(999);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        // A process that exits right after a release (a security-scan slice
+        // child closes Nest, then exits) must still decrement the lease
+        describe('at shutdown', () => {
+            it('finishes a release still in its quiet window before Mongo closes', async () => {
+                const { sandbox, leaseId } = await acquireCreated();
+                await sandbox.run('git log -1');
+
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+                expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+                await manager.beforeApplicationShutdown();
+
+                expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+                expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
+            });
+
+            it('stops waiting for a command that is still running', async () => {
+                const { sandbox, leaseId } = await acquireCreated();
+                const provided = await (sandboxProvider.createSandboxWithRepo
+                    .mock.results[0].value as Promise<SandboxInstance>);
+                (provided.run as jest.Mock).mockReturnValueOnce(
+                    new Promise(() => {}),
+                );
+                void sandbox.run('hangs');
+
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+                await manager.beforeApplicationShutdown();
+
+                expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+                const warn = (manager as any).logger.warn as jest.Mock;
+                expect(
+                    warn.mock.calls.filter(
+                        ([entry]) =>
+                            entry.message ===
+                            `SandboxLeaseManager: release stopped waiting for the holder's running commands at shutdown leaseId="${leaseId}" prKey="${prKey}"`,
+                    ),
+                ).toHaveLength(1);
+            });
+
+            it('gives back at once a release that arrives during shutdown', async () => {
+                const { sandbox, leaseId } = await acquireCreated();
+                await sandbox.run('git log -1');
+                await manager.beforeApplicationShutdown();
+
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+
+                expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+            });
+        });
+
+        it('decrements only the lease on the sandbox it was given', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await goQuiet();
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(
+                prKey,
+                sandbox.sandboxId,
+            );
+        });
+
+        // The lease was retired and a new one created for the prKey (a
+        // joiner whose connect failed cold-created it): this release must
+        // leave the new holder's lease alone (#2628)
+        it('schedules nothing when its lease was replaced', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await goQuiet();
+            leaseRepo.decrementLease.mockResolvedValueOnce(null);
+
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
+            expect(sandbox.usage?.().stopAt).toBeUndefined();
         });
 
         it('stamps a command that fails too', async () => {
@@ -1951,6 +2201,72 @@ describe('SandboxLeaseManager', () => {
                 { apiKey: 'test-e2b-key' },
             );
             expect(leaseRepo.setKillAt).toHaveBeenCalled();
+        });
+
+        // A holder that joins between the decrement and killAt keeps the
+        // sandbox: no kill, no E2B timeout (#2628)
+        it('schedules nothing when a holder joined before killAt was written', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const setTimeoutSpy = jest
+                .spyOn(Sandbox, 'setTimeout')
+                .mockResolvedValue(undefined as any);
+            leaseRepo.setKillAt.mockResolvedValueOnce(false);
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            await new Promise((r) => setImmediate(r));
+
+            expect(sandbox.usage?.().stopAt).toBeUndefined();
+            expect(setTimeoutSpy).not.toHaveBeenCalled();
+        });
+
+        it('gives a sandbox held again its time back when the idle timeout landed after the joiner', async () => {
+            const { leaseId } = await acquireCreated();
+            const setTimeoutSpy = jest
+                .spyOn(Sandbox, 'setTimeout')
+                .mockResolvedValue(undefined as any);
+            const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: 'review-sandbox-id',
+                expiresAt,
+            } as any);
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            await new Promise((r) => setImmediate(r));
+            await new Promise((r) => setImmediate(r));
+
+            expect(setTimeoutSpy).toHaveBeenCalledTimes(2);
+            expect(setTimeoutSpy.mock.calls[0][1]).toBe(30_000);
+            const restored = setTimeoutSpy.mock.calls[1][1];
+            expect(restored).toBeGreaterThan(19 * 60 * 1000);
+            expect(restored).toBeLessThanOrEqual(20 * 60 * 1000);
+        });
+
+        it('leaves the idle timeout when nobody joined', async () => {
+            const { leaseId } = await acquireCreated();
+            const setTimeoutSpy = jest
+                .spyOn(Sandbox, 'setTimeout')
+                .mockResolvedValue(undefined as any);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 0,
+                state: 'READY',
+                sandboxId: 'review-sandbox-id',
+                killAt: new Date(Date.now() + 30_000),
+                expiresAt: new Date(Date.now() + 20 * 60 * 1000),
+            } as any);
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            await new Promise((r) => setImmediate(r));
+            await new Promise((r) => setImmediate(r));
+
+            expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+            expect(setTimeoutSpy.mock.calls[0][1]).toBe(30_000);
         });
 
         it('records no stop when another holder keeps the sandbox', async () => {

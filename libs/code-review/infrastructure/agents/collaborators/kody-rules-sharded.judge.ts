@@ -24,6 +24,12 @@ import { jsonSchema, type Schema } from 'ai';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import {
+    classifyLLMError,
+    type ClassifiedErrorInfo,
+    isTerminalCategory,
+    LlmErrorCategory,
+} from '@libs/llm/error-classifier';
 import { recoverRuleUuid } from './finding-mapper';
 import {
     extensionScopeAppliesToFile,
@@ -381,6 +387,76 @@ export type RunJudge = (args: {
  */
 export const SHARD_CONCURRENCY_DEFAULT = 4;
 
+/** Terminal provider failures in a row, of one kind (see isTerminalCategory), before the rest are skipped. */
+export const TERMINAL_FAILURES_TO_STOP = 2;
+
+/**
+ * Whether a terminal-looking failure is the provider refusing the model, which
+ * every other shard would hit too, rather than something about this request.
+ *
+ * - The provider has to have answered with a status (or the call been refused
+ *   before it was sent, CONFIG_INVALID). A reply that failed the wire schema
+ *   has no status, and its text is the model's own review: a finding about
+ *   `legacyBilling` that "does not exist" read as QUOTA_EXCEEDED and
+ *   MODEL_NOT_FOUND, and stopped a review against a healthy provider.
+ * - A request refused on its content says nothing about the next file.
+ *   OpenRouter answers a moderation flag with a 403 whose error carries
+ *   `metadata.reasons` / `metadata.flagged_input`; read from that structure,
+ *   not from the wording, which a quoted prompt could contain.
+ */
+function isProviderRefusal(info: ClassifiedErrorInfo, err: unknown): boolean {
+    if (info.category === LlmErrorCategory.CONFIG_INVALID) return true;
+    if (info.httpStatus === undefined) return false;
+    return !flaggedByModeration(err);
+}
+
+/**
+ * Whether the error, or any error it wraps (`cause`, a RetryError's
+ * `lastError` and `errors`, an AggregateError's `errors`), carries a
+ * moderation flag. Walks every wrapper once, however deep.
+ */
+function flaggedByModeration(err: unknown): boolean {
+    const seen = new Set<object>();
+    const queue: unknown[] = [err];
+    while (queue.length) {
+        const next = queue.shift();
+        if (!next || typeof next !== 'object' || seen.has(next)) continue;
+        seen.add(next);
+        const e = next as {
+            data?: unknown;
+            responseBody?: unknown;
+            cause?: unknown;
+            lastError?: unknown;
+            errors?: unknown;
+        };
+        for (const body of [e.data, parseJson(e.responseBody)]) {
+            const metadata = (
+                body as { error?: { metadata?: unknown } } | undefined
+            )?.error?.metadata as
+                | { reasons?: unknown; flagged_input?: unknown }
+                | undefined;
+            if (
+                Array.isArray(metadata?.reasons) ||
+                typeof metadata?.flagged_input === 'string'
+            ) {
+                return true;
+            }
+        }
+        queue.push(e.cause, e.lastError);
+        if (Array.isArray(e.errors)) queue.push(...e.errors);
+    }
+    return false;
+}
+
+function parseJson(value: unknown): unknown {
+    if (typeof value !== 'string') return undefined;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return undefined;
+    }
+}
+
 export interface ShardedJudgeInput {
     changedFiles: FileChange[];
     incrementalDiff?: boolean;
@@ -501,6 +577,11 @@ export interface ShardedJudgeResult {
     violations: ShardViolation[];
     shardsRun: number;
     shardsErrored: number;
+    /**
+     * The terminal provider failure (an LlmErrorCategory) after which the
+     * remaining shards were skipped without a call, if that happened.
+     */
+    providerRefusal?: string;
     referenceStats: ShardReferenceStats;
     promptCacheStats: ShardPromptCacheStats;
 }
@@ -1477,6 +1558,56 @@ export async function judgeKodyRulesSharded(
 
     let shardsRun = 0;
     let shardsErrored = 0;
+    // The provider refused the review's model for a reason no retry fixes
+    // (a spent cap, a revoked key, a model it does not serve). Every shard
+    // calls the same model, so the rest would fail the same way: up to
+    // hundreds of calls per review, 14k shard failures in one day (Nov 2026).
+    // After TERMINAL_FAILURES_TO_STOP such failures in a row, of the same
+    // kind, the remaining shards count as failed without a call; the provider
+    // reports the run the way it reports any failed shard. In a row: one
+    // request refused on its content (some gateways answer that with a 403)
+    // must not end a review whose other shards go through.
+    let terminalStreak = 0;
+    let streakCategory: string | undefined;
+    // The streak reached the threshold; confirmed once the shards already
+    // in flight have landed without a success (see awaitRefusalVerdict).
+    let suspectedFor: string | undefined;
+    let stoppedFor: string | undefined;
+    const inFlight = new Set<Promise<unknown>>();
+    const providerAnswered = (): void => {
+        terminalStreak = 0;
+        suspectedFor = undefined;
+    };
+    const stopAfterTerminal = (err: unknown): void => {
+        const info = classifyLLMError(err);
+        if (
+            !isTerminalCategory(info.category) ||
+            !isProviderRefusal(info, err)
+        ) {
+            providerAnswered();
+            return;
+        }
+        if (info.category !== streakCategory) {
+            // A new kind of failure starts its own streak; the suspicion
+            // raised by the old one no longer holds.
+            terminalStreak = 0;
+            suspectedFor = undefined;
+        }
+        terminalStreak++;
+        streakCategory = info.category;
+        if (!stoppedFor && terminalStreak >= TERMINAL_FAILURES_TO_STOP) {
+            suspectedFor = info.category;
+        }
+    };
+    // Shards finish in any order: two refusals can land while a request that
+    // started earlier is still on its way to succeeding. New shards wait for
+    // those to land; a success among them clears the suspicion.
+    const awaitRefusalVerdict = async (): Promise<void> => {
+        if (!suspectedFor || stoppedFor) return;
+        await Promise.allSettled([...inFlight]);
+        // Reported to the caller, which logs it with the review's ids.
+        if (suspectedFor && !stoppedFor) stoppedFor = suspectedFor;
+    };
     const violations: ShardViolation[] = [];
     const referenceStats: ShardReferenceStats = {
         shards: 0,
@@ -1547,12 +1678,18 @@ export async function judgeKodyRulesSharded(
         async (shard, cacheable) => {
             const { file, applicable } = shard;
             shardsRun++;
+            await awaitRefusalVerdict();
+            if (stoppedFor) {
+                shardsErrored++;
+                return [] as ShardViolation[];
+            }
             // Index-aligned with the rules `ruleBlock` presents (a ruleId of N
             // maps to applicable[N-1]); keep '' holes rather than filtering so
             // the indices don't shift.
             const ruleUuids = applicable.map((r) => r.uuid ?? '');
+            let call: Promise<unknown> | undefined;
             try {
-                const vs = await runJudge({
+                const judged = runJudge({
                     system: shard.system,
                     user: shard.user,
                     filename: file.filename,
@@ -1563,8 +1700,14 @@ export async function judgeKodyRulesSharded(
                         ? { cachePrefix: shard.head }
                         : {}),
                 });
+                call = judged;
+                inFlight.add(judged);
+                // Awaited here before anyone else waits on it, so this shard's
+                // outcome is counted before a waiting shard reads the verdict.
+                const vs = await judged;
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
+                providerAnswered();
                 const resolved = resolveShardViolations(vs, ruleUuids);
                 const proposing = resolved.filter(proposesAChange);
                 if (proposing.length < resolved.length) {
@@ -1598,6 +1741,7 @@ export async function judgeKodyRulesSharded(
                 }));
             } catch (err) {
                 shardsErrored++;
+                stopAfterTerminal(err);
                 logger?.warn({
                     message: `[kody-rules-shard] file shard failed for ${file.filename} (${applicable.length} rule(s)) — degrading to zero findings: ${err instanceof Error ? err.message : String(err)}`,
                     // SimpleLogger silently drops entries without a context
@@ -1607,6 +1751,8 @@ export async function judgeKodyRulesSharded(
                     metadata: { filename: file.filename, err },
                 });
                 return [] as ShardViolation[];
+            } finally {
+                if (call) inFlight.delete(call);
             }
         },
     );
@@ -1623,7 +1769,12 @@ export async function judgeKodyRulesSharded(
     };
 
     // ── PR-scope shard: one call over the whole PR ──────────────────────────
-    if (prRules.length > 0) {
+    // The last file shards may have been the refused ones.
+    await awaitRefusalVerdict();
+    if (prRules.length > 0 && stoppedFor) {
+        shardsRun++;
+        shardsErrored++;
+    } else if (prRules.length > 0) {
         shardsRun++;
         const ruleUuids = prRules.map((r) => r.uuid ?? '');
         const referenceSection = referenceSectionFor(prRules);
@@ -1669,5 +1820,6 @@ export async function judgeKodyRulesSharded(
         shardsErrored,
         referenceStats,
         promptCacheStats,
+        ...(stoppedFor ? { providerRefusal: stoppedFor } : {}),
     };
 }

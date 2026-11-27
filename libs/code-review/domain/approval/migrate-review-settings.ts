@@ -10,6 +10,7 @@ import {
     riskReviewRoutingSchema,
     type RiskCriterion,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import { routesForLegacyMode } from '../review-mode';
 
 type Settings = Pick<
     CodeReviewConfig,
@@ -143,8 +144,7 @@ export function resolveReviewSettings(
         riskCriteria: criteria,
         approvalPolicies: policies,
         riskReviewRouting: {
-            noRisk: legacyRoutingMode === 'heavy' ? 'heavy' : 'balanced',
-            riskFound: 'heavy',
+            ...routesForLegacyMode(legacyRoutingMode),
             ...saved.riskReviewRouting,
         },
     };

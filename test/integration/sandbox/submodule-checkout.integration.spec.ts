@@ -12,6 +12,21 @@ import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/loca
 import { buildAgentTools } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import { UNINITIALIZED_SUBMODULE_MARKER } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 
+// The servers this suite starts on loopback are its own: allowed the way an
+// operator allows its private hosts (API_ALLOWED_PRIVATE_HOSTS,
+// libs/llm/gateway-address-guard.ts), which cloud mode otherwise refuses.
+const savedAllowedPrivateHosts = process.env.API_ALLOWED_PRIVATE_HOSTS;
+beforeAll(() => {
+    process.env.API_ALLOWED_PRIVATE_HOSTS = '127.0.0.1,localhost';
+});
+afterAll(() => {
+    if (savedAllowedPrivateHosts === undefined) {
+        delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+    } else {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = savedAllowedPrivateHosts;
+    }
+});
+
 const execFileAsync = promisify(execFile);
 
 /**

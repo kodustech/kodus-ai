@@ -345,6 +345,7 @@ kodus config remote keys                                # Every setting you can 
 kodus config remote set . suggestionControl.severityLevelFilter high
 kodus config remote set global runOnDraft true
 kodus config remote unset . runOnDraft                  # Inherit from the level above again
+kodus config remote risk-rules .                        # Risk rules in effect, with their ids
 kodus config remote add-ignore-file . "**/*.generated.ts"
 kodus config remote add-base-branch . "release/*"
 kodus config remote add-ignore-title . "WIP"

@@ -16,6 +16,21 @@ import {
     driveCurrentStage,
 } from './drive-current-stage';
 
+// The servers this suite starts on loopback are its own: allowed the way an
+// operator allows its private hosts (API_ALLOWED_PRIVATE_HOSTS,
+// libs/llm/gateway-address-guard.ts), which cloud mode otherwise refuses.
+const savedAllowedPrivateHosts = process.env.API_ALLOWED_PRIVATE_HOSTS;
+beforeAll(() => {
+    process.env.API_ALLOWED_PRIVATE_HOSTS = '127.0.0.1,localhost';
+});
+afterAll(() => {
+    if (savedAllowedPrivateHosts === undefined) {
+        delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+    } else {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = savedAllowedPrivateHosts;
+    }
+});
+
 jest.setTimeout(60_000);
 
 // A tracker waits RETRY_DELAY_MS (1s, trackers/tracker.ts) before its second

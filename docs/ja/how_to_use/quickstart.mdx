@@ -38,7 +38,7 @@ description: "Kody に Pull Request をレビューさせるまで：アカウ�
     自社ネットワーク内のサーバー（GitHub Enterprise Server（Beta）、セルフマネージドの GitLab、Bitbucket Data Center、Forgejo）は、トークンとその URL で接続します。入力場所はトークンガイドに記載されています。
 
     <Note>
-      Kodus Cloud を自社ネットワーク内のサーバーに接続しますか？先に、ファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。
+      Kodus Cloud を自社ネットワーク内のサーバーに接続しますか？先に、ファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。Teams と Enterprise では、**Organization > General** で **Fixed outbound IP** もオンにすると、Kody はその IP からコードをクローンします。その他のプランでは Kody は共有ネットワークからクローンするため、許可リストの IP しか受け付けないサーバーは接続を拒否します。
     </Note>
   </Step>
 

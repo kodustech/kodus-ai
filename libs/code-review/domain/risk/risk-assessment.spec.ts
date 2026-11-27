@@ -83,6 +83,21 @@ describe('shared PR risk contract', () => {
         expect(riskApprovalVeto(true, risk, current)).toBeDefined();
     });
 
+    it('says why an unavailable assessment holds approval', () => {
+        expect(
+            riskApprovalVeto(
+                true,
+                {
+                    status: 'unavailable',
+                    reason: 'Kody could not read the diff of src/a.ts: the Git provider did not return it.',
+                },
+                current,
+            ),
+        ).toBe(
+            'Risk assessment is unavailable: Kody could not read the diff of src/a.ts: the Git provider did not return it.',
+        );
+    });
+
     it('requires verified no-risk on the reviewed head for approval', () => {
         expect(
             riskApprovalVeto(true, assessed(false), current),
@@ -173,4 +188,31 @@ describe('shared PR risk contract', () => {
             );
         },
     );
+});
+
+describe('the hold names the rules that matched', () => {
+    const withRules = (rules: Array<{ id: string; name: string }>) => ({
+        ...assessed(true),
+        rules,
+    });
+
+    it.each([
+        [
+            [{ id: 'kodus-money', name: 'Money, billing and licensing' }],
+            'Risk rule: `Money, billing and licensing`.',
+        ],
+        [
+            [
+                { id: 'kodus-data', name: 'Stored data and migrations' },
+                {
+                    id: 'fiscal',
+                    name: 'Fiscal `XML` @team\nhttps://x.example #12',
+                },
+            ],
+            'Risk rules: `Stored data and migrations`, `Fiscal XML @team https://x.example #12`.',
+        ],
+        [[], 'Risk was identified in this PR.'],
+    ])('for %j', (rules, reason) => {
+        expect(riskApprovalVeto(true, withRules(rules), current)).toBe(reason);
+    });
 });

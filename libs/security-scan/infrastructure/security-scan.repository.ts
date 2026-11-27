@@ -11,6 +11,9 @@ import {
 } from '../domain/security-scan.types';
 
 import { SecurityScanModel } from './security-scan.model';
+import { SecurityScanCoverageModel } from './security-scan-coverage.model';
+import type { CoverageEntry } from '../domain/coverage-ledger';
+import type { VulnClass } from '../domain/surface/surface.types';
 
 export const SECURITY_SCAN_REPOSITORY_TOKEN = Symbol.for(
     'SecurityScanRepository',
@@ -83,12 +86,30 @@ export interface ISecurityScanRepository {
         organizationId: string,
         repository: ScanRepositoryKey,
     ): Promise<SecurityScanRecord | null>;
+    /** How many scans of the organization are queued or running. */
+    countActive(organizationId: string): Promise<number>;
+    /** The organization's oldest queued or running scans, at most `limit`. */
+    findOldestActiveIds(
+        organizationId: string,
+        limit: number,
+    ): Promise<string[]>;
     /**
      * Marks as failed the organization's scans nothing has touched for their
      * state's window: the worker running them stopped, or the job waiting for
      * one was lost. Returns how many.
      */
     failStale(organizationId: string, after: StaleScanWindows): Promise<number>;
+    /** What earlier scans concluded about the repository, per file and class. */
+    findCoverage(
+        organizationId: string,
+        repository: ScanRepositoryKey,
+    ): Promise<CoverageEntry[]>;
+    /** Records the conclusions a scan reached, each replacing the one before. */
+    recordCoverage(
+        organizationId: string,
+        repository: ScanRepositoryKey,
+        entries: CoverageEntry[],
+    ): Promise<void>;
 }
 
 export type ScanWriteGuard = {
@@ -153,7 +174,82 @@ export class SecurityScanRepository implements ISecurityScanRepository {
     constructor(
         @InjectModel(SecurityScanModel.name)
         private readonly model: Model<SecurityScanModel>,
+        @InjectModel(SecurityScanCoverageModel.name)
+        private readonly coverageModel?: Model<SecurityScanCoverageModel>,
     ) {}
+
+    async findCoverage(
+        organizationId: string,
+        repository: ScanRepositoryKey,
+    ): Promise<CoverageEntry[]> {
+        if (!this.coverageModel) return [];
+        const docs = await this.coverageModel
+            .find(
+                { organizationId, ...sameRepository(repository) },
+                {
+                    filePath: 1,
+                    vulnerabilityClass: 1,
+                    blob: 1,
+                    evidence: 1,
+                    incomplete: 1,
+                    scanId: 1,
+                    commitSha: 1,
+                },
+            )
+            .lean()
+            .exec();
+        return docs.map((d) => ({
+            filePath: d.filePath,
+            vulnerabilityClass: d.vulnerabilityClass as VulnClass,
+            blob: d.blob,
+            evidence: d.evidence ?? [],
+            ...(d.incomplete ? { incomplete: true } : {}),
+            scanId: d.scanId,
+            commitSha: d.commitSha,
+        }));
+    }
+
+    async recordCoverage(
+        organizationId: string,
+        repository: ScanRepositoryKey,
+        entries: CoverageEntry[],
+    ): Promise<void> {
+        if (!this.coverageModel || !entries.length) return;
+        await this.coverageModel.bulkWrite(
+            entries.map((entry) => ({
+                updateOne: {
+                    filter: {
+                        organizationId,
+                        ...sameRepository(repository),
+                        filePath: entry.filePath,
+                        vulnerabilityClass: entry.vulnerabilityClass,
+                    },
+                    update: {
+                        $set: {
+                            organizationId,
+                            repository: {
+                                platform: repository.platform,
+                                host: repository.host,
+                                id: repository.id,
+                            },
+                            filePath: entry.filePath,
+                            vulnerabilityClass: entry.vulnerabilityClass,
+                            blob: entry.blob,
+                            evidence: entry.evidence,
+                            incomplete: !!entry.incomplete,
+                            scanId: entry.scanId,
+                            commitSha: entry.commitSha,
+                            modelName: entry.modelName,
+                            examinedAt:
+                                entry.examinedAt ?? new Date().toISOString(),
+                        },
+                    },
+                    upsert: true,
+                },
+            })),
+            { ordered: false },
+        );
+    }
 
     /** Throws a duplicate-key error (11000) while the repository has an active scan. */
     async create(scan: NewSecurityScan): Promise<SecurityScanRecord> {
@@ -380,6 +476,25 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         return doc ? toRecord(doc) : null;
     }
 
+    async countActive(organizationId: string): Promise<number> {
+        return this.model
+            .countDocuments({ organizationId, status: { $in: ACTIVE } })
+            .exec();
+    }
+
+    async findOldestActiveIds(
+        organizationId: string,
+        limit: number,
+    ): Promise<string[]> {
+        const docs = await this.model
+            .find({ organizationId, status: { $in: ACTIVE } }, { _id: 1 })
+            .sort({ createdAt: 1, _id: 1 })
+            .limit(limit)
+            .lean()
+            .exec();
+        return docs.map((d) => String(d._id));
+    }
+
     async failStale(
         organizationId: string,
         after: StaleScanWindows,
@@ -435,6 +550,9 @@ function toRecord(doc: any): SecurityScanRecord {
         coverage: o.coverage,
         outcome: o.outcome,
         modelName: o.modelName,
+        ...(o.modelId ? { modelId: o.modelId } : {}),
+        ...(o.mode ? { mode: o.mode } : {}),
+        ...(o.scheduleId ? { scheduleId: o.scheduleId } : {}),
         requestedBy: o.requestedBy,
         error: o.error,
         startedAt: o.startedAt,

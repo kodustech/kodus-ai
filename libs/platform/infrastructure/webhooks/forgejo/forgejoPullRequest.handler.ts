@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 import {
@@ -662,6 +663,13 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                             requestedReviewMode: requestedReviewModeOf(
                                 comment.body,
                             ),
+                            requestedReviewModeAccess:
+                                await reviewCommandAccess(
+                                    this.codeManagement,
+                                    params,
+                                    context?.organizationAndTeamData,
+                                    requestedReviewModeOf(comment.body),
+                                ),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

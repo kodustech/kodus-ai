@@ -136,6 +136,9 @@ export function buildUserPrompt(input: UserPromptInput): string {
     if (hasSandbox) {
         toolLines.push(
             '- grep / readFile / listDir / exec — search and read the repository when the user asks about code, config, or behavior. Cite file paths and line numbers when you do.',
+            // One commit printed whole was 424 MB (Nov 2026); the agent then
+            // narrowed to the file anyway. Start there.
+            '- To check a commit, start with `git show --stat <sha>`, then `git show <sha> -- <file>` for the file this thread is about. Never print a whole commit or log with patches.',
         );
     }
 

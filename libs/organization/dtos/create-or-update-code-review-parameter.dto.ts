@@ -1,10 +1,11 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { MAX_RISK_CRITERIA } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
 import {
     approvalPoliciesSchema,
     type NamedApprovalPolicy,
 } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import {
-    riskCriteriaSchema,
+    riskCriteriaInputSchema,
     riskReviewRoutingSchema,
     REVIEW_SETTINGS_INHERITABLE_FIELDS,
     type RiskCriterion,
@@ -443,8 +444,13 @@ class ConversationConfigDto {
     /**
      * `false` makes Kody answer an unmentioned reply in its own thread only
      * when someone writes `@kody`. Unset leaves the classifier deciding.
+     *
+     * The API pipe's `enableImplicitConversion` turns any non-empty string
+     * into `true` before validation, so `"false"` would be stored as on and
+     * erase an opt-out. Validate the raw value instead: only a boolean passes.
      */
-    @IsOptional()
+    @ValidateIf((_, value) => value !== undefined)
+    @Transform(({ obj, key }) => obj[key])
     @IsBoolean()
     @ApiPropertyOptional()
     implicitReplies?: boolean;
@@ -947,15 +953,21 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @ValidateIf((_, value) => value !== undefined)
     @IsArray()
-    @ArrayMaxSize(50)
+    @ArrayMaxSize(MAX_RISK_CRITERIA)
     @Type(() => Object)
+    // Stored as parsed (ids and names trimmed, unknown keys dropped), so a
+    // reader of the raw config matches a default by its id.
+    @Transform(({ value }) => {
+        const parsed = riskCriteriaInputSchema.safeParse(value);
+        return parsed.success ? parsed.data : value;
+    })
     @ValidateBy({
         name: 'riskCriteria',
         validator: {
             validate: (value: unknown) =>
-                riskCriteriaSchema.safeParse(value).success,
+                riskCriteriaInputSchema.safeParse(value).success,
             defaultMessage: () =>
-                'Risk criteria must be valid and have unique IDs.',
+                'Risk criteria must be valid, have unique IDs, and use kodus- IDs only for Kodus risk rules.',
         },
     })
     riskCriteria?: RiskCriterion[];
@@ -967,7 +979,8 @@ class CodeReviewConfigWithoutLLMProviderDto {
         validator: {
             validate: (value: unknown) =>
                 riskReviewRoutingSchema.safeParse(value).success,
-            defaultMessage: () => 'Risk routing must select Balanced or Heavy.',
+            defaultMessage: () =>
+                'Risk routing must select Balanced, Heavy or Ultra.',
         },
     })
     riskReviewRouting?: RiskReviewRouting;
@@ -1043,7 +1056,8 @@ class CodeReviewConfigWithoutLLMProviderDto {
      * `implicitReplies: false` makes Kody answer an unmentioned reply in its
      * own review thread only when someone writes `@kody`.
      */
-    @IsOptional()
+    @ValidateIf((_, value) => value !== undefined)
+    @IsObject()
     @ValidateNested()
     @Type(() => ConversationConfigDto)
     @ApiPropertyOptional({ type: ConversationConfigDto })

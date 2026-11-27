@@ -1,4 +1,5 @@
 import {
+    isAbortOrHardTimeout,
     LlmErrorCategory,
     attachClassification,
     classifyLLMError,
@@ -356,10 +357,66 @@ describe('classifyLLMError', () => {
             ).toBe(LlmErrorCategory.TRANSIENT);
         });
 
+        // #2130: the Gemini 429 a large review hit, as the review saw it: the
+        // message alone, no response body. A per-minute input-token quota
+        // that says when to retry is a rate limit, not spent credits.
+        it('Gemini per-minute input-token 429 with only its message → RATE_LIMIT (#2130)', () => {
+            const err = Object.assign(
+                new Error(
+                    'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_paid_tier_input_token_count, limit: 2000000, model: gemini-3.8-flash Please retry in 17.320234636s.',
+                ),
+                { name: 'AI_APICallError', statusCode: 429 },
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
+        // The other side of #2130: a quota that is really spent must stay
+        // QUOTA_EXCEEDED, or a key with no credit is retried forever.
+        it.each([
+            [
+                'a daily quota, retried hours later',
+                'You exceeded your current quota. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 50 Please retry in 52843.1s.',
+            ],
+            [
+                'a billing quota, with no retry delay',
+                'You exceeded your current quota, please check your plan and billing details.',
+            ],
+            [
+                'a delay just past a minute',
+                'You exceeded your current quota. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_paid_tier_input_token_count Please retry in 61s.',
+            ],
+        ])('keeps %s on a 429 as QUOTA_EXCEEDED', (_case, message) => {
+            const err = Object.assign(new Error(message), {
+                name: 'AI_APICallError',
+                statusCode: 429,
+            });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
         it('OpenAI "exceeds the context window" → CONTEXT_OVERFLOW', () => {
             const err = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',
             );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
+        // Anthropic answers an overflow with HTTP 400 in its own words. Read
+        // as REQUEST_REJECTED, the PR summary re-sent the same prompt instead
+        // of splitting it (#2681 review).
+        it.each([
+            'prompt is too long: 212345 tokens > 200000 maximum',
+            'input length and `max_tokens` exceed context limit: 170256 + 64000 > 200000, decrease input length or `max_tokens` and try again',
+        ])('Anthropic "%s" → CONTEXT_OVERFLOW', (message) => {
+            const err = Object.assign(new Error(message), {
+                name: 'AI_APICallError',
+                statusCode: 400,
+            });
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.CONTEXT_OVERFLOW,
             );
@@ -640,6 +697,28 @@ describe('classifyLLMError', () => {
             );
             expect(info.category).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
             expect(info.friendlyMessage).not.toMatch(/invalid/i);
+        });
+
+        it('reads a spent monthly or weekly cap on a 429 as QUOTA_EXCEEDED', () => {
+            for (const message of [
+                'Your project has exceeded its monthly spending cap. Please go to AI Studio at https://ai.studio/spend to manage your project spend cap.',
+                'you (someone) have reached your weekly usage limit, resets in 3 days',
+            ]) {
+                expect(classifyLLMError(apiError(429, message)).category).toBe(
+                    LlmErrorCategory.QUOTA_EXCEEDED,
+                );
+            }
+        });
+
+        it('keeps a per-account requests-per-minute 429 on RATE_LIMIT', () => {
+            expect(
+                classifyLLMError(
+                    apiError(
+                        429,
+                        'Rate limit exceeded: new-account-rpm/moonshotai/kimi-k3.1-pro-20261023. Rate limit reached',
+                    ),
+                ).category,
+            ).toBe(LlmErrorCategory.RATE_LIMIT);
         });
 
         it('keeps a 403 that says nothing about limits on AUTH_INVALID', () => {
@@ -970,6 +1049,514 @@ describe('REQUEST_REJECTED (#1687)', () => {
         );
         expect(classifyLLMError(new Error('socket hang up')).category).not.toBe(
             LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+});
+
+describe('transport failures before any HTTP status (#1844)', () => {
+    // The AI SDK turns undici's `TypeError('fetch failed')` into this shape: the
+    // message prefixed "Cannot connect to API:", the socket error as `cause`,
+    // and no status. Built the same way here so no socket is opened.
+    const cannotConnect = (causeMessage: string, code: string) =>
+        new APICallError({
+            message: `Cannot connect to API: ${causeMessage}`,
+            url: 'https://llm.example.invalid/v1/chat/completions',
+            requestBodyValues: {},
+            cause: Object.assign(new Error(causeMessage), { code }),
+            isRetryable: true,
+        });
+
+    it.each([
+        ['connect ECONNREFUSED 127.0.0.1:443', 'ECONNREFUSED'],
+        ['getaddrinfo ENOTFOUND llm.example.invalid', 'ENOTFOUND'],
+        ['getaddrinfo EAI_AGAIN llm.example.invalid', 'EAI_AGAIN'],
+        ['connect EHOSTUNREACH 10.0.0.9:443', 'EHOSTUNREACH'],
+        ['connect ENETUNREACH 10.0.0.9:443', 'ENETUNREACH'],
+        // undici's wording for a socket the server dropped mid-request.
+        ['other side closed', 'UND_ERR_SOCKET'],
+    ])(
+        'an unreachable provider (%s) is TRANSIENT and cascades to the fallback',
+        (causeMessage, code) => {
+            const err = cannotConnect(causeMessage, code);
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(true);
+        },
+    );
+
+    it('a bare ECONNREFUSED from a caller outside the AI SDK is TRANSIENT too', () => {
+        const err = Object.assign(
+            new Error('connect ECONNREFUSED 10.0.0.1:443'),
+            {
+                code: 'ECONNREFUSED',
+            },
+        );
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.TRANSIENT);
+    });
+
+    // What the shared gate must keep doing. These pass before and after the fix.
+    describe('impact: what must not change', () => {
+        it('a connect timeout stays out of the cascade (the abort/timeout rule)', () => {
+            const err = cannotConnect(
+                'Connect Timeout Error (attempted address: 10.0.0.9:443, timeout: 10000ms)',
+                'UND_ERR_CONNECT_TIMEOUT',
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(false);
+        });
+
+        it('an ETIMEDOUT stays out of the cascade', () => {
+            expect(
+                shouldFailoverToNextModel(
+                    cannotConnect(
+                        'connect ETIMEDOUT 10.0.0.9:443',
+                        'ETIMEDOUT',
+                    ),
+                ),
+            ).toBe(false);
+        });
+
+        it('a user abort is not cascaded', () => {
+            const abort = Object.assign(
+                new Error('This operation was aborted'),
+                { name: 'AbortError' },
+            );
+            expect(shouldFailoverToNextModel(abort)).toBe(false);
+        });
+
+        const withBody = (statusCode: number, message: string) =>
+            new APICallError({
+                message,
+                url: 'https://llm.example.invalid/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode,
+                responseBody: JSON.stringify({ error: { message } }),
+            });
+
+        it.each([401, 403])(
+            'a %i stays AUTH_INVALID even when its body names a connect failure',
+            (status) => {
+                expect(
+                    classifyLLMError(
+                        withBody(
+                            status,
+                            'upstream ECONNREFUSED: cannot connect to api',
+                        ),
+                    ).category,
+                ).toBe(LlmErrorCategory.AUTH_INVALID);
+            },
+        );
+
+        it('a 402 stays QUOTA_EXCEEDED', () => {
+            expect(
+                classifyLLMError(withBody(402, 'Insufficient credits'))
+                    .category,
+            ).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
+        });
+
+        it('a 400 with no recognised wording stays REQUEST_REJECTED and is not cascaded', () => {
+            const err = withBody(400, 'Unknown parameter: foo');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.REQUEST_REJECTED,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(false);
+        });
+
+        it('an unclassified error with no status stays UNKNOWN and is not cascaded', () => {
+            const err = new Error('the model returned something odd');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.UNKNOWN,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(false);
+        });
+    });
+});
+
+describe('OpenRouter upstream errors (#1871)', () => {
+    const wrapped = (statusCode: number, raw: string) =>
+        new APICallError({
+            message: 'Provider returned error',
+            url: 'https://openrouter.ai/api/v1/chat/completions',
+            requestBodyValues: {},
+            statusCode,
+            data: {
+                error: { message: 'Provider returned error', code: statusCode },
+            },
+            responseBody: JSON.stringify({
+                error: {
+                    message: 'Provider returned error',
+                    code: statusCode,
+                    metadata: { raw, provider_name: 'Chutes' },
+                },
+            }),
+        });
+
+    it('a rejected request quotes the upstream reason in the headline', () => {
+        const info = classifyLLMError(
+            wrapped(400, 'max_tokens must be at most 8192 for this model'),
+            'open_router',
+        );
+        expect(info.category).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        expect(info.providerMessage).toBe(
+            'Chutes: max_tokens must be at most 8192 for this model',
+        );
+        expect(info.friendlyMessage).toContain(
+            'max_tokens must be at most 8192 for this model',
+        );
+    });
+
+    it('impact: an upstream 429 still classifies as a rate limit', () => {
+        expect(
+            classifyLLMError(
+                wrapped(
+                    429,
+                    'temporarily rate-limited upstream. Please retry shortly.',
+                ),
+                'open_router',
+            ).category,
+        ).toBe(LlmErrorCategory.RATE_LIMIT);
+    });
+});
+
+describe('real production shapes the classifier misread (prod worker logs, 11-10..11-24)', () => {
+    const apiError = (message: string, statusCode?: number) =>
+        Object.assign(new Error(message), {
+            name: 'AI_APICallError',
+            ...(statusCode ? { statusCode } : {}),
+        });
+
+    it("MiniMax's context window error (code 2013) is CONTEXT_OVERFLOW, not a rejected request", () => {
+        // 105 events; it was REQUEST_REJECTED, so the run never shrank its input.
+        const err = apiError(
+            'invalid params, context window exceeds limit (2013)',
+            400,
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONTEXT_OVERFLOW,
+        );
+    });
+
+    it('a rate-limit 429 whose docs URL says "quotas" stays RATE_LIMIT', () => {
+        // Fireworks: the only "quota" is in the link, which made it a spent quota.
+        const err = apiError(
+            'You have exceeded your rate limit for this API. Please see https://docs.fireworks.ai/guides/quotas_usage/rate-limits for details.',
+            429,
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.RATE_LIMIT,
+        );
+    });
+
+    it.each([
+        // A spent quota that also carries a link still reads from its words.
+        [
+            'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.',
+            429,
+        ],
+        [
+            'Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/settings/keys',
+            403,
+        ],
+        ['Insufficient balance or no resource package. Please recharge.', 429],
+    ])(
+        'a spent quota with a link is still QUOTA_EXCEEDED: %s',
+        (message, status) => {
+            expect(classifyLLMError(apiError(message, status)).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        },
+    );
+
+    it('an invalid parameter that is not about the context window stays REQUEST_REJECTED', () => {
+        const err = apiError(
+            'invalid params, temperature out of range (2013)',
+            400,
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+});
+
+describe('transport codes and links inside a provider body', () => {
+    const apiError = (message: string, statusCode: number, body: string) =>
+        Object.assign(new Error(message), {
+            name: 'AI_APICallError',
+            statusCode,
+            responseBody: body,
+        });
+
+    it('a 400 whose body echoes code mentioning ENOTFOUND stays REQUEST_REJECTED', () => {
+        // Review prompts are diffs; a rejection that echoes one is not a
+        // network failure (Kody, PR #2700): no failover, no "network" copy.
+        const err = apiError(
+            'Bad Request',
+            400,
+            JSON.stringify({
+                error: {
+                    message:
+                        "Invalid 'messages[1].content': unsupported value near `if (e.code === 'ENOTFOUND' || e.code === 'EAI_AGAIN') retry()`",
+                },
+            }),
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a spent quota whose minified body has a link before the quota code stays QUOTA_EXCEEDED', () => {
+        // The link must not swallow the JSON after it.
+        const err = apiError(
+            'Too Many Requests',
+            429,
+            '{"error":{"message":"See https://platform.example.com/docs/errors","code":"insufficient_quota"}}',
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.QUOTA_EXCEEDED,
+        );
+    });
+});
+
+// Review on #2700 (sartorijr92): each case is the reviewer's reproduction.
+describe('classifyLLMError: review on #2700', () => {
+    const { TypeValidationError, JSONParseError, NoObjectGeneratedError } =
+        jest.requireActual('ai');
+    const modelSays =
+        'The retry loop treats ENOTFOUND as fatal; getaddrinfo EAI_AGAIN is transient';
+
+    it.each([
+        [
+            'TypeValidationError',
+            () =>
+                new TypeValidationError({
+                    value: { suggestions: [{ suggestionContent: modelSays }] },
+                    cause: new Error('schema'),
+                }),
+        ],
+        [
+            'JSONParseError',
+            () =>
+                new JSONParseError({
+                    text: modelSays,
+                    cause: new Error('parse'),
+                }),
+        ],
+        [
+            'NoObjectGeneratedError',
+            () =>
+                new NoObjectGeneratedError({
+                    message: 'No object generated',
+                    text: modelSays,
+                    cause: new TypeValidationError({
+                        value: modelSays,
+                        cause: new Error('x'),
+                    }),
+                    response: {} as any,
+                    usage: {} as any,
+                    finishReason: 'stop',
+                }),
+        ],
+    ])(
+        'a %s whose model output quotes network codes stays UNKNOWN (no re-issue, no cascade)',
+        (_name, build) => {
+            const info = classifyLLMError(build());
+            expect(info.category).toBe(LlmErrorCategory.UNKNOWN);
+        },
+    );
+
+    it('an unresolvable host is TRANSIENT and the message says why', () => {
+        const cause = Object.assign(new TypeError('fetch failed'), {
+            cause: Object.assign(
+                new Error('getaddrinfo ENOTFOUND api.deepseek.cm'),
+                {
+                    code: 'ENOTFOUND',
+                    hostname: 'api.deepseek.cm',
+                },
+            ),
+        });
+        const err = new APICallError({
+            message:
+                'Cannot connect to API: getaddrinfo ENOTFOUND api.deepseek.cm',
+            url: 'https://api.deepseek.cm/v1/chat/completions',
+            requestBodyValues: {},
+            cause,
+            isRetryable: true,
+        });
+        const info = classifyLLMError(err, 'openai_compatible');
+        expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
+        expect(info.friendlyMessage).toContain('ENOTFOUND api.deepseek.cm');
+        expect(info.friendlyMessage).toContain('check the base URL');
+    });
+
+    it.each([
+        'Insufficient balance or no resource package. Please recharge. Please retry in 10s.',
+        'Key limit exceeded (monthly limit). Please retry in 30s',
+        'You have reached your specified API usage limits. You will regain access on 2026-12-01. Please retry in 30s',
+    ])(
+        'a spent balance with a short retry delay stays QUOTA_EXCEEDED: %s',
+        (message) => {
+            const err = Object.assign(new Error(message), { statusCode: 429 });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        },
+    );
+
+    it('a link naming a daily window does not switch the per-minute delay rule off', () => {
+        const err = Object.assign(
+            new Error(
+                'You exceeded your current quota. See https://ai.google.dev/gemini-api/docs/rate-limits#requests-per-day. Please retry in 17s.',
+            ),
+            { statusCode: 429 },
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.RATE_LIMIT,
+        );
+    });
+
+    it('a link naming a per-minute window does not make a spent balance a rate limit', () => {
+        const err = Object.assign(
+            new Error(
+                'Insufficient balance. See https://docs.x.ai/limits#tokens-per-minute',
+            ),
+            { statusCode: 429 },
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.QUOTA_EXCEEDED,
+        );
+    });
+});
+
+describe('classifyLLMError: Kody on #2700', () => {
+    it("an earlier attempt's timeout does not make a later 503 a hard timeout", () => {
+        const timeout = Object.assign(new Error('connect'), {
+            code: 'ETIMEDOUT',
+        });
+        const unavailable = Object.assign(new Error('Service Unavailable'), {
+            name: 'AI_APICallError',
+            statusCode: 503,
+        });
+        const retry = {
+            name: 'AI_RetryError',
+            message: 'Failed after 2 attempts.',
+            reason: 'maxRetriesExceeded',
+            errors: [timeout, unavailable],
+            lastError: unavailable,
+        };
+        expect(isAbortOrHardTimeout(retry)).toBe(false);
+    });
+
+    it('a connect failure publishes only the code and host, never the raw message', () => {
+        const socket = Object.assign(
+            new Error(
+                'getaddrinfo ENOTFOUND gw.example.test?key=AQ.secretsecretsecret',
+            ),
+            { code: 'ENOTFOUND', hostname: 'gw.example.test' },
+        );
+        const wrapper = Object.assign(new Error('wrapped ENOTFOUND outer'), {
+            code: 'ENOTFOUND',
+            cause: socket,
+        });
+        const err = new APICallError({
+            message: 'Cannot connect to API: x',
+            url: 'https://gw.example.test/v1',
+            requestBodyValues: {},
+            cause: wrapper,
+            isRetryable: true,
+        });
+        const info = classifyLLMError(err);
+        expect(info.friendlyMessage).toContain('ENOTFOUND gw.example.test');
+        expect(info.friendlyMessage).not.toContain('secret');
+        expect(info.friendlyMessage).not.toContain('outer');
+    });
+});
+
+describe('classifyLLMError: Kody on #2700, second pass', () => {
+    it("the connect message names the final attempt's failure, not an earlier one", () => {
+        const earlier = Object.assign(
+            new Error('getaddrinfo ENOTFOUND old.example'),
+            {
+                code: 'ENOTFOUND',
+                hostname: 'old.example',
+            },
+        );
+        const last = Object.assign(new Error('connect ECONNREFUSED'), {
+            code: 'ECONNREFUSED',
+            address: '203.0.113.9',
+            port: 443,
+        });
+        const retry = {
+            name: 'AI_RetryError',
+            message: 'Failed after 2 attempts.',
+            errors: [earlier, last],
+            lastError: last,
+        };
+        const info = classifyLLMError(retry);
+        expect(info.friendlyMessage).toContain('ECONNREFUSED 203.0.113.9:443');
+        expect(info.friendlyMessage).not.toContain('old.example');
+    });
+});
+
+describe('classifyLLMError: the address guard refusal is read from the error, not a body', () => {
+    it('a 400 whose body quotes the refusal sentence keeps its status category', () => {
+        const err = Object.assign(new Error('Bad Request'), {
+            name: 'AI_APICallError',
+            statusCode: 400,
+            responseBody: JSON.stringify({
+                error: {
+                    message:
+                        'messages[0]: the diff says BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+                },
+            }),
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a status-less failure whose BODY alone quotes the refusal sentence is not CONFIG_INVALID', () => {
+        const err = Object.assign(new Error('upstream failed'), {
+            responseBody:
+                'the diff says BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+        });
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.UNKNOWN);
+    });
+
+    it("a provider's 400 whose own message quotes the refusal sentence keeps its status category", () => {
+        const err = Object.assign(
+            new Error(
+                'Invalid prompt: BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+            ),
+            { name: 'AI_APICallError', statusCode: 400 },
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a refusal carried under a status is still CONFIG_INVALID (never retried)', () => {
+        const refusal = Object.assign(new Error('refused'), {
+            name: 'GatewayAddressRefusedError',
+            code: 'EBYOK_GATEWAY_ADDRESS',
+        });
+        const err = Object.assign(new Error('wrapped'), {
+            statusCode: 503,
+            cause: refusal,
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+    });
+
+    it('a status-less failure whose cause carries the guard code is CONFIG_INVALID', () => {
+        const refusal = Object.assign(new Error('refused'), {
+            code: 'EBYOK_GATEWAY_ADDRESS',
+        });
+        const err = Object.assign(new TypeError('fetch failed'), {
+            cause: refusal,
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
         );
     });
 });

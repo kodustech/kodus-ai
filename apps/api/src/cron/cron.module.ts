@@ -35,6 +35,8 @@ import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
 import { SyncAllRepositoriesCronProvider } from './syncAllRepositories.cron';
+import { DeepScanSchedulesCronProvider } from './deepScanSchedules.cron';
+import { SecurityScanModule } from '@libs/security-scan/security-scan.module';
 import { SSOModule } from '@libs/ee/sso/sso.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
@@ -70,6 +72,7 @@ import { OrganizationParametersModule } from '@libs/organization/modules/organiz
         FeatureGateModule,
         forwardRef(() => LicenseModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => SecurityScanModule),
     ],
     providers: [
         {
@@ -78,6 +81,7 @@ import { OrganizationParametersModule } from '@libs/organization/modules/organiz
         },
         CheckIfPRCanBeApprovedCronProvider,
         ClassifyOrphanedSessionsCronProvider,
+        DeepScanSchedulesCronProvider,
         CodeReviewFeedbackCronProvider,
         KodyLearningCronProvider,
         PruneLicenseSeatsCronProvider,

@@ -49,8 +49,10 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
 
     beforeEach(async () => {
         mockCommentManagerService = {};
+        let nextId = 0;
         mockPullRequestService = {
             aggregateAndSaveDataStructure: jest.fn().mockResolvedValue(null),
+            newSuggestionId: jest.fn(() => `new-${++nextId}`),
         };
         mockSuggestionService = {
             resolveImplementedSuggestionsOnPlatform: jest
@@ -217,5 +219,84 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             }),
         ]);
         expect(out.lastAnalyzedCommit).toBe('abc');
+    });
+
+    // A change request is recorded over these ids after the comments are
+    // posted, so the posted suggestion must already carry the id it is
+    // stored under.
+    it('gives every suggestion its id before posting, the same one it is stored under', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({
+                commentResults: [],
+                lastAnalyzedCommit: 'abc',
+            });
+        const ctx = baseContext({
+            codeReviewConfig: {} as never,
+            validSuggestions: [
+                { relevantFile: 'src/foo.ts', severity: 'critical' },
+                { id: 'kept', relevantFile: 'src/foo.ts', severity: 'high' },
+            ] as never,
+            discardedSuggestions: [
+                {
+                    relevantFile: 'src/foo.ts',
+                    severity: 'low',
+                    priorityStatus: 'discarded-by-quantity',
+                },
+            ] as never,
+        });
+
+        await stage.execute(ctx);
+
+        const saved =
+            mockSuggestionService.verifyIfSuggestionsWereSent.mock.calls[0][2];
+        expect(saved.map((s: { id: string }) => s.id)).toEqual([
+            'new-1',
+            'kept',
+        ]);
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect(
+            posted.map((c: { suggestion: { id: string } }) => c.suggestion.id),
+        ).toEqual(['new-1', 'kept']);
+        const fallbacks =
+            mockCommentManagerService.createLineComments.mock.calls[0][6];
+        expect(fallbacks.low.map((s: { id: string }) => s.id)).toEqual([
+            'new-2',
+        ]);
+    });
+    // A severity named like an Object.prototype key used to rank as NaN,
+    // which left the sort in insertion order.
+    it('ranks a severity named like a prototype key below a critical one', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({
+                commentResults: [],
+                lastAnalyzedCommit: 'abc',
+            });
+        const ctx = baseContext({
+            codeReviewConfig: {} as never,
+            validSuggestions: [
+                {
+                    id: 'odd',
+                    relevantFile: 'src/foo.ts',
+                    severity: 'constructor',
+                },
+                {
+                    id: 'crit',
+                    relevantFile: 'src/foo.ts',
+                    severity: 'critical',
+                },
+            ] as never,
+        });
+
+        await stage.execute(ctx);
+
+        const sorted =
+            mockSuggestionService.verifyIfSuggestionsWereSent.mock.calls[0][2];
+        expect(sorted.map((s: { id: string }) => s.id)).toEqual([
+            'crit',
+            'odd',
+        ]);
     });
 });

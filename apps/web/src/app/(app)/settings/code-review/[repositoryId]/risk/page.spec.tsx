@@ -53,6 +53,31 @@ jest.mock("@services/codeManagement/hooks", () => ({
 jest.mock("@services/risk-assessment/fetch", () => ({
     previewPrRisk: jest.fn(),
 }));
+const DEFAULT_RULES = [
+    {
+        id: "kodus-security",
+        name: "Security and permissions",
+        enabled: true,
+        instructions: "A change to authentication or permissions.",
+    },
+    {
+        id: "kodus-shared-contract",
+        name: "Shared contracts and public interfaces",
+        enabled: true,
+        instructions: "A change to what other code relies on.",
+    },
+];
+const loadedDefaults = () => ({
+    data: { criteria: DEFAULT_RULES, retiredIds: ["kodus-retired"] },
+});
+let mockDefaultRules: {
+    data?: ReturnType<typeof loadedDefaults>["data"];
+    isLoading?: boolean;
+    isError?: boolean;
+} = loadedDefaults();
+jest.mock("@services/risk-assessment/hooks", () => ({
+    useDefaultRiskCriteria: () => mockDefaultRules,
+}));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
 const saveSettings = jest.fn();
 jest.mock("../../_hooks/use-code-review-settings-mutation", () => ({
@@ -104,6 +129,7 @@ function setup(
 beforeEach(() => {
     jest.resetAllMocks();
     mockAccess = true;
+    mockDefaultRules = loadedDefaults();
     saveSettings.mockResolvedValue(undefined);
 });
 
@@ -186,13 +212,18 @@ it("allows risk with approval off and changes only the independent toggle", asyn
     );
 });
 
-it("keeps criteria optional and saves only risk configuration", async () => {
+it("lists Kodus's rules on before any team setting and saves only risk configuration", async () => {
     setup();
-    expect(
-        screen.getByText(
-            "Kody uses the PR diff and code context. Add criteria to include your team’s context.",
-        ),
-    ).toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Risk rules" });
+    for (const rule of DEFAULT_RULES) {
+        expect(
+            within(list).getByRole("heading", { name: rule.name }),
+        ).toBeInTheDocument();
+        expect(
+            within(list).getByRole("switch", { name: `Enable ${rule.name}` }),
+        ).toBeChecked();
+    }
+    expect(within(list).queryByRole("button", { name: /^Delete / })).toBeNull();
     fireEvent.click(screen.getByRole("switch", { name: "Risk assessment" }));
     await waitFor(() =>
         expect(
@@ -210,7 +241,7 @@ it("keeps criteria optional and saves only risk configuration", async () => {
 
 it("adds team guidance through the dialog without changing approval", async () => {
     setup();
-    fireEvent.click(screen.getByRole("button", { name: "Add criterion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     fireEvent.change(screen.getByLabelText("Name"), {
         target: { value: "Access control" },
     });
@@ -259,8 +290,8 @@ it("previews real service results in the side panel without saving or publishing
 
 it("edits and validates both file filters in one sheet and discards its draft on Cancel", () => {
     setup();
-    fireEvent.click(screen.getByRole("button", { name: "Add criterion" }));
-    const editor = screen.getByRole("dialog", { name: "Add criterion" });
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    const editor = screen.getByRole("dialog", { name: "Add rule" });
     expect(editor).toHaveAttribute("data-slot", "sheet-content");
     for (const name of ["Included files", "Excluded files"]) {
         const section = within(editor).getByRole("region", { name });
@@ -287,9 +318,146 @@ it("edits and validates both file filters in one sheet and discards its draft on
     fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
     expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add criterion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     const reopened = screen.getByRole("dialog");
     for (const input of within(reopened).getAllByRole("textbox"))
         expect(input).toHaveValue("");
     expect(within(reopened).queryByText("src/**")).not.toBeInTheDocument();
+});
+
+it("stores a Kodus rule the team turns off as its id alone, and drops it when turned back on", async () => {
+    setup();
+    const toggle = screen.getByRole("switch", {
+        name: "Enable Shared contracts and public interfaces",
+    });
+    fireEvent.click(toggle);
+    expect(currentForm.getValues("riskCriteria.value")).toEqual([
+        { id: "kodus-shared-contract", enabled: false },
+    ]);
+    expect(toggle).not.toBeChecked();
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalled());
+    const [data, options] = saveSettings.mock.calls[0];
+    expect(options.prepare(data).codeReviewConfig.riskCriteria).toEqual([
+        { id: "kodus-shared-contract", enabled: false },
+    ]);
+    fireEvent.click(toggle);
+    expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
+});
+
+it("keeps only what the team changed in an edited Kodus rule, and Reset restores Kodus's version", () => {
+    setup();
+    fireEvent.click(
+        screen.getByRole("button", { name: "Edit Security and permissions" }),
+    );
+    const editor = screen.getByRole("dialog", { name: "Edit rule" });
+    expect(within(editor).getByLabelText("Name")).toHaveValue(
+        "Security and permissions",
+    );
+    fireEvent.change(
+        within(editor).getByLabelText("What should Kody consider?"),
+        {
+            target: { value: "Only the billing permissions matter." },
+        },
+    );
+    fireEvent.click(within(editor).getByRole("button", { name: "Apply" }));
+    expect(currentForm.getValues("riskCriteria.value")).toEqual([
+        {
+            id: "kodus-security",
+            enabled: true,
+            instructions: "Only the billing permissions matter.",
+        },
+    ]);
+    expect(screen.getByText("Kodus · edited")).toBeInTheDocument();
+    fireEvent.click(
+        screen.getByRole("button", { name: "Reset Security and permissions" }),
+    );
+    expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
+    expect(
+        screen.getByText("A change to authentication or permissions."),
+    ).toBeInTheDocument();
+});
+
+it("does not list an override of a rule Kodus stopped shipping, which the assessment drops", () => {
+    setup(true, [
+        {
+            id: "kodus-retired",
+            name: "Old rule",
+            enabled: true,
+            instructions: "Stale wording.",
+        },
+    ]);
+    expect(screen.queryByRole("heading", { name: "Old rule" })).toBeNull();
+    expect(
+        within(screen.getByRole("list", { name: "Risk rules" })).getAllByRole(
+            "heading",
+        ),
+    ).toHaveLength(DEFAULT_RULES.length);
+});
+
+it.each<[string, typeof mockDefaultRules]>([
+    ["could not be loaded", { isError: true }],
+    ["are still loading", { isLoading: true }],
+])("keeps the list read-only while Kodus's rules %s", (_, defaultRules) => {
+    mockDefaultRules = defaultRules;
+    setup(true, [
+        {
+            id: "kodus-security",
+            name: "Our security",
+            enabled: true,
+            instructions: "Only billing auth.",
+        },
+        {
+            id: "tenant",
+            name: "Tenant isolation",
+            enabled: true,
+            instructions: "Data must not cross tenants.",
+        },
+    ]);
+    const list = screen.getByRole("list", { name: "Risk rules" });
+    for (const control of [
+        ...within(list).getAllByRole("switch"),
+        ...within(list).getAllByRole("button"),
+    ])
+        expect(control).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add rule" })).toBeDisabled();
+    if (defaultRules.isError)
+        expect(
+            screen.getByText(/Could not load Kodus’s rules/),
+        ).toBeInTheDocument();
+});
+
+it("at 50 stored entries, locks only the Kodus rules a change would add an entry for", () => {
+    setup(true, [
+        { id: "kodus-security", enabled: false },
+        ...Array.from({ length: 49 }, (_, index) => ({
+            id: `team-${index}`,
+            name: `Team rule ${index}`,
+            enabled: true,
+            instructions: "Check it.",
+        })),
+    ]);
+    expect(
+        screen.getByText(
+            "The settings keep up to 50 entries, counting your rules and the Kodus rules you changed.",
+        ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add rule" })).toBeDisabled();
+    const controls = (rule: string) => [
+        screen.getByRole("switch", { name: `Enable ${rule}` }),
+        screen.getByRole("button", { name: `Edit ${rule}` }),
+    ];
+    for (const control of controls("Shared contracts and public interfaces"))
+        expect(control).toBeDisabled();
+    // Already stored, so changing them replaces their entry in place.
+    for (const control of [
+        ...controls("Security and permissions"),
+        ...controls("Team rule 0"),
+    ])
+        expect(control).toBeEnabled();
 });

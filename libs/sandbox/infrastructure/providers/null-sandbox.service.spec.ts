@@ -15,7 +15,10 @@ import {
     NULL_SANDBOX_INSTANCE,
     NullSandboxProvider,
 } from './null-sandbox.service';
-import { buildNativeToolConfigs } from '@libs/agents/infrastructure/services/agents/native-tools.factory';
+import {
+    buildNativeToolConfigs,
+    REPOSITORY_UNAVAILABLE,
+} from '@libs/agents/infrastructure/services/agents/native-tools.factory';
 
 describe('NULL_SANDBOX_INSTANCE — raises instead of answering empty (KRC-02)', () => {
     it('grep throws rather than resolving an empty string', async () => {
@@ -77,11 +80,17 @@ describe('NULL_SANDBOX_INSTANCE — raises instead of answering empty (KRC-02)',
 });
 
 describe('the audited consumers still hold with the throw', () => {
-    it('buildNativeToolConfigs registers NO tools for a null sandbox, so it never calls one', () => {
-        // The conversation path (chatWithKodyFromGit) passes NULL_SANDBOX_INSTANCE
-        // straight through when the lease cannot be acquired. It gates on
-        // `type === 'null'` before touching remoteCommands, which is what makes
-        // the throw safe there.
-        expect(buildNativeToolConfigs(NULL_SANDBOX_INSTANCE)).toEqual([]);
+    it('buildNativeToolConfigs answers that the checkout is unavailable on a null sandbox, so it never calls one', async () => {
+        // The conversation path (chatWithKodyFromGit) opens NULL_SANDBOX_INSTANCE
+        // on the first tool call when the lease cannot be acquired. Each tool
+        // gates on `type === 'null'` before touching remoteCommands, which is
+        // what makes the throw safe there.
+        const tools = buildNativeToolConfigs(async () => NULL_SANDBOX_INSTANCE);
+
+        for (const tool of tools) {
+            await expect(
+                tool.execute({ pattern: 'x', path: 'a.ts', start: 1, end: 2 }),
+            ).resolves.toEqual({ error: REPOSITORY_UNAVAILABLE });
+        }
     });
 });

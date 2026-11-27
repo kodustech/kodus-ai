@@ -32,6 +32,7 @@ import {
     fixedIpReasonFrom,
     syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
+import { FixedEgressIpUnavailableError } from '@libs/sandbox/domain/egress-plan';
 import type { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { readWithinRootCommand } from './read-within-root';
 
@@ -159,11 +160,53 @@ describe('buildE2BRemoteCommands', () => {
             error: '',
         } as any);
 
+    /**
+     * `exec` runs in the background and is awaited through its handle, so it
+     * can be stopped mid-stream. `chunks` are delivered to onStdout before
+     * `run` resolves; `outcome` is what `wait()` settles with.
+     */
+    const backgroundRun = (
+        outcome:
+            | { stdout: string; stderr?: string; exitCode: number }
+            | Error,
+        chunks: Array<string | { stderr: string }> = [],
+        // E2B streams output while the command runs, after `run` returned the
+        // handle; `late` delivers the chunks then instead of before.
+        { late = false }: { late?: boolean } = {},
+    ) => {
+        const kill = jest.fn().mockResolvedValue(true);
+        const disconnect = jest.fn().mockResolvedValue(undefined);
+        const out = chunks.filter((c): c is string => typeof c === 'string');
+        const err = chunks
+            .filter((c): c is { stderr: string } => typeof c !== 'string')
+            .map((c) => c.stderr);
+        const run = jest.fn(async (_cmd: string, opts: any) => {
+            const deliver = () => {
+                for (const c of chunks) {
+                    if (typeof c === 'string') opts.onStdout?.(c);
+                    else opts.onStderr?.(c.stderr);
+                }
+            };
+            if (!late) deliver();
+            return {
+                kill,
+                disconnect,
+                stdout: out.join(''),
+                stderr: err.join(''),
+                exitCode: undefined,
+                wait: async () => {
+                    if (late) deliver();
+                    if (outcome instanceof Error) throw outcome;
+                    return outcome;
+                },
+            };
+        });
+        return { run, kill, disconnect };
+    };
+
     describe('runCmd normalization', () => {
         it('returns the CommandExitError fields as a plain result instead of throwing (via exec)', async () => {
-            const run = jest
-                .fn()
-                .mockRejectedValue(exitError('out', 'boom', 3));
+            const { run } = backgroundRun(exitError('out', 'boom', 3));
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const res = await rc.exec('do-thing');
             expect(res).toEqual({ stdout: 'out', stderr: 'boom', exitCode: 3 });
@@ -565,7 +608,7 @@ describe('buildE2BRemoteCommands', () => {
 
     describe('exec', () => {
         it('prefixes the command with cd REPO_DIR and returns separated streams', async () => {
-            const run = jest.fn().mockResolvedValue({
+            const { run, kill } = backgroundRun({
                 stdout: 'ok',
                 stderr: 'warn',
                 exitCode: 0,
@@ -573,13 +616,15 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const res = await rc.exec('git status');
             expect(res).toEqual({ stdout: 'ok', stderr: 'warn', exitCode: 0 });
-            expect(run).toHaveBeenCalledWith(`cd ${REPO_DIR} && git status`, {
-                timeoutMs: 30_000,
-            });
+            expect(run).toHaveBeenCalledWith(
+                `cd ${REPO_DIR} && git status`,
+                expect.objectContaining({ background: true, timeoutMs: 30_000 }),
+            );
+            expect(kill).not.toHaveBeenCalled();
         });
 
         it('defaults a falsy stderr to an empty string', async () => {
-            const run = jest.fn().mockResolvedValue({
+            const { run } = backgroundRun({
                 stdout: 'ok',
                 stderr: undefined,
                 exitCode: 5,
@@ -587,6 +632,232 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const res = await rc.exec('cmd');
             expect(res).toEqual({ stdout: 'ok', stderr: '', exitCode: 5 });
+        });
+
+        // A conversation `git log -p` printed 424 MB; E2B buffered all of it
+        // in the worker before the guards froze on it (Nov 2026).
+        it('stops a command whose stdout passes the cap and keeps only the head', async () => {
+            const line = 'x'.repeat(99) + '\n';
+            const chunk = line.repeat(10_000); // 1 MB
+            const chunks = Array.from({ length: 5 }, () => chunk);
+            const { run, kill } = backgroundRun(
+                exitError(chunks.join(''), '', -1),
+                chunks,
+            );
+            const warn = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                logger: { warn } as any,
+            });
+
+            const res = await rc.exec('git log -p --token=SECRET_CANARY');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            // 2,000,000 characters end on a newline, which the cut drops.
+            expect(res).toEqual({
+                stdout: line.repeat(20_000).slice(0, -1),
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+            expect(warn).toHaveBeenCalledTimes(1);
+            // The program only: an argument can carry a token.
+            expect(warn.mock.calls[0][0].metadata).toEqual({
+                program: 'git',
+                maxChars: 2_000_000,
+            });
+            expect(JSON.stringify(warn.mock.calls)).not.toContain('SECRET_CANARY');
+        });
+
+        it('stops a command whose output arrives after run returned', async () => {
+            const line = 'z'.repeat(99) + '\n';
+            const chunks = Array.from({ length: 3 }, () => line.repeat(10_000));
+            const { run, kill } = backgroundRun(
+                exitError(chunks.join(''), '', -1),
+                chunks,
+                { late: true },
+            );
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('git show abc');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            expect(res.truncated).toBe(true);
+            expect(res.stdout).toBe(line.repeat(20_000).slice(0, -1));
+        });
+
+        // E2B 2.46.1: a killed command's stream keeps delivering what the
+        // sandbox already produced, and `wait()` settles only on the stream's
+        // end. Only `disconnect()` ends the wait early (it then rejects).
+        it('drops the stream once stopped instead of waiting for all the output', async () => {
+            const line = 'w'.repeat(99) + '\n';
+            const chunk = line.repeat(10_000); // 1 MB
+            let received = 0;
+            let dropped!: (err: Error) => void;
+            const kill = jest.fn().mockResolvedValue(true);
+            const disconnect = jest.fn(async () =>
+                dropped(new Error('Process exited without a result')),
+            );
+            const run = jest.fn(async (_cmd: string, opts: any) => {
+                const handle: any = {
+                    kill,
+                    disconnect,
+                    exitCode: undefined,
+                    get stdout() {
+                        return chunk.repeat(received);
+                    },
+                    stderr: '',
+                    wait: () =>
+                        new Promise((resolve, reject) => {
+                            // The rest of a 424 MB answer, still streaming.
+                            const timer = setInterval(() => {
+                                received++;
+                                opts.onStdout?.(chunk);
+                                if (received === 400) {
+                                    clearInterval(timer);
+                                    resolve({ stdout: handle.stdout, stderr: '', exitCode: 0 });
+                                }
+                            }, 0);
+                            dropped = (err) => {
+                                clearInterval(timer);
+                                reject(err);
+                            };
+                        }),
+                };
+                return handle;
+            });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('git show abc');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            expect(disconnect).toHaveBeenCalledTimes(1);
+            // Stopped on the third megabyte, not after all 400.
+            expect(received).toBe(3);
+            expect(res).toEqual({
+                stdout: line.repeat(20_000).slice(0, -1),
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+        });
+
+        it('leaves a small streamed output alone: no kill, no flag, no log', async () => {
+            const { run, kill } = backgroundRun(
+                { stdout: 'a\nb\n', stderr: '', exitCode: 0 },
+                ['a\n', 'b\n'],
+                { late: true },
+            );
+            const warn = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                logger: { warn } as any,
+            });
+
+            const res = await rc.exec('ls');
+
+            expect(kill).not.toHaveBeenCalled();
+            expect(warn).not.toHaveBeenCalled();
+            expect(res).toEqual({ stdout: 'a\nb\n', stderr: '', exitCode: 0 });
+        });
+
+        it('does not stop an output of exactly the cap', async () => {
+            const exact = 'q'.repeat(2_000_000);
+            const { run, kill } = backgroundRun(
+                { stdout: exact, stderr: '', exitCode: 0 },
+                [exact],
+            );
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat exact.txt');
+
+            expect(kill).not.toHaveBeenCalled();
+            expect(res).toEqual({ stdout: exact, stderr: '', exitCode: 0 });
+        });
+
+        it('re-throws a stream error when nothing was stopped', async () => {
+            const { run } = backgroundRun(new Error('sandbox gone'), ['x\n']);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            await expect(rc.exec('ls')).rejects.toThrow('sandbox gone');
+        });
+
+        it('logs the program alone, cut at 40 characters and at shell operators', async () => {
+            const big = 'w'.repeat(2_000_001);
+            const cases: Array<[string, string]> = [
+                ['cat;rm -rf / --token=SECRET', 'cat'],
+                [`${'p'.repeat(60)} arg`, 'p'.repeat(40)],
+                ['  grep|head', 'grep'],
+            ];
+            for (const [command, program] of cases) {
+                const { run } = backgroundRun(exitError(big, '', -1), [big]);
+                const warn = jest.fn();
+                const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                    logger: { warn } as any,
+                });
+                await rc.exec(command);
+                expect(warn).toHaveBeenCalledWith({
+                    message: '[SANDBOX-EXEC] command stopped after 2000000 output characters',
+                    context: undefined,
+                    metadata: { program, maxChars: 2_000_000 },
+                });
+            }
+        });
+
+        it('keeps a head that starts with a newline and has no other', async () => {
+            const text = '\n' + 'a'.repeat(2_000_005);
+            const { run } = backgroundRun(exitError(text, '', -1), [text]);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat odd.txt');
+
+            expect(res.stdout).toBe('\n' + 'a'.repeat(1_999_999));
+        });
+
+        it('counts stderr toward the cap', async () => {
+            const line = 'e'.repeat(99) + '\n';
+            const chunks = Array.from({ length: 3 }, () => ({
+                stderr: line.repeat(10_000),
+            }));
+            const { run, kill } = backgroundRun(
+                exitError('', chunks.map((c) => c.stderr).join(''), -1),
+                chunks,
+            );
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('find / -name x');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            expect(res).toEqual({
+                stdout: '',
+                stderr: line.repeat(20_000).slice(0, -1),
+                exitCode: -1,
+                truncated: true,
+            });
+        });
+
+        it('keeps what a stopped command printed when its stream errors', async () => {
+            const chunks = Array.from({ length: 3 }, () => 'y\n'.repeat(600_000));
+            const { run } = backgroundRun(new Error('stream closed'), chunks);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat big.json');
+
+            expect(res).toEqual({
+                stdout: 'y\n'.repeat(1_000_000).slice(0, -1),
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+        });
+
+        it('does not split an emoji when the cut has no newline to stop at', async () => {
+            // 1,999,999 ASCII characters, then an emoji across the cap.
+            const chunks = ['a'.repeat(1_999_999) + '😀' + 'b'.repeat(10)];
+            const { run } = backgroundRun(exitError(chunks[0], '', -1), chunks);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat one-line.txt');
+
+            expect(res.stdout).toBe('a'.repeat(1_999_999));
         });
     });
 });
@@ -1235,7 +1506,8 @@ describe('E2BSandboxService egress route', () => {
      * boots it. `onProxy` follows the iptables commands the service runs.
      */
     const fakeSandbox = (opts: {
-        directClone?: 'ok' | 'refused';
+        directClone?:
+            'ok' | 'refused' | 'bad-credentials' | 'no-repo-permission' | 'dns';
         proxyClone?: 'ok' | 'fails';
         reachable?: boolean;
         reachCheck?: 'sandbox-error';
@@ -1266,6 +1538,21 @@ describe('E2BSandboxService egress route', () => {
                 const outcome = onProxy
                     ? (opts.proxyClone ?? 'ok')
                     : (opts.directClone ?? 'ok');
+                if (outcome === 'bad-credentials') {
+                    throw exitError(
+                        "fatal: Authentication failed for 'https://github.com/acme/api.git/'",
+                    );
+                }
+                if (outcome === 'no-repo-permission') {
+                    throw exitError(
+                        "remote: Write access to repository not granted.\nfatal: unable to access 'https://github.com/acme/api.git/': The requested URL returned error: 403",
+                    );
+                }
+                if (outcome === 'dns') {
+                    throw exitError(
+                        "fatal: unable to access 'https://github.com/acme/api.git/': Could not resolve host: github.com",
+                    );
+                }
                 if (outcome !== 'ok') throw exitError(IP_BLOCK);
             }
             return { stdout: '', stderr: '', exitCode: 0 };
@@ -1279,9 +1566,25 @@ describe('E2BSandboxService egress route', () => {
         return { sbx, log };
     };
 
-    const policy = (route: 'direct' | 'fixed_ip') => ({
+    type Fallback = 'allowed' | 'plan' | 'turned_off' | 'throws';
+    const policy = (
+        route: 'direct' | 'fixed_ip',
+        fallback: Fallback,
+        why = route === 'direct' ? 'not_marked' : 'marked',
+    ) => ({
         route: jest.fn().mockResolvedValue(route),
+        decide:
+            why === 'throws'
+                ? jest.fn().mockRejectedValue(new Error('pg down'))
+                : jest.fn().mockResolvedValue({ route, why }),
+        fixedIpAllowed: jest.fn().mockResolvedValue(fallback !== 'plan'),
+        fixedIpFallback:
+            fallback === 'throws'
+                ? jest.fn().mockRejectedValue(new Error('billing down'))
+                : jest.fn().mockResolvedValue(fallback),
         markFixedIpRequired: jest.fn().mockResolvedValue(undefined),
+        getFixedIpSetting: jest.fn(),
+        setFixedIp: jest.fn(),
     });
 
     const create = async (opts: {
@@ -1290,6 +1593,15 @@ describe('E2BSandboxService egress route', () => {
         template?: boolean;
         scoped?: boolean;
         gitProxyMisconfigured?: boolean;
+        /** The organization's plan includes the fixed IP (default: yes). */
+        paidPlan?: boolean;
+        /** What the policy answers after a failed direct clone. */
+        fallback?: Fallback;
+        /** Why the policy picked the route (default follows the route);
+         * `throws` makes the decision itself fail. */
+        why?: string;
+        /** Overrides the organization and team the sandbox is created for. */
+        scopeOverride?: { organizationId?: string; teamId?: string };
     }) => {
         const { sbx, log } = fakeSandbox(opts.sandbox ?? {});
         (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
@@ -1307,8 +1619,23 @@ describe('E2BSandboxService egress route', () => {
                     }),
                 })[key],
         };
-        const egress = policy(opts.route);
+        const egress = policy(
+            opts.route,
+            opts.fallback ?? (opts.paidPlan === false ? 'plan' : 'allowed'),
+            opts.why,
+        );
         const service = new E2BSandboxService(config as any, egress);
+        const logged = jest.fn();
+        const realLogger = (service as any).logger;
+        (service as any).logger = new Proxy(realLogger, {
+            get: (target, prop) =>
+                prop === 'log' || prop === 'warn'
+                    ? (entry: unknown) => {
+                          logged(entry);
+                          return target[prop](entry);
+                      }
+                    : target[prop],
+        });
         const result = service.createSandboxWithRepo({
             cloneUrl: 'https://github.com/acme/api.git',
             authToken: 'tok',
@@ -1317,9 +1644,16 @@ describe('E2BSandboxService egress route', () => {
             platform: PlatformType.GITHUB,
             sandboxMetadata: { stage: 'review' },
             ...(opts.scoped !== false && { organizationId: ORG, teamId: TEAM }),
+            ...opts.scopeOverride,
         });
-        return { result, egress, log, sbx };
+        return { result, egress, log, sbx, logged };
     };
+
+    /** The one `[egress] route=` line the sandbox wrote. */
+    const routeLines = (logged: jest.Mock) =>
+        logged.mock.calls
+            .map(([entry]) => entry as { message: string; metadata: any })
+            .filter((e) => e.message?.startsWith('[egress] route='));
 
     const clones = (log: { cmd: string; onProxy: boolean }[]) =>
         log.filter((l) => l.cmd.includes('git init'));
@@ -1329,7 +1663,7 @@ describe('E2BSandboxService egress route', () => {
     it('leaves the network alone for a team that needs the fixed IP', async () => {
         const { result, log, egress } = await create({ route: 'fixed_ip' });
         await result;
-        expect(egress.route).toHaveBeenCalledWith({
+        expect(egress.decide).toHaveBeenCalledWith({
             organizationId: ORG,
             teamId: TEAM,
         });
@@ -1424,13 +1758,112 @@ describe('E2BSandboxService egress route', () => {
         expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
     });
 
+    it('never sends a team whose plan has no fixed IP back to the proxy when its Git host refuses the direct clone', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'refused' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(error.message).toContain('Teams and Enterprise');
+        expect(error.message).toContain('only accepts allowlisted IPs');
+        expect(error.message).not.toMatch(
+            /ip_allow_list|unreachable|forbidden/,
+        );
+        expect(error.reason).toBe('ip_allow_list');
+        expect(error.blockedBy).toBe('plan');
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
+        expect(
+            log.some((l) => l.cmd.includes('iptables -t nat -A OUTPUT')),
+        ).toBe(false);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('tells a team whose plan has no fixed IP why, when its Git host cannot be reached direct', async () => {
+        const { result, log } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { reachable: false },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(error.reason).toBe('unreachable');
+        expect(clones(log)).toHaveLength(0);
+    });
+
+    it('gives a team whose plan has no fixed IP the clone error itself when it does not look like a firewall', async () => {
+        const { result } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'bad-credentials' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).not.toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(String(error?.stderr ?? error?.message)).toContain(
+            'Authentication failed',
+        );
+    });
+
+    it('respects a team that turned the fixed IP off by hand, and says how to turn it on', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            fallback: 'turned_off',
+            sandbox: { directClone: 'refused' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(error.blockedBy).toBe('turned_off');
+        expect(error.message).toContain('Organization settings > General');
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('retries through the fixed IP and marks the team when the policy cannot answer', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            fallback: 'throws',
+            sandbox: { directClone: 'refused' },
+        });
+        await result;
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false, true]);
+        expect(egress.markFixedIpRequired).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            'ip_allow_list',
+        );
+    });
+
+    it("gives a team whose plan has no fixed IP git's own 403 when it is not the IP allow list", async () => {
+        const { result } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'no-repo-permission' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).not.toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(String(error?.stderr)).toContain(
+            'Write access to repository not granted',
+        );
+    });
+
+    it("gives a team whose plan has no fixed IP git's own error when the host name does not resolve", async () => {
+        const { result } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'dns' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).not.toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(String(error?.stderr)).toContain('Could not resolve host');
+    });
+
     it('keeps the fixed IP, without asking, for a sandbox that does not say which team it serves', async () => {
         const { result, log, egress } = await create({
             route: 'direct',
             scoped: false,
         });
         await result;
-        expect(egress.route).not.toHaveBeenCalled();
+        expect(egress.decide).not.toHaveBeenCalled();
         expect(touchesNetwork(log)).toBe(false);
     });
 
@@ -1440,7 +1873,122 @@ describe('E2BSandboxService egress route', () => {
             template: false,
         });
         await result;
-        expect(egress.route).not.toHaveBeenCalled();
+        expect(egress.decide).not.toHaveBeenCalled();
+    });
+
+    it('logs one route line per sandbox with the organization, the team and why', async () => {
+        const { result, logged } = await create({ route: 'direct' });
+        await result;
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=direct (not_marked)',
+                metadata: expect.objectContaining({
+                    organizationId: ORG,
+                    teamId: TEAM,
+                    route: 'direct',
+                    why: 'not_marked',
+                }),
+            }),
+        ]);
+    });
+
+    it("logs the policy's own reason, not one read off the route", async () => {
+        for (const [route, why] of [
+            ['fixed_ip', 'rollout_off'],
+            ['direct', 'not_in_plan'],
+        ] as const) {
+            const { result, logged } = await create({ route, why });
+            await result;
+            expect(routeLines(logged)).toEqual([
+                expect.objectContaining({
+                    message: `[egress] route=${route} (${why})`,
+                    metadata: expect.objectContaining({ route, why }),
+                }),
+            ]);
+        }
+    });
+
+    it('logs the fixed IP with the reason when the sandbox cannot be taken off the proxy', async () => {
+        const { result, logged } = await create({
+            route: 'direct',
+            sandbox: { cannotLeaveProxy: true },
+        });
+        await result;
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=fixed_ip (bypass_failed)',
+            }),
+        ]);
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'could not take the sandbox off the egress proxy',
+                ),
+                metadata: expect.objectContaining({
+                    organizationId: ORG,
+                    teamId: TEAM,
+                }),
+            }),
+        );
+    });
+
+    it('keeps the fixed IP, and says so, when the route decision itself fails', async () => {
+        const { result, logged, log } = await create({
+            route: 'direct',
+            why: 'throws',
+        });
+        await result;
+        expect(touchesNetwork(log)).toBe(false);
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=fixed_ip (policy_failed)',
+            }),
+        ]);
+    });
+
+    it('decides nothing for a sandbox with an organization but no team, nor a team but no organization', async () => {
+        for (const scopeOverride of [
+            { teamId: undefined },
+            { organizationId: undefined },
+        ]) {
+            const { result, logged, egress, log } = await create({
+                route: 'direct',
+                scopeOverride,
+            });
+            await result;
+            expect(egress.decide).not.toHaveBeenCalled();
+            expect(touchesNetwork(log)).toBe(false);
+            expect(routeLines(logged)).toEqual([
+                expect.objectContaining({
+                    message: '[egress] route=fixed_ip (no_scope)',
+                }),
+            ]);
+        }
+    });
+
+    it('warns about the proxy only when the sandbox could not leave it', async () => {
+        const { result, logged } = await create({ route: 'direct' });
+        await result;
+        expect(logged).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'could not take the sandbox off the egress proxy',
+                ),
+            }),
+        );
+    });
+
+    it('logs why a sandbox without the template keeps the fixed IP', async () => {
+        const { result, logged } = await create({
+            route: 'direct',
+            template: false,
+        });
+        await result;
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=fixed_ip (no_template)',
+            }),
+        ]);
     });
 
     it('never tells the sandbox provider which organization or team it serves', async () => {

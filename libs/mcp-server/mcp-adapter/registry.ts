@@ -70,6 +70,7 @@ export class MCPRegistry {
                         type: transportType,
                         url: config.url, // obrigatório para http/sse/ws
                         headers: config.headers,
+                        trusted: config.trusted === true,
                         timeout: config.timeout ?? this.options.defaultTimeout,
                         retries: config.retries ?? this.options.maxRetries,
                     },

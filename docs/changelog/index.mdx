@@ -71,6 +71,106 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">November 24, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">See what each specialist agent did during a Heavy review</div>
+                    <p className="kodus-changelog-copy">In Heavy mode, Kody runs specialist agents in parallel with the general code review. Until now, you could only see the final review results, without knowing how each agent contributed.</p>
+                    <p className="kodus-changelog-copy">The PR timeline now includes a <strong>Specialist Agents</strong> section, where you can see:</p>
+                    <ul className="kodus-changelog-list">
+                        <li>Each agent's status.</li>
+                        <li>Execution time.</li>
+                        <li>Tool calls made.</li>
+                        <li>How many findings each agent kept after checking them.</li>
+                        <li>The reason for failure if an agent couldn't complete its analysis.</li>
+                    </ul>
+                    <p className="kodus-changelog-copy">We've also separated the review mode from the execution status. Each PR and review run now displays a Balanced or Heavy tag, while the Status column reflects only the outcome of the execution.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/11/specialist-agents.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-performance filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Review hangs:</strong> fixed two issues that could interrupt review processing: calculating diffs for large files in Azure Repos and filtering out files containing secrets from search results with extremely long lines, such as minified code and lockfiles. We've also improved the detection of stalled review runs.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Suggested fixes:</strong> the "Suggested fix" block is no longer displayed when Kody's comment doesn't include a suggested code change.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Duplicate comments:</strong> fixed an issue that could cause Kody to repost a finding when the comparison against previous comments timed out. Findings with the same rule and text are no longer duplicated.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Incomplete reviews:</strong> when part of a review fails, the review is now marked as partial rather than being treated as complete and potentially approved.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Diffs exceeding 50,000 lines:</strong> when a diff needs to be truncated, the review now displays a warning identifying the affected files.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Call graph:</strong> when a call graph cannot be generated, the PR now displays a "Call graph unavailable" warning, providing more visibility into the context used during the review.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Prompt caching for Kody Rules:</strong> Kody Rules checks now reuse shared portions of the prompt through provider-side caching, reducing input token costs. This improvement is available for Claude models (directly or through Bedrock) and OpenAI GPT-5.6 or later.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">License verification unavailable:</strong> when the billing service is temporarily unavailable, Kody now explains that she couldn't verify the subscription and asks the user to mention her again in a few minutes, instead of incorrectly reporting that the trial has expired.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitLab:</strong> fixed an issue that could cause active members to appear as "Removed from organization" on the Licenses page when the API hit its rate limit. We also fixed an issue where historical merge requests were imported without authors, titles, or dates.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitHub:</strong> the author list used for filtering, license management, and bot detection now includes all PRs from the past 60 days, rather than just the 100 most recent PRs per repository. This prevents authors and bots, such as Dependabot, from disappearing from the list in repositories with high PR volumes.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Azure Repos and Forgejo:</strong> network failures or rate limit errors encountered while fetching PR files are now recorded as execution failures, preventing reviews from being marked as successful when no files were analyzed.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Forgejo:</strong> fixed an issue that prevented IDE rules from being imported through the "Sync IDE rules" feature, even when the rule files were found.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">BYOK:</strong></p>
+                        <ul className="kodus-changelog-list">
+                            <li>Fixed the formatting of Anthropic model names and versions.</li>
+                            <li>Models with identical names now display their IDs to make them easier to distinguish.</li>
+                            <li>Added support for listing models from OpenAI-compatible endpoints that return a flat list, such as Together.</li>
+                            <li>The option to enter a model manually remains available while searching.</li>
+                            <li>Removed Claude Sonnet 4, Claude 3.7 Sonnet, and Claude 3.5 Sonnet v2 from the Bedrock fallback list, as these models have been discontinued by AWS.</li>
+                        </ul>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Self-hosted:</strong> the configuration link in Kody's initial comment now points to your own instance using the <code className="kodus-changelog-code">API_USER_INVITE_BASE_URL</code> environment variable, instead of the cloud dashboard.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">November 17, 2026</span>
         </div>
 
@@ -2203,6 +2303,1184 @@ rss: true
 </div>
 
 <div className="kodus-changelog-rss-source" aria-hidden="true">
+    <Update label="November 24, 2026 - See what each specialist agent did during a Heavy review" tags={["AI Engine", "UX & Interface"]}>
+        In Heavy mode, Kody runs specialist agents in parallel with the general code review. Until now, you could only see the final review results, without knowing how each agent contributed.
+
+        The PR timeline now includes a Specialist Agents section, where you can see each agent's status, execution time, tool calls made, how many findings each agent kept after checking them, and the reason for failure if an agent couldn't complete its analysis.
+
+        We've also separated the review mode from the execution status. Each PR and review run now displays a Balanced or Heavy tag, while the Status column reflects only the outcome of the execution.
+
+        Video: https://kodus.io/wp-content/uploads/2026/11/specialist-agents.mp4
+    </Update>
+
+    <Update label="November 24, 2026 - Review hangs" tags={["Performance", "GIT Provider"]}>
+        Fixed two issues that could interrupt review processing: calculating diffs for large files in Azure Repos and filtering out files containing secrets from search results with extremely long lines, such as minified code and lockfiles. We've also improved the detection of stalled review runs.
+    </Update>
+
+    <Update label="November 24, 2026 - Suggested fixes" tags={["UX & Interface"]}>
+        The "Suggested fix" block is no longer displayed when Kody's comment doesn't include a suggested code change.
+    </Update>
+
+    <Update label="November 24, 2026 - Duplicate comments" tags={["AI Engine"]}>
+        Fixed an issue that could cause Kody to repost a finding when the comparison against previous comments timed out. Findings with the same rule and text are no longer duplicated.
+    </Update>
+
+    <Update label="November 24, 2026 - Incomplete reviews" tags={["AI Engine"]}>
+        When part of a review fails, the review is now marked as partial rather than being treated as complete and potentially approved.
+    </Update>
+
+    <Update label="November 24, 2026 - Diffs exceeding 50,000 lines" tags={["AI Engine"]}>
+        When a diff needs to be truncated, the review now displays a warning identifying the affected files.
+    </Update>
+
+    <Update label="November 24, 2026 - Call graph" tags={["AI Engine"]}>
+        When a call graph cannot be generated, the PR now displays a "Call graph unavailable" warning, providing more visibility into the context used during the review.
+    </Update>
+
+    <Update label="November 24, 2026 - Prompt caching for Kody Rules" tags={["Kody Rules", "BYOK"]}>
+        Kody Rules checks now reuse shared portions of the prompt through provider-side caching, reducing input token costs. This improvement is available for Claude models (directly or through Bedrock) and OpenAI GPT-5.6 or later.
+    </Update>
+
+    <Update label="November 24, 2026 - License verification unavailable" tags={["Billing & Licenses"]}>
+        When the billing service is temporarily unavailable, Kody now explains that she couldn't verify the subscription and asks the user to mention her again in a few minutes, instead of incorrectly reporting that the trial has expired.
+    </Update>
+
+    <Update label="November 24, 2026 - GitLab" tags={["GIT Provider", "Billing & Licenses"]}>
+        Fixed an issue that could cause active members to appear as "Removed from organization" on the Licenses page when the API hit its rate limit. We also fixed an issue where historical merge requests were imported without authors, titles, or dates.
+    </Update>
+
+    <Update label="November 24, 2026 - GitHub" tags={["GIT Provider", "Billing & Licenses"]}>
+        The author list used for filtering, license management, and bot detection now includes all PRs from the past 60 days, rather than just the 100 most recent PRs per repository. This prevents authors and bots, such as Dependabot, from disappearing from the list in repositories with high PR volumes.
+    </Update>
+
+    <Update label="November 24, 2026 - Azure Repos and Forgejo" tags={["GIT Provider"]}>
+        Network failures or rate limit errors encountered while fetching PR files are now recorded as execution failures, preventing reviews from being marked as successful when no files were analyzed.
+    </Update>
+
+    <Update label="November 24, 2026 - Forgejo" tags={["GIT Provider", "Kody Rules"]}>
+        Fixed an issue that prevented IDE rules from being imported through the "Sync IDE rules" feature, even when the rule files were found.
+    </Update>
+
+    <Update label="November 24, 2026 - BYOK" tags={["BYOK"]}>
+        Fixed the formatting of Anthropic model names and versions. Models with identical names now display their IDs to make them easier to distinguish. Added support for listing models from OpenAI-compatible endpoints that return a flat list, such as Together. The option to enter a model manually remains available while searching. Removed Claude Sonnet 4, Claude 3.7 Sonnet, and Claude 3.5 Sonnet v2 from the Bedrock fallback list, as these models have been discontinued by AWS.
+    </Update>
+
+    <Update label="November 24, 2026 - Self-hosted" tags={["Self-hosted"]}>
+        The configuration link in Kody's initial comment now points to your own instance using the `API_USER_INVITE_BASE_URL` environment variable, instead of the cloud dashboard.
+    </Update>
+
+    <Update label="November 17, 2026 - PR risk assessment, routing, and approval policies (Beta)" tags={["AI Engine", "GIT Provider", "Self-hosted"]}>
+        Until now, risk assessment was tied to auto-approval. This meant auto-approval had to be enabled for Kody to assess a PR's risk.
+
+        Now, risk assessment, routing, and approval work independently, while sharing the same risk assessment result.
+
+        Risk assessment:
+
+        Kody evaluates the entire PR before determining the review mode, even when auto-approval is disabled. No configuration is needed to get started.
+
+        You can also add criteria specific to your team, such as the impact of changing account permissions or deleting customer data. Each criterion can have its own instructions and apply only to specific files.
+
+        With Preview on a PR, you can test these criteria against a real PR, including changes you haven't saved yet, without posting comments or approving the PR.
+
+        Video: https://kodus.io/wp-content/uploads/2026/11/risk_assessment.mp4
+
+        Routing:
+
+        You can set one review mode for PRs with no identified risks and another for PRs where risks are detected.
+
+        For example, you could use Balanced for everyday reviews and Heavy when Kody identifies a risk. If risk assessment can't run, Kody falls back to the configured default mode. If risk assessment is disabled, the same mode applies to every PR.
+
+        You can also see which models are used at each scope (global, repository, or directory) and configure different models for Balanced and Heavy at the organization level.
+
+        The `--heavy` and `--balanced` commands still take precedence over routing, subject to your plan's restrictions.
+
+        Video: https://kodus.io/wp-content/uploads/2026/11/rounting.mp4
+
+        Approval policies:
+
+        Auto-approval now lets you create policies with custom names and conditions.
+
+        You can combine PR labels, authors (including GitHub teams, GitLab groups, and Azure DevOps teams), included or excluded files, limits on changed lines, and instructions Kody must check before approving.
+
+        For example, you could create a policy that only approves dependency updates that stay within the same major version.
+
+        If a PR meets at least one policy, auto-approval may be allowed. Kody also posts a comment explaining which policy allowed the approval or which conditions weren't met.
+
+        If a risk is identified, risk assessment is unavailable, or the PR modifies a file that requires human approval, no policy can automatically approve it.
+
+        Already using auto-approval? Your current configuration won't change. It will be converted into a policy called Existing approval policy.
+
+        Available on Teams and Enterprise plans. For self-hosted installations, `BETA_FEATURES=true` must be enabled.
+
+        Video: https://kodus.io/wp-content/uploads/2026/11/approval-policies.mp4
+    </Update>
+
+    <Update label="November 17, 2026 - Review every repository, including new ones" tags={["GIT Provider", "Self-hosted", "Billing & Licenses"]}>
+        With Review every repository, Kody can review every repository accessible through your Git integration and automatically include new repositories as they're created. No need to add them manually.
+
+        Before enabling it, you can see how many repositories will be included. Archived repositories are excluded, while forks and mirrors are only included if you enable that option.
+
+        Kody checks for new repositories every 10 minutes. On GitHub, if the Kodus app is configured to receive the `Repository` event, new repositories are added as soon as GitHub reports their creation.
+
+        Want to exclude a repository? Just disable automated review in its settings. That choice is preserved during future syncs, and PR authors don't consume licenses for automated reviews.
+
+        Available for GitHub, GitLab, Bitbucket Cloud, Bitbucket Data Center, Azure DevOps, and Forgejo, on both cloud and self-hosted deployments.
+
+        Video: https://kodus.io/wp-content/uploads/2026/11/Revise-todos-os-repositorios.mp4
+    </Update>
+
+    <Update label="November 17, 2026 - Custom Agents (Beta): CLAUDE.md and AGENTS.md can now be used as references" tags={["Custom Agents", "AI Engine"]}>
+        When repository instructions are enabled, Kody loads files like `CLAUDE.md` and `AGENTS.md` from the target branch to understand the repository's guidelines.
+
+        The problem was that even though these instructions were available, Custom Agents couldn't reference them in comments. If an agent found a violation of a rule defined in one of these files, the comment was discarded because Kody only accepted citations from guides directly linked to the agent.
+
+        Now, these files are also accepted as sources.
+
+        For example, if `CLAUDE.md` specifies that discount rules must live in `PricingService`, an agent can flag a controller that applies discounts directly and cite that rule in its comment.
+
+        Validation still applies: if the cited text doesn't exist in the file, the comment is discarded.
+
+        Another improvement is that teams using only Custom Agents, with bug, security, and performance categories disabled, will now also load these files during reviews.
+    </Update>
+
+    <Update label="November 17, 2026 - Custom Agents (Beta): Architecture template improvements" tags={["Custom Agents", "CLI"]}>
+        The Architecture template now includes a clearer rule about dependency direction between code layers.
+
+        The rule is simple: dependencies must point inward.
+
+        If domain or model code imports something from a controller, route handler, adapter, job, page, or web framework, even if it's just a type, the agent should flag it as a violation.
+
+        On the other hand, a component built on top of UI primitives follows the expected dependency direction and shouldn't trigger a comment.
+
+        This change applies to new agents created with the Architecture template, both through the app and the CLI (`kodus agents create --template architecture`).
+    </Update>
+
+    <Update label="November 17, 2026 - More accurate detection of implemented suggestions" tags={["AI Engine", "Cockpit"]}>
+        With every new commit to a PR, Kody checks which suggestions have been implemented.
+
+        Previously, this check relied heavily on the suggested fix example. Now, Kody considers the comment text, the affected lines, and the original code. This means developers don't have to follow the exact suggested fix for their changes to be recognized as implemented.
+
+        The check is also performed file by file, using the corresponding patch.
+
+        When Kody can't confirm whether a suggestion was implemented, whether due to a model failure, an unreadable response, or a missing file-specific patch, the suggestion receives a Not measured status instead of being marked as not implemented.
+
+        These suggestions are excluded from the implementation rate calculation in Cockpit's Kodus Review, but remain visible in the weekly chart and explorer.
+
+        Threads are still automatically resolved only when the suggestion has been fully implemented.
+    </Update>
+
+    <Update label="November 17, 2026 - Worker performance improvements" tags={["Performance", "Kody Rules", "GIT Provider"]}>
+        We fixed three issues that were causing unnecessary processing during reviews.
+
+        On large PRs, checking ignored file patterns could block the worker for about a minute. Kody Rules synchronization also reread the organization's entire document whenever a rule was updated.
+
+        Additionally, when GitHub returned a rate limit, Kody kept trying to fetch files individually.
+
+        All three issues have been fixed without changing review results.
+    </Update>
+
+    <Update label="November 17, 2026 - Faster reviews list" tags={["Performance", "UX & Interface"]}>
+        Teams with a large review history sometimes had to wait tens of seconds for the list to open. In some cases, it wouldn't load at all.
+
+        Now, each page fetches only the items it needs, and filters for open PRs are processed directly in the database.
+    </Update>
+
+    <Update label="November 17, 2026 - Kody's change requests" tags={["GIT Provider"]}>
+        When auto-approval was disabled or blocked by a policy, Kody's "changes requested" status could continue blocking a PR even after all critical findings had been resolved. Now, Kody dismisses the change request as soon as all those findings are resolved.
+    </Update>
+
+    <Update label="November 17, 2026 - Risk assessment on large PRs" tags={["AI Engine"]}>
+        PRs with diffs larger than 50,000 characters weren't receiving risk assessments. Now, Kody sends the entire PR to the model, respecting the actual context window limit of the configured model.
+    </Update>
+
+    <Update label="November 17, 2026 - Approval withholding reasons" tags={["GIT Provider"]}>
+        Previously, different reasons for withholding approval could display the same message. Now, Kody tells you exactly what happened: a new commit during the review, a change to the target branch, or issues reading the PR labels or PR data. We also fixed an issue where the same reason could be posted twice in the comments.
+    </Update>
+
+    <Update label="November 17, 2026 - Grouped suggestions" tags={["AI Engine"]}>
+        When a comment flagged the same issue in multiple locations using "Also found in", Kody could mark the suggestion as implemented and resolve the thread after only the primary file had been fixed. Now, the suggestion is only considered implemented once every affected location has been fixed. Until then, its status remains partial.
+    </Update>
+
+    <Update label="November 17, 2026 - Custom Agents (Beta), code file references" tags={["Custom Agents"]}>
+        When a Custom Agent referenced a line from the repository itself as an example of a pattern to follow, the comment could be discarded. Now, Kody validates that comment as a bug, using the file from the target branch as a reference.
+    </Update>
+
+    <Update label="November 17, 2026 - Context window" tags={["AI Engine", "BYOK"]}>
+        Some models without a known context window size were being assigned the default 128k limit. Now, Kody checks additional sources to identify each model's actual limit.
+    </Update>
+
+    <Update label="November 17, 2026 - Bitbucket Cloud" tags={["GIT Provider", "Performance"]}>
+        Kody was making multiple individual requests to fetch authors and files, quickly consuming Bitbucket's per-user API request quota. In accounts that hit the limit, some reviews ended up being skipped. Now, Kody uses a single diff per PR and reuses previously stored author data.
+
+        We've also improved how 429 errors are handled. When Bitbucket returns this error, it's displayed in the repository list instead of showing an empty list.
+    </Update>
+
+    <Update label="November 17, 2026 - Forgejo" tags={["GIT Provider"]}>
+        When multiple Forgejo instances were connected, a webhook could be associated with the wrong repository if their IDs matched. Now, Kody identifies the repository within the instance that sent the webhook. This fix has been live on cloud since November 12.
+    </Update>
+
+    <Update label="November 17, 2026 - GitHub" tags={["GIT Provider"]}>
+        We fixed an issue where fetching a PR diff and making other API calls could use the wrong repository owner. Now, Kody uses the owner saved when the repository was selected.
+    </Update>
+
+    <Update label="November 17, 2026 - MCP" tags={["MCP", "CLI"]}>
+        We fixed an issue that caused Kody's issue list to appear empty for team keys used by the CLI.
+    </Update>
+
+    <Update label="November 17, 2026 - Self-hosted" tags={["Self-hosted"]}>
+        Some beta features were being enabled even without `BETA_FEATURES=true`. Now, they remain disabled until that setting is enabled.
+    </Update>
+
+    <Update label="November 17, 2026 - Kody Rules" tags={["Kody Rules"]}>
+        Files referenced by a Kody Rule now appear only once per prompt, preventing duplicate content.
+    </Update>
+
+    <Update label="November 17, 2026 - Agents" tags={["Custom Agents"]}>
+        We fixed an issue with reading files in Next.js routes that contain dots in segment names.
+    </Update>
+
+    <Update label="November 17, 2026 - PR description" tags={["GIT Provider"]}>
+        We fixed an issue where emojis could be cut in half when a PR description needed to be truncated.
+    </Update>
+
+    <Update label="November 9, 2026 - Custom Agents can now read skills and documentation from other repositories (Beta)" tags={["Custom Agents", "GIT Provider", "Security"]}>
+        Custom Agents can now access skills and documents referenced in their instructions, even when those files are stored in another repository within the same Git integration.
+
+        You can also specify a branch or tag.
+
+        For security, agents only use the specified fixed reference or the default branch. The PR being reviewed cannot control which reference is used.
+
+        Video: https://kodus.io/wp-content/uploads/2026/11/1109.mp4
+    </Update>
+
+    <Update label="November 9, 2026 - Heavy Review has been rebuilt (Beta)" tags={["AI Engine", "CLI", "Performance"]}>
+        The `@kody review --heavy` command (or `kodus review --heavy` in the CLI) now runs 9 specialist review lenses (M3) in parallel with the general-purpose review.
+
+        All findings go through the same verification pipeline used by other Kody reviews.
+
+        Heavy Review is available on Teams and Enterprise plans, both cloud and self-hosted, as well as trial accounts. On other plans, reviews continue to run normally in Balanced mode.
+    </Update>
+
+    <Update label="November 9, 2026 - CLI can now access web app data and settings" tags={["CLI", "Cockpit", "Kody Rules", "Custom Agents"]}>
+        Until now, the CLI could only communicate with the API through team key endpoints (`/cli/*`). With `kodus auth login`, it can now access the same endpoints as the web app, while respecting the logged-in user's permissions.
+
+        Existing team key workflows continue to work as before. Only the new commands require login.
+
+        This brings several features that were previously only available in the web app directly to your terminal:
+
+        `kodus cockpit <tab>`: Access Cockpit tabs while respecting your organization's visibility settings.
+
+        `kodus usage tokens --by daily|pr|developer|review|model`: Check token usage directly from the terminal.
+
+        `kodus rules pause|resume|delete`: Pause, resume, and delete rules. The `view/create/update` commands now also work with login.
+
+        `kodus agents list|show|create|update|enable|disable|delete|try`: Manage Custom Agents without opening the web app.
+
+        `kodus config remote show|set|unset|keys`: View and edit remote settings at the global, repository, or directory level, including where each value comes from.
+
+        `kodus pr reviews`: A new command available in the CLI.
+    </Update>
+
+    <Update label="November 9, 2026 - GitHub merge queue support" tags={["GIT Provider"]}>
+        When a PR entered GitHub's merge queue, Kody's check could time out while waiting for the queue to advance. This would block the merge until someone manually triggered another review.
+
+        Now, Kody tracks the PR throughout the entire process and publishes the review result directly to the commit being tested by the merge queue, without requiring another manual run.
+    </Update>
+
+    <Update label="November 9, 2026 - BYOK: Custom base URLs for native OpenAI credentials" tags={["BYOK", "AI Engine"]}>
+        Previously, teams using an OpenAI-compatible proxy or gateway had to configure a separate “OpenAI-compatible” provider.
+
+        Now, you can use native OpenAI credentials and simply customize the base URL. This makes setup easier for teams already using an internal gateway to route their requests.
+    </Update>
+
+    <Update label="November 9, 2026 - Self-hosted: Explicit LLM provider configuration" tags={["Self-hosted", "BYOK", "AI Engine"]}>
+        The `API_LLM_PROVIDER` variable (`openai`, `openai_compatible`, `anthropic`, `anthropic_compatible`, `google_gemini`, `google_vertex`) is now respected exactly as configured.
+
+        Previously, heuristics based on the model name or URL could silently override this setting.
+
+        We've also improved error handling. HTTP 400/422 responses from a provider are now identified as rejections from that specific provider instead of being reported as generic failures.
+    </Update>
+
+    <Update label="November 9, 2026 - Fewer false positives for unused imports" tags={["Kody Rules"]}>
+        Kody Rules now checks the importing file itself before flagging an import as unused.
+
+        This fixes cases where certain code constructs, such as `using var` and syntax variations in Kotlin, PHP, and Rust, could trigger false positives.
+    </Update>
+
+    <Update label="November 9, 2026 - Reviews after merging the target branch or removing changes" tags={["GIT Provider", "AI Engine"]}>
+        We've fixed two scenarios where Kody could skip a review because it incorrectly determined there were no new changes:
+
+        When a push happened immediately after the target branch was merged into the PR branch.
+
+        When a rebase or force-push removed a line that had already been reviewed.
+
+        Both scenarios now correctly trigger a full review.
+    </Update>
+
+    <Update label="November 9, 2026 - Better handling of LLM provider rate limits" tags={["AI Engine", "BYOK", "Kody Rules"]}>
+        Previously, when a request hit a provider's rate limit (429), some checks could fail completely without trying an alternative.
+
+        This affected Kody Rules checks, finding recovery, and verification of implemented suggestions.
+
+        Now, the system retries the request. If the rate limit persists, it correctly falls back to the configured BYOK model instead of failing the check.
+    </Update>
+
+    <Update label="November 9, 2026 - CLI: kodus review now respects the repository's configured review mode" tags={["CLI"]}>
+        Previously, running `kodus review` without any flags would always start a Balanced review, even if the repository was configured to use a different mode.
+
+        Now, the CLI automatically uses the review mode configured for that repository.
+    </Update>
+
+    <Update label="November 9, 2026 - Custom Agents (Beta): Fewer false positives and clearer error messages" tags={["Custom Agents", "GIT Provider", "Kody Rules"]}>
+        We've fixed an issue where agent runs that submitted results at a later processing stage were incorrectly treated as unfinished. This frequently caused false positives in production.
+
+        We've also made a few other improvements:
+
+        Agents can now follow rule files explicitly referenced in their instructions.
+
+        If an agent fails to read skills or documents from another repository, it now displays a clear error message instead of loading indefinitely or incorrectly reporting that nothing was found.
+
+        Directory-level branch and tag overrides are now saved correctly.
+    </Update>
+
+    <Update label="November 9, 2026 - Centralized config: GitLab subgroup support" tags={["GIT Provider", "Kody Rules"]}>
+        Repositories with “/” in their paths, as is common with GitLab subgroups, could have their configurations interpreted incorrectly.
+
+        The system was treating only the first segment of the path as the repository name. As a result, repository-specific settings, directory groups, and Kody Rules could be silently ignored.
+
+        This has been fixed.
+    </Update>
+
+    <Update label="November 9, 2026 - BYOK: Clearer error messages when testing or saving credentials" tags={["BYOK"]}>
+        Previously, when a BYOK connection test or credential save was rejected, the app only displayed a generic error message.
+
+        Now, the interface shows the actual error message returned by the API, making it easier to identify and resolve the issue.
+    </Update>
+
+    <Update label="November 9, 2026 - Auto-approval history with risk assessment" tags={["Cockpit", "AI Engine"]}>
+        Fixed two issues in the feature released on October 30. Decision reasons longer than 500 characters are now saved in full, and the scheduled job responsible for maintaining the history no longer treats partial runs as complete.
+    </Update>
+
+    <Update label="November 9, 2026 - Reviews occasionally finishing without comments" tags={["AI Engine"]}>
+        Findings recovered from model output that referenced a function or line but didn't point to a valid file were consuming verification calls before being discarded. In some cases, this left the review with no findings to publish. These results are now filtered out before verification, preserving the verification budget for valid findings.
+    </Update>
+
+    <Update label="November 9, 2026 - DeepSeek V4.1 Flash" tags={["AI Engine", "BYOK"]}>
+        Fixed an issue where some comments displayed the model's raw reasoning instead of the expected severity, reference, and summary.
+    </Update>
+
+    <Update label="November 9, 2026 - Claude prompt caching via Bedrock" tags={["AI Engine", "BYOK"]}>
+        Fixed an issue that caused the cache to be silently discarded, increasing costs for Bedrock users.
+    </Update>
+
+    <Update label="November 9, 2026 - OpenAI-compatible endpoints with “Thinking Off”" tags={["AI Engine", "BYOK"]}>
+        Fixed an issue that could cause reviews using gpt-5.6/gpt-6 to fail due to tool incompatibilities with `reasoning_effort` when reasoning was disabled.
+    </Update>
+
+    <Update label="November 9, 2026 - PR summary and description" tags={["GIT Provider"]}>
+        Failures when writing this information, such as when the configured token only had read permissions, were incorrectly reported as API key issues. Error messages now show the actual cause. We've also fixed this behavior in Azure Repos, Bitbucket, and Forgejo.
+    </Update>
+
+    <Update label="November 9, 2026 - Azure Repos" tags={["GIT Provider"]}>
+        Fixed project resolution during incremental reads, eliminating implementation verification failures that could occur starting with the second read.
+    </Update>
+
+    <Update label="November 9, 2026 - MCP" tags={["MCP"]}>
+        Tools with identical names across different servers no longer cause all tools in a conversation to fail. Also, `KODUS_LIST_KODY_ISSUES` now returns an empty list instead of an error when no results are found.
+    </Update>
+
+    <Update label="November 9, 2026 - Malformed model outputs" tags={["Kody Rules", "AI Engine"]}>
+        Invalid shard/verifier responses during Kody Rules checks can no longer bypass the configured suggestion limits.
+    </Update>
+
+    <Update label="November 9, 2026 - Integration settings" tags={["GIT Provider"]}>
+        Failures when reading integration settings are now reported as errors instead of silently appearing as “not configured.”
+    </Update>
+
+    <Update label="November 9, 2026 - Vertex AI in BYOK" tags={["BYOK", "AI Engine"]}>
+        Removed retired Gemini 2.5 models from the model selector.
+    </Update>
+
+    <Update label="November 9, 2026 - Self-hosted" tags={["Self-hosted", "Security"]}>
+        Expanded sensitive data protection in logs. Credential fields are now detected based on field name suffixes and known token formats (`ghp_`, `github_pat_`, `glpat-`, `Bearer`), rather than relying only on exact field name matches.
+    </Update>
+
+    <Update label="October 30, 2026 - Coding agent instruction reviews" tags={["Kody Rules", "AI Engine"]}>
+        Previously, files such as `CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, and Copilot instructions were converted into Kody Rules. Now, when “Use coding-agent instructions in reviews” is enabled, Kody reads these files directly during code reviews.
+
+        This also works when one instruction file references another. To prevent unsupported suggestions, Kody only accepts findings based on these instructions when it can verify that the cited information actually exists in the file.
+
+        During onboarding, detected instruction files for each repository are also listed next to the toggle.
+
+        Learn more about coding-agent instruction reviews in our documentation (https://docs.kodus.io/en/how_to_use/code_review/configs/rules_file_detection).
+    </Update>
+
+    <Update label="October 30, 2026 - Automatic approval with risk assessment" tags={["Cockpit", "GIT Provider", "AI Engine"]}>
+        Auto-approval already considered labels, authors, and sensitive file paths before approving a clean PR. Now, it also takes into account the historical risk of the affected code area by analyzing changes made over the past 30 days. This risk history is now available in the Cockpit. On GitHub, if Kody has already approved a PR but a subsequent review identifies an issue that blocks approval, the previous approval is automatically dismissed.
+
+        Learn more about automatic approval in our documentation (https://docs.kodus.io/en/how_to_use/code_review/configs/auto_approve).
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/approve.mp4
+    </Update>
+
+    <Update label="October 30, 2026 - Automatic pausing of noisy Kody Rules" tags={["Kody Rules", "Cockpit", "Notifications"]}>
+        Kody can now automatically pause rules that generate too much noise during reviews. This feature is disabled by default and follows the configuration hierarchy: organization → repository → directory.
+
+        A daily check identifies rules marked as “ignored” or “noisy” in the Cockpit, including manually created rules, and automatically pauses them. When this happens, the team receives an in-app notification. Every Monday, organization owners also receive an email summarizing which rules were paused or resumed during the week. If nothing has changed, no email is sent.
+
+        Paused rules are labeled “Paused by Kody” and display the reason, date, and metrics behind the decision. They can also be reactivated at any time using the Resume button.
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/pause-rules.mp4
+    </Update>
+
+    <Update label="October 30, 2026 - Business logic validation revamped" tags={["AI Engine", "Cockpit"]}>
+        We've rebuilt the engine that checks whether a PR meets a task's requirements and acceptance criteria. Each requirement is now evaluated individually and marked as MET, PARTIAL, MISSING, CHECK MANUALLY, or NOT IN TASK.
+
+        All results are consolidated into a single comment per PR, which gets updated after each check instead of creating duplicates.
+
+        You can configure the validation at the repository or directory level, including where tasks and acceptance criteria come from, team-specific guidelines, what qualifies as “met,” and whether rechecks run automatically or only when requested using `@kody -v business-logic`.
+
+        You can also preview the results with Try it and track them in a dedicated Cockpit tab. If someone other than the PR author challenges a result, Kody rechecks it against the actual code.
+
+        Learn more about business logic validation in our documentation (https://docs.kodus.io/en/how_to_use/code_review/business_logic_validation).
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/business-logic-config.mp4
+    </Update>
+
+    <Update label="October 30, 2026 - More accurate suggestion deduplication" tags={["AI Engine"]}>
+        We've improved how duplicate findings are identified and grouped, reducing repetitive comments about the same issue.
+    </Update>
+
+    <Update label="October 30, 2026 - More thorough finding verification" tags={["AI Engine"]}>
+        Kody now checks code-related facts more carefully before confirming a finding. Verification also respects behavior explicitly documented as intentional in the repository, helping reduce false positives.
+    </Update>
+
+    <Update label="October 30, 2026 - More efficient post-rebase reviews" tags={["AI Engine", "Performance"]}>
+        Previously, after a rebase, Kody would review the entire PR again, including code that hadn't changed. This meant agents could analyze the same code multiple times, potentially generating duplicate comments. Now, Kody compares the previous diff with the latest one and reviews only the lines that have actually changed since the last review, using the rest of the code only as context.
+    </Update>
+
+    <Update label="October 30, 2026 - “Heavy” mode removed" tags={["AI Engine", "CLI"]}>
+        We decided to discontinue this mode because it was being rewritten and wasn't delivering the expected improvements. The `@kody review --heavy` and `kodus review --heavy` commands still work, but now run a standard review.
+    </Update>
+
+    <Update label="October 30, 2026 - Partial GitLab reviews no longer create duplicate status notes" tags={["GIT Provider"]}>
+        When a review ran in multiple stages, each update created a new note on the merge request. Now, all updates are made to the same note.
+    </Update>
+
+    <Update label="October 30, 2026 - PRs closed during a review no longer reopen unexpectedly" tags={["GIT Provider"]}>
+        If a PR was closed while Kody was still reviewing it, the review result could reopen it. Kody now checks whether the PR is still open before taking any action.
+    </Update>
+
+    <Update label="October 30, 2026 - Kody Rules that require additional repository context now work in Azure Repos" tags={["Kody Rules", "GIT Provider"]}>
+        We fixed an issue that prevented rules requiring information beyond the diff from running. These rules now receive the same context available in other integrations.
+    </Update>
+
+    <Update label="October 30, 2026 - Renaming a file no longer incorrectly blocks approval, and approval dismissal now works across all Git integrations" tags={["GIT Provider"]}>
+        A simple file rename could be interpreted as a change to a sensitive path, unnecessarily blocking approval. We also fixed approval dismissal, which previously worked only with certain Git providers.
+    </Update>
+
+    <Update label="October 30, 2026 - Code-area risk history now waits for the initial scan to finish before updating" tags={["Cockpit", "AI Engine"]}>
+        We've adjusted the update sequence to prevent partial results from overwriting a full scan that's still in progress.
+    </Update>
+
+    <Update label="October 30, 2026 - Fixed linking between reviews identified as duplicates" tags={["AI Engine"]}>
+        Reviews recognized as belonging to the same change weren't always linked correctly. This has now been fixed.
+    </Update>
+
+    <Update label="October 30, 2026 - GitLab webhook creation failures are now visible" tags={["GIT Provider"]}>
+        Previously, webhook creation errors during onboarding weren't shown to users. These failures now display a clear error message.
+    </Update>
+
+    <Update label="October 30, 2026 - GitLab now handles rate limits (429) correctly" tags={["GIT Provider"]}>
+        We fixed retry behavior so the system backs off when a rate limit is reached, preventing onboarding from getting stuck under heavy load.
+    </Update>
+
+    <Update label="October 30, 2026 - Personal access token (PAT) requests on GitHub Enterprise Server now use the correct host" tags={["GIT Provider", "Self-hosted"]}>
+        We fixed GraphQL requests that could be sent to the public GitHub host instead of the customer's configured GHES instance.
+    </Update>
+
+    <Update label="October 30, 2026 - Fixed reaction counts in Forgejo, including comments with no reactions" tags={["GIT Provider"]}>
+        Reaction counts now correctly handle comments with zero reactions.
+    </Update>
+
+    <Update label="October 30, 2026 - Git token rotation now preserves the configured host" tags={["GIT Provider", "Security"]}>
+        Updating a token no longer causes the system to lose its reference to the configured Git server.
+    </Update>
+
+    <Update label="October 30, 2026 - Null legacy fields in Kody Rules no longer break MCP rule listings" tags={["Kody Rules", "MCP"]}>
+        We fixed invalid responses from MCP tools when listing rules containing null legacy fields.
+    </Update>
+
+    <Update label="October 30, 2026 - Improved handling of AI model rate and quota limits" tags={["AI Engine", "BYOK"]}>
+        We've improved how the system interprets rate-limit and quota responses from Anthropic, Google, Z.AI, Together, and Claude through a proxy. The system now recognizes these limits correctly and avoids unnecessary retries.
+    </Update>
+
+    <Update label="October 30, 2026 - BYOK: a second OpenAI-compatible endpoint now uses its own API key" tags={["BYOK"]}>
+        We fixed an issue where configuring two OpenAI-compatible endpoints could cause one to use the other's API key.
+    </Update>
+
+    <Update label="October 30, 2026 - Email notifications now respect the configured sender (API_SMTP_FROM)" tags={["Notifications", "Self-hosted"]}>
+        We fixed email delivery so it correctly uses the sender address defined in this setting.
+    </Update>
+
+    <Update label="October 30, 2026 - Rule library imports now surface errors and preserve the correct language" tags={["Kody Rules"]}>
+        Import failures are now shown to users, and imported rules correctly retain their language settings.
+    </Update>
+
+    <Update label="October 30, 2026 - GitLab work item URLs are now correctly recognized as issues" tags={["GIT Provider", "AI Engine"]}>
+        We fixed how these links are identified during business rule validation.
+    </Update>
+
+    <Update label="October 30, 2026 - Valid findings are no longer discarded due to minor formatting differences" tags={["AI Engine"]}>
+        We've improved how findings that slightly deviate from the expected format are handled, so valid findings are no longer lost.
+    </Update>
+
+    <Update label="October 30, 2026 - Accepting a divergence on GitHub now requires write access" tags={["Security", "GIT Provider"]}>
+        We fixed an issue that allowed collaborators with read-only access to accept divergences. Kody now checks permissions directly with GitHub, allowing only users with write or admin access to accept them.
+    </Update>
+
+    <Update label="October 30, 2026 - Unreadable tasks are no longer mistaken for typos" tags={["AI Engine"]}>
+        When a task tracker recognized a task key but returned data in a format Kody couldn't parse, the system incorrectly suggested a possible typo. This is now treated as a read error, with no comment posted on the PR and a notification sent to the administrator. A possible typo is only suggested when the tracker genuinely doesn't recognize the key.
+    </Update>
+
+    <Update label="October 30, 2026 - Fixed chat responses when a requirement's status is challenged" tags={["AI Engine"]}>
+        We fixed an issue that prevented Kody from responding correctly when someone challenged a requirement's status. Previously, this only worked when the status, such as MISSING, appeared in uppercase as a standalone word in the comment.
+    </Update>
+
+    <Update label="October 30, 2026 - CLI now points to the correct flag for structured output" tags={["CLI"]}>
+        We fixed the CLI help text, which incorrectly referenced the nonexistent `--json` flag. It now correctly points to `--format json`, which already returns the verdict in a structured format.
+    </Update>
+
+    <Update label="October 30, 2026 - “Try it” no longer mistakes lowercase task keys for regular names" tags={["AI Engine"]}>
+        We fixed an issue where references such as `gpt-5` in a task description could be interpreted as ordinary names rather than valid task identifiers, even when they matched the correct task.
+    </Update>
+
+    <Update label="October 22, 2026 - Custom Review Agents (Beta)" tags={["Custom Agents", "AI Engine", "MCP"]}>
+        You can now add specialized reviewers that work alongside Kody, each focused on specific aspects of your code, such as architecture, test coverage, security, or duplicate code.
+
+        Get started with one of the available templates (Architecture, E2E Coverage, Regression & Hallucination, or Security Reviewer), or import an existing skill from your repository and turn it into a reviewer.
+
+        Each agent can be configured to:
+
+        Review specific files, following your repository's skills and documentation.
+
+        Use your team's tools, including plugins, up to three CLIs running in an isolated sandbox, and structural code searches with ast-grep.
+
+        You can also run a specific agent on demand by mentioning `@kody -v agent-name` in a comment.
+
+        Before enabling an agent, you can test it on a real PR using Try it, without posting any comments. You'll see which suggestions it would keep or discard, understand why, and fine-tune its instructions.
+
+        All agents start disabled and follow the same validation checks, severity criteria, limits, and deduplication rules as Kody to keep PR noise to a minimum.
+
+        Learn more about customizing review agents in our documentation (https://docs.kodus.io/en/how_to_use/code_review/custom_agents).
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/custom-agents-2026-10-22-v4-40s.mp4
+    </Update>
+
+    <Update label="October 22, 2026 - Shorter, clearer suggestions" tags={["AI Engine", "UX & Interface"]}>
+        Suggestion comments are now limited to two short sentences instead of trying to pack in every technical detail. They also no longer repeat line numbers already visible in the diff. Titles over 100 characters are automatically rewritten to stay readable in the PR view.
+
+        Comments are now anchored to the exact line where the issue occurs, rather than occasionally landing on a nearby line.
+    </Update>
+
+    <Update label="October 22, 2026 - Unverified findings are no longer published" tags={["AI Engine"]}>
+        When Kody's search process ran out of steps or was interrupted mid-response, the result could still be treated as a complete, verified suggestion. Reviews now recognize incomplete runs and withhold those findings instead of publishing them.
+    </Update>
+
+    <Update label="October 22, 2026 - Suggestions are now automatically marked as implemented" tags={["AI Engine"]}>
+        When you push a commit during a review that fixes a reported issue, Kody automatically checks the change and marks the suggestion as implemented, rather than leaving it pending until someone checks manually.
+    </Update>
+
+    <Update label="October 22, 2026 - Stronger authentication and organization isolation" tags={["Security", "MCP", "GIT Provider"]}>
+        We closed several sandbox escape vulnerabilities in Kody's local tooling, enforced JWT signature verification in the MCP manager (which previously only decoded tokens), tightened tenant scoping across several endpoints, and now encrypt GitHub App installation tokens at rest.
+    </Update>
+
+    <Update label="October 6, 2026 - Platform redesign" tags={["UX & Interface", "Kody Rules", "BYOK", "Cockpit"]}>
+        We redesigned the code review settings and a large part of the app. Previously, each page mapped to a key in `kodus-config.yml`. If you wanted to make Kody less noisy in a repository, for example, you had to know that the severity threshold lived on a page called Suggestion Control. Now, each setting lives on the page that answers the question you have when you go looking for it.
+
+        Five code review pages:
+
+        Each setting now lives on the page that answers the question you have when you go looking for it:
+
+        General: when Kody reviews, which PRs and files she ignores, and how she provides feedback on the PR. Ignored files now has an editor that validates each pattern and a “Test a file” field that tells you whether a file will be reviewed or which pattern is causing it to be ignored.
+
+        What to review: categories, the instructions that define each one, and the minimum severity required for posting, all in one place.
+
+        Kody Rules: rules and memories for the selected scope.
+
+        What Kody writes: Kody’s personality, PR summary, and the start, completion, and failure messages for reviews, with a live preview of an example PR.
+
+        Linked repositories: repositories Kody can read for additional context. Only available at repository scope.
+
+        One scope selector for global, repository, and directory settings:
+
+        Switching scopes keeps you on the same page, so comparing the global configuration with a repository configuration takes two clicks. Each scope and page shows how many settings override the global defaults. At repository and directory scope, a badge shows whether `kodus-config.yml` was applied, not found, or unavailable.
+
+        Video: /videos/scope-selector.mp4
+
+        Kody Rules in a table:
+
+        Each rule shows its severity, source, status, and last update. The source tells you whether the rule came from a repository file such as `CLAUDE.md`, analysis of previous reviews, the library, the CLI, or someone on the team.
+
+        On plans with Cockpit, the table also shows how many times each rule has triggered and a health label based on the last 30 days: healthy, noisy, ignored, stale, or not enough data. Clicking a row opens a panel with the rule’s instructions, examples, and impact. You can move between rules with J and K. Rules and memories generated by Kody appear in an approval section at the top of the page.
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/Kody-Rules-em-formato-de-tabela-.mp4
+
+        Navigation moved to a sidebar:
+
+        The top navigation is gone. Everything now lives in a left sidebar with five destinations:
+
+        Reviews: pull requests and CLI reviews.
+
+        Cockpit: now includes Issues.
+
+        Repositories: replaces Git Settings and Integrations.
+
+        AI providers: the former BYOK page, with Providers, Routing, and Budget tabs. The fallback model now lives under Routing.
+
+        Plugins.
+
+        Organization settings now live in a collapsible group. Members and PR licenses are now tabs under Subscription.
+
+        ⌘K command palette:
+
+        Search for any page, setting, MCP plugin, Kody Rule, or repository. Typing a number such as `#123` opens that pull request. Old terms still work: searching for “byok” takes you to AI providers, and “git settings” takes you to Repositories.
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/comand-k-.mp4
+
+        Locked pages stay visible:
+
+        Features outside your plan now remain visible in the sidebar with a lock icon and open a preview using data from your own workspace, such as the number of PRs reviewed in the last 30 days or how many rules are being ignored.
+
+        Previously, the interface only made the limitation clear on the free plan. Workspaces with a canceled, expired, or failed license could still see the normal rules list with no warning, even though those rules were being ignored.
+
+        Reviews now shows what Kody skipped and what each run was missing:
+
+        The pull request list now includes a Kody skipped view, showing PRs that requested a review but were skipped because of configuration. The suggestions column also separates what was actually posted to the PR from what your settings prevented Kody from posting.
+
+        Previously, a review that failed to check out the repository, had to switch to a fallback model, or dropped some findings still ended with a successful status. It looked the same as a complete review, and those losses were only visible in our logs. Now each of those situations is recorded in the run. When you expand a row in Reviews, you can see whether the review:
+
+        used the fallback provider;
+
+        ran with less context;
+
+        had its fidelity reduced to fit within a smaller context window.
+
+        None of this is posted to the pull request. But if you are investigating why a review missed something, you can now see which context or capability was missing from that run.
+
+        Video: https://kodus.io/wp-content/uploads/2026/10/Reviews-agora-mostra-o-que-a-Kody-pulou-e-o-que-cada-execucao-perdeu-.mp4
+
+        What moved:
+
+        Review Categories and Suggestion Control now live under What to review.
+
+        Custom Prompts was split up: category-specific instructions moved to What to review, while the general tone became Kody’s personality under What Kody writes.
+
+        PR Summary and Custom Messages moved to What Kody writes.
+
+        Old links redirect to the new pages.
+
+        Important: suggestion grouping and per-severity suggestion limits no longer have a UI. The keys still exist under `suggestionControl` and are still applied, but they can now only be changed through `kodus-config.yml`. If your team uses either of them, make sure the file defines the values you expect.
+
+        What to check in your workspace after the update:
+
+        Use the scope selector to see which repositories override the global configuration, especially the severity threshold.
+
+        If you used Custom Prompts, review each category’s instructions under What to review and Kody’s personality under What Kody writes.
+
+        If you use `kodus-config.yml`, make sure the repository badge says the file was applied.
+
+        Under AI providers, open the Routing tab and configure a fallback model so an invalid key or provider outage does not stop reviews.
+    </Update>
+
+    <Update label="October 6, 2026 - Kody replies in her own threads without requiring a mention" tags={["GIT Provider"]}>
+        When you reply in a thread started by Kody, you no longer need to write `@kody` to get a response. Kody determines whether the message is directed at her: she responds when it is and stays quiet when you are talking to someone else on the team.
+
+        There are limits on replies to other bots and on the number of replies per thread to prevent conversations from getting stuck in a loop. Available on GitHub, GitLab, Bitbucket Cloud, and Azure Repos.
+    </Update>
+
+    <Update label="October 6, 2026 - Self-hosted Doctor shows whether reviews ran completely" tags={["Self-hosted"]}>
+        Self-hosted. In addition to checking installation configuration, Doctor now analyzes reviews from the last 7 days. It shows:
+
+        failed runs;
+
+        what each review had to skip, such as an unavailable sandbox, switching to a fallback model, or partial Kody Rules;
+
+        agents that stopped after hitting their limit;
+
+        findings that could not be posted;
+
+        👍/👎 feedback.
+    </Update>
+
+    <Update label="October 6, 2026 - Revised suggestions link back to the original" tags={["AI Engine"]}>
+        When Kody revisits a suggestion from an earlier round, the new comment now links back to the original. She also reads the latest suggestions across the entire PR instead of only a subset per file, so she has a better memory of what she has already said.
+    </Update>
+
+    <Update label="October 6, 2026 - More visibility into incomplete reviews" tags={["AI Engine", "UX & Interface"]}>
+        When a review loses part of its context, that is now recorded in the run. Examples include an unavailable repository checkout, switching to a fallback model, or dropped findings.
+
+        When you expand a review on the Reviews page, you can see whether it ran on the fallback provider, with less context, or with reduced fidelity to fit within a smaller context window. None of this is posted to the PR, but if you are investigating why a review missed something, you can now see what it did not have access to.
+    </Update>
+
+    <Update label="October 6, 2026 - BYOK model lists load faster" tags={["BYOK"]}>
+        For OpenAI-compatible providers, the model list loads as soon as you enter the base URL. For OpenAI, the list now shows only models that support chat.
+    </Update>
+
+    <Update label="October 6, 2026 - Fewer model calls when syncing Kody Rules" tags={["Kody Rules", "AI Engine"]}>
+        As long as a rule’s text does not change, Kodus reuses its reference detection results. Saving or syncing rules no longer triggers repeated model calls for the same content.
+    </Update>
+
+    <Update label="October 6, 2026 - Clearer errors for centralized configuration" tags={["Kody Rules"]}>
+        When a rule file is rejected, the error now tells you which field failed validation.
+    </Update>
+
+    <Update label="October 6, 2026 - Pages show their structure first" tags={["UX & Interface", "Kody Rules"]}>
+        While a page is loading, you now see a preview of its actual layout instead of a blank screen or spinner. Kody Rules notifications also take you directly to the affected rule or repository.
+    </Update>
+
+    <Update label="October 6, 2026 - No duplicate suggestions across review rounds" tags={["AI Engine"]}>
+        Kody no longer flags the same issue again after already posting it on the PR, even when a new commit changes the surrounding code.
+    </Update>
+
+    <Update label="October 6, 2026 - Kody Rule violated in multiple places" tags={["Kody Rules"]}>
+        When the same rule is violated in multiple locations within a file, the “Also found in” list with the additional locations now appears again in the comment.
+    </Update>
+
+    <Update label="October 6, 2026 - Duplicate replies to the same comment" tags={["GIT Provider"]}>
+        If a Git provider delivered the same webhook more than once, Kody could reply multiple times. Now each comment gets only one reply. On GitLab, duplicate Kodus webhooks are also removed the next time the repository is saved.
+    </Update>
+
+    <Update label="October 6, 2026 - Trial reviews and Kodus-managed model reviews" tags={["AI Engine"]}>
+        Fireworks retired DeepSeek V4 Flash, which was the default model, causing these reviews to fail. The default is now DeepSeek V4.1 Flash, and configurations saved with the old model automatically use the new one.
+    </Update>
+
+    <Update label="October 6, 2026 - BYOK configurations pointing to the retired Fireworks model" tags={["BYOK", "AI Engine"]}>
+        Configurations that call Fireworks directly using the old DeepSeek V4 Flash ID no longer fail every review with a “model not found” error.
+    </Update>
+
+    <Update label="October 6, 2026 - More reliable fallback when a provider is down" tags={["BYOK", "AI Engine"]}>
+        If a provider keeps returning temporary errors after all retries are exhausted, the review now switches to the organization’s fallback model instead of failing.
+    </Update>
+
+    <Update label="October 6, 2026 - Better compatibility with reasoning models" tags={["BYOK", "AI Engine"]}>
+        Kody ignores reasoning blocks sent before the JSON response. Models that always use reasoning, such as GLM and Kimi, no longer receive the parameter for enabling or disabling reasoning, which some providers reject. If a provider rejects an unsupported reasoning parameter, Kodus retries the request without it. Advanced settings written in the provider’s native format are now passed through to the request.
+    </Update>
+
+    <Update label="October 6, 2026 - Empty responses from MiniMax-M3" tags={["BYOK", "AI Engine"]}>
+        Kodus now requests structured output in a format MiniMax-M3 can return correctly. Previously, the model could return an empty response.
+    </Update>
+
+    <Update label="October 6, 2026 - PR summaries for large PRs" tags={["AI Engine"]}>
+        If a PR does not fit within the model’s context window, the summary now processes the files in chunks and continues instead of failing.
+    </Update>
+
+    <Update label="October 6, 2026 - Deprecated managed integrations" tags={["MCP"]}>
+        Integrations that are no longer supported have been removed from the MCP connections list.
+    </Update>
+
+    <Update label="October 6, 2026 - Cross-organization isolation" tags={["Security"]}>
+        Routes for members, permissions, CLI keys, issues, integrations, and Kody Rules now only accept resources belonging to the organization making the request. Invitations, organization joins, and team member changes no longer trust IDs provided in the request.
+
+        Action required for MCP users: the Kodus MCP server now requires authentication. External clients such as Cursor or Claude Desktop must send a Team CLI key, and creating or editing Kody Rules requires the `kodyRules:manage` permission.
+    </Update>
+
+    <Update label="October 6, 2026 - Provider account IDs in failure comments" tags={["Security", "BYOK"]}>
+        Some providers include account and key identifiers in billing errors. Those IDs are now hidden from the comments Kody posts when a review fails, including on public PRs.
+    </Update>
+
+    <Update label="October 6, 2026 - Doctor incorrectly reporting that reviews were not running" tags={["Self-hosted"]}>
+        Doctor no longer shows “NOT RUNNING” on installations where reviews are working. It now ignores old incidents outside the analysis window, reevaluates seat warnings, skips the model test for organizations with no repositories, and reads the license from the organizations that are actually running reviews.
+    </Update>
+
+    <Update label="October 6, 2026 - Activity logs" tags={["UX & Interface"]}>
+        Opening the activity logs no longer throws an error when the organization has no records yet or when a filter returns no results.
+    </Update>
+
+    <Update label="October 6, 2026 - All seats in use" tags={["Billing & Licenses"]}>
+        Assigning a seat when all seats are occupied now opens an explanatory modal, and a rejected request shows a message. On self-hosted installations, the modal points to the license key, and the number of seats in use is updated when a seat is released.
+    </Update>
+
+    <Update label="October 6, 2026 - Unsaved changes that did not exist" tags={["UX & Interface"]}>
+        The SSO and General pages no longer show pending changes after you toggle an option on and then back off.
+    </Update>
+
+    <Update label="October 6, 2026 - Edits lost when leaving What to review" tags={["UX & Interface"]}>
+        Unsaved category instructions are now protected when leaving the page, just like on the other configuration pages.
+    </Update>
+
+    <Update label="October 6, 2026 - Plan buttons for users without billing access" tags={["Billing & Licenses"]}>
+        Locked features no longer show “See plans” or “Activate a license” to users who cannot access billing. Instead, they are told to contact an organization admin.
+    </Update>
+
+    <Update label="October 6, 2026 - False paused-reviews warning" tags={["Billing & Licenses", "BYOK"]}>
+        A zero Kodus credit balance no longer shows the paused-reviews banner for organizations that do not use the Kodus provider for reviews.
+    </Update>
+
+    <Update label="October 6, 2026 - Routing changes lost when switching tabs" tags={["BYOK", "UX & Interface"]}>
+        On the AI providers page, switching tabs no longer discards unsaved routing changes.
+    </Update>
+
+    <Update label="October 6, 2026 - PR details for failed or skipped reviews" tags={["UX & Interface"]}>
+        The PR page now shows the run status instead of “Nothing to flag.”
+    </Update>
+
+    <Update label="October 6, 2026 - Creating a rule from a suggestion" tags={["Kody Rules", "UX & Interface"]}>
+        The “Create rule” button now becomes enabled after you select a suggested rule.
+    </Update>
+
+    <Update label="October 6, 2026 - Locked Cockpit" tags={["Cockpit"]}>
+        Failed or skipped runs no longer count as reviewed. Organizations with older reviews are also no longer redirected to “Connect a repository.”
+    </Update>
+
+    <Update label="October 6, 2026 - Issues and plan selection copy" tags={["UX & Interface", "Billing & Licenses"]}>
+        Fixed broken counts such as “Showing of 0 issues” and inconsistent PR estimates when models do not have pricing information.
+    </Update>
+
+    <Update label="October 6, 2026 - Sidebar on smaller screens" tags={["UX & Interface"]}>
+        The current page item is no longer cut off, and opening the app on mobile no longer causes a page error.
+    </Update>
+
+    <Update label="September 25, 2026 - More Bedrock models in the model picker" tags={["BYOK", "UX & Interface"]}>
+        When connecting Amazon Bedrock, the model list now includes supported text models beyond Anthropic’s inference profiles. This makes more of the models available in your Bedrock account selectable during BYOK setup.
+    </Update>
+
+    <Update label="September 25, 2026 - Kody Rules using context beyond the diff" tags={["Kody Rules", "AI Engine"]}>
+        Rules that depended on code elsewhere in a file or in a related file could produce incorrect findings. Repository lookups could report an existing file as missing, and a finding could still be published after its claim had been disproved. Kody now handles that context and those checks consistently before posting the finding.
+    </Update>
+
+    <Update label="September 25, 2026 - Contradictory reviews after new commits" tags={["AI Engine"]}>
+        As a PR evolved, Kody could lose track of earlier findings and suggest reversing a change the team had already made in response to her review. Review findings now reach the PR summary, and later review rounds receive previous suggestions and their implementation status as context. This helps Kody stay consistent across commits.
+    </Update>
+
+    <Update label="September 25, 2026 - BYOK in implementation checks" tags={["BYOK", "AI Engine"]}>
+        Checks that validate whether suggestions were implemented now use the organization’s configured model. Previously, these calls could bypass its BYOK configuration.
+    </Update>
+
+    <Update label="September 25, 2026 - Findings with unusable code fixes" tags={["AI Engine"]}>
+        If Kody produces a valid finding but its proposed replacement is empty, unchanged, or incomplete, she now keeps the finding and posts it without the unusable code block. Previously, the entire finding could be discarded.
+    </Update>
+
+    <Update label="September 25, 2026 - Marking notifications as read" tags={["Notifications"]}>
+        Marking one notification or all notifications as read works again. Both actions had been returning a server error.
+    </Update>
+
+    <Update label="September 25, 2026 - Removing a Kody Rule source" tags={["Kody Rules"]}>
+        Deleting a source file, or marking it to be ignored, now removes every rule associated with that path. Previously, duplicate rule records could leave a deleted rule active and still firing.
+    </Update>
+
+    <Update label="September 25, 2026 - The wrong issue used as review context" tags={["MCP", "AI Engine"]}>
+        When a PR already identifies an issue, Kody’s fallback now looks for that issue instead of selecting an unrelated result from an issue search. If it cannot retrieve the referenced issue, it does not substitute another one.
+    </Update>
+
+    <Update label="September 25, 2026 - Documentation search failures" tags={["AI Engine"]}>
+        Kody now distinguishes an unavailable documentation search from a successful search with no results. A search failure no longer tells the review that documentation does not exist.
+    </Update>
+
+    <Update label="September 25, 2026 - OpenCode Go reviews" tags={["BYOK", "AI Engine"]}>
+        BYOK requests to OpenCode Go now include its required session header. Without it, the provider could reject review requests.
+    </Update>
+
+    <Update label="September 25, 2026 - Bedrock connection tests" tags={["BYOK", "UX & Interface"]}>
+        Testing or saving a Bedrock connection with a selected model no longer fails while handling the credentials. The model picker also loads for a new Bedrock connection instead of waiting for an API key field Bedrock does not use.
+    </Update>
+
+    <Update label="September 25, 2026 - Editing Kody Rules and Custom Prompts" tags={["Kody Rules", "UX & Interface"]}>
+        The editors no longer lose keystrokes while you type or delete. Formatting in Kody Rule instructions, including line breaks and lists, is also preserved when you save and reopen them.
+    </Update>
+
+    <Update label="September 25, 2026 - Saving Custom Prompts" tags={["UX & Interface"]}>
+        The Save button now becomes available when a valid Custom Prompt has been edited.
+    </Update>
+
+    <Update label="September 25, 2026 - Settings for organizations without repositories" tags={["UX & Interface"]}>
+        Saving code review settings no longer fails when the organization has no connected repositories.
+    </Update>
+
+    <Update label="September 25, 2026 - Self-hosted SAML sign-in" tags={["Self-hosted", "Security"]}>
+        Sign-in links now use the installation’s public API address. Previously, they could point the user’s browser to an internal service address that it could not reach.
+    </Update>
+
+    <Update label="September 25, 2026 - PR-level Kody Rule findings" tags={["Kody Rules", "AI Engine"]}>
+        A finding that cannot be anchored to a file and changed line is now posted on the pull request. Previously, some of these findings were silently discarded.
+    </Update>
+
+    <Update label="September 25, 2026 - Credit balances" tags={["Billing & Licenses"]}>
+        The production web deployment now has the credential required for billing requests. Without it, a failed balance request could incorrectly appear in the interface as a zero balance.
+    </Update>
+
+    <Update label="September 25, 2026 - BYOK calls rejected for empty system messages" tags={["BYOK", "AI Engine"]}>
+        Kodus no longer sends an empty system message to providers that reject it, allowing affected validation calls to complete.
+    </Update>
+
+    <Update label="September 25, 2026 - Findings returned outside the expected format" tags={["AI Engine"]}>
+        Kody can now recover findings returned as prose when an OpenAI or compatible provider requires JSON response mode. Previously, the recovery request itself could be rejected.
+    </Update>
+
+    <Update label="September 25, 2026 - Findings with unusual confidence values" tags={["AI Engine"]}>
+        An out-of-range confidence value no longer discards an otherwise valid review finding.
+    </Update>
+
+    <Update label="September 25, 2026 - Organization-wide conversations" tags={["AI Engine"]}>
+        Conversations no longer fail when the request has no selected team, which is valid for an organization-wide conversation.
+    </Update>
+
+    <Update label="September 25, 2026 - Trial reviews" tags={["CLI", "AI Engine"]}>
+        Trial reviews no longer fail while trying to find an integration for the trial’s placeholder organization.
+    </Update>
+
+    <Update label="September 25, 2026 - Concurrent settings updates" tags={["UX & Interface"]}>
+        Simultaneous changes to the same team setting no longer collide and return an error.
+    </Update>
+
+    <Update label="September 25, 2026 - GitHub review comment placement" tags={["GIT Provider", "AI Engine"]}>
+        Kody now handles another line-validation error GitHub can return when she tries to attach a finding to a changed line.
+    </Update>
+
+    <Update label="September 25, 2026 - Requests for changes" tags={["GIT Provider", "AI Engine"]}>
+        An incomplete, unpublished critical comment no longer stops Kody’s request-changes step. The step can continue without a link or summary that the comment does not have.
+    </Update>
+
+    <Update label="September 25, 2026 - Legacy Azure GPT model settings" tags={["BYOK", "AI Engine"]}>
+        Azure model IDs such as `gpt-35-turbo` are no longer mistaken for reasoning models. Kodus keeps request settings compatible with those models.
+    </Update>
+
+    <Update label="September 25, 2026 - GPT-6 Astra model settings" tags={["BYOK", "AI Engine"]}>
+        Kodus now recognizes GPT-6 Astra as a reasoning model and uses its correct context-window information. This fixes incompatible request parameters and avoids splitting reviews according to a much smaller default window.
+    </Update>
+
+    <Update label="September 8, 2026 - Turn conversations with Kody into lasting context" tags={["AI Engine", "Kody Rules"]}>
+        Kody now takes a more proactive role when you talk to her in a PR. When you explain a team convention, clarify why a suggestion doesn’t apply, or share context worth keeping, she can suggest creating a memory or creating or updating a Kody Rule, without waiting for you to ask.
+
+        This helps turn everyday feedback into knowledge that can guide future reviews. Kody proposes the action and asks for your confirmation before saving changes.
+    </Update>
+
+    <Update label="September 8, 2026 - More flexible BYOK configuration" tags={["BYOK", "AI Engine"]}>
+        You’re no longer tied to a single AI provider. You can now mix providers and models across repositories and specific agents, choosing the setup that best fits each task. This gives your team more flexibility to balance review quality and cost, using more capable models where they matter most and more economical options elsewhere.
+
+        We also rebuilt the configuration experience around that flexibility. Setup adapts to each provider’s credentials and advanced settings, and supported integrations fetch available models directly from the provider’s API. You can configure primary and fallback models and fine-tune their settings from the updated flow.
+
+        Video: https://kodus.io/wp-content/uploads/2026/09/byok-conf-final.mp4
+    </Update>
+
+    <Update label="September 8, 2026 - Reasoning settings now respect the selected model" tags={["BYOK", "AI Engine"]}>
+        We fixed how the configured reasoning level is applied across different providers and model families, including compatibility with temperature settings.
+    </Update>
+
+    <Update label="September 8, 2026 - Review sizing now respects model capacity" tags={["BYOK", "AI Engine"]}>
+        We improved context-window handling so reviews are split according to the available capacity of the selected model.
+    </Update>
+
+    <Update label="September 8, 2026 - OpenRouter provider preferences" tags={["BYOK", "UX & Interface"]}>
+        You can now enter multiple providers without commas disappearing as you type. Saved preferences also remain intact when you reopen and edit the configuration.
+    </Update>
+
+    <Update label="September 8, 2026 - Existing BYOK configurations remain intact" tags={["BYOK"]}>
+        We fixed migration cases that could remove Bedrock configurations, setups containing only fallback models, or OpenRouter options. We also restored fallback model references affected by the migration.
+    </Update>
+
+    <Update label="September 8, 2026 - More reliable model fallback" tags={["BYOK", "AI Engine"]}>
+        Tool compatibility now takes both the primary and fallback models into account. Reviews also correctly switch to the fallback model when rate-limit retries are exhausted.
+    </Update>
+
+    <Update label="September 8, 2026 - Stalled model calls no longer wait indefinitely" tags={["AI Engine", "Performance"]}>
+        We added timeouts to operations that could previously get stuck, including review processing and BYOK connection checks.
+    </Update>
+
+    <Update label="September 8, 2026 - Clearer handling of unavailable models" tags={["BYOK", "AI Engine", "Notifications"]}>
+        Reviews that cannot obtain an available BYOK model are now reported as failed instead of appearing to complete successfully. We also prevent duplicate notifications for the same model-exhaustion failure.
+    </Update>
+
+    <Update label="September 8, 2026 - Fewer unnecessary retries after provider billing errors" tags={["BYOK", "AI Engine"]}>
+        Errors that require changes to the provider account or payment setup no longer trigger repeated retries that cannot resolve the issue.
+    </Update>
+
+    <Update label="September 8, 2026 - Better recovery from unexpected model responses" tags={["AI Engine"]}>
+        We improved how reviews handle responses that contain useful content in an unexpected format, reducing failures caused by response structure.
+    </Update>
+
+    <Update label="September 8, 2026 - More complete suggestion formatting" tags={["AI Engine"]}>
+        We fixed cases where the formatting step could leave suggestions out of the final review.
+    </Update>
+
+    <Update label="September 8, 2026 - Cleaner review comments" tags={["AI Engine"]}>
+        Internal labels used during generation and auxiliary numbered structures are now removed more consistently before suggestions are published, without rewriting normal explanatory text.
+    </Update>
+
+    <Update label="September 8, 2026 - Manual review requests are preserved" tags={["AI Engine"]}>
+        When you request a review while the PR is already being processed, the request is deferred to a new attempt instead of being silently dropped.
+    </Update>
+
+    <Update label="September 8, 2026 - Correct branch selection for reviews" tags={["GIT Provider", "AI Engine"]}>
+        Reviews now consistently take the repository’s default branch, configured branch patterns, and explicit exclusions into account when deciding whether a PR should be reviewed.
+    </Update>
+
+    <Update label="September 8, 2026 - Bitbucket repository configuration" tags={["GIT Provider"]}>
+        We fixed how Kodus reads configuration files from Bitbucket repositories, ensuring repository settings are loaded during reviews.
+    </Update>
+
+    <Update label="September 8, 2026 - More reliable task context retrieval" tags={["MCP", "AI Engine"]}>
+        We fixed cases where issue identifiers were sent to integration fields that only accept predefined options, causing task-context requests to fail.
+    </Update>
+
+    <Update label="September 8, 2026 - More reliable reaction counts" tags={["GIT Provider", "Performance"]}>
+        We fixed reaction synchronization to prevent stale counts and reduced the number of simultaneous requests sent to Git providers.
+    </Update>
+
+    <Update label="September 8, 2026 - Cache write costs are easier to identify" tags={["Cockpit"]}>
+        Usage related to cache writes now appears separately in token charts and cost breakdowns.
+    </Update>
+
+    <Update label="September 8, 2026 - Token usage is recorded even when operations fail" tags={["Cockpit"]}>
+        We fixed cases where an error could prevent token usage from being saved, leaving consumption reports incomplete.
+    </Update>
+
+    <Update label="September 8, 2026 - Notifications follow the selected organization" tags={["Notifications"]}>
+        The notification feed, unread count, and mark-as-read actions now consistently apply to the organization you are currently viewing.
+    </Update>
+
+    <Update label="September 8, 2026 - Dashboard pagination no longer skips records" tags={["Cockpit"]}>
+        We fixed how subsequent pages resume loading results, preventing records from being missed between pages.
+    </Update>
+
+    <Update label="September 8, 2026 - Cockpit cards respect the selected date range" tags={["Cockpit"]}>
+        We fixed analytics cards that were using their own date ranges instead of the dashboard’s shared filter.
+    </Update>
+
+    <Update label="September 8, 2026 - Date filters remain accurate after midnight" tags={["Cockpit", "UX & Interface"]}>
+        Date-picker presets and the current-day selection now remain correct when the page stays open across midnight.
+    </Update>
+
+    <Update label="September 8, 2026 - Faster access to review findings" tags={["UX & Interface"]}>
+        Clicking the suggestion count in the PR list now takes you directly to the first finding.
+    </Update>
+
+    <Update label="September 8, 2026 - Easier workspace selection" tags={["UX & Interface"]}>
+        The workspace selection screen now supports scrolling through longer lists and uses less space at the top of the screen.
+    </Update>
+
+    <Update label="September 8, 2026 - Clearer Git integration errors" tags={["GIT Provider", "UX & Interface"]}>
+        Repository connection and selection flows now show more useful error messages, making it easier to understand why an integration could not be completed.
+    </Update>
+
+    <Update label="September 8, 2026 - Better keyboard navigation" tags={["UX & Interface"]}>
+        We improved focus visibility and made interactive table rows accessible using Enter and Space.
+    </Update>
+
+    <Update label="September 8, 2026 - Reduced-motion preferences are respected" tags={["UX & Interface"]}>
+        Interface animations now reduce motion when that preference is enabled on your device.
+    </Update>
+
+    <Update label="September 8, 2026 - More reliable self-hosted startup" tags={["Self-hosted"]}>
+        We updated the MongoDB versions used in Docker Compose to avoid an identified kernel compatibility issue. Dependent services now wait for the database to become healthy before starting.
+    </Update>
+
+    <Update label="August 24, 2026 - Vertex AI without static keys" tags={["Self-hosted", "AI Engine"]}>
+        Self-hosted installations can now authenticate with Vertex AI using the identity already provided by the cloud infrastructure. This reduces the need to store sensitive credentials and simplifies setup in environments such as GKE, EKS, and Cloud Run.
+    </Update>
+
+    <Update label="August 24, 2026 - Jira task context" tags={["AI Engine"]}>
+        Kody now correctly identifies the Atlassian environment when fetching Jira issues used as review context. This allows it to access the right task information and use it when evaluating the pull request.
+    </Update>
+
+    <Update label="August 24, 2026 - More reliable GitLab clones" tags={["GIT Provider", "Performance"]}>
+        We fixed clone failures that could occur when a project was renamed or moved to another GitLab group. We now also cache this information for a period of time, reducing API calls and speeding up the start of reviews.
+    </Update>
+
+    <Update label="August 24, 2026 - Conversations with Kody in Azure DevOps" tags={["GIT Provider", "AI Engine"]}>
+        Questions asked with `@kody` directly in a new Azure DevOps thread now receive a response as expected. Previously, Kody could only find comments that were already replies within an existing conversation.
+    </Update>
+
+    <Update label="August 24, 2026 - Safer license management" tags={["Billing & Licenses"]}>
+        We improved seat management to prevent licenses from being removed incorrectly and make assignment based on Git identity more reliable. Bot accounts are now handled correctly in this flow as well.
+    </Update>
+
+    <Update label="August 24, 2026 - Clearer reviewer selection" tags={["UX & Interface"]}>
+        We refined the loading states and buttons in the reviewer selection step. The flow now makes it clearer when an action is being processed and prevents inconsistent clicks or navigation.
+    </Update>
+
+    <Update label="August 24, 2026 - Centralized Kody Rules sync" tags={["Kody Rules"]}>
+        Rules being changed through a configuration PR no longer disappear during synchronization. They remain visible while waiting for the PR to be merged and return to the correct state once the change is complete.
+    </Update>
+
+    <Update label="August 24, 2026 - More resilient business rule validation" tags={["MCP", "AI Engine"]}>
+        We improved the handling of MCP integration failures and parameters with predefined options. This prevents integration errors or valid argument formats from incorrectly interrupting a validation.
+    </Update>
+
+    <Update label="August 24, 2026 - Kody Rules in the organization’s language" tags={["Kody Rules"]}>
+        Comments generated from Kody Rules now respect the organization’s configured language. Teams configured to use Portuguese, for example, will receive rule explanations and guidance in the expected language.
+    </Update>
+
+    <Update label="August 24, 2026 - Safer interpretation of Kody Rules" tags={["Kody Rules", "AI Engine"]}>
+        We added a validation step to make sure examples used internally by Kody do not reverse the intended meaning of a rule. This reduces the risk of suggesting a change that conflicts with the policy defined by the team.
+    </Update>
+
+    <Update label="August 24, 2026 - More predictable selection lists" tags={["UX & Interface"]}>
+        Selection menus now use the browser’s native scrolling behavior. This makes interactions more stable, especially in longer lists.
+    </Update>
+
+    <Update label="August 24, 2026 - Conversations with Kody in GitLab and Bitbucket" tags={["GIT Provider", "AI Engine"]}>
+        We fixed Kody’s reply flow in pull request conversations on GitLab and Bitbucket, ensuring that questions posted in comments receive the expected response.
+    </Update>
+
+    <Update label="August 24, 2026 - Bitbucket Data Center webhooks" tags={["GIT Provider"]}>
+        Pull requests from Bitbucket Data Center and Server are now correctly recognized when a webhook is received. Previously, some of these events could be ignored and fail to trigger an automatic review.
+    </Update>
+
+    <Update label="August 17, 2026 - Support for Agent Rules in .agents/rules" tags={["Kody Rules", "AI Engine"]}>
+        Some AI development tools let teams keep engineering instructions in the `.agents/rules/` directory, including architecture standards, coding conventions, and constraints for changes to specific parts of a repository.
+
+        We fixed how Kodus discovers these files. Previously, rules stored in this format could be missed during import and would not appear as a source for Kody Rules. Kody now recognizes files under `.agents/rules/**`, allowing these instructions to be discovered and used in the rules and review workflow.
+    </Update>
+
+    <Update label="August 17, 2026 - Reasoning configuration for Anthropic BYOK models" tags={["BYOK", "AI Engine"]}>
+        We fixed compatibility between reasoning effort options and different generations of Anthropic models. The interface and runtime now apply only the settings supported by the selected model.
+    </Update>
+
+    <Update label="August 17, 2026 - More reliable Centralized Configuration" tags={["Kody Rules"]}>
+        We fixed four scenarios related to syncing and exporting centralized configurations:
+
+        A missing configuration in a repository is no longer treated as if it had been deleted.
+
+        Repositories whose configuration is organized entirely in directories now get the correct baseline, and configuration package downloads have been fixed.
+
+        Rules are converted into plain objects before YAML generation, preventing incorrectly serialized content.
+
+        Legacy scopes are now reconciled using ownership records already known by the system.
+    </Update>
+
+    <Update label="August 17, 2026 - Plan-restricted rules update after an upgrade" tags={["Kody Rules", "Billing & Licenses"]}>
+        When an organization changes plans, Kody Rules that were previously unavailable are recalculated and synced again. This ensures the status shown for each rule reflects the organization’s current eligibility.
+    </Update>
+
+    <Update label="August 17, 2026 - Protection against database connection pool exhaustion" tags={["Performance"]}>
+        We made several related fixes to reduce pressure on the database connection pool:
+
+        Concurrent queries and workflows now handle connections and locks more safely.
+
+        Cron jobs that could trigger large numbers of simultaneous queries are now limited.
+
+        Supporting indexes were added to the most critical paths.
+
+        The Kody Learning cron no longer continuously consumes connections while it runs.
+    </Update>
+
+    <Update label="August 17, 2026 - Automatic retries when GitHub rate limits are reached" tags={["GIT Provider", "Performance"]}>
+        When a review hits the GitHub API rate limit, the job now fails as a transient error and is requeued for another attempt instead of waiting silently, making recovery more predictable.
+    </Update>
+
+    <Update label="August 17, 2026 - Pull request cards refresh after suggestion validation" tags={["AI Engine", "UX & Interface"]}>
+        The “Needs attention” and “Awaiting” counters now update when suggestion implementation checks finish, so the interface no longer shows stale numbers until the next manual refresh.
+    </Update>
+
+    <Update label="August 17, 2026 - Seats from former members are removed correctly" tags={["Billing & Licenses"]}>
+        We added cleanup for seats assigned to people who are no longer part of the organization. This keeps the license list and available seat count consistent.
+    </Update>
+
+    <Update label="August 17, 2026 - More actionable CLI errors" tags={["CLI", "UX & Interface"]}>
+        The CLI no longer shows only generic messages such as `Request failed with status 403`. For permission errors, oversized payloads, or large reviews, it now explains the likely cause and suggests next steps, such as narrowing the scope or using `--branch`, `--commit`, or `--fast`.
+    </Update>
+
     <Update label="August 10, 2026 - Linked Repository Context in Reviews" tags={["AI Engine"]}>
         Kody can now reference linked repositories while reviewing a pull request. This gives it better context for changes that depend on contracts, shared libraries, internal APIs, or standards maintained outside the current repository.
 
@@ -2371,6 +3649,76 @@ rss: true
 
     <Update label="July 30, 2026 - RabbitMQ and Workflow Queue Fixes" tags={["Self-hosted", "Performance"]}>
         Workflow queues now use centralized arguments and are correctly declared and bound with a DLX, reducing inconsistencies during initialization.
+    </Update>
+
+    <Update label="July 20, 2026 - Kody Rules: Select Reviewers" tags={["Kody Rules", "UX & Interface"]}>
+        Kody Rules can now take selected reviewers into account during the configuration flow. This gives teams greater control when directing specific rules to the people or groups best suited to the context of a review.
+
+        This update helps reduce noise and improves rule governance, especially in organizations with multiple teams, domain areas, or repositories with clearly distributed ownership.
+    </Update>
+
+    <Update label="July 20, 2026 - Removed Preset Step, Added Severity Level, and Fixed Enable/Disable Buttons" tags={["UX & Interface", "Kody Rules"]}>
+        We simplified the review setup by removing the preset step and adding severity-level configuration. Teams can now define the level of criticality that reviews should consider directly during onboarding.
+
+        We also fixed the enabled and disabled states of several buttons, making the setup flow more predictable and reducing confusion during initial configuration.
+    </Update>
+
+    <Update label="July 20, 2026 - Append Team-Authored Custom Messages to Error Comments" tags={["AI Engine", "UX & Interface"]}>
+        Custom messages written by the team are now also included in code review error comments.
+
+        This allows Kody's communication to preserve the tone, context, and instructions defined by each organization, even when an analysis identifies an issue. The improvement helps standardize the developer experience and makes comments better aligned with each team's internal processes.
+    </Update>
+
+    <Update label="July 20, 2026 - Bounded Reaper Concurrency and Improved Handling for E2B Sandboxes That No Longer Exist" tags={["Self-hosted", "Performance"]}>
+        We improved the process responsible for cleaning up sandboxes by introducing controlled concurrency. This prevents spikes in simultaneous operations and makes cleanup more stable in high-volume environments.
+
+        We also now correctly handle cases where a sandbox no longer exists in E2B, preventing unnecessary errors and making the sandbox lifecycle more resilient.
+    </Update>
+
+    <Update label="July 20, 2026 - Performance Improvements for Heavy Screens and Analytics" tags={["Performance", "Cockpit", "UX & Interface"]}>
+        We refactored some of the product's heavier screens, particularly areas containing lists, filters, and analytics, to improve performance and responsiveness.
+
+        The work includes improvements to queries, rendering, data loading, and the overall visual experience in workflows that handle large amounts of information. The expected result is smoother navigation, less frontend overhead, and more reliable presentation of the displayed data.
+    </Update>
+
+    <Update label="July 20, 2026 - Rules Generated from Past Reviews" tags={["Kody Rules", "AI Engine"]}>
+        Fixed the generation of Kody Rules from previous reviews, improving the reliability of the rule-learning and creation flow.
+    </Update>
+
+    <Update label="July 20, 2026 - Use the Correct Queue Names for the RabbitMQ Health Check" tags={["Self-hosted"]}>
+        Fixed the queue names used by the RabbitMQ health check. Previously, the check could fail to accurately reflect the state of the queues used by the application. It now checks the expected queue names, improving the accuracy of the system's health signals.
+    </Update>
+
+    <Update label="July 20, 2026 - Harden Local Sandbox readFile/writeFile Path Validation" tags={["Security", "Self-hosted"]}>
+        Strengthened path validation for `readFile` and `writeFile` operations in the local sandbox. The change prevents unauthorized access outside the permitted directory and reinforces execution-environment isolation. This improves the security and reliability of file read and write operations within the sandbox.
+    </Update>
+
+    <Update label="July 20, 2026 - Fix Bitbucket Requests to Avoid 429 Errors" tags={["GIT Provider"]}>
+        Adjusted how requests are made to Bitbucket to reduce the occurrence of 429 rate-limit errors. The fix improves integration stability, especially for organizations with a high volume of repositories, pull requests, or simultaneous operations.
+    </Update>
+
+    <Update label="July 20, 2026 - Close Parent Directory Swap TOCTOU Vulnerability in Local Sandbox writeFile" tags={["Security", "Self-hosted"]}>
+        Fixed a time-of-check to time-of-use race condition in the local sandbox's `writeFile` operation. The flow now performs stronger validation of the actual path before writing, preventing changes to the parent directory from redirecting the operation outside the expected location. This strengthens isolation and reduces risks during write operations.
+    </Update>
+
+    <Update label="July 20, 2026 - Change @Kody resume to @Kody start-review in the Cadence Message" tags={["UX & Interface"]}>
+        Updated the cadence message to correctly instruct users to use `@Kody start-review` instead of `@Kody resume`. This reduces ambiguity and prevents incorrect commands from being suggested during the review flow.
+    </Update>
+
+    <Update label="July 20, 2026 - Resolve CLI Sandbox Clone Platform from the Connected Integration" tags={["GIT Provider", "Self-hosted"]}>
+        Fixed how the platform used to clone repositories inside the CLI sandbox is resolved. The platform is now determined based on the integration connected to the repository, preventing inconsistencies in environments using GitLab, Bitbucket, or other self-managed integrations.
+    </Update>
+
+    <Update label="July 20, 2026 - Fix LLM Compression Message" tags={["AI Engine"]}>
+        Fixed the compression message generated by the LLM during the code review flow. This step is used when the context needs to be compressed so the analysis can continue. The fix makes the communication clearer and prevents incorrect or confusing messages during processing.
+    </Update>
+
+    <Update label="July 20, 2026 - Remove Repository from Integration Configuration When Removed from Repository Settings" tags={["GIT Provider", "UX & Interface"]}>
+        Fixed synchronization between repository-level settings and integration settings. When a repository is removed from the repository-level configuration, it is now also correctly removed from the integration configuration, preventing inconsistent states and unexpected review behavior.
+    </Update>
+
+    <Update label="July 20, 2026 - Business Rules Validation" tags={["AI Engine", "Kody Rules"]}>
+        Fixed the business rules validation flow. This change improves the reliability of business-rule-based analysis, helping Kody interpret and apply these validations more consistently during code review.
     </Update>
 
     <Update label="July 13, 2026 - New Token Usage Experience" tags={["UX & Interface", "BYOK"]}>

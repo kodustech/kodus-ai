@@ -33,11 +33,11 @@ describe('moonshotModule — Anthropic-protocol brand contract', () => {
         // (the claude-only reasoning-config resolver would report false, which the
         // UI showed as "doesn't support reasoning").
         expect(caps.supportsReasoning).toBe(true);
-        // Otherwise identical to the anthropic module for the same id (one source).
-        expect(caps).toEqual({
-            ...anthropicModule.capabilities('kimi-k2.7-code'),
-            supportsReasoning: true,
-        });
+        // Otherwise identical to the anthropic module for the same id (one
+        // source), minus reasoningAlwaysOn: the brand exposes reasoning.
+        const { reasoningAlwaysOn: _alwaysOn, ...shared } =
+            anthropicModule.capabilities('kimi-k2.7-code');
+        expect(caps).toEqual({ ...shared, supportsReasoning: true });
     });
 
     it('emits NO inline cache marker — Kimi caches automatically (marker ignored)', () => {

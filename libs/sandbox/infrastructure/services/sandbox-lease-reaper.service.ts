@@ -269,9 +269,8 @@ export class SandboxLeaseReaperService {
         if (!lock) return;
 
         try {
-            const ready = await this.leaseRepository.findReadyToKill(
-                new Date(),
-            );
+            const now = new Date();
+            const ready = await this.leaseRepository.findReadyToKill(now);
             if (ready.length === 0) return;
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
@@ -291,8 +290,31 @@ export class SandboxLeaseReaperService {
                     // the next 30s tick retries instead of orphaning the E2B
                     // sandbox with no lease left to reconcile against.
                     let sandboxGone = true;
+                    let docId = lease._id;
 
                     if (lease.sandboxId && apiKey) {
+                        // A holder may have joined since the read above: take
+                        // the lease off its prKey only if it is still idle.
+                        const detachedId =
+                            await this.leaseRepository.detachIdle(
+                                lease._id,
+                                lease.sandboxId,
+                                now,
+                            );
+                        if (!detachedId) {
+                            this.logger.log({
+                                message:
+                                    '[SANDBOX-IDLE-KILL] A holder joined before the kill — leaving the sandbox running',
+                                context: SandboxLeaseReaperService.name,
+                                metadata: {
+                                    prKey: lease._id,
+                                    sandboxId: lease.sandboxId,
+                                },
+                            });
+                            return;
+                        }
+                        docId = detachedId;
+
                         try {
                             await Sandbox.kill(lease.sandboxId, { apiKey });
                         } catch (err) {
@@ -328,7 +350,7 @@ export class SandboxLeaseReaperService {
                                 } else {
                                     sandboxGone = false;
                                     await this.leaseRepository.bumpKillRetry(
-                                        lease._id,
+                                        docId,
                                     );
 
                                     if (attempts === MAX_KILL_RETRIES) {
@@ -367,7 +389,7 @@ export class SandboxLeaseReaperService {
                         return;
                     }
 
-                    await this.leaseRepository.delete(lease._id);
+                    await this.leaseRepository.delete(docId);
 
                     this.logger.log({
                         message: '[SANDBOX-IDLE-KILL] Killed idle sandbox',

@@ -191,15 +191,18 @@ describe("DeleteRejectionAlert", () => {
 function Harness({
     config,
     model,
+    name = model.model,
     onDeleted,
 }: {
     config: BYOKConfig;
     model: BYOKConfig["models"][number];
+    name?: string;
     onDeleted: () => void;
 }) {
     const { confirmAndDelete, rejectionReasons } = useDeleteModel({
         config,
         model,
+        name,
         onDeleted,
     });
     return (
@@ -273,6 +276,21 @@ describe("useDeleteModel", () => {
             expect.objectContaining({ variant: "danger" }),
         );
         expect(screen.queryByText("…and 2 more")).not.toBeInTheDocument();
+    });
+
+    it("names the model as the caller shows it, not by its raw id", async () => {
+        render(
+            <Harness
+                config={twoModelConfig}
+                model={modelAlpha}
+                name="Alpha (pinned)"
+                onDeleted={jest.fn()}
+            />,
+        );
+        await act(async () => {
+            fireEvent.click(screen.getByText("trigger"));
+        });
+        expect(modalState.props?.title).toBe("Remove Alpha (pinned)?");
     });
 
     it("last model: the confirm modal uses the disconnect copy", async () => {

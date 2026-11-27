@@ -77,10 +77,11 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         // `claude-*` ids, so it would report supportsReasoning=false and the UI
         // would wrongly show "doesn't support reasoning". The brand knows better.
         capabilities(model: string): ModelCapabilities {
-            return {
-                ...anthropicModule.capabilities(model),
-                supportsReasoning: true,
-            };
+            // reasoningAlwaysOn means "no level can be sent", which the brand
+            // contradicts by exposing reasoning, so it does not carry over.
+            const { reasoningAlwaysOn: _alwaysOn, ...caps } =
+                anthropicModule.capabilities(model);
+            return { ...caps, supportsReasoning: true };
         },
         build(
             cfg: ProviderBuildConfig,

@@ -12,6 +12,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { environment } from '@libs/ee/configs/environment';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
@@ -31,6 +32,7 @@ describe('ValidateConfigStage — v2 routing', () => {
     let mockOrganizationParametersService: any;
     let mockCodeManagementService: any;
     let validateOrganizationLicense: jest.Mock;
+    let ultraEnabled: jest.Mock;
 
     const TEAMS = {
         valid: true,
@@ -51,6 +53,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             origin: 'command',
             platformType: 'github',
             teamAutomationId: 'team-automation-id',
+            // Whoever asks by command here can write; the refusals set it.
+            requestedReviewModeAccess: 'write',
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -93,9 +97,14 @@ describe('ValidateConfigStage — v2 routing', () => {
         };
         mockOrganizationParametersService = { findByKey: jest.fn() };
         mockCodeManagementService = {
-            createSingleIssueComment: jest.fn(),
+            // The platform returns the comment it posted.
+            createSingleIssueComment: jest
+                .fn()
+                .mockResolvedValue({ id: 'comment-1' }),
+            createIssueComment: jest.fn().mockResolvedValue({}),
         };
         validateOrganizationLicense = jest.fn().mockResolvedValue(TEAMS);
+        ultraEnabled = jest.fn().mockResolvedValue(true);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -103,6 +112,10 @@ describe('ValidateConfigStage — v2 routing', () => {
                 {
                     provide: LICENSE_SERVICE_TOKEN,
                     useValue: { validateOrganizationLicense },
+                },
+                {
+                    provide: UltraReviewGate,
+                    useValue: { isEnabledFor: ultraEnabled },
                 },
                 {
                     provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
@@ -311,6 +324,485 @@ describe('ValidateConfigStage — v2 routing', () => {
         });
     });
 
+    describe('ultra', () => {
+        const trioConfig = (ultraModelIds = ['m-C', 'm-A', 'm-B']) =>
+            v2(
+                {
+                    defaultModelId: 'm-A',
+                    fallbackModelId: 'm-D',
+                    ultraModelIds,
+                },
+                [
+                    { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+                    { id: 'm-B', credentialId: 'c-oa', model: 'gpt-5-mini' },
+                    { id: 'm-C', credentialId: 'c-oa', model: 'gpt-6.1-sol' },
+                    { id: 'm-D', credentialId: 'c-oa', model: 'gpt-6-luna' },
+                ],
+            );
+        const ultraContext = (
+            requestedReviewMode?: 'ultra',
+            extra: Record<string, unknown> = {},
+        ) => {
+            const context = buildContext(undefined);
+            if (!requestedReviewMode) {
+                (context.codeReviewConfig as any).reviewMode = 'ultra';
+                // A push: the settings ask for Ultra, no command does.
+                (context as any).origin = 'github';
+            }
+            return { ...context, requestedReviewMode, ...extra } as any;
+        };
+        const comment = () =>
+            mockCodeManagementService.createSingleIssueComment.mock
+                .calls[0]?.[0]?.body as string | undefined;
+
+        it('runs Ultra on the three models in order, each without a per-call fallback, and the review slot on the codeReview model', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(result.heavy).toBe(false);
+            expect(
+                result.ultra?.models.map((m) => [m.position, m.slot.model]),
+            ).toEqual([
+                [1, 'gpt-6.1-sol'],
+                [2, 'gpt-4o'],
+                [3, 'gpt-5-mini'],
+            ]);
+            expect(result.ultra?.models.every((m) => !m.slot.fallback)).toBe(
+                true,
+            );
+            expect(result.ultra?.fallback?.slot.model).toBe('gpt-6-luna');
+            expect(result.ultra?.mergeModel.slot.model).toBe('gpt-6.1-sol');
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(comment()).toBeUndefined();
+        });
+
+        it.each([
+            ['--ultra', 'ultra' as const, 'requested'],
+            ['the settings', undefined, 'default'],
+        ])(
+            'an Ultra review asked by %s records why it routed there',
+            async (_, requested, reason) => {
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+
+                const result = await stage.execute(ultraContext(requested));
+
+                expect(result.ultra).toBeDefined();
+                expect(result.reviewRoutingReason).toBe(reason);
+            },
+        );
+
+        it.each([
+            ['--ultra', 'ultra' as const],
+            ['the settings', undefined],
+        ])(
+            'outside the Ultra alpha, Ultra asked by %s runs no review, says why and reads no plan',
+            async (_, requested) => {
+                ultraEnabled.mockResolvedValue(false);
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    null,
+                );
+
+                const result = await stage.execute(ultraContext(requested));
+
+                expect(ultraEnabled).toHaveBeenCalledWith(
+                    result.organizationAndTeamData.organizationId,
+                );
+                expect(result.ultra).toBeUndefined();
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(comment()).toContain(
+                    'Ultra review is not available for this organization yet',
+                );
+                expect(validateOrganizationLicense).not.toHaveBeenCalled();
+            },
+        );
+
+        it("runs Ultra on a trial with three of the team's own models", async () => {
+            validateOrganizationLicense.mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'trial',
+                planType: 'teams_managed',
+            });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const result = await stage.execute(ultraContext('ultra'));
+            expect(result.ultra?.models).toHaveLength(3);
+        });
+
+        it('on free, runs no review for --ultra and says why on the PR', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra).toBeUndefined();
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain(
+                'Ultra review is available on the Teams and Enterprise plans',
+            );
+            expect(comment()).toContain('was not reviewed');
+        });
+
+        it.each([
+            [
+                'the license service is unreachable',
+                { valid: false, unavailable: true },
+            ],
+            ['the plan read throws', new Error('billing down')],
+        ])(
+            'when %s, runs no review for --ultra and says the plan could not be read, not that it lacks Ultra',
+            async (_, outcome) => {
+                if (outcome instanceof Error)
+                    validateOrganizationLicense.mockRejectedValue(outcome);
+                else validateOrganizationLicense.mockResolvedValue(outcome);
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+
+                const result = await stage.execute(ultraContext('ultra'));
+
+                expect(result.ultra).toBeUndefined();
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(comment()).toContain(
+                    "Kody could not read this organization's plan just now",
+                );
+                expect(comment()).not.toContain('is not on one');
+            },
+        );
+
+        it('a trio still set after the trial ended runs nothing; the PR is told once, on the first review skipped for it', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            // Production always carries the CURRENT execution here; it says
+            // nothing about earlier reviews of the PR.
+            const current = {
+                pipelineMetadata: { lastExecution: { uuid: 'now' } },
+            };
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+
+            const first = await stage.execute(ultraContext(undefined, current));
+            expect(first.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain('Ultra review is available');
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: 'skipped',
+                    errorMessage: first.statusInfo?.message,
+                    pullRequestNumber: 1,
+                }),
+                { rethrow: true },
+            );
+
+            mockCodeManagementService.createSingleIssueComment.mockClear();
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) =>
+                    filters?.errorMessage ? { uuid: 'earlier-skip' } : null,
+            );
+            const later = await stage.execute(ultraContext(undefined, current));
+            expect(later.statusInfo?.status).toBe('skipped');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('--ultra is always answered, even after an earlier skip for the same reason', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'earlier-skip' },
+            );
+            await stage.execute(ultraContext('ultra'));
+            expect(comment()).toContain('Ultra review is available');
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('with fewer than three own models, runs no review and says how many there are', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({ defaultModelId: 'm-A' }),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain('this organization has 2 configured');
+        });
+
+        it('a model on Kodus credits with none left counts as unavailable, so the fallback takes its place', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-5-mini' ? { allowed: false } : null,
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models.map((m) => m.slot.model)).toEqual([
+                'gpt-6.1-sol',
+                'gpt-4o',
+            ]);
+            expect(result.ultra?.unavailable).toEqual([
+                expect.objectContaining({
+                    position: 3,
+                    reason: 'Its Kodus credits are exhausted.',
+                }),
+            ]);
+            gate.mockResolvedValue(null);
+        });
+
+        it('settings asking for it on a draft skip as any draft does, and the PR is told once it is ready', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            // Nothing was recorded as told: the draft skip carried its own reason.
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+            const cadence = jest
+                .spyOn(stage as any, 'evaluateReviewCadence')
+                .mockResolvedValueOnce({
+                    shouldProcess: false,
+                    reason: 'Pull request is a draft',
+                    shouldSaveSkipped: false,
+                });
+
+            const draft = await stage.execute(ultraContext());
+            expect(draft.statusInfo).toMatchObject({
+                status: 'skipped',
+                message: 'Pull request is a draft',
+            });
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+
+            const ready = await stage.execute(ultraContext());
+            expect(ready.statusInfo?.message).toContain(
+                'Ultra review is available',
+            );
+            expect(comment()).toContain('Ultra review is available');
+            cadence.mockRestore();
+        });
+
+        it('an unreadable record of earlier skips posts nothing: the review skips on the config error', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockRejectedValueOnce(
+                new Error('connection reset'),
+            );
+
+            const result = await stage.execute(ultraContext());
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.statusInfo?.message).not.toContain('Ultra review');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('the earlier-skips read asks the store to throw, not to read a failure as none', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            await stage.execute(ultraContext());
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(expect.anything(), { rethrow: true });
+        });
+
+        it('a refusal the platform did not take is not recorded as told: the next review tries again', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext());
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.statusInfo?.message).toContain('could not post why');
+        });
+
+        it('a command refusal the platform did not take is not recorded as told either', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.message).toContain('could not post why');
+            // The usual skip reaction still shows on the PR.
+            expect(result.pipelineMetadata?.notificationHandled).toBe(false);
+        });
+
+        it('a plain start-review on settings that ask for Ultra is always answered', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'earlier-skip' },
+            );
+
+            await stage.execute(ultraContext(undefined, { origin: 'command' }));
+
+            expect(comment()).toContain('Ultra review is available');
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('a fallback on Kodus credits with none left is not used', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-6-luna' ? { allowed: false } : null,
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models).toHaveLength(3);
+            expect(result.ultra?.fallback).toBeUndefined();
+            gate.mockResolvedValue(null);
+        });
+
+        it('with the three and the fallback out of credits, skips as Balanced does, with the credits comment', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.ultra).toBeUndefined();
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringMatching(/credit/i),
+                }),
+            );
+            gate.mockResolvedValue(null);
+        });
+
+        it('a credits comment the platform refused leaves the notification to the usual skip', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBeFalsy();
+            gate.mockResolvedValue(null);
+        });
+
+        it('a credits comment that threw leaves the notification to the usual skip', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createIssueComment.mockRejectedValueOnce({
+                status: 404,
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBeFalsy();
+            gate.mockResolvedValue(null);
+        });
+
+        it('with the three out of credits, the merge runs on the fallback', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-6-luna' ? null : { allowed: false },
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models).toEqual([]);
+            expect(result.ultra?.mergeModel.slot.model).toBe('gpt-6-luna');
+            gate.mockResolvedValue(null);
+        });
+
+        it("Kody Rules and the summary run on the org's default model, not a repository's override", async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const context = ultraContext('ultra');
+            context.codeReviewConfig.byokModelId = 'm-B';
+
+            const result = await stage.execute(context);
+
+            expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
+                'gpt-4o',
+            );
+        });
+
+        it('@kody -v runs its one custom agent, not Ultra', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const result = await stage.resolveReviewRouting(
+                ultraContext(undefined, { onlyCustomAgent: 'audit' }),
+            );
+            expect(result.ultra).toBeUndefined();
+        });
+    });
+
     it('does not crash when there is no BYOK config', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue(null);
 
@@ -390,6 +882,163 @@ describe('ValidateConfigStage — v2 routing', () => {
         const result = await stage.execute(buildContext(undefined));
 
         expect(result.codeReviewConfig.byokConfig).toBeUndefined();
+    });
+
+    describe('review modes turned off for commands', () => {
+        const byKey = (commandModes: unknown) =>
+            mockOrganizationParametersService.findByKey.mockImplementation(
+                async (key: string) =>
+                    key === 'review_command_modes_config'
+                        ? commandModes === undefined
+                            ? null
+                            : { configValue: commandModes }
+                        : {
+                              configValue: v2(
+                                  {
+                                      defaultModelId: 'm-A',
+                                      ultraModelIds: ['m-A', 'm-B', 'm-C'],
+                                  },
+                                  [
+                                      {
+                                          id: 'm-A',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-4o',
+                                      },
+                                      {
+                                          id: 'm-B',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-5-mini',
+                                      },
+                                      {
+                                          id: 'm-C',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-6.1-sol',
+                                      },
+                                  ],
+                              ),
+                          },
+            );
+        const run = (
+            requestedReviewMode?: 'heavy' | 'ultra' | 'balanced',
+            reviewMode?: string,
+            // null: not read, as from a job enqueued before the check.
+            requestedReviewModeAccess:
+                'write' | 'none' | 'unknown' | null = 'write',
+        ) => {
+            const context = buildContext(undefined) as any;
+            if (reviewMode) context.codeReviewConfig.reviewMode = reviewMode;
+            if (!requestedReviewMode) context.origin = 'github';
+            return stage.execute({
+                ...context,
+                requestedReviewMode,
+                requestedReviewModeAccess:
+                    requestedReviewModeAccess ?? undefined,
+            });
+        };
+        const comment = () =>
+            mockCodeManagementService.createSingleIssueComment.mock
+                .calls[0]?.[0]?.body as string | undefined;
+
+        it.each([
+            ['heavy', { heavyBlocked: true }, 'Heavy review by command'],
+            ['ultra', { ultraBlocked: true }, 'Ultra review by command'],
+        ] as const)(
+            '--%s turned off runs no review and tells the PR who can turn it on',
+            async (mode, config, text) => {
+                byKey(config);
+
+                const result = await run(mode);
+
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(result.heavy).toBeFalsy();
+                expect(result.ultra).toBeUndefined();
+                expect(comment()).toContain(text);
+                expect(comment()).toContain('organization owner');
+                expect(result.statusInfo?.message).toBe(comment());
+                expect(result.pipelineMetadata?.notificationHandled).toBe(true);
+            },
+        );
+
+        it.each([
+            ['heavy', 'none', 'Someone with write access can ask for it.'],
+            ['ultra', 'none', 'Someone with write access can ask for it.'],
+            ['ultra', 'unknown', 'Kody could not check yours'],
+            ['heavy', null, 'Kody could not check yours'],
+            ['ultra', null, 'Kody could not check yours'],
+        ] as const)(
+            '--%s from someone whose write access is %s runs no review and says why',
+            async (mode, access, text) => {
+                byKey(undefined);
+
+                const result = await run(mode, undefined, access);
+
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(result.heavy).toBeFalsy();
+                expect(result.ultra).toBeUndefined();
+                expect(comment()).toContain('needs write access');
+                expect(comment()).toContain(text);
+                expect(result.statusInfo?.message).toBe(comment());
+            },
+        );
+
+        it.each([
+            ['with write access', 'heavy', 'write'],
+            ['--balanced, which needs none', 'balanced', 'none'],
+        ] as const)('a command %s runs the review', async (_, mode, access) => {
+            byKey(undefined);
+
+            const result = await run(mode, undefined, access);
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(comment()).toBeUndefined();
+        });
+
+        it('a reply the platform refused leaves the usual skip notification', async () => {
+            byKey({ heavyBlocked: true });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValue(
+                null,
+            );
+
+            const result = await run('heavy');
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBe(false);
+        });
+
+        it.each([
+            ['--heavy with only Ultra off', 'heavy', { ultraBlocked: true }],
+            ['--ultra with only Heavy off', 'ultra', { heavyBlocked: true }],
+            ['--heavy with nothing stored', 'heavy', undefined],
+            [
+                '--balanced with both off',
+                'balanced',
+                { heavyBlocked: true, ultraBlocked: true },
+            ],
+        ] as const)('%s runs the review', async (_, mode, config) => {
+            byKey(config);
+
+            const result = await run(mode);
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(comment()).toBeUndefined();
+        });
+
+        it.each([
+            ['heavy', { heavyBlocked: true }],
+            ['ultra', { ultraBlocked: true }],
+        ] as const)(
+            'settings routing to %s still run it with the command off',
+            async (mode, config) => {
+                byKey(config);
+
+                const result = await run(undefined, mode);
+
+                expect(result.statusInfo?.status).not.toBe('skipped');
+                expect(
+                    mode === 'heavy' ? result.heavy : result.ultra,
+                ).toBeTruthy();
+            },
+        );
     });
 });
 

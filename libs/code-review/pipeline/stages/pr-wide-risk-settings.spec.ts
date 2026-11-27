@@ -132,7 +132,7 @@ it.each([false, true])(
     'uses complete PR paths for risk on a docs-only follow-up (renamed=%s)',
     async (renamed) => {
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'high',
+            matchedRules: ['kodus-security'],
             reason: 'The session bypasses authorization.',
         } as any);
         const { resolve, risk, context, docs, files } = setup(renamed);

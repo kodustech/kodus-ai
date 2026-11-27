@@ -14,6 +14,7 @@ import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
 import {
     NON_REASONING_TRAITS,
     resolveCompatibleReasoningTraits,
+    sendsDefaultReasoningLevel,
 } from '@libs/llm/providers/kernel/reasoning-traits';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
@@ -59,7 +60,7 @@ export function defaultReasoningEffortFor(
         // neutral, but OpenAI defaults gpt-5.1's effort to `none`, so omitting
         // there disables. So the module DECLARES it, and an undeclared model
         // stays on the safe side (impose; costs tokens, never disables).
-        return traits.omittingDisablesReasoning === false ? undefined : 'medium';
+        return sendsDefaultReasoningLevel(traits) ? 'medium' : undefined;
     } catch {
         // A lookup failure must never break the call — fall back to the caller's
         // own default (matches resolveStructuredPlan's best-effort posture).

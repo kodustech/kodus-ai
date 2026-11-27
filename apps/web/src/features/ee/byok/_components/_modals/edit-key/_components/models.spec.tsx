@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
@@ -38,7 +39,13 @@ jest.mock("@services/organizationParameters/hooks", () => ({
     useLLMProviderModelsPreview: (...args: unknown[]) => mockPreview(...args),
 }));
 
-function Harness({ lockedInUse }: { lockedInUse: boolean }) {
+function Harness({
+    lockedInUse,
+    lockedLabel,
+}: {
+    lockedInUse: boolean;
+    lockedLabel?: string;
+}) {
     const form = useForm({
         defaultValues: {
             provider: "novita",
@@ -47,7 +54,11 @@ function Harness({ lockedInUse }: { lockedInUse: boolean }) {
     });
     return (
         <FormProvider {...form}>
-            <ByokModelSelect lockedInUse={lockedInUse} credentialStored />
+            <ByokModelSelect
+                lockedInUse={lockedInUse}
+                lockedLabel={lockedLabel}
+                credentialStored
+            />
         </FormProvider>
     );
 }
@@ -76,7 +87,11 @@ function LivePickerHarness({
 
 beforeEach(() => {
     mockPreview.mockReset();
-    mockPreview.mockReturnValue({ data: [], isFetching: false, isError: false });
+    mockPreview.mockReturnValue({
+        data: [],
+        isFetching: false,
+        isError: false,
+    });
 });
 
 describe("ByokModelSelect — lock when the model is in use in Routing", () => {
@@ -96,9 +111,23 @@ describe("ByokModelSelect — lock when the model is in use in Routing", () => {
         ).not.toBeInTheDocument();
     });
 
+    it("locked: shows the name the page gives it, id included", () => {
+        render(
+            <Harness
+                lockedInUse
+                lockedLabel="Deepseek V4 Pro (deepseek/deepseek-v4-pro)"
+            />,
+        );
+        expect(
+            screen.getByText("Deepseek V4 Pro (deepseek/deepseek-v4-pro)"),
+        ).toBeInTheDocument();
+    });
+
     it("unlocked: renders the editable picker, not the lock hint", () => {
         render(<Harness lockedInUse={false} />);
-        expect(screen.queryByText(/in use in routing/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/in use in routing/i),
+        ).not.toBeInTheDocument();
     });
 });
 
@@ -284,6 +313,34 @@ describe("ByokModelSelect — custom endpoint (openai_compatible)", () => {
         );
         expect(screen.getByText("Deepseek V4.1")).toBeInTheDocument();
         expect(screen.queryByText(/select a model/i)).not.toBeInTheDocument();
+    });
+
+    it("a saved model the endpoint does not list, whose label a listed one shares, shows its id", () => {
+        mockPreview.mockReturnValue({
+            data: [
+                {
+                    id: "accounts/fireworks/models/deepseek-v4p1",
+                    name: "Deepseek V4.1",
+                },
+            ],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "accounts/fireworks/models/deepseek-v4p1-0731",
+                    baseURL: FIREWORKS,
+                }}
+            />,
+        );
+        expect(
+            screen.getByText(
+                "Deepseek V4.1 (accounts/fireworks/models/deepseek-v4p1-0731)",
+            ),
+        ).toBeInTheDocument();
     });
 
     it("typed key + base URL on a fresh connect: lists live", () => {
@@ -558,5 +615,31 @@ describe("ByokModelSelect — models that share a label", () => {
         expect(screen.getByRole("combobox")).toHaveTextContent(
             "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)",
         );
+    });
+});
+
+describe("ByokModelSelect — one listing", () => {
+    it("ids that differ only before the last slash are different models", async () => {
+        mockPreview.mockReturnValue({
+            data: [
+                { id: "openai/gpt-4o", name: "GPT 4o" },
+                { id: "azure/gpt-4o", name: "GPT 4o" },
+            ],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://litellm.example.com/v1",
+                }}
+            />,
+        );
+        fireEvent.click(screen.getByRole("combobox"));
+        expect(await screen.findByText("openai/gpt-4o")).toBeInTheDocument();
+        expect(screen.getByText("azure/gpt-4o")).toBeInTheDocument();
     });
 });

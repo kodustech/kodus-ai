@@ -14,11 +14,32 @@ import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
-import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    Optional,
+} from '@nestjs/common';
 import axios from 'axios';
 
 import { resolveByokSlot } from './byok-credentials.util';
+import {
+    addressRefusal,
+    gatewayLookup,
+    urlPort,
+} from '@libs/llm/gateway-address-guard';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
+
+/** The socket's lookup for a listing on a user endpoint: the same policy the
+ *  save-time guard applied to this host and port, judged on what the socket
+ *  resolves now. */
+function listingLookup(url: string) {
+    const parsed = new URL(url);
+    return gatewayLookup(
+        undefined,
+        addressRefusal(parsed.hostname, urlPort(parsed)),
+    );
+}
 
 export interface ModelResponse {
     provider: BYOKProvider;
@@ -95,7 +116,8 @@ export class GetModelsByProviderUseCase {
             ))
         ) {
             this.logger.warn({
-                message: 'Refused to list the Kodus catalog: org outside the private alpha',
+                message:
+                    'Refused to list the Kodus catalog: org outside the private alpha',
                 context: GetModelsByProviderUseCase.name,
                 metadata: {
                     organizationId: organizationAndTeamData?.organizationId,
@@ -266,23 +288,31 @@ export class GetModelsByProviderUseCase {
         }
 
         try {
-            const response = await axios.get(
-                listing.url({ apiKey, baseURL, awsBearerToken, awsRegion }),
-                {
-                    headers: listing.headers({
-                        apiKey,
-                        baseURL,
-                        awsBearerToken,
-                        awsRegion,
-                    }),
-                    // A user-supplied endpoint: never follow redirects (a public URL
-                    // could 302 onto a private IP / metadata endpoint past the guard).
-                    ...(targetsUserEndpoint ? { maxRedirects: 0 } : {}),
-                    ...(listing.timeoutMs
-                        ? { timeout: listing.timeoutMs }
-                        : {}),
-                },
-            );
+            const listingUrl = listing.url({
+                apiKey,
+                baseURL,
+                awsBearerToken,
+                awsRegion,
+            });
+            const response = await axios.get(listingUrl, {
+                headers: listing.headers({
+                    apiKey,
+                    baseURL,
+                    awsBearerToken,
+                    awsRegion,
+                }),
+                // A user-supplied endpoint: never follow redirects (a public URL
+                // could 302 onto a private IP / metadata endpoint past the guard),
+                // and judge the address again when the socket resolves it, since
+                // the guard above saw only what the host answered a moment ago.
+                ...(targetsUserEndpoint
+                    ? {
+                          maxRedirects: 0,
+                          lookup: listingLookup(listingUrl) as any,
+                      }
+                    : {}),
+                ...(listing.timeoutMs ? { timeout: listing.timeoutMs } : {}),
+            });
 
             // The live call authenticated, so this list IS evidence about the key.
             return {

@@ -58,6 +58,12 @@ export interface ApprovalPoliciesRequest {
     fullPrFiles?: FileChange[];
     heavy?: boolean;
     previousEligibility?: ApprovalEligibilityCache;
+    /**
+     * Decide only on what needs no model call: risk is left out and every
+     * eligibility instruction counts as met. Approve means a risk assessment
+     * could still decide the PR; anything else holds it regardless.
+     */
+    fixedConditionsOnly?: boolean;
 }
 
 @Injectable()
@@ -155,11 +161,14 @@ export class ApprovalPoliciesService {
                 baseSha,
             });
             if (snapshotHold) return hold(snapshotHold);
-            const currentRiskVeto = riskApprovalVeto(
-                input.config.riskAssessmentActive === true,
-                input.risk,
-                { headSha, baseSha, description: live },
-            );
+            const riskEnabled =
+                !input.fixedConditionsOnly &&
+                input.config.riskAssessmentActive === true;
+            const currentRiskVeto = riskApprovalVeto(riskEnabled, input.risk, {
+                headSha,
+                baseSha,
+                description: live,
+            });
             if (currentRiskVeto) return hold(currentRiskVeto);
             const needsFiles =
                 policies.some(
@@ -194,6 +203,7 @@ export class ApprovalPoliciesService {
             const judgeEligibility = async (
                 policy: PolicyEligibilityInput['policy'],
             ): Promise<PolicyEligibility> => {
+                if (input.fixedConditionsOnly) return { status: 'eligible' };
                 if (!modelLoaded) {
                     if (input.config.resolvedModelSlot)
                         modelSlot = input.config.resolvedModelSlot;
@@ -255,7 +265,7 @@ export class ApprovalPoliciesService {
                 approvalActive: true,
                 policies,
                 reviewClean: input.reviewClean,
-                riskEnabled: input.config.riskAssessmentActive === true,
+                riskEnabled,
                 risk: input.risk,
                 currentHeadSha: headSha,
                 currentBaseSha: baseSha,
@@ -275,7 +285,7 @@ export class ApprovalPoliciesService {
                 judgeEligibility,
             });
             // A provider read or model call can race a new commit or base update.
-            if (decision.kind === 'approve') {
+            if (decision.kind === 'approve' && !input.fixedConditionsOnly) {
                 phase = 'final-snapshot';
                 const current = await this.codeManagement.getPullRequest({
                     ...request,

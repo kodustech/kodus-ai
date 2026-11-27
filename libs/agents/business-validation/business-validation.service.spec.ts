@@ -1,3 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
 import type { TaskReference } from './business-validation.types';
 import {
     authorClaimSection,
@@ -8,8 +13,12 @@ import {
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
     resolveBusinessLogicSettings,
 } from './settings';
+import { extractTaskReferences } from './task-references';
 import { resolveTasks } from './task-resolver';
 import { buildTaskTrackers } from './trackers/tracker-catalog';
+import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
+import { analyzerOutputTokens } from './judge/model-window';
+import { formatPullRequestDiff } from './pull-request-diff';
 
 jest.mock('./task-resolver', () => {
     const actual = jest.requireActual('./task-resolver');
@@ -94,6 +103,55 @@ describe('BusinessValidationService · a task the PR names that does not exist',
         await expect(
             decide(true, typo([]), [ref('KOD-999')]),
         ).resolves.toMatchObject({ kind: 'task_missing', required: true });
+    });
+});
+
+describe('BusinessValidationService · a referenced task the tracker cannot find (#2422)', () => {
+    const unreadable = {
+        kind: 'not_found',
+        looksIntended: false,
+        attempts: [
+            { reference: 'PAY-42', tracker: 'Jira', status: 'not_found' },
+        ],
+    };
+
+    it('tells a team that requires a task which reference it looked for, not that the PR names none', async () => {
+        const outcome = await decide(true, unreadable, [ref('PAY-42')]);
+        expect(outcome.kind).toBe('task_required');
+        expect(outcome.message).toContain('PAY-42');
+        expect(outcome.message).toContain('Jira');
+        expect(outcome.message).not.toContain("doesn't reference a task");
+    });
+
+    it('keeps the guidance to reference a task when what it found is only a word like UTF-8', async () => {
+        const references = extractTaskReferences({
+            title: 'fix: handle UTF-8 BOM in the CSV importer',
+        });
+        const resolution = await resolveTasks(
+            references,
+            [
+                {
+                    name: 'Jira',
+                    canRead: (r) => r.kind === 'key',
+                    read: async () => ({ status: 'not_found' }),
+                    ownsReference: async () => false,
+                } as any,
+            ],
+            { organizationAndTeamData: { organizationId: 'org-1' } },
+        );
+        expect(resolution.kind).toBe('not_found');
+        const outcome = await decide(true, resolution, references);
+        expect(outcome.kind).toBe('task_required');
+        expect(outcome.message).toContain(
+            '`PROJ-123`, `Closes #123` or a link',
+        );
+        expect(outcome.message).toContain('UTF-8');
+    });
+
+    it('still says the PR names no task when it names none', async () => {
+        const outcome = await decide(true, { kind: 'no_reference' }, []);
+        expect(outcome.kind).toBe('task_required');
+        expect(outcome.message).toContain("doesn't reference a task");
     });
 });
 
@@ -684,5 +742,362 @@ describe('legacyOutcomeLabels', () => {
         expect(
             legacyOutcomeLabels({ kind: 'task_too_thin', tasks: [] } as any),
         ).toMatchObject({ taskContextStatus: 'weak' });
+    });
+});
+
+describe("BusinessValidationService · a judge call fits the model's window (#2233)", () => {
+    const skill = readFileSync(
+        join(__dirname, '../skills/business-rules-validation/SKILL.md'),
+        'utf8',
+    );
+    const svg = (chars: number) => {
+        let out = '';
+        for (let i = 0; out.length < chars; i++) {
+            out += `+<path d="M${i % 97}.${i % 7} ${i % 13}.5L${i % 31} ${i % 11}z"/>\n`;
+        }
+        return out.slice(0, chars);
+    };
+    const worst = (text: string) =>
+        estimateTextTokens(text, { worstCase: true });
+    const task = {
+        tracker: 'Linear',
+        id: 'KOD-1',
+        title: 'New header icons',
+        description: 'Replace the header icons with the new set.',
+        acceptanceCriteria: [
+            'Icons render in the header',
+            'Old icons are removed',
+        ],
+    };
+    const assetPr = formatPullRequestDiff([
+        { filename: 'src/header.tsx', patch: svg(20_000) },
+        ...Array.from({ length: 8 }, (_, i) => ({
+            filename: `icons/icon-${i}.svg`,
+            patch: svg(20_000),
+        })),
+    ]);
+
+    const codeFiles = (count: number) =>
+        formatPullRequestDiff(
+            Array.from({ length: count }, (_, i) => ({
+                filename: `src/header/part-${i}.ts`,
+                patch: Array.from(
+                    { length: 40 },
+                    (_, line) =>
+                        `+export const icon${i}_${line} = render('icon-${i}-${line}');`,
+                ).join('\n'),
+            })),
+        );
+    const codePr = codeFiles(12);
+
+    /** Runs the service's decision with a judge that records each call it gets. */
+    async function judgeCalls(
+        slot: Record<string, unknown>,
+        options: { diff?: string; task?: typeof task; body?: string } = {},
+    ) {
+        const calls: Array<{ text: string; diff: string }> = [];
+        const service = new BusinessValidationService(
+            {} as any,
+            {} as any,
+            { findByKey: async () => undefined } as any,
+            {
+                loadInstructions: () => skill,
+                listReferences: () => [],
+                loadReference: () => undefined,
+            } as any,
+        );
+        const judge = {
+            modelSlot: { provider: 'openai_compatible', apiKey: '', ...slot },
+            translate: async (m: string) => m,
+            judge: async (input: any) => {
+                calls.push({
+                    text: `${input.instructions}\n${buildBusinessRulesAnalysisPrompt(input)}`,
+                    diff: input.diff,
+                });
+                return {
+                    needsMoreInfo: false,
+                    status: 'meets_requirements',
+                    requirements: [
+                        {
+                            requirement: 'Icons render in the header',
+                            state: 'met',
+                            evidence: [],
+                        },
+                    ],
+                };
+            },
+        };
+        const outcome = await (service as any).decide(
+            {
+                door: 'auto',
+                organizationAndTeamData: { organizationId: 'org-1' },
+                pullRequest: {
+                    number: 1,
+                    body: options.body ?? 'Closes KOD-1',
+                },
+                diff: options.diff ?? assetPr,
+            },
+            resolveBusinessLogicSettings({}),
+            {
+                kind: 'found',
+                attempts: [],
+                tasks: [{ task: options.task ?? task }],
+            },
+            [ref('KOD-1')],
+            ['Linear'],
+            async () => judge,
+        );
+        return { outcome, calls, slot: judge.modelSlot as any };
+    }
+
+    it('reads part of the code on a 32k-token slot, and the call with its answer fits the window', async () => {
+        const { outcome, calls, slot } = await judgeCalls({
+            model: 'local-open-weights',
+            maxInputTokens: 32_000,
+        });
+        expect(assetPr.length).toBeLessThan(200_000);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(
+            worst(calls[0].text) + (await analyzerOutputTokens(slot)).reserved,
+        ).toBeLessThanOrEqual(32_000);
+        expect(outcome.kind).toBe('validated');
+        expect(outcome.unseenFiles.length).toBeGreaterThan(0);
+    });
+
+    it('still reads code on a 16k-token slot', async () => {
+        const { calls, slot } = await judgeCalls(
+            { model: 'local-open-weights', maxInputTokens: 16_000 },
+            { diff: codePr },
+        );
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(
+            worst(calls[0].text) + (await analyzerOutputTokens(slot)).reserved,
+        ).toBeLessThanOrEqual(16_000);
+    });
+
+    it("keeps room for the slot's own answer limit, which the call sends whatever the judge asks", async () => {
+        const { calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 64_000,
+                maxOutputTokens: 32_000,
+            },
+            { diff: codeFiles(60) },
+        );
+        expect(worst(calls[0].text) + 32_000).toBeLessThanOrEqual(64_000);
+    });
+
+    it("asks nothing, and says to lower the answer limit, when the slot's answer fills its window", async () => {
+        const { outcome, calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 32_000,
+                maxOutputTokens: 32_000,
+            },
+            { diff: codePr },
+        );
+        expect(calls).toHaveLength(0);
+        expect(outcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'too_large_for_model',
+        });
+        expect(outcome.message).toContain(
+            "Lower that model's max output tokens",
+        );
+    });
+
+    it("fits the call with the slot's whole answer when that answer takes most of the window", async () => {
+        const { calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 64_000,
+                maxOutputTokens: 48_000,
+            },
+            { diff: codeFiles(60) },
+        );
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(worst(calls[0].text) + 48_000).toBeLessThanOrEqual(64_000);
+    });
+
+    it('sizes the call for a fallback with a smaller window than the primary', async () => {
+        const { calls } = await judgeCalls({
+            model: 'big-window',
+            maxInputTokens: 1_000_000,
+            fallback: {
+                provider: 'openai_compatible',
+                apiKey: '',
+                model: 'small-window',
+                maxInputTokens: 32_000,
+            },
+        });
+        expect(worst(calls[0].text)).toBeLessThanOrEqual(32_000);
+    });
+
+    it('counts a base64 image pasted in the PR description at its real size', async () => {
+        const image = `![logo](data:image/png;base64,${Buffer.alloc(18_000, 7).toString('base64').replace(/A/g, 'Bq9')})`;
+        const { calls, slot } = await judgeCalls(
+            { model: 'local-open-weights', maxInputTokens: 64_000 },
+            { body: `Closes KOD-1\n\n${image}`, diff: codeFiles(60) },
+        );
+        expect(
+            worst(calls[0].text) + (await analyzerOutputTokens(slot)).reserved,
+        ).toBeLessThanOrEqual(64_000);
+    });
+
+    // Numbers with no space between them: about 1.2 characters a token.
+    const numberTable = (chars: number) => {
+        let seed = 11;
+        let out = '+';
+        while (out.length < chars) {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            out += `${seed % 256},`;
+        }
+        return out.slice(0, chars);
+    };
+
+    it('still asks the judge, naming the file, when the only change is over the cost cap on a large window', async () => {
+        const fixture = formatPullRequestDiff([
+            {
+                filename: 'test/fixtures/catalog.json',
+                patch: Array.from(
+                    { length: 6_000 },
+                    (_, line) => `+  "item-${line}": { "price": ${line} },`,
+                ).join('\n'),
+            },
+        ]);
+        expect(fixture.length).toBeGreaterThan(200_000);
+        const { outcome, calls } = await judgeCalls(
+            { model: 'big-window', maxInputTokens: 1_048_576 },
+            { diff: fixture },
+        );
+        expect(calls).toHaveLength(1);
+        expect(calls[0].diff).toBe('');
+        expect(outcome.kind).toBe('validated');
+        expect(outcome.unseenFiles).toContain('test/fixtures/catalog.json');
+    });
+
+    it('fits the call with the thinking budget Anthropic sends on top of the answer', async () => {
+        const icons = formatPullRequestDiff(
+            Array.from({ length: 40 }, (_, i) => ({
+                filename: `icons/icon-${i}.svg`,
+                patch: numberTable(4_750),
+            })),
+        );
+        expect(worst(icons)).toBeGreaterThan(150_000);
+        const { calls } = await judgeCalls(
+            {
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-5',
+                maxInputTokens: 200_000,
+                reasoningEffort: 'high',
+            },
+            { diff: icons },
+        );
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        // max_tokens = the 20k answer + the 40k budget of effort high.
+        expect(worst(calls[0].text) + 60_000).toBeLessThanOrEqual(200_000);
+    });
+
+    it("cuts the code to what fits beside the answer a Claude model's output limit caps, no less", async () => {
+        const catalog = formatPullRequestDiff(
+            Array.from({ length: 40 }, (_, i) => ({
+                filename: `src/catalog/part-${i}.json`,
+                patch: numberTable(4_750),
+            })),
+        );
+        // Whole, it does not fit beside the 64k answer.
+        expect(worst(catalog) + 64_000).toBeGreaterThan(200_000);
+        const { outcome, calls } = await judgeCalls(
+            {
+                provider: 'anthropic',
+                model: 'claude-haiku-4-5-20251001',
+                maxInputTokens: 200_000,
+                maxOutputTokens: 64_000,
+                reasoningEffort: 'high',
+            },
+            { diff: catalog },
+        );
+        expect(outcome.kind).toBe('validated');
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(calls[0].diff.length).toBeLessThan(catalog.length);
+        // The adapter declares max_tokens = min(64k + 40k budget, 64k): the
+        // call fits with that answer, and uses the room a 104k reserve
+        // (answer + budget, uncapped) would have taken from the code.
+        expect(worst(calls[0].text) + 64_000).toBeLessThanOrEqual(200_000);
+        expect(worst(calls[0].text) + 104_000).toBeGreaterThan(200_000);
+    });
+
+    it("reads the code on a small slot whose answer limit is below the judge's own", async () => {
+        const defaults = formatPullRequestDiff([
+            {
+                filename: 'src/defaults.ts',
+                patch: Array.from(
+                    { length: 1_000 },
+                    (_, line) => `+export const default${line} = ${line};`,
+                ).join('\n'),
+            },
+        ]);
+        const { outcome, calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 16_000,
+                maxOutputTokens: 1_000,
+            },
+            { diff: defaults },
+        );
+        expect(outcome.kind).toBe('validated');
+        expect(calls[0].diff).toBe(defaults);
+        expect(worst(calls[0].text) + 1_000).toBeLessThanOrEqual(16_000);
+    });
+
+    it('blames the size of the code, not the answer limit, when the code would not fit beside any answer', async () => {
+        const generated = formatPullRequestDiff([
+            { filename: 'src/gamma.ts', patch: numberTable(150_000) },
+        ]);
+        const { outcome, calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 128_000,
+                maxOutputTokens: 64_000,
+            },
+            { diff: generated },
+        );
+        expect(calls).toHaveLength(0);
+        expect(outcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'too_large_for_model',
+        });
+        expect(outcome.message).toContain('Too large for the model');
+    });
+
+    it('says the task is too large for the model, and asks it nothing, when no file fits beside it', async () => {
+        const { outcome, calls } = await judgeCalls(
+            { model: 'local-open-weights', maxInputTokens: 32_000 },
+            {
+                task: {
+                    ...task,
+                    description: 'Replace the header icons. '.repeat(6_000),
+                },
+            },
+        );
+        expect(calls).toHaveLength(0);
+        expect(outcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'too_large_for_model',
+        });
+        expect(outcome.message).toContain('32000 tokens');
+    });
+});
+
+describe('legacyOutcomeLabels', () => {
+    it('records a run too large for the model as an unknown task context, not a missing one', () => {
+        expect(
+            legacyOutcomeLabels({
+                kind: 'skipped',
+                reason: 'too_large_for_model',
+                message: '',
+            } as any).taskContextStatus,
+        ).toBe('unknown');
     });
 });

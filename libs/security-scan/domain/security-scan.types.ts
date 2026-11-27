@@ -1,4 +1,5 @@
 import type { VulnClass } from './surface/surface.types';
+import type { SecurityScanMode } from './coverage-ledger';
 
 export enum SecurityScanStatus {
     QUEUED = 'queued',
@@ -52,6 +53,8 @@ export interface ScanUnitProgress {
     unitId: string;
     state: ScanUnitState;
     findings: number;
+    /** Findings the independent check refuted in this unit: not reported. */
+    refuted?: number;
     error?: string;
     /**
      * On a unit a slice left pending: the classes whose lens already ended,
@@ -60,6 +63,13 @@ export interface ScanUnitProgress {
      */
     lensesRun?: VulnClass[];
     lensesExamined?: VulnClass[];
+    /**
+     * On a unit carried from an earlier scan of the same commit that its
+     * limit stopped halfway: the classes that scan read to the end. They do
+     * not run again and they complete the unit, but this scan did not read
+     * them: they resolve nothing.
+     */
+    lensesInherited?: VulnClass[];
     /** Files fully read by each class, recorded with this unit. */
     examinedByClass?: ScanExaminedClass[];
 }
@@ -70,6 +80,10 @@ export interface SecurityScanOutcomeCounts {
     reopened: number;
     dismissed: number;
     resolved: number;
+    /** Findings the independent check refuted: never reported. */
+    refuted?: number;
+    /** Open issues folded into another one with the same root cause. */
+    consolidated?: number;
 }
 
 /** The files a lens of one class read to the end. */
@@ -105,6 +119,11 @@ export interface SecurityScanCoverage {
      */
     mapFailedLanguages?: string[];
     filesBeyondPlan?: number;
+    /**
+     * Incremental scans: candidate files left out because what an earlier
+     * scan concluded about them still holds (nothing they read changed).
+     */
+    unchangedFiles?: number;
 }
 
 export interface SecurityScanRecord {
@@ -148,6 +167,18 @@ export interface SecurityScanRecord {
     outcome?: SecurityScanOutcomeCounts;
     /** Model the scan ran on, as `provider:model`. */
     modelName?: string;
+    /**
+     * The model the person picked for this scan (a model of the org's BYOK
+     * config); the deep scan routing's when unset.
+     */
+    modelId?: string;
+    /**
+     * `incremental` skips what earlier scans concluded and still holds;
+     * `full` reads everything again. Scans before it existed are `full`.
+     */
+    mode?: SecurityScanMode;
+    /** The schedule that started it, when a schedule did. */
+    scheduleId?: string;
     requestedBy?: { userId?: string; email?: string };
     error?: string;
     startedAt?: string;
@@ -168,6 +199,12 @@ export interface ScanFinding {
      * takes this scan's code, lines, evidence and owner.
      */
     storedAs?: string;
+    /**
+     * The identity of the issue this finding is one more place of: the same
+     * root cause, reached or repeated elsewhere. Stored as an occurrence on
+     * that issue, never as an issue of its own nor over its body.
+     */
+    occurrenceOf?: string;
     vulnerabilityClass: VulnClass;
     cwe?: string;
     title: string;
@@ -182,6 +219,11 @@ export interface ScanFinding {
     suggestedFix?: string;
     /** One setting the whole application shares, not this place's own bug. */
     appWide?: boolean;
+    /**
+     * The deployment or configuration fact the verdict depends on, when the
+     * verifier could not read it in the code.
+     */
+    assumption?: string;
     reproduction?: {
         path: string;
         content: string;
@@ -189,6 +231,11 @@ export interface ScanFinding {
         executed: boolean;
         exitCode?: number;
         reproduced?: boolean;
+        /**
+         * It ran but could not exercise the code: a dependency it could not
+         * install offline, a runner the sandbox lacks. No verdict either way.
+         */
+        inconclusive?: boolean;
         output?: string;
     };
 }
@@ -205,7 +252,12 @@ export type ScanReportedFinding = Pick<
     | 'startLine'
     | 'endLine'
 > &
-    Partial<Pick<ScanFinding, 'attackPath'>> & {
+    Partial<Pick<ScanFinding, 'attackPath' | 'symbol'>> & {
         /** The issue it was stored as: a scan carrying it on sights it too. */
         fingerprint?: string;
+        /**
+         * The identities of the places folded into this issue as occurrences:
+         * a finding found again at one of them is that occurrence again.
+         */
+        fingerprintAliases?: string[];
     };

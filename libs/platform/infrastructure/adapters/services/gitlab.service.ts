@@ -1,4 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { assertGitServerUrlAllowed } from './git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -1461,12 +1463,14 @@ export class GitlabService implements Omit<
             const { token, host: hostParam } = params;
             const normalizedHost = this.normalizeGitlabHost(hostParam);
             const userApiUrl = `${this.getGitlabWebBaseUrl(hostParam)}/api/v4/user`;
+            if (normalizedHost) await assertGitServerUrlAllowed(userApiUrl);
 
             const testResponse = await axios.get(userApiUrl, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
                 timeout: 30000,
+                ...integrationRequestGuard(userApiUrl, 'Git server'),
             });
 
             if (!testResponse || !testResponse.data) {

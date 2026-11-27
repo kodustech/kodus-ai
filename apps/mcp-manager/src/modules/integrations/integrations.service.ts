@@ -14,7 +14,11 @@ import {
     MCPIntegrationInterface,
     MCPIntegrationUniqueFields,
 } from './interfaces/mcp-integration.interface';
-import { Logger } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
+import {
+    assertIntegrationUrlAllowed,
+    IntegrationUrlRefusedError,
+} from '@libs/llm/gateway-address-guard';
 
 type IntegrationFilters = Partial<
     Pick<
@@ -152,6 +156,20 @@ export class IntegrationsService {
         }
     }
 
+    /** A custom server URL an org typed may not point at the platform's
+     *  internal network or the cloud metadata service
+     *  (gateway-address-guard.ts, `assertIntegrationUrlAllowed`). */
+    private async assertServerUrl(baseUrl: string): Promise<void> {
+        try {
+            await assertIntegrationUrlAllowed(baseUrl);
+        } catch (error) {
+            if (error instanceof IntegrationUrlRefusedError) {
+                throw new BadRequestException(error.message);
+            }
+            throw error;
+        }
+    }
+
     async validateIntegration(
         integrationData: CreateIntegrationDto,
     ): Promise<boolean> {
@@ -170,6 +188,7 @@ export class IntegrationsService {
                   )
                 : {};
 
+            await this.assertServerUrl(integrationData.baseUrl);
             const client = new CustomClient({
                 ...integrationData,
                 headers,
@@ -209,6 +228,7 @@ export class IntegrationsService {
                 organizationId,
                 name,
             });
+            await this.assertServerUrl(baseUrl);
 
             const encryptedAuth = this.encryptAuth(
                 authType,
@@ -282,6 +302,7 @@ export class IntegrationsService {
                 logoUrl,
             } = createIntegrationDto;
 
+            await this.assertServerUrl(baseUrl);
             const encryptedAuth = this.encryptAuth(
                 authType,
                 createIntegrationDto,

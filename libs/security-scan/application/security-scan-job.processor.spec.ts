@@ -5,23 +5,35 @@ jest.mock(
     '@libs/code-review/infrastructure/agents/collaborators/model-factory',
     () => ({
         resolveReviewAgentModel: jest.fn(async () => ({
-            byokConfig: { provider: 'openai_compatible', model: 'deepseek-v4-flash' },
-            main: { role: 'main', modelName: 'openai_compatible:deepseek-v4-flash' },
+            byokConfig: {
+                provider: 'openai_compatible',
+                model: 'deepseek-v4-flash',
+            },
+            main: {
+                role: 'main',
+                modelName: 'openai_compatible:deepseek-v4-flash',
+            },
         })),
     }),
 );
 
 import { SecurityScanEngine } from './security-scan-engine';
+import { LLM } from '@libs/llm/llm';
 import {
     ScanFailure,
     SecurityScanJobProcessor,
     buildIssueDescription,
     scanErrorMessage,
+    withFoldingReserve,
 } from './security-scan-job.processor';
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
-import { SCAN_NO_AREA_EXAMINED_MESSAGE } from '../domain/scan-failure';
+import {
+    SCAN_NO_AREA_EXAMINED_MESSAGE,
+    SCAN_NO_PROGRESS_MESSAGE,
+} from '../domain/scan-failure';
+import { ownFingerprintOf } from '../domain/finding-fingerprint';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
@@ -60,7 +72,9 @@ const finding = {
     endLine: 7,
     language: 'typescript',
     symbol: 'OrdersController.findOne',
-    attackPath: [{ file: 'src/orders.controller.ts', line: 5, note: 'id from path' }],
+    attackPath: [
+        { file: 'src/orders.controller.ts', line: 5, note: 'id from path' },
+    ],
 };
 
 function setup(engineResult: any, scan = scanRecord()) {
@@ -69,12 +83,17 @@ function setup(engineResult: any, scan = scanRecord()) {
         update: jest.fn(async (..._args: unknown[]) => scan),
         claim: jest.fn(async (..._args: unknown[]) => scan as any),
         recordUnit: jest.fn(async (..._args: unknown[]) => true),
+        findCoverage: jest.fn(async (..._args: unknown[]) => [] as any[]),
+        recordCoverage: jest.fn(async (..._args: unknown[]) => undefined),
     };
     const jobRepository = {
         findOne: jest.fn(async () => ({
             payload: {
                 scanId: 'scan-1',
-                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
             },
         })),
         update: jest.fn(),
@@ -84,7 +103,11 @@ function setup(engineResult: any, scan = scanRecord()) {
         type: 'e2b',
         repoDir: '/repo',
         run: jest.fn(async () => ({ stdout: 'abc123\n', exitCode: 0 })),
-        remoteCommands: { read: jest.fn(async () => { throw new Error('none'); }) },
+        remoteCommands: {
+            read: jest.fn(async () => {
+                throw new Error('none');
+            }),
+        },
         cleanup: jest.fn(),
     };
     const leaseManager = { acquire: jest.fn(async () => ({ sandbox })) };
@@ -109,19 +132,38 @@ function setup(engineResult: any, scan = scanRecord()) {
     const issuesService = {
         upsertScanFinding: jest.fn(async () => ({ outcome: 'created' })),
         resolveUnseenScanFindings: jest.fn(async () => 2),
-        markScanFindingsSeen: jest.fn(async (..._args: unknown[]) => ({ sighted: 0, reopened: 0 })),
-        findOpenScanFindings: jest.fn(async (..._args: unknown[]) => [] as any[]),
+        markScanFindingsSeen: jest.fn(async (..._args: unknown[]) => ({
+            sighted: 0,
+            reopened: 0,
+        })),
+        findOpenScanFindings: jest.fn(
+            async (..._args: unknown[]) => [] as any[],
+        ),
         findOpenScanFindingAreas: jest.fn(async () => [
             { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
         ]),
+        addScanFindingOccurrence: jest.fn(
+            async (..._args: unknown[]) => ({ outcome: 'merged' }) as any,
+        ),
+        foldScanIssueInto: jest.fn(async (..._args: unknown[]) => true),
+        markScanIssuesConsolidated: jest.fn(
+            async (..._args: unknown[]) => undefined,
+        ),
     };
-    const kodyIssuesManagement = { clearIssuesCache: jest.fn(async () => undefined) };
+    const kodyIssuesManagement = {
+        clearIssuesCache: jest.fn(async () => undefined),
+    };
 
     (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
         run: jest.fn(async (params: any) => {
             await params.onPlanned?.([], ['typescript']);
-            for (const [progress, findings, sighted] of engineResult.unitEvents ?? []) {
-                await params.onUnitDone(progress, findings, sighted);
+            for (const [
+                progress,
+                findings,
+                sighted,
+                covered,
+            ] of engineResult.unitEvents ?? []) {
+                await params.onUnitDone(progress, findings, sighted, covered);
             }
             return engineResult.result;
         }),
@@ -140,7 +182,17 @@ function setup(engineResult: any, scan = scanRecord()) {
         kodyIssuesManagement as any,
     );
 
-    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager, pricingResolver, jobRepository };
+    return {
+        processor,
+        scans,
+        jobQueue,
+        issuesService,
+        sandbox,
+        kodyIssuesManagement,
+        leaseManager,
+        pricingResolver,
+        jobRepository,
+    };
 }
 
 const lastUpdate = (scans: { update: jest.Mock }) =>
@@ -154,7 +206,12 @@ const finishedResult = (overrides = {}) => ({
     finished: true,
     stoppedByBudget: false,
     examinedFiles: ['src/orders.controller.ts'],
-    examinedByClass: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] }],
+    examinedByClass: [
+        {
+            vulnerabilityClass: 'authz',
+            filePaths: ['src/orders.controller.ts'],
+        },
+    ],
     ...overrides,
 });
 
@@ -168,7 +225,11 @@ describe('SecurityScanJobProcessor', () => {
             run: jest.fn(async (params: any) => {
                 await paused;
                 unitDone = params
-                    .onUnitDone({ unitId: 'u1', state: 'pending', findings: 0 }, [finding], [{ ...finding, fingerprint: 'fp-old' }])
+                    .onUnitDone(
+                        { unitId: 'u1', state: 'pending', findings: 0 },
+                        [finding],
+                        [{ ...finding, fingerprint: 'fp-old' }],
+                    )
                     .catch((e: Error) => e);
                 await unitDone;
                 return finishedResult();
@@ -225,7 +286,12 @@ describe('SecurityScanJobProcessor', () => {
     });
 
     it('starts a slice from what the one before may have been billed, when it died with requests in flight', async () => {
-        const committed = { usd: 0.02, inputTokens: 4_000, outputTokens: 6_000, requests: 1 };
+        const committed = {
+            usd: 0.02,
+            inputTokens: 4_000,
+            outputTokens: 6_000,
+            requests: 1,
+        };
         const { processor, scans } = setup(
             { result: finishedResult() },
             scanRecord({ committedSpend: committed } as any),
@@ -235,7 +301,11 @@ describe('SecurityScanJobProcessor', () => {
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
             run: jest.fn(async (params: any) => {
                 startedAt = params.meter.snapshot();
-                await params.meter.admit({ inputTokens: 10, inputTokensUpperBound: 10, maxOutputTokens: 10 });
+                await params.meter.admit({
+                    inputTokens: 10,
+                    inputTokensUpperBound: 10,
+                    maxOutputTokens: 10,
+                });
                 return finishedResult();
             }),
         }));
@@ -246,33 +316,54 @@ describe('SecurityScanJobProcessor', () => {
         // Each request's reservation goes on record before it leaves.
         expect((scans as any).raiseCommittedSpend).toHaveBeenCalledWith(
             'scan-1',
-            expect.objectContaining({ inputTokens: 4_010, outputTokens: 6_010 }),
+            expect.objectContaining({
+                inputTokens: 4_010,
+                outputTokens: 6_010,
+            }),
             'job-1',
         );
     });
 
     it('stores a finding found again under the issue it is, and records that identity for a resumed scan', async () => {
         const { processor, issuesService, scans } = setup({
-            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [{ ...finding, storedAs: 'fp-open' }]]],
+            unitEvents: [
+                [
+                    { unitId: 'u1', state: 'done', findings: 1 },
+                    [{ ...finding, storedAs: 'fp-open' }],
+                ],
+            ],
             result: finishedResult(),
         });
 
         await processor.process('job-1');
 
         expect(issuesService.upsertScanFinding).toHaveBeenCalledWith(
-            expect.objectContaining({ fingerprint: 'fp-open', startLine: finding.startLine }),
+            expect.objectContaining({
+                fingerprint: 'fp-open',
+                startLine: finding.startLine,
+            }),
         );
-        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [unknown, unknown, unknown, any[]];
+        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [
+            unknown,
+            unknown,
+            unknown,
+            any[],
+        ];
         expect(reported.map((r) => r.fingerprint)).toEqual(['fp-open']);
     });
 
     it('refreshes an issue a finding is stored as, without first marking it sighted', async () => {
         const { processor, issuesService } = setup({
-            unitEvents: [[
-                { unitId: 'u1', state: 'done', findings: 1 },
-                [{ ...finding, storedAs: 'fp-x' }],
-                [{ ...finding, fingerprint: 'fp-x' }, { ...finding, fingerprint: 'fp-y' }],
-            ]],
+            unitEvents: [
+                [
+                    { unitId: 'u1', state: 'done', findings: 1 },
+                    [{ ...finding, storedAs: 'fp-x' }],
+                    [
+                        { ...finding, fingerprint: 'fp-x' },
+                        { ...finding, fingerprint: 'fp-y' },
+                    ],
+                ],
+            ],
             result: finishedResult(),
         });
 
@@ -280,17 +371,28 @@ describe('SecurityScanJobProcessor', () => {
 
         // Marked first, the write would read it as a second weakness.
         expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith(
-            expect.objectContaining({ fingerprints: ['fp-y'], foundAgain: true }),
+            expect.objectContaining({
+                fingerprints: ['fp-y'],
+                foundAgain: true,
+            }),
         );
     });
 
     it('writes no issue once another job holds the scan', async () => {
         const { processor, issuesService, scans } = setup({
-            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding], [{ ...finding, fingerprint: 'fp-old' }]]],
+            unitEvents: [
+                [
+                    { unitId: 'u1', state: 'done', findings: 1 },
+                    [finding],
+                    [{ ...finding, fingerprint: 'fp-old' }],
+                ],
+            ],
             result: finishedResult(),
         });
         // Claimed at the start, then lost.
-        scans.claim.mockResolvedValueOnce(scanRecord() as any).mockResolvedValue(null);
+        scans.claim
+            .mockResolvedValueOnce(scanRecord() as any)
+            .mockResolvedValue(null);
 
         await processor.process('job-1');
 
@@ -299,11 +401,19 @@ describe('SecurityScanJobProcessor', () => {
     });
 
     it('stores each finding as an issue, resolves what was not seen again and completes', async () => {
-        const { processor, scans, issuesService, sandbox, kodyIssuesManagement, leaseManager } =
-            setup({
-                unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding]]],
-                result: finishedResult(),
-            });
+        const {
+            processor,
+            scans,
+            issuesService,
+            sandbox,
+            kodyIssuesManagement,
+            leaseManager,
+        } = setup({
+            unitEvents: [
+                [{ unitId: 'u1', state: 'done', findings: 1 }, [finding]],
+            ],
+            result: finishedResult(),
+        });
 
         await processor.process('job-1');
 
@@ -319,7 +429,9 @@ describe('SecurityScanJobProcessor', () => {
             }),
         );
         // A new plan reads the repository's open findings again.
-        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].revisit).toEqual([
             { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
         ]);
@@ -335,7 +447,12 @@ describe('SecurityScanJobProcessor', () => {
             repositoryHost: 'github.com',
             repositoryId: 'repo-1',
             scanId: 'scan-1',
-            examined: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] }],
+            examined: [
+                {
+                    vulnerabilityClass: 'authz',
+                    filePaths: ['src/orders.controller.ts'],
+                },
+            ],
             trackedFiles: undefined,
             scanStartedAt: expect.any(String),
         });
@@ -346,7 +463,9 @@ describe('SecurityScanJobProcessor', () => {
                 outcome: expect.objectContaining({ created: 1, resolved: 2 }),
             }),
         );
-        expect(kodyIssuesManagement.clearIssuesCache).toHaveBeenCalledWith('org-1');
+        expect(kodyIssuesManagement.clearIssuesCache).toHaveBeenCalledWith(
+            'org-1',
+        );
         // The lease manager only takes org:repo:<slot> keys.
         const [key] = leaseManager.acquire.mock.calls[0] as unknown as [string];
         expect(key.split(':')).toHaveLength(3);
@@ -361,7 +480,9 @@ describe('SecurityScanJobProcessor', () => {
                 examinedFiles: [],
                 examinedByClass: [],
                 trackedFiles: ['src/orders.controller.ts'],
-                progress: [{ unitId: 'u1', state: 'skipped_budget', findings: 0 }],
+                progress: [
+                    { unitId: 'u1', state: 'skipped_budget', findings: 0 },
+                ],
             }),
         });
 
@@ -385,7 +506,11 @@ describe('SecurityScanJobProcessor', () => {
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
             run: jest.fn(async (params: any) => {
                 // The plan timed out with its request still at the provider.
-                await params.meter.admit({ inputTokens: 1_000, inputTokensUpperBound: 1_000, maxOutputTokens: 1_000 });
+                await params.meter.admit({
+                    inputTokens: 1_000,
+                    inputTokensUpperBound: 1_000,
+                    maxOutputTokens: 1_000,
+                });
                 await params.onPlanned?.([{ id: 'u1' }], ['typescript']);
                 return {
                     ...finishedResult(),
@@ -398,13 +523,18 @@ describe('SecurityScanJobProcessor', () => {
         await processor.process('job-1');
 
         expect(jobQueue.enqueue).toHaveBeenCalled();
-        const handoff = (scans.update.mock.calls as unknown as [string, any][]).find(
-            ([, c]) => c.status === SecurityScanStatus.QUEUED,
-        )![1];
-        expect(handoff.spend).toEqual(expect.objectContaining({ inputTokens: 0, outputTokens: 0 }));
+        const handoff = (
+            scans.update.mock.calls as unknown as [string, any][]
+        ).find(([, c]) => c.status === SecurityScanStatus.QUEUED)![1];
+        expect(handoff.spend).toEqual(
+            expect.objectContaining({ inputTokens: 0, outputTokens: 0 }),
+        );
         // What the next slice starts from: never the spend alone.
         expect(handoff.committedSpend).toEqual(
-            expect.objectContaining({ inputTokens: 1_000, outputTokens: 1_000 }),
+            expect.objectContaining({
+                inputTokens: 1_000,
+                outputTokens: 1_000,
+            }),
         );
     });
 
@@ -420,9 +550,11 @@ describe('SecurityScanJobProcessor', () => {
         };
         const { processor, scans, jobQueue, issuesService } = setup(
             {
-                unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding]]],
+                unitEvents: [
+                    [{ unitId: 'u1', state: 'done', findings: 1 }, [finding]],
+                ],
                 result: finishedResult({
-                finished: false,
+                    finished: false,
                     progress: [
                         { unitId: 'u1', state: 'done', findings: 0 },
                         { unitId: 'u2', state: 'pending', findings: 0 },
@@ -435,11 +567,17 @@ describe('SecurityScanJobProcessor', () => {
         await processor.process('job-1');
 
         // The next job dedups against what this one and the ones before it reported.
-        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].reported).toEqual([earlier]);
         // Each unit appends what it reported, in the same write as its progress.
         const unitUpdate = scans.recordUnit.mock.calls[0] as any;
-        expect(unitUpdate[1]).toEqual({ unitId: 'u1', state: 'done', findings: 1 });
+        expect(unitUpdate[1]).toEqual({
+            unitId: 'u1',
+            state: 'done',
+            findings: 1,
+        });
         expect(unitUpdate[3]).toEqual([
             expect.objectContaining({
                 // The issue it was stored as, for a scan that carries it on.
@@ -482,7 +620,8 @@ describe('SecurityScanJobProcessor', () => {
 
         await processor.process('job-1');
 
-        const [, , , cloneParams] = leaseManager.acquire.mock.calls[0] as unknown as any[];
+        const [, , , cloneParams] = leaseManager.acquire.mock
+            .calls[0] as unknown as any[];
         expect(cloneParams.checkoutSha).toBe('first-sha');
     });
 
@@ -498,7 +637,9 @@ describe('SecurityScanJobProcessor', () => {
 
         await processor.process('job-1');
 
-        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0]).toEqual(
             expect.objectContaining({ units: [], progress: [] }),
         );
@@ -511,21 +652,37 @@ describe('SecurityScanJobProcessor', () => {
     });
 
     it('fails a first job that cannot read HEAD, keeping the inherited plan and what it reported', async () => {
-        const reported = [{ vulnerabilityClass: 'authz', filePath: 'src/a.ts', fingerprint: 'fp-a' }];
+        const reported = [
+            {
+                vulnerabilityClass: 'authz',
+                filePath: 'src/a.ts',
+                fingerprint: 'fp-a',
+            },
+        ];
         const { processor, scans, sandbox } = setup(
             { result: finishedResult() },
-            scanRecord({ planCommitSha: 'plan-sha', units: [{ id: 'u1' }] as any, reported: reported as any }),
+            scanRecord({
+                planCommitSha: 'plan-sha',
+                units: [{ id: 'u1' }] as any,
+                reported: reported as any,
+            }),
         );
         const run = sandbox.run.getMockImplementation() as any;
-        (sandbox.run as jest.Mock).mockImplementation(async (command: string) =>
-            command.includes('rev-parse HEAD') ? { stdout: '', exitCode: 128 } : run(command),
+        (sandbox.run as jest.Mock).mockImplementation(
+            async (command: string) =>
+                command.includes('rev-parse HEAD')
+                    ? { stdout: '', exitCode: 128 }
+                    : run(command),
         );
 
-        const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls.length;
+        const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls
+            .length;
         await processor.process('job-1');
 
         // Nothing tied to a commit runs; nothing of the plan is wiped.
-        expect((SecurityScanEngine as unknown as jest.Mock).mock.calls.length).toBe(engines);
+        expect(
+            (SecurityScanEngine as unknown as jest.Mock).mock.calls.length,
+        ).toBe(engines);
         expect(scans.update).not.toHaveBeenCalledWith(
             'scan-1',
             expect.objectContaining({ reported: [] }),
@@ -539,14 +696,30 @@ describe('SecurityScanJobProcessor', () => {
     });
 
     it('fails a slice that neither planned nor moved a unit, instead of queuing it again', async () => {
-        const unit = { id: 'u1', file: 'src/a.ts', relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 50, reasons: [] };
+        const unit = {
+            id: 'u1',
+            file: 'src/a.ts',
+            relatedFiles: [],
+            language: 'typescript',
+            classes: ['authz'],
+            priority: 50,
+            reasons: [],
+        };
         const { processor, scans, jobQueue } = setup(
             { result: { ...finishedResult(), finished: false, progress: [] } },
-            scanRecord({ commitSha: 'abc123', units: [unit] as any, progress: [] }),
+            scanRecord({
+                commitSha: 'abc123',
+                units: [unit] as any,
+                progress: [],
+            }),
         );
         // A continuation whose setup took the whole slice: no unit started.
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
-            run: jest.fn(async () => ({ ...finishedResult(), finished: false, progress: [] })),
+            run: jest.fn(async () => ({
+                ...finishedResult(),
+                finished: false,
+                progress: [],
+            })),
         }));
 
         await processor.process('job-1');
@@ -561,10 +734,22 @@ describe('SecurityScanJobProcessor', () => {
     });
 
     it('fails a slice of an inherited plan that reached no unit, though every unit comes back pending', async () => {
-        const unit = (id: string) => ({ id, file: `src/${id}.ts`, relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 50, reasons: [] });
+        const unit = (id: string) => ({
+            id,
+            file: `src/${id}.ts`,
+            relatedFiles: [],
+            language: 'typescript',
+            classes: ['authz'],
+            priority: 50,
+            reasons: [],
+        });
         const { processor, scans, jobQueue } = setup(
             { result: finishedResult() },
-            scanRecord({ commitSha: 'abc123', units: [unit('u1'), unit('u2')] as any, progress: [] }),
+            scanRecord({
+                commitSha: 'abc123',
+                units: [unit('u1'), unit('u2')] as any,
+                progress: [],
+            }),
         );
         // The engine lists every unit it never reached as bare pending.
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
@@ -581,7 +766,7 @@ describe('SecurityScanJobProcessor', () => {
         await processor.process('job-1');
 
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
-        expect(lastUpdate(scans).error).toEqual(expect.stringContaining('made no progress'));
+        expect(lastUpdate(scans).error).toBe(SCAN_NO_PROGRESS_MESSAGE);
     });
 
     it('records what a failed slice spent', async () => {
@@ -589,7 +774,9 @@ describe('SecurityScanJobProcessor', () => {
         // The slice spends, then fails before any unit lands.
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
             run: jest.fn(async (params: any) => {
-                params.meter.record({ usage: { inputTokens: 100_000, outputTokens: 5_000 } });
+                params.meter.record({
+                    usage: { inputTokens: 100_000, outputTokens: 5_000 },
+                });
                 throw new Error('provider exploded');
             }),
         }));
@@ -599,7 +786,10 @@ describe('SecurityScanJobProcessor', () => {
         const failed = lastUpdate(scans);
         expect(failed.status).toBe(SecurityScanStatus.FAILED);
         expect(failed.spend).toEqual(
-            expect.objectContaining({ inputTokens: 100_000, outputTokens: 5_000 }),
+            expect.objectContaining({
+                inputTokens: 100_000,
+                outputTokens: 5_000,
+            }),
         );
         expect(failed.spend.usd).toBeGreaterThan(0);
     });
@@ -610,8 +800,9 @@ describe('SecurityScanJobProcessor', () => {
             result: finishedResult({ findings: [] }),
         });
         // Claimed, then lost: timed out and failed, or claimed by another job.
-        scans.update.mockImplementation(async (_id: unknown, _c: unknown, _r: unknown, guard?: any) =>
-            guard?.ownedBy && !guard?.orUnowned ? null : ({} as any),
+        scans.update.mockImplementation(
+            async (_id: unknown, _c: unknown, _r: unknown, guard?: any) =>
+                guard?.ownedBy && !guard?.orUnowned ? null : ({} as any),
         );
 
         await processor.process('job-1');
@@ -665,9 +856,15 @@ describe('SecurityScanJobProcessor', () => {
 
         await processor.process('job-1');
 
-        expect(scans.claim).toHaveBeenCalledWith('scan-1', 'job-1', expect.any(Number));
+        expect(scans.claim).toHaveBeenCalledWith(
+            'scan-1',
+            'job-1',
+            expect.any(Number),
+        );
         // Every write of the slice lands only while the job holds it.
-        const owned = (scans.update.mock.calls as any[]).filter((c) => c[3]?.ownedBy === 'job-1');
+        const owned = (scans.update.mock.calls as any[]).filter(
+            (c) => c[3]?.ownedBy === 'job-1',
+        );
         expect(owned.length).toBe(scans.update.mock.calls.length);
     });
 
@@ -677,10 +874,13 @@ describe('SecurityScanJobProcessor', () => {
         // holds it.
         scans.claim.mockResolvedValue(null);
 
-        const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls.length;
+        const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls
+            .length;
         await processor.process('job-1');
 
-        expect((SecurityScanEngine as unknown as jest.Mock).mock.calls.length).toBe(engines);
+        expect(
+            (SecurityScanEngine as unknown as jest.Mock).mock.calls.length,
+        ).toBe(engines);
     });
 
     it('keeps an inherited plan made at the commit it reads', async () => {
@@ -695,7 +895,9 @@ describe('SecurityScanJobProcessor', () => {
 
         await processor.process('job-1');
 
-        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].units).toEqual([{ id: 'u1' }]);
     });
 
@@ -704,22 +906,38 @@ describe('SecurityScanJobProcessor', () => {
 
         await processor.process('job-1');
 
-        const [, , , cloneParams] = leaseManager.acquire.mock.calls[0] as unknown as any[];
+        const [, , , cloneParams] = leaseManager.acquire.mock
+            .calls[0] as unknown as any[];
         expect(cloneParams.checkoutSha).toBeUndefined();
     });
 
     it("reads open findings on a scan's first job, carried-on plan or not, and not on its continuations", async () => {
-        const unit = { id: 'u1', file: 'src/a.ts', relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 50, reasons: [] };
-        const carried = setup({ result: finishedResult() }, scanRecord({ units: [unit] as any }));
+        const unit = {
+            id: 'u1',
+            file: 'src/a.ts',
+            relatedFiles: [],
+            language: 'typescript',
+            classes: ['authz'],
+            priority: 50,
+            reasons: [],
+        };
+        const carried = setup(
+            { result: finishedResult() },
+            scanRecord({ units: [unit] as any }),
+        );
         await carried.processor.process('job-1');
-        expect(carried.issuesService.findOpenScanFindingAreas).toHaveBeenCalledTimes(1);
+        expect(
+            carried.issuesService.findOpenScanFindingAreas,
+        ).toHaveBeenCalledTimes(1);
 
         const continued = setup(
             { result: finishedResult() },
             scanRecord({ units: [unit] as any, commitSha: 'abc123' }),
         );
         await continued.processor.process('job-1');
-        expect(continued.issuesService.findOpenScanFindingAreas).not.toHaveBeenCalled();
+        expect(
+            continued.issuesService.findOpenScanFindingAreas,
+        ).not.toHaveBeenCalled();
     });
 
     it('reads open findings on a later job that still has no plan stored', async () => {
@@ -736,11 +954,17 @@ describe('SecurityScanJobProcessor', () => {
 
     it("stores what the plan could not hold, and keeps it on the plan's continuations", async () => {
         const planned = setup({
-            result: finishedResult({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+            result: finishedResult({
+                mapFailedLanguages: ['python'],
+                filesBeyondPlan: 1,
+            }),
         });
         await planned.processor.process('job-1');
         expect(lastUpdate(planned.scans).coverage).toEqual(
-            expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+            expect.objectContaining({
+                mapFailedLanguages: ['python'],
+                filesBeyondPlan: 1,
+            }),
         );
 
         // A continuation does not map again: the plan's gaps carry over.
@@ -763,21 +987,38 @@ describe('SecurityScanJobProcessor', () => {
         );
         await continued.processor.process('job-1');
         expect(lastUpdate(continued.scans).coverage).toEqual(
-            expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+            expect.objectContaining({
+                mapFailedLanguages: ['python'],
+                filesBeyondPlan: 1,
+            }),
         );
     });
 
-    it("sights a carried-on finding in an area this scan did not read again, and leaves a reread one to the resolver", async () => {
+    it('sights a carried-on finding in an area this scan did not read again, and leaves a reread one to the resolver', async () => {
         const { processor, issuesService } = setup(
             { result: finishedResult() },
             scanRecord({
                 reported: [
                     // Its area was not read again: held as found.
-                    { vulnerabilityClass: 'authz', title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-held' },
+                    {
+                        vulnerabilityClass: 'authz',
+                        title: 'IDOR',
+                        filePath: 'src/a.ts',
+                        fingerprint: 'fp-held',
+                    },
                     // Read again (authz on the controller) and not found: gone.
-                    { vulnerabilityClass: 'authz', title: 'IDOR', filePath: './src/orders.controller.ts', fingerprint: 'fp-reread' },
+                    {
+                        vulnerabilityClass: 'authz',
+                        title: 'IDOR',
+                        filePath: './src/orders.controller.ts',
+                        fingerprint: 'fp-reread',
+                    },
                     // Reported before fingerprints were kept: nothing to sight.
-                    { vulnerabilityClass: 'injection', title: 'SQLi', filePath: 'src/b.ts' },
+                    {
+                        vulnerabilityClass: 'injection',
+                        title: 'SQLi',
+                        filePath: 'src/b.ts',
+                    },
                 ] as any,
             }),
         );
@@ -794,20 +1035,35 @@ describe('SecurityScanJobProcessor', () => {
         });
         expect(
             issuesService.markScanFindingsSeen.mock.invocationCallOrder.at(-1),
-        ).toBeLessThan(issuesService.resolveUnseenScanFindings.mock.invocationCallOrder[0]);
+        ).toBeLessThan(
+            issuesService.resolveUnseenScanFindings.mock.invocationCallOrder[0],
+        );
     });
 
     it('sights at once an earlier finding a unit found again, reopening it if resolved since', async () => {
         const { processor, scans, issuesService } = setup({
-            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], [{ ...finding, fingerprint: 'fp-again' }]]],
+            unitEvents: [
+                [
+                    { unitId: 'u1', state: 'done', findings: 0 },
+                    [],
+                    [{ ...finding, fingerprint: 'fp-again' }],
+                ],
+            ],
             result: finishedResult({ findings: [] }),
         });
-        issuesService.markScanFindingsSeen.mockResolvedValueOnce({ sighted: 2, reopened: 1 });
+        issuesService.markScanFindingsSeen.mockResolvedValueOnce({
+            sighted: 2,
+            reopened: 1,
+        });
 
         await processor.process('job-1');
 
         expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith(
-            expect.objectContaining({ fingerprints: ['fp-again'], scanId: 'scan-1', foundAgain: true }),
+            expect.objectContaining({
+                fingerprints: ['fp-again'],
+                scanId: 'scan-1',
+                foundAgain: true,
+            }),
         );
         // Found again: counted as still open, or reopened.
         expect(lastUpdate(scans).outcome).toEqual(
@@ -815,7 +1071,12 @@ describe('SecurityScanJobProcessor', () => {
         );
         // And on the scan's record: a scan carrying on this plan holds it
         // too, instead of resolving it in an area it inherits as read.
-        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [unknown, unknown, unknown, any[]];
+        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [
+            unknown,
+            unknown,
+            unknown,
+            any[],
+        ];
         expect(reported.map((r) => r.fingerprint)).toEqual(['fp-again']);
     });
 
@@ -826,7 +1087,11 @@ describe('SecurityScanJobProcessor', () => {
                 planCommitSha: 'old-sha',
                 units: [{ id: 'u1' }] as any,
                 reported: [
-                    { vulnerabilityClass: 'authz', filePath: 'src/removed.ts', fingerprint: 'fp-old' },
+                    {
+                        vulnerabilityClass: 'authz',
+                        filePath: 'src/removed.ts',
+                        fingerprint: 'fp-old',
+                    },
                 ] as any,
             }),
         );
@@ -839,15 +1104,21 @@ describe('SecurityScanJobProcessor', () => {
             undefined,
             expect.objectContaining({ ownedBy: 'job-1' }),
         );
-        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].reported).toEqual([]);
         expect(
-            (issuesService.markScanFindingsSeen.mock.calls as any[]).flatMap((c) => c[0].fingerprints),
+            (issuesService.markScanFindingsSeen.mock.calls as any[]).flatMap(
+                (c) => c[0].fingerprints,
+            ),
         ).not.toContain('fp-old');
     });
 
-    it("does not count inherited areas as a second independent miss", async () => {
-        const inherited = [{ vulnerabilityClass: 'injection', filePaths: ['src/done.ts'] }];
+    it('does not count inherited areas as a second independent miss', async () => {
+        const inherited = [
+            { vulnerabilityClass: 'injection', filePaths: ['src/done.ts'] },
+        ];
         const { processor, scans, issuesService } = setup(
             { result: finishedResult() },
             scanRecord({
@@ -871,19 +1142,28 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(
             expect.objectContaining({
                 examined: expect.arrayContaining([
-                    { vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] },
+                    {
+                        vulnerabilityClass: 'authz',
+                        filePaths: ['src/orders.controller.ts'],
+                    },
                 ]),
             }),
         );
-        expect(lastUpdate(scans).coverage.inheritedExaminedByClass).toEqual(inherited);
+        expect(lastUpdate(scans).coverage.inheritedExaminedByClass).toEqual(
+            inherited,
+        );
         // The plan's own fake onPlanned write keeps it too.
         expect(
-            (scans.update.mock.calls as any[]).filter((c) => c[1]?.units && c[1]?.coverage),
+            (scans.update.mock.calls as any[]).filter(
+                (c) => c[1]?.units && c[1]?.coverage,
+            ),
         ).toEqual(
             expect.arrayContaining([
                 expect.arrayContaining([
                     expect.objectContaining({
-                        coverage: expect.objectContaining({ inheritedExaminedByClass: inherited }),
+                        coverage: expect.objectContaining({
+                            inheritedExaminedByClass: inherited,
+                        }),
                     }),
                 ]),
             ]),
@@ -899,7 +1179,12 @@ describe('SecurityScanJobProcessor', () => {
                 coverage: {
                     examinedFiles: [],
                     examinedByClass: [],
-                    inheritedExaminedByClass: [{ vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] }],
+                    inheritedExaminedByClass: [
+                        {
+                            vulnerabilityClass: 'authz',
+                            filePaths: ['src/a.ts'],
+                        },
+                    ],
                     unitsTotal: 1,
                     unitsDone: 0,
                     unitsFailed: 0,
@@ -931,7 +1216,12 @@ describe('SecurityScanJobProcessor', () => {
         // Read once to start the job; never once per area.
         expect(scans.findById).toHaveBeenCalledTimes(1);
         const writes = scans.recordUnit.mock.calls as any[];
-        expect(writes.map((call) => call[1].unitId)).toEqual(['u1', 'u2', 'u3', 'u2']);
+        expect(writes.map((call) => call[1].unitId)).toEqual([
+            'u1',
+            'u2',
+            'u3',
+            'u2',
+        ]);
         expect(writes[2][2].coverage).toEqual(
             expect.objectContaining({ unitsDone: 2, unitsFailed: 1 }),
         );
@@ -943,10 +1233,14 @@ describe('SecurityScanJobProcessor', () => {
 
     it('fails the scan, resolving nothing, when a finding cannot be stored', async () => {
         const { processor, scans, issuesService } = setup({
-            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding]]],
+            unitEvents: [
+                [{ unitId: 'u1', state: 'done', findings: 1 }, [finding]],
+            ],
             result: finishedResult(),
         });
-        issuesService.upsertScanFinding.mockRejectedValue(new Error('mongo down'));
+        issuesService.upsertScanFinding.mockRejectedValue(
+            new Error('mongo down'),
+        );
 
         await processor.process('job-1');
 
@@ -979,7 +1273,12 @@ describe('SecurityScanJobProcessor', () => {
         const { processor, scans, issuesService } = setup({
             result: finishedResult({
                 progress: [
-                    { unitId: 'u1', state: 'failed', findings: 0, error: 'every lens failed' },
+                    {
+                        unitId: 'u1',
+                        state: 'failed',
+                        findings: 0,
+                        error: 'every lens failed',
+                    },
                 ],
                 findings: [],
                 examinedFiles: [],
@@ -1004,7 +1303,12 @@ describe('SecurityScanJobProcessor', () => {
                 result: finishedResult({
                     progress: [
                         { unitId: 'u0', state: 'done', findings: 0 },
-                        { unitId: 'u1', state: 'failed', findings: 0, error: 'every lens failed' },
+                        {
+                            unitId: 'u1',
+                            state: 'failed',
+                            findings: 0,
+                            error: 'every lens failed',
+                        },
                     ],
                     findings: [],
                     examinedFiles: [],
@@ -1017,7 +1321,10 @@ describe('SecurityScanJobProcessor', () => {
                     examinedFiles: [],
                     examinedByClass: [],
                     inheritedExaminedByClass: [
-                        { vulnerabilityClass: 'authz', filePaths: ['src/done.ts'] },
+                        {
+                            vulnerabilityClass: 'authz',
+                            filePaths: ['src/done.ts'],
+                        },
                     ],
                     unitsTotal: 2,
                     unitsDone: 1,
@@ -1070,7 +1377,10 @@ describe('SecurityScanJobProcessor', () => {
         expect(lastUpdate(scans)).toEqual(
             expect.objectContaining({
                 status: SecurityScanStatus.COMPLETED,
-                coverage: expect.objectContaining({ unitsDone: 0, unitsFailed: 1 }),
+                coverage: expect.objectContaining({
+                    unitsDone: 0,
+                    unitsFailed: 1,
+                }),
             }),
         );
     });
@@ -1079,7 +1389,9 @@ describe('SecurityScanJobProcessor', () => {
         const { processor, scans } = setup({ result: finishedResult() });
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
             run: jest.fn(async () => {
-                throw new Error('clone of https://x-access-token:ghs_abc@github.com/acme/shop failed');
+                throw new Error(
+                    'clone of https://x-access-token:ghs_abc@github.com/acme/shop failed',
+                );
             }),
         }));
 
@@ -1095,7 +1407,9 @@ describe('SecurityScanJobProcessor', () => {
     });
 
     it('fails a USD-capped scan whose model has lost its price, instead of running it uncapped', async () => {
-        const { processor, scans, pricingResolver } = setup({ result: finishedResult() });
+        const { processor, scans, pricingResolver } = setup({
+            result: finishedResult(),
+        });
         pricingResolver.resolve.mockResolvedValue({ priced: false } as any);
         (SecurityScanEngine as unknown as jest.Mock).mockClear();
 
@@ -1117,7 +1431,12 @@ describe('buildIssueDescription', () => {
             {
                 ...(finding as any),
                 suggestedFix: 'Scope the query by the caller.',
-                reproduction: { path: 'a.spec.ts', content: 'test()', command: 'x', executed: false },
+                reproduction: {
+                    path: 'a.spec.ts',
+                    content: 'test()',
+                    command: 'x',
+                    executed: false,
+                },
             },
             'abcdef1234567890',
         );
@@ -1139,46 +1458,452 @@ describe('scanErrorMessage', () => {
     it("quotes the model provider's answer, redacted", () => {
         const error = Object.assign(new Error('Bad request'), {
             responseBody: JSON.stringify({
-                error: { message: 'Invalid key sk-ant-api03-abcdefghijklmnopqrstuvwxyz' },
+                error: {
+                    message:
+                        'Invalid key sk-ant-api03-abcdefghijklmnopqrstuvwxyz',
+                },
             }),
         });
-        const message = scanErrorMessage(error);
-        expect(message).toMatch(/^The model provider refused a request: Invalid key/);
-        expect(message).not.toMatch(/abcdefghijklmnop/);
+        expect(scanErrorMessage(error)).toBe(
+            'The model provider refused a request: Invalid key [redacted]',
+        );
     });
 
     it('hides any other error', () => {
-        expect(scanErrorMessage(new Error('E11000 duplicate key one_active_scan'))).toMatch(
-            /^The scan stopped on an internal error/,
+        expect(
+            scanErrorMessage(new Error('E11000 duplicate key one_active_scan')),
+        ).toBe(
+            'The scan stopped on an internal error. Its findings so far are kept; run it again, and contact support if it keeps failing.',
         );
     });
 });
 
 describe('durable unit accounting', () => {
     it('stores examined areas with a finished unit before a worker can die', async () => {
-        const examined = [{vulnerabilityClass: 'authz', filePaths: ['src/a.ts']}];
-        const {processor, scans} = setup({unitEvents: [[{unitId: 'u1', state: 'done', findings: 0, examinedByClass: examined}, []]], result: finishedResult()});
+        const examined = [
+            { vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] },
+        ];
+        const { processor, scans } = setup({
+            unitEvents: [
+                [
+                    {
+                        unitId: 'u1',
+                        state: 'done',
+                        findings: 0,
+                        examinedByClass: examined,
+                    },
+                    [],
+                ],
+            ],
+            result: finishedResult(),
+        });
         await processor.process('job-1');
         const changes = (scans.recordUnit.mock.calls[0] as any)[2];
         expect(changes.coverage.examinedByClass).toEqual(examined);
         expect(changes.coverage.examinedFiles).toContain('src/a.ts');
     });
     it('recovers coverage from a unit recorded before a redelivery', async () => {
-        const examined = [{vulnerabilityClass: 'authz', filePaths: ['src/already-read.ts']}];
-        const {processor, issuesService} = setup({result: finishedResult({examinedByClass: [], examinedFiles: []})},
-            scanRecord({progress: [{unitId: 'u1', state: 'done', findings: 0, examinedByClass: examined}]}));
+        const examined = [
+            { vulnerabilityClass: 'authz', filePaths: ['src/already-read.ts'] },
+        ];
+        const { processor, issuesService } = setup(
+            {
+                result: finishedResult({
+                    examinedByClass: [],
+                    examinedFiles: [],
+                }),
+            },
+            scanRecord({
+                progress: [
+                    {
+                        unitId: 'u1',
+                        state: 'done',
+                        findings: 0,
+                        examinedByClass: examined,
+                    },
+                ],
+            }),
+        );
         await processor.process('job-1');
-        expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(expect.objectContaining({examined}));
+        expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(
+            expect.objectContaining({ examined }),
+        );
     });
     it('stores settled-but-unrecorded usage in final spend', async () => {
-        const {processor, scans} = setup({result: finishedResult()});
-        (SecurityScanEngine as any).mockImplementation(() => ({run: async ({meter}: any) => {
-            const admission = await meter.admit({inputTokens: 200_000, inputTokensUpperBound: 200_000, maxOutputTokens: 8_000});
-            admission.settle({usage: {inputTokens: 200_000, outputTokens: 8_000}});
-            return finishedResult();
-        }}));
+        const { processor, scans } = setup({ result: finishedResult() });
+        (SecurityScanEngine as any).mockImplementation(() => ({
+            run: async ({ meter }: any) => {
+                const admission = await meter.admit({
+                    inputTokens: 200_000,
+                    inputTokensUpperBound: 200_000,
+                    maxOutputTokens: 8_000,
+                });
+                admission.settle({
+                    usage: { inputTokens: 200_000, outputTokens: 8_000 },
+                });
+                return finishedResult();
+            },
+        }));
         await processor.process('job-1');
         expect(lastUpdate(scans).spend.inputTokens).toBe(200_000);
         expect(lastUpdate(scans).spend.outputTokens).toBe(8_000);
+    });
+});
+
+describe('SecurityScanJobProcessor: one issue per root cause', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('records a finding folded into another issue on that issue, never as an issue of its own', async () => {
+        const { processor, issuesService, scans } = setup({
+            unitEvents: [
+                [
+                    { unitId: 'u1', state: 'done', findings: 1 },
+                    [
+                        {
+                            ...finding,
+                            filePath: 'src/orders.routes.ts',
+                            occurrenceOf: 'fp-holder',
+                        },
+                    ],
+                ],
+            ],
+            result: finishedResult(),
+        });
+
+        await processor.process('job-1');
+
+        expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
+        expect(issuesService.addScanFindingOccurrence).toHaveBeenCalledWith(
+            expect.objectContaining({
+                holderFingerprint: 'fp-holder',
+                scanId: 'scan-1',
+                occurrence: expect.objectContaining({
+                    filePath: 'src/orders.routes.ts',
+                    fingerprint: expect.any(String),
+                }),
+            }),
+        );
+        const occurrence = (
+            issuesService.addScanFindingOccurrence.mock.calls[0] as any
+        )[0].occurrence;
+        expect(occurrence.fingerprint).not.toBe('fp-holder');
+        // A resumed scan sights the holder through it.
+        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [
+            unknown,
+            unknown,
+            unknown,
+            any[],
+        ];
+        expect(reported.map((r) => r.fingerprint)).toEqual(['fp-holder']);
+        expect(lastUpdate(scans).outcome.created).toBe(0);
+    });
+
+    it('stores the finding as its own issue when the issue it was folded into is gone', async () => {
+        const { processor, issuesService } = setup({
+            unitEvents: [
+                [
+                    { unitId: 'u1', state: 'done', findings: 1 },
+                    [{ ...finding, occurrenceOf: 'fp-gone' }],
+                ],
+            ],
+            result: finishedResult(),
+        });
+        issuesService.addScanFindingOccurrence.mockResolvedValueOnce(null);
+
+        await processor.process('job-1');
+
+        // Under its own identity, not the gone issue's.
+        const [stored] = issuesService.upsertScanFinding.mock.calls[0] as any;
+        expect(stored.fingerprint).toBe(
+            ownFingerprintOf(scanRecord() as any, finding as any),
+        );
+        expect(stored.fingerprint).not.toBe('fp-gone');
+    });
+
+    it('folds open issues that share a root cause at the end of the scan, and records what it compared', async () => {
+        const { processor, issuesService, scans } = setup({
+            unitEvents: [],
+            result: finishedResult({ findings: [] }),
+        });
+        const open = [
+            {
+                ...finding,
+                fingerprint: 'fp-auth',
+                severity: 'critical',
+                cwe: 'CWE-862',
+            },
+            {
+                ...finding,
+                fingerprint: 'fp-dos',
+                severity: 'high',
+                cwe: 'CWE-400',
+                startLine: 30,
+                endLine: 31,
+            },
+        ];
+        // The engine's own read happens first; the sweep reads them again.
+        issuesService.findOpenScanFindings.mockResolvedValue(open as any);
+        const run = jest.spyOn(LLM, 'run').mockResolvedValue({
+            sameAs: 'c1',
+            reason: 'the DoS is the missing auth',
+        } as any);
+
+        await processor.process('job-1');
+
+        expect(run).toHaveBeenCalledWith(
+            expect.objectContaining({ runName: 'security-scan-root-cause' }),
+        );
+        expect(issuesService.foldScanIssueInto).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprint: 'fp-dos', into: 'fp-auth' }),
+        );
+        expect(issuesService.markScanIssuesConsolidated).toHaveBeenCalledWith(
+            expect.objectContaining({
+                fingerprints: expect.arrayContaining(['fp-auth', 'fp-dos']),
+            }),
+        );
+        expect(lastUpdate(scans).outcome.consolidated).toBe(1);
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.COMPLETED);
+    });
+
+    it('leaves a duplicate whose fold did not land to be compared again', async () => {
+        const { processor, issuesService } = setup({
+            unitEvents: [],
+            result: finishedResult({ findings: [] }),
+        });
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            {
+                ...finding,
+                fingerprint: 'fp-auth',
+                severity: 'critical',
+                cwe: 'CWE-862',
+            },
+            {
+                ...finding,
+                fingerprint: 'fp-dos',
+                severity: 'high',
+                cwe: 'CWE-400',
+                startLine: 30,
+                endLine: 31,
+            },
+        ] as any);
+        jest.spyOn(LLM, 'run').mockResolvedValue({
+            sameAs: 'c1',
+            reason: 'the DoS is the missing auth',
+        } as any);
+        // The holder changed between the read and the write.
+        issuesService.foldScanIssueInto.mockResolvedValueOnce(false);
+
+        await processor.process('job-1');
+
+        expect(issuesService.foldScanIssueInto.mock.calls).toEqual([
+            [
+                {
+                    organizationId: 'org-1',
+                    repositoryPlatform: scanRecord().repository.platform,
+                    repositoryHost: scanRecord().repository.host ?? '',
+                    repositoryId: 'repo-1',
+                    fingerprint: 'fp-dos',
+                    into: 'fp-auth',
+                },
+            ],
+        ]);
+        const [{ fingerprints }] = issuesService.markScanIssuesConsolidated.mock
+            .calls[0] as any;
+        expect(fingerprints).toEqual(['fp-auth']);
+    });
+
+    it('compares nothing again that has not changed since it was last compared', async () => {
+        const { processor, issuesService } = setup({
+            unitEvents: [],
+            result: finishedResult({ findings: [] }),
+        });
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            {
+                ...finding,
+                fingerprint: 'a',
+                consolidatedAt: '2026-11-24T10:00:00Z',
+                lastSeenAt: '2026-11-24T09:00:00Z',
+            },
+            {
+                ...finding,
+                fingerprint: 'b',
+                consolidatedAt: '2026-11-24T10:00:00Z',
+                lastSeenAt: '2026-11-24T09:00:00Z',
+            },
+        ] as any);
+        const run = jest.spyOn(LLM, 'run');
+
+        await processor.process('job-1');
+
+        expect(run).not.toHaveBeenCalled();
+        expect(issuesService.foldScanIssueInto).not.toHaveBeenCalled();
+    });
+
+    it('finishes the scan when folding fails', async () => {
+        const { processor, issuesService, scans } = setup({
+            unitEvents: [],
+            result: finishedResult({ findings: [] }),
+        });
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            { ...finding, fingerprint: 'a' },
+            { ...finding, fingerprint: 'b' },
+        ] as any);
+        issuesService.foldScanIssueInto.mockRejectedValue(
+            new Error('mongo down'),
+        );
+        jest.spyOn(LLM, 'run').mockResolvedValue({
+            sameAs: 'c1',
+            reason: '',
+        } as any);
+
+        await processor.process('job-1');
+
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.COMPLETED);
+    });
+});
+
+describe('SecurityScanJobProcessor: incremental scans', () => {
+    const entry = {
+        filePath: 'src/orders.controller.ts',
+        vulnerabilityClass: 'authz',
+        blob: 'b1',
+        evidence: [],
+    };
+
+    it('hands the engine what earlier scans concluded, and records what this one concludes', async () => {
+        const { processor, scans } = setup(
+            {
+                unitEvents: [
+                    [
+                        { unitId: 'u1', state: 'done', findings: 0 },
+                        [],
+                        [],
+                        [entry],
+                    ],
+                ],
+                result: finishedResult({ findings: [], unchangedFiles: 12 }),
+            },
+            scanRecord({ mode: 'incremental' }) as any,
+        );
+        scans.findCoverage.mockResolvedValue([{ ...entry, blob: 'b0' }]);
+
+        await processor.process('job-1');
+
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
+        const params = engine.run.mock.calls[0][0];
+        expect(params.mode).toBe('incremental');
+        expect(params.coverage).toEqual([{ ...entry, blob: 'b0' }]);
+        expect(scans.findCoverage).toHaveBeenCalledWith('org-1', {
+            platform: 'GITHUB',
+            host: 'github.com',
+            id: 'repo-1',
+        });
+        expect(scans.recordCoverage).toHaveBeenCalledWith(
+            'org-1',
+            expect.objectContaining({ id: 'repo-1' }),
+            [
+                expect.objectContaining({
+                    ...entry,
+                    scanId: 'scan-1',
+                    commitSha: 'abc123',
+                    modelName: 'openai_compatible:deepseek-v4-flash',
+                }),
+            ],
+        );
+        expect(lastUpdate(scans).coverage.unchangedFiles).toBe(12);
+    });
+
+    it('reads no earlier conclusion in a full scan', async () => {
+        const { processor, scans } = setup({
+            unitEvents: [],
+            result: finishedResult({ findings: [] }),
+        });
+
+        await processor.process('job-1');
+
+        const engine = (
+            SecurityScanEngine as unknown as jest.Mock
+        ).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0].mode).toBe('full');
+        expect(scans.findCoverage).not.toHaveBeenCalled();
+    });
+
+    it('runs the scan on the model picked for it', async () => {
+        const { processor } = setup(
+            { unitEvents: [], result: finishedResult({ findings: [] }) },
+            scanRecord({ modelId: 'model-42' }) as any,
+        );
+
+        await processor.process('job-1');
+
+        expect(resolveReviewAgentModel).toHaveBeenLastCalledWith(
+            expect.anything(),
+            expect.anything(),
+            'securityScan',
+            'model-42',
+        );
+    });
+});
+
+describe('the reserve for folding duplicates at the end of a scan', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('keeps 5% of the limit, between $0.05 and $0.50, and nothing without a limit', () => {
+        expect(withFoldingReserve({ maxUsd: 2 })).toEqual({ maxUsd: 1.9 });
+        expect(withFoldingReserve({ maxUsd: 0.5 })).toEqual({ maxUsd: 0.45 });
+        expect(withFoldingReserve({ maxUsd: 50 })).toEqual({ maxUsd: 49.5 });
+        expect(withFoldingReserve({ maxTokens: 2_000_000 })).toEqual({
+            maxTokens: 1_900_000,
+        });
+        expect(withFoldingReserve({})).toEqual({});
+        // A small limit keeps at least half for the lenses.
+        expect(withFoldingReserve({ maxUsd: 0.05 })).toEqual({ maxUsd: 0.025 });
+        expect(withFoldingReserve({ maxTokens: 50_000 })).toEqual({
+            maxTokens: 25_000,
+        });
+    });
+
+    it('folds duplicates even when the lenses stopped at the limit', async () => {
+        const { processor, issuesService, scans } = setup(
+            {
+                unitEvents: [],
+                result: finishedResult({
+                    findings: [],
+                    stoppedByBudget: true,
+                    finished: false,
+                }),
+            },
+            scanRecord({ budget: { maxUsd: 2 } }) as any,
+        );
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            {
+                ...finding,
+                fingerprint: 'fp-auth',
+                severity: 'critical',
+                cwe: 'CWE-862',
+            },
+            {
+                ...finding,
+                fingerprint: 'fp-dos',
+                severity: 'high',
+                cwe: 'CWE-400',
+                startLine: 30,
+                endLine: 31,
+            },
+        ] as any);
+        jest.spyOn(LLM, 'run').mockResolvedValue({
+            sameAs: 'c1',
+            reason: 'same',
+        } as any);
+
+        await processor.process('job-1');
+
+        expect(issuesService.foldScanIssueInto).toHaveBeenCalled();
+        expect(lastUpdate(scans).status).toBe(
+            SecurityScanStatus.STOPPED_BY_BUDGET,
+        );
+        expect(lastUpdate(scans).outcome.consolidated).toBe(1);
     });
 });

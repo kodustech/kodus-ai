@@ -1,4 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { assertGitServerUrlAllowed } from '../git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -192,6 +194,9 @@ export class BitbucketDataCenterService implements Omit<
             baseURL: `${baseURL}/rest/api/1.0`,
             headers,
             timeout: 30000,
+            // The host is the org's: the socket judges what it resolves to, and
+            // every redirect hop is judged again (gateway-address-guard.ts).
+            ...integrationRequestGuard(`${baseURL}/rest/api/1.0`, 'Git server'),
         });
     }
 
@@ -237,6 +242,7 @@ export class BitbucketDataCenterService implements Omit<
                 host,
                 authMode = AuthMode.TOKEN,
             } = params;
+            await assertGitServerUrlAllowed(host);
 
             if (!host) {
                 throw new BadRequestException(
@@ -2394,15 +2400,91 @@ export class BitbucketDataCenterService implements Omit<
         }
     }
 
+    /**
+     * Whether one user can push to the repository: their effective
+     * REPO_WRITE, granted to them or to a group they are in, on the
+     * repository or its project. Undefined when Data Center can't say.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.id) return undefined;
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetails) return undefined;
+            const axiosClient = this.getAxiosInstance(authDetails);
+            const login = params.login.toLowerCase();
+            let start = 0;
+            // `filter` matches a part of the name, slug or email: page until
+            // the user is found or the list ends.
+            for (;;) {
+                const { data } = await axiosClient.get('/users', {
+                    params: {
+                        'filter': params.login,
+                        'permission.1': 'REPO_WRITE',
+                        'permission.1.repositoryId': params.repository.id,
+                        start,
+                        'limit': 100,
+                    },
+                });
+                const users: { name?: string; slug?: string }[] =
+                    data?.values ?? [];
+                if (
+                    users.some(
+                        (u) =>
+                            u.name?.toLowerCase() === login ||
+                            u.slug?.toLowerCase() === login,
+                    )
+                ) {
+                    return true;
+                }
+                if (data?.isLastPage !== false) return false;
+                // A page that does not move forward would be read forever:
+                // the rest of the list is unread, so Data Center can't say.
+                if (
+                    typeof data.nextPageStart !== 'number' ||
+                    data.nextPageStart <= start
+                ) {
+                    return undefined;
+                }
+                start = data.nextPageStart;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                },
+            });
+            return undefined;
+        }
+    }
+
     async getListMembers(params: {
         organizationAndTeamData: OrganizationAndTeamData;
+        /** Throw rather than return a list missing anyone it could not read. */
+        requireComplete?: boolean;
     }): Promise<{ name: string; id: string | number }[]> {
         try {
             const { organizationAndTeamData } = params;
             const authDetails = await this.getAuthDetails(
                 organizationAndTeamData,
             );
-            if (!authDetails) return [];
+            if (!authDetails) {
+                if (params.requireComplete) {
+                    throw new Error('Bitbucket credentials unavailable');
+                }
+                return [];
+            }
 
             const repositories = <Repositories[]>(
                     await this.integrationConfigService.findOne({
@@ -2411,7 +2493,12 @@ export class BitbucketDataCenterService implements Omit<
                     })
                 )?.configValue || [];
 
-            if (!repositories.length) return [];
+            if (!repositories.length) {
+                if (params.requireComplete) {
+                    throw new Error('No Bitbucket repositories configured');
+                }
+                return [];
+            }
 
             const axiosClient = this.getAxiosInstance(authDetails);
             const uniqueMembers = new Map<
@@ -2458,6 +2545,7 @@ export class BitbucketDataCenterService implements Omit<
                         start = response.data.nextPageStart;
                     }
                 } catch (error) {
+                    if (params.requireComplete) throw error;
                     // One project the token cannot read must not discard the
                     // members already collected from the others.
                     this.logger.warn({
@@ -2474,6 +2562,7 @@ export class BitbucketDataCenterService implements Omit<
 
             return Array.from(uniqueMembers.values());
         } catch (error) {
+            if (params.requireComplete) throw error;
             this.logger.error({
                 message: 'Error getting list of members from Data Center',
                 context: BitbucketDataCenterService.name,

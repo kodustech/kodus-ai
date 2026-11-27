@@ -1364,6 +1364,17 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#getFixedEgressIp",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/fixed-egress-ip",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#getLLMConfigStatus",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/llm-config/status",
@@ -1411,6 +1422,17 @@
     "key": "organizationParameters.controller.ts#modelCapabilities",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/model-capabilities",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#setFixedEgressIp",
+    "httpMethod": "PUT",
+    "urlPath": "/organization-parameters/fixed-egress-ip",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -1782,6 +1804,17 @@
     }
   },
   {
+    "key": "riskAssessment.controller.ts#defaultCriteria",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/risk/default-criteria",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "riskAssessment.controller.ts#previewApprovalOnPr",
     "httpMethod": "POST",
     "urlPath": "/code-review/risk/approval-preview",
@@ -1834,6 +1867,50 @@
       "billing_manager": "deny",
       "repo_admin": "allow",
       "contributor": "allow"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#listSchedules",
+    "httpMethod": "GET",
+    "urlPath": "/security-scans/schedules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#removeSchedule",
+    "httpMethod": "DELETE",
+    "urlPath": "/security-scans/schedules/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#saveSchedule",
+    "httpMethod": "PUT",
+    "urlPath": "/security-scans/schedules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "securityScans.controller.ts#setScheduleEnabled",
+    "httpMethod": "PATCH",
+    "urlPath": "/security-scans/schedules/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
     }
   },
   {

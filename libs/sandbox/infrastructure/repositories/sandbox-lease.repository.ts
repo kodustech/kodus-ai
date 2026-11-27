@@ -49,6 +49,18 @@ function decomposePrKey(prKey: string): {
     };
 }
 
+/**
+ * The states a joiner may extend: a sandbox that is up, or being created.
+ * An INVALIDATED lease keeps its expiry.
+ */
+const EXTENDABLE_LEASE_STATES = ['READY', 'CREATING'];
+/**
+ * No join pushes a lease still CREATING past this long after it was created,
+ * so one stuck there (its worker died) is still reaped, however often it is
+ * joined. Above the longest lease asked for (an Ultra run's, 80 min).
+ */
+export const MAX_LEASE_LIFETIME_MS = 90 * 60 * 1000;
+
 @Injectable()
 export class SandboxLeaseRepository {
     constructor(
@@ -100,16 +112,56 @@ export class SandboxLeaseRepository {
             { upsert: true, new: true },
         );
 
+        // A joiner that needs longer (an Ultra review's Kody Rules on the
+        // PR's lease) pushes the expiry out; the reaper kills by this date, in
+        // use or not. A lease still CREATING goes no further than
+        // MAX_LEASE_LIFETIME_MS after it was created, so one stuck there is
+        // still reaped.
+        const target = new Date(
+            doc.state === 'CREATING'
+                ? Math.min(
+                      expiresAt.getTime(),
+                      new Date(doc.createdAt).getTime() + MAX_LEASE_LIFETIME_MS,
+                  )
+                : expiresAt.getTime(),
+        );
+        if (
+            EXTENDABLE_LEASE_STATES.includes(doc.state) &&
+            doc.expiresAt < target
+        ) {
+            const extended = await this.leaseModel.findOneAndUpdate(
+                {
+                    _id: prKey,
+                    state: { $in: EXTENDABLE_LEASE_STATES },
+                    expiresAt: { $lt: target },
+                },
+                { $set: { expiresAt: target } },
+                { new: true },
+            );
+            if (extended) return extended;
+        }
+
         return doc;
     }
 
     /**
      * Atomically decrement leaseCount by 1. Returns the updated document
      * (which may have leaseCount === 0 after the decrement).
+     *
+     * With `sandboxId`, only the lease on that sandbox is decremented. A
+     * holder's lease can be retired and a new one created for the same prKey
+     * (a joiner whose connect failed, the TTL reaper, a PR closed and
+     * reopened); the old holder's release must then find nothing, not take
+     * the new holder's count to 0 (#2628).
      */
-    async decrementLease(prKey: string): Promise<SandboxLeaseModel | null> {
+    async decrementLease(
+        prKey: string,
+        sandboxId?: string,
+    ): Promise<SandboxLeaseModel | null> {
         return this.leaseModel.findOneAndUpdate(
-            { _id: prKey },
+            sandboxId === undefined
+                ? { _id: prKey }
+                : { _id: prKey, sandboxId },
             { $inc: { leaseCount: -1 } },
             { new: true },
         );
@@ -221,8 +273,7 @@ export class SandboxLeaseRepository {
             .findOneAndDelete({ _id: prKey, sandboxId })
             .select('leaseCount')
             .lean();
-        const otherHolders =
-            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const otherHolders = (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
         const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
 
         const orgSegment = prKey.split(':')[0];
@@ -244,6 +295,57 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Take an idle lease off its prKey before the idle-kill cron kills its
+     * sandbox. findReadyToKill is a read: a holder can join between it and
+     * the kill. The delete only matches while nobody holds the lease and its
+     * killAt has passed, so a joiner either got in first (the lease stays,
+     * nothing is killed) or arrives after it and creates a new sandbox. The
+     * kill then runs against a retired doc (as in retire()), which no acquire
+     * matches, and which keeps the sandbox tracked if the kill fails.
+     *
+     * Returns the id of the doc the kill goes on, or null when a holder
+     * joined. A retired doc is returned as is.
+     */
+    async detachIdle(
+        leaseId: string,
+        sandboxId: string,
+        now: Date,
+    ): Promise<string | null> {
+        if (leaseId.split(':')[1] === 'retired') return leaseId;
+
+        const detached = await this.leaseModel
+            .findOneAndDelete({
+                _id: leaseId,
+                sandboxId,
+                killAt: { $lte: now },
+                leaseCount: { $not: { $gt: 0 } },
+            })
+            .select('killRetryCount')
+            .lean();
+        if (!detached) return null;
+
+        const orgSegment = leaseId.split(':')[0];
+        const retiredId = `${orgSegment}:retired:${sandboxId}`;
+        await this.leaseModel.updateOne(
+            { _id: retiredId },
+            {
+                $setOnInsert: {
+                    sandboxId,
+                    state: 'READY',
+                    leaseCount: 0,
+                    createdAt: now,
+                    expiresAt: now,
+                    killAt: now,
+                    organizationId: orgSegment,
+                    killRetryCount: detached.killRetryCount ?? 0,
+                },
+            },
+            { upsert: true },
+        );
+        return retiredId;
+    }
+
+    /**
      * Which of these sandbox ids still have a lease doc (active or retired).
      * The orphan sweep kills only the ids NOT in this set.
      */
@@ -262,16 +364,23 @@ export class SandboxLeaseRepository {
      * deployment) can pick up via findReadyToKill().
      *
      * Only sets killAt when the lease has a real sandboxId — there's no
-     * point scheduling a kill for a NullSandbox or a CREATING-only lease.
+     * point scheduling a kill for a NullSandbox or a CREATING-only lease —
+     * and only while nobody holds it. A release reads leaseCount 0 and writes
+     * killAt in two steps; a holder that joins in between has already cleared
+     * killAt, and this write must not land after it (#2628).
+     *
+     * Returns whether the kill was scheduled.
      */
-    async setKillAt(prKey: string, killAt: Date): Promise<void> {
-        await this.leaseModel.updateOne(
+    async setKillAt(prKey: string, killAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
             {
                 _id: prKey,
                 sandboxId: { $exists: true, $ne: '' },
+                leaseCount: { $not: { $gt: 0 } },
             },
             { $set: { killAt } },
         );
+        return result.matchedCount === 1;
     }
 
     /**
@@ -287,7 +396,7 @@ export class SandboxLeaseRepository {
     }
 
     /**
-     * Find leases whose idle-kill timestamp has elapsed. Drives the
+     * Find unheld leases whose idle-kill timestamp has elapsed. Drives the
      * `killIdleSandboxes` cron — runs against the sparse compound index
      * `{ killAt: 1, sandboxId: 1 }` so it only scans docs that are actually
      * waiting to be killed.
@@ -300,17 +409,15 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            | '_id'
-            | 'sandboxId'
-            | 'killAt'
-            | 'killRetryCount'
-            | 'organizationId'
+            '_id' | 'sandboxId' | 'killAt' | 'killRetryCount' | 'organizationId'
         >[]
     > {
         return this.leaseModel
             .find({
                 killAt: { $lte: now },
                 sandboxId: { $exists: true, $ne: '' },
+                // A held sandbox is never idle, whatever killAt says.
+                leaseCount: { $not: { $gt: 0 } },
             })
             .select('_id sandboxId killAt killRetryCount organizationId')
             .lean();

@@ -1,4 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { assertGitServerUrlAllowed } from './git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -152,6 +154,7 @@ import {
     repoGetPullRequestCommits,
     repoGetPullRequestFiles,
     repoGetPullReviewComments,
+    repoGetRepoPermissions,
     repoListHooks,
     repoListPullRequests,
     repoListPullReviews,
@@ -280,6 +283,12 @@ export class ForgejoService implements Omit<
             headers: {
                 Authorization: `token ${token}`,
             },
+            // The host is the org's: the socket judges what it resolves to,
+            // and every redirect hop is judged again (gateway-address-guard.ts).
+            ...integrationRequestGuard(
+                `${authDetail.host}/api/v1`,
+                'Git server',
+            ),
         });
     }
 
@@ -1131,6 +1140,7 @@ export class ForgejoService implements Omit<
             }
 
             const normalizedHost = host.replace(/\/+$/, '');
+            await assertGitServerUrlAllowed(normalizedHost);
 
             const authDetails: ForgejoAuthDetail = {
                 accessToken: encrypt(token),
@@ -1669,6 +1679,61 @@ export class ForgejoService implements Omit<
                 error,
             });
             return null;
+        }
+    }
+
+    /**
+     * Whether one user can push to the repository: write, admin or owner on
+     * it, teams and organization included. Undefined when Forgejo can't say.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.name) {
+            return undefined;
+        }
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) {
+            return undefined;
+        }
+        const repoInfo = this.extractRepoInfo(
+            params.repository.name,
+            'userCanWrite',
+        );
+        if (!repoInfo) {
+            return undefined;
+        }
+        try {
+            const result = await repoGetRepoPermissions({
+                client: this.createForgejoClient(authDetail),
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    collaborator: params.login,
+                },
+            });
+            throwIfForgejoFailed(result);
+            return ['write', 'admin', 'owner'].includes(
+                result.data?.permission ?? '',
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: ForgejoService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 

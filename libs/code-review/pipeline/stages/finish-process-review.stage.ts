@@ -6,6 +6,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CommentResult } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
@@ -13,7 +14,7 @@ import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 // SeverityLevel no longer used — request changes is driven by level classification
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
+import { reviewErrorsBlockApproval } from '@libs/code-review/domain/approval/review-approval-errors';
 import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
 import { isCriticalFinding } from '@libs/code-review/domain/approval/own-change-request';
 import { OwnChangeRequestService } from '../services/own-change-request.service';
@@ -187,12 +188,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // — proved with a regression test before this fix (a clean PR with
         // ONLY that error never called approvePullRequest). Every OTHER
         // partial/critical error still blocks, unchanged.
-        const reviewHasFailures = (context.errors ?? []).some(
-            (e) =>
-                e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
-                ((e?.severity ?? 'critical') === 'critical' ||
-                    e?.severity === 'partial'),
-        );
+        const reviewHasFailures = reviewErrorsBlockApproval(context.errors);
 
         // `@kody -v <agent>` runs one custom agent and none of the built-in
         // ones (#2172): finding nothing there says nothing about the PR as a
@@ -340,13 +336,59 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 return;
             }
 
+            // A finding that never reached the PR could never be resolved
+            // there, so only delivered ones are behind the request.
             const criticalComments = lineComments.filter(
                 (comment) =>
+                    comment.deliveryStatus === DeliveryStatus.SENT &&
                     !!comment.comment.suggestion &&
                     isCriticalFinding(comment.comment.suggestion),
             );
 
             if (criticalComments.length === 0) {
+                return;
+            }
+
+            // Recorded before it is made: the record is what lets the request
+            // leave later, with or without an approval.
+            const findings = criticalComments.map((comment) => {
+                const commentId = comment.codeReviewFeedbackData?.commentId;
+                return {
+                    suggestionId:
+                        comment.comment.suggestion?.id ||
+                        comment.codeReviewFeedbackData?.suggestionId ||
+                        '',
+                    commentId:
+                        commentId === undefined || commentId === null
+                            ? ''
+                            : String(commentId),
+                };
+            });
+            const requestedAt = await this.ownChangeRequest.record({
+                organizationAndTeamData,
+                repository,
+                prNumber,
+                suggestionIds: findings
+                    .map((finding) => finding.suggestionId)
+                    .filter(Boolean),
+                commentIds: findings
+                    .map((finding) => finding.commentId)
+                    .filter(Boolean),
+                findingComments: findings.filter(
+                    (finding) => finding.suggestionId && finding.commentId,
+                ),
+            });
+            if (!requestedAt) {
+                this.logger.warn({
+                    message: `Not requesting changes for PR#${prNumber}: the request could not be recorded, so it could never be taken back`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repository.id,
+                        prNumber,
+                        criticalComments: criticalComments.length,
+                    },
+                });
                 return;
             }
 
@@ -362,17 +404,18 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                     repository,
                     criticalComments,
                 });
-            // What lets the request leave later without an approval.
-            await this.ownChangeRequest.record({
-                organizationAndTeamData,
-                repository,
-                prNumber,
-                commentIds: criticalComments
-                    .map((comment) => comment.codeReviewFeedbackData?.commentId)
-                    .filter((id) => id !== undefined && id !== null)
-                    .map(String),
-                summaryCommentId: requested?.summaryCommentId,
-            });
+            const summaryCommentId = requested
+                ? requested.summaryCommentId
+                : undefined;
+            if (summaryCommentId) {
+                await this.ownChangeRequest.recordSummary({
+                    organizationAndTeamData,
+                    repository,
+                    prNumber,
+                    requestedAt,
+                    summaryCommentId,
+                });
+            }
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes for PR#${prNumber}`,

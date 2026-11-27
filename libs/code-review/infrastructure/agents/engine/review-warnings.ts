@@ -174,13 +174,17 @@ export function withFallbackWarnings(
  */
 export function buildSandboxUnavailableWarning(params: {
     modelName: string;
+    /** Why, in words for the team, when the cause is theirs to act on. */
+    cause?: string;
 }): ReviewWarning {
+    const detail =
+        'the repository could not be checked out, so the review read only the diff (no tools, no call graph)';
     return {
         kind: 'SANDBOX_UNAVAILABLE',
         reason: 'sandbox_unavailable',
         contextWindowTokens: 0,
         modelName: params.modelName,
-        detail: 'the repository could not be checked out, so the review read only the diff (no tools, no call graph)',
+        detail: params.cause ? `${detail}. ${params.cause}` : detail,
     };
 }
 

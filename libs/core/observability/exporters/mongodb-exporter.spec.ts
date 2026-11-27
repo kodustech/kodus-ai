@@ -342,6 +342,99 @@ describe('MongoDBExporter organization attribution', () => {
         expect(entry.metadata.teamId).toBe('team-2');
     });
 
+    it('reads flat ids from params, as the Kody Learning cron logs them', () => {
+        // kodyLearning.cron.ts logs `metadata: { params }` with
+        // `params = { organizationId, teamId }`.
+        const entry = logged({
+            component: 'KodyLearningCronProvider',
+            params: { organizationId: 'org-3', teamId: 'team-3' },
+            timestamp: '2026-11-24T03:00:00.000Z',
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-3');
+        expect(entry.metadata.teamId).toBe('team-3');
+        expect(entry.metadata.tenantId).toBe('org-3');
+    });
+
+    it('reads flat ids from payload, as the feedback sync logs them', () => {
+        // save-feedback.use-case.ts logs `metadata: { payload }` with the
+        // organization and team set flat on the payload.
+        const entry = logged({
+            component: 'SaveCodeReviewFeedbackUseCase',
+            payload: {
+                organizationId: 'org-4',
+                teamId: 'team-4',
+                automationExecutionsPRs: [1, 2],
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-4');
+        expect(entry.metadata.teamId).toBe('team-4');
+        expect(entry.metadata.tenantId).toBe('org-4');
+    });
+
+    it('reads a pair nested in payload', () => {
+        const entry = logged({
+            component: 'SomeUseCase',
+            payload: {
+                organizationAndTeamData: {
+                    organizationId: 'org-5',
+                    teamId: 'team-5',
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-5');
+        expect(entry.metadata.teamId).toBe('team-5');
+    });
+
+    it('prefers the top-level pair over params and payload', () => {
+        const entry = logged({
+            component: 'AzureReposService',
+            organizationAndTeamData: {
+                organizationId: 'org-top',
+                teamId: 'team-top',
+            },
+            params: { organizationId: 'org-params', teamId: 'team-params' },
+            payload: { organizationId: 'org-payload', teamId: 'team-payload' },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-top');
+        expect(entry.metadata.teamId).toBe('team-top');
+    });
+
+    it('does not let a partial top-level pair hide a full one in params', () => {
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            organizationAndTeamData: { teamId: 'team-partial' },
+            params: {
+                organizationAndTeamData: {
+                    organizationId: 'org-6',
+                    teamId: 'team-6',
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-6');
+        expect(entry.metadata.teamId).toBe('team-6');
+    });
+
+    it('still redacts credentials when the org comes from a flat payload', () => {
+        const entry = logged({
+            component: 'SaveCodeReviewFeedbackUseCase',
+            payload: {
+                organizationId: 'org-4',
+                teamId: 'team-4',
+                password: 'hunter2',
+                token: 'pat-secret',
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-4');
+        expect(JSON.stringify(entry.attributes)).not.toContain('hunter2');
+        expect(JSON.stringify(entry.attributes)).not.toContain('pat-secret');
+    });
+
     it('still says unknown when no shape carries the pair', () => {
         const entry = logged({
             component: 'BitbucketCloudService',

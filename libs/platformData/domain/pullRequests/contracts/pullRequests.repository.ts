@@ -1,5 +1,6 @@
 import type {
     UpdateSuggestionOptions,
+    KodyChangeRequestFinding,
     KodyChangeRequestRecord,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
@@ -305,6 +306,17 @@ export interface IPullRequestsRepository {
         request: KodyChangeRequestRecord,
     ): Promise<boolean>;
     /**
+     * Adds a summary comment to the request made at `requestedAt`; a record
+     * cleared or replaced since then is left alone.
+     */
+    addKodyChangeRequestSummary(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+        summaryCommentId: string,
+    ): Promise<boolean>;
+    /**
      * Forgets the request read at `requestedAt`. One made since then stays:
      * it is a different request, over findings the reader did not see.
      */
@@ -325,6 +337,13 @@ export interface IPullRequestsRepository {
     findOpenPullRequestsWithKodyChangeRequest(
         organizationId: string,
     ): Promise<IPullRequestWithKodyChangeRequest[]>;
+    /** The stored state of the suggestions behind a change request. */
+    findKodyChangeRequestFindings(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        suggestionIds: string[],
+    ): Promise<KodyChangeRequestFinding[]>;
     findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],

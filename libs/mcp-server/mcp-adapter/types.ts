@@ -135,6 +135,10 @@ export interface MCPClientConfig {
 
         url?: string;
         headers?: Record<string, string>;
+        /** The URL comes from the platform's own configuration (a first-party
+         *  Kodus MCP endpoint), not from an org. Only then is it dialed
+         *  without the address check (gateway-address-guard.ts). */
+        trusted?: boolean;
 
         timeout?: number;
         retries?: number;
@@ -227,6 +231,9 @@ export interface MCPServerConfig {
     category?: string | null;
     /** Catalog id of the integration this server comes from (`linear-default`), or the custom integration's id. */
     integrationId?: string;
+    /** `url` comes from the platform's own configuration, not from an org:
+     *  dialed without the address check. Unset means org input. */
+    trusted?: boolean;
     /**
      * Called when the server refuses the credential in `headers` (HTTP 401,
      * `invalid_token`). Set by whoever issued that credential, so it can

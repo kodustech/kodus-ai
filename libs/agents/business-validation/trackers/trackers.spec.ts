@@ -100,6 +100,24 @@ describe('buildTaskTrackers', () => {
         ).toEqual(['Azure DevOps']);
     });
 
+    it("lets the team's own Jira plugin read a Jira Server link on the company's host (#2422)", () => {
+        const [link] = extractTaskReferences({
+            body: 'Implements https://tracker.acme.com/browse/PAY-123',
+        });
+        const [jiraServer] = buildTaskTrackers(
+            [
+                server({
+                    name: 'Jira Server',
+                    integrationId: 'jira-server',
+                    provider: 'custom',
+                }),
+            ],
+            { taskSource: 'jira-server', taskSourceTool: 'get_issue' },
+        );
+        expect(link).toMatchObject({ kind: 'key', id: 'PAY-123' });
+        expect(jiraServer.canRead(link)).toBe(true);
+    });
+
     it('uses nothing when the chosen source is no longer connected', () => {
         expect(buildTaskTrackers(servers, { taskSource: 'gone' })).toEqual([]);
     });

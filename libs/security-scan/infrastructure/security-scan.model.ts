@@ -12,6 +12,7 @@ import {
     SecurityScanSpend,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
+import type { SecurityScanMode } from '../domain/coverage-ledger';
 import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 @Schema({ collection: 'security_scans', timestamps: true })
@@ -82,6 +83,15 @@ export class SecurityScanModel extends CoreDocument {
 
     @Prop({ type: String })
     public modelName?: string;
+
+    @Prop({ type: String })
+    public modelId?: string;
+
+    @Prop({ type: String })
+    public mode?: SecurityScanMode;
+
+    @Prop({ type: String })
+    public scheduleId?: string;
 
     @Prop({ type: Object })
     public requestedBy?: { userId?: string; email?: string };

@@ -8,6 +8,7 @@ import * as path from 'path';
 import { ApiModule } from '../../apps/api/src/api.module';
 import { buildDocsConfig } from '../../apps/api/src/docs/docs-guard';
 import { ApiErrorDto } from '../../apps/api/src/dtos/api-error.dto';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 const resolveDocsAuth = () => {
     const username = process.env.API_DOCS_BASIC_USER;
@@ -48,15 +49,19 @@ async function exportOpenApi(): Promise<void> {
     if (specUrl) {
         const document = await exportFromUrl(specUrl);
         await fs.mkdir(path.dirname(outputPath), { recursive: true });
-        await fs.writeFile(outputPath, JSON.stringify(document, null, 2), 'utf8');
+        await fs.writeFile(
+            outputPath,
+            JSON.stringify(document, null, 2),
+            'utf8',
+        );
         // eslint-disable-next-line no-console
         console.log(`OpenAPI exported to ${outputPath}`);
         return;
     }
 
     const app = await NestFactory.create(ApiModule, {
+        ...NEST_APP_OPTIONS,
         logger: ['error'],
-        snapshot: true,
         abortOnError: false,
     });
 
@@ -77,13 +82,9 @@ async function exportOpenApi(): Promise<void> {
         swaggerBuilder.addServer(server.url, server.description);
     });
 
-    const document = SwaggerModule.createDocument(
-        app,
-        swaggerBuilder.build(),
-        {
-            extraModels: [ApiErrorDto],
-        },
-    );
+    const document = SwaggerModule.createDocument(app, swaggerBuilder.build(), {
+        extraModels: [ApiErrorDto],
+    });
 
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
     await fs.writeFile(outputPath, JSON.stringify(document, null, 2), 'utf8');

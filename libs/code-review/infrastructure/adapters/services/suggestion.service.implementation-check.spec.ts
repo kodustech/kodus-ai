@@ -424,6 +424,140 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         ]);
     });
 
+    it('counts a dense patch at its real tokens, not at 3 characters a token (#2233)', async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            maxInputTokens: 16_000,
+        });
+        // Numbers with no space between them: about 1.2 characters a token.
+        let seed = 3;
+        let patch = '+';
+        while (patch.length < 20_000) {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            patch += `${seed % 256},`;
+        }
+
+        const result = await check(
+            [sent('s-1', 'assets/table.csv')],
+            [{ filename: 'assets/table.csv', patch }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).not.toHaveBeenCalled();
+        expect(result.unmeasured).toEqual([
+            { id: 's-1', reason: 'diff_too_large' },
+        ]);
+    });
+
+    it("keeps room for the slot's own answer limit, not a flat quarter of the window", async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            maxInputTokens: 16_000,
+            maxOutputTokens: 1_000,
+        });
+        // About 13k tokens: over three quarters of the window, within what
+        // a 1k answer leaves.
+        const patch = Array.from(
+            { length: 1_250 },
+            (_, line) => `+export const value${line} = compute(${line});`,
+        ).join('\n');
+
+        await check(
+            [sent('s-1', 'app/values.ts')],
+            [{ filename: 'app/values.ts', patch }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps room for the answer a structured call sends, not a thinking budget it never does', async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5-20251001',
+            apiKey: 'k',
+            maxInputTokens: 40_000,
+            maxOutputTokens: 8_192,
+        });
+        // About 28.5k tokens: within 40k beside the 8k answer the call sends,
+        // over what an 8k answer plus a thinking budget would leave.
+        const patch = Array.from(
+            { length: 2_520 },
+            (_, line) => `+export const value${line} = compute(${line});`,
+        ).join('\n');
+
+        await check(
+            [sent('s-1', 'app/values.ts')],
+            [{ filename: 'app/values.ts', patch }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps room for the fallback's answer when it is the larger one", async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            maxInputTokens: 16_000,
+            maxOutputTokens: 1_000,
+            fallback: {
+                provider: 'openai_compatible',
+                model: 'other-open-weights',
+                maxInputTokens: 16_000,
+                maxOutputTokens: 8_000,
+            },
+        });
+        // About 13k tokens: fits beside the primary's 1k answer, not the
+        // fallback's 8k.
+        const patch = Array.from(
+            { length: 1_250 },
+            (_, line) => `+export const value${line} = compute(${line});`,
+        ).join('\n');
+
+        const result = await check(
+            [sent('s-1', 'app/values.ts')],
+            [{ filename: 'app/values.ts', patch }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).not.toHaveBeenCalled();
+        expect(result.unmeasured).toEqual([
+            { id: 's-1', reason: 'diff_too_large' },
+        ]);
+    });
+
+    it("sizes the check by the fallback's window when it is the smaller one", async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai',
+            model: 'gpt-x',
+            maxInputTokens: 1_000_000,
+            fallback: {
+                provider: 'openai_compatible',
+                model: 'local-open-weights',
+                maxInputTokens: 1_000,
+            },
+        });
+
+        const result = await check(
+            [sent('s-1', 'app/a.rb')],
+            [{ filename: 'app/a.rb', patch: 'x'.repeat(10_000) }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).not.toHaveBeenCalled();
+        expect(result.unmeasured).toEqual([
+            { id: 's-1', reason: 'diff_too_large' },
+        ]);
+    });
+
     it('counts what the prompt carries for each suggestion, not just the patch, against the context window', async () => {
         permissionValidationService.resolveTaskSlot.mockResolvedValue({
             provider: 'openai',

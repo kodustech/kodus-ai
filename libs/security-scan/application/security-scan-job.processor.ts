@@ -1,4 +1,4 @@
-import { fingerprintOf } from '../domain/finding-fingerprint';
+import { fingerprintOf, ownFingerprintOf } from '../domain/finding-fingerprint';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -57,7 +57,18 @@ import {
     ISecurityScanRepository,
     SECURITY_SCAN_REPOSITORY_TOKEN,
 } from '../infrastructure/security-scan.repository';
-import { SecurityScanEngine } from './security-scan-engine';
+import {
+    SecurityScanEngine,
+    type SecurityScanModel,
+} from './security-scan-engine';
+import { boundedEnvInt } from '../domain/env-limits';
+import {
+    consolidateOpenIssues,
+    occurrenceOf,
+    rootCauseCallOn,
+} from './scan-consolidation';
+import { LLM } from '@libs/llm/llm';
+import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import { ScanOwnerResolver } from './scan-owner-resolver';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import {
@@ -87,6 +98,17 @@ const LEASE_TTL_MS = 34 * 60 * 1000;
  * length: a plan runs across as many slices as it needs.
  */
 export const SCAN_MAX_UNITS = 2000;
+
+/**
+ * The most units one job starts. A job is a bounded piece of a scan: a
+ * crash loses little, and other repositories' scans queue in between.
+ */
+export const SCAN_UNITS_PER_JOB = boundedEnvInt(
+    'API_SECURITY_SCAN_UNITS_PER_JOB',
+    24,
+    1,
+    500,
+);
 
 export interface SecurityScanJobPayload {
     scanId: string;
@@ -299,6 +321,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             pricingResolver: this.pricingResolver,
             pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
                 ?.modelPricing,
+            modelId: scan.modelId,
         });
 
         // The organization's model may have been disconnected since the start.
@@ -311,8 +334,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         if (budgetError) {
             throw new ScanFailure(budgetError);
         }
+        // The lenses stop short of the limit by a small reserve: the end of
+        // the scan folds duplicate issues within the rest of it, so a scan
+        // stopped by its limit still folds them, and the limit still holds.
         const meter = new ScanBudgetMeter(
-            scan.budget,
+            withFoldingReserve(scan.budget),
             rates,
             carriedSpend(scan),
             model.contextWindowTokens,
@@ -421,6 +447,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             });
         }
 
+        const repositoryKey = {
+            platform: scan.repository.platform,
+            host: scan.repository.host ?? '',
+            id: scan.repository.id,
+        };
         const owners = new ScanOwnerResolver(sandbox, {
             cloneUrl: cloneParams.url,
             branch,
@@ -441,6 +472,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             reopened: scan.outcome?.reopened ?? 0,
             dismissed: scan.outcome?.dismissed ?? 0,
             resolved: scan.outcome?.resolved ?? 0,
+            refuted: scan.outcome?.refuted ?? 0,
         };
 
         // Only this job writes the scan's progress while it runs, so it is
@@ -484,10 +516,21 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             meter,
             signal,
             deadlineAt: sliceStartedAt + SCAN_SLICE_MS,
+            maxUnitsPerRun: SCAN_UNITS_PER_JOB,
             maxUnits: SCAN_MAX_UNITS,
             units: scan.units,
             progress: scan.progress,
             reported: scan.reported,
+            identify: (finding) => ownFingerprintOf(scan, finding),
+            mode: scan.mode ?? 'full',
+            // Read whenever a plan is made: a continuation holds its plan.
+            coverage:
+                scan.mode === 'incremental' && (firstJob || !scan.units?.length)
+                    ? await this.scans.findCoverage(
+                          scan.organizationId,
+                          repositoryKey,
+                      )
+                    : undefined,
             // The same bug found again keeps the issue it is, whichever
             // place this scan's dedup would keep.
             known: (
@@ -537,7 +580,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     coverage: liveCoverage,
                 });
             },
-            onUnitDone: async (progress, findings, sightedAll) => {
+            onUnitDone: async (progress, findings, sightedAll, covered) => {
                 // Writes nothing once this job lost the scan: timed out (the
                 // scan failed, its sandbox gone, the slice still running in
                 // the background) or claimed by another job. A later scan
@@ -569,6 +612,19 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     counts.reopened += reopened;
                     counts.stillOpen += stillOpen;
                 }
+                // What this unit concluded, for a later incremental scan.
+                if (covered?.length) {
+                    await this.scans.recordCoverage(
+                        scan.organizationId,
+                        repositoryKey,
+                        covered.map((entry) => ({
+                            ...entry,
+                            scanId: scan.uuid,
+                            commitSha,
+                            modelName: model.modelName,
+                        })),
+                    );
+                }
                 for (const finding of findings) {
                     signal?.throwIfAborted();
                     const outcome = await this.storeFinding(
@@ -590,6 +646,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         .clearIssuesCache(scan.organizationId)
                         .catch(() => undefined);
                 }
+                counts.refuted =
+                    (counts.refuted ?? 0) + (progress.refuted ?? 0);
                 const earlier = unitStates.get(progress.unitId);
                 if (earlier) {
                     tally(earlier.state, -1);
@@ -685,6 +743,14 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 [],
             filesBeyondPlan:
                 result.filesBeyondPlan ?? scan.coverage?.filesBeyondPlan ?? 0,
+            ...((result.unchangedFiles ?? scan.coverage?.unchangedFiles) !==
+            undefined
+                ? {
+                      unchangedFiles:
+                          result.unchangedFiles ??
+                          scan.coverage?.unchangedFiles,
+                  }
+                : {}),
         };
 
         if (!result.finished && !result.stoppedByBudget && !signal?.aborted) {
@@ -781,6 +847,23 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             scanStartedAt: scan.startedAt ?? new Date().toISOString(),
         });
 
+        // Issues earlier scans opened for one root cause fold into one, now
+        // that this scan's sightings and resolutions are on record.
+        // The whole limit, from what the lenses committed: the reserve.
+        const foldingMeter = new ScanBudgetMeter(
+            scan.budget,
+            rates,
+            meter.committedSpend(),
+            model.contextWindowTokens,
+        );
+        foldingMeter.beforeEachRequest((committed) =>
+            this.scans.raiseCommittedSpend(scan.uuid, committed, jobId),
+        );
+        onMeter(foldingMeter);
+        counts.consolidated =
+            (counts.consolidated ?? 0) +
+            (await this.consolidateIssues(scan, model, foldingMeter, signal));
+
         await this.kodyIssuesManagement
             .clearIssuesCache(scan.organizationId)
             .catch(() => undefined);
@@ -790,7 +873,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 ? SecurityScanStatus.STOPPED_BY_BUDGET
                 : SecurityScanStatus.COMPLETED,
             progress: result.progress,
-            spend: meter.committedSpend(),
+            spend: foldingMeter.committedSpend(),
             coverage,
             outcome: counts,
             finishedAt: new Date().toISOString(),
@@ -799,8 +882,111 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         return {
             status: 'finished',
             outcome: counts,
-            spend: meter.committedSpend(),
+            spend: foldingMeter.committedSpend(),
         };
+    }
+
+    /**
+     * Folds the repository's open issues that share a root cause: each issue
+     * not compared since it last changed is compared with the rest, on the
+     * scan's model and within its spend cap, for at most
+     * CONSOLIDATION_WINDOW_MS. What is left is compared by a later scan.
+     * Returns how many issues were folded into another.
+     */
+    private async consolidateIssues(
+        scan: SecurityScanRecord,
+        model: SecurityScanModel,
+        meter: ScanBudgetMeter,
+        signal: AbortSignal | undefined,
+    ): Promise<number> {
+        const scope = {
+            organizationId: scan.organizationId,
+            repositoryPlatform: scan.repository.platform as PlatformType,
+            repositoryHost: scan.repository.host ?? '',
+            repositoryId: scan.repository.id,
+        };
+        if (meter.isExhausted() || !model.slot) {
+            return 0;
+        }
+        try {
+            const open = (
+                await this.issuesService.findOpenScanFindings(scope)
+            ).map((f) => ({
+                ...f,
+                vulnerabilityClass: f.vulnerabilityClass as VulnClass,
+                severity: f.severity as ScanFinding['severity'],
+            }));
+            const subjects = new Set(
+                open
+                    .filter(
+                        (f) =>
+                            !f.consolidatedAt ||
+                            (!!f.lastSeenAt && f.consolidatedAt < f.lastSeenAt),
+                    )
+                    .map((f) => f.fingerprint),
+            );
+            if (!subjects.size || open.length < 2) {
+                return 0;
+            }
+            const stopAt = Date.now() + CONSOLIDATION_WINDOW_MS;
+            const call = rootCauseCallOn(
+                LLM.run.bind(LLM),
+                model.slot,
+                scan.organizationId,
+            );
+            const { absorbed, compared } = await runWithUsageMeter(
+                meter,
+                () =>
+                    consolidateOpenIssues(call, open, subjects, {
+                        isFinal: () => meter.isExhausted() || !!signal?.aborted,
+                        shouldStop: () =>
+                            Date.now() >= stopAt ||
+                            meter.isExhausted() ||
+                            !!signal?.aborted,
+                    }),
+                {
+                    organizationId: scan.organizationId,
+                    teamId: scan.teamId,
+                    repositoryId: scan.repository.id,
+                },
+            );
+            let folded = 0;
+            // A fold that did not land (an issue changed since it was read)
+            // leaves its duplicate to be compared again next time.
+            const unfolded = new Set<string>();
+            for (const { issue, into } of absorbed) {
+                if (
+                    await this.issuesService.foldScanIssueInto({
+                        ...scope,
+                        fingerprint: issue.fingerprint,
+                        into: into.fingerprint,
+                    })
+                ) {
+                    folded++;
+                } else if (issue.fingerprint) {
+                    unfolded.add(issue.fingerprint);
+                }
+            }
+            await this.issuesService.markScanIssuesConsolidated({
+                ...scope,
+                fingerprints: compared.filter((fp) => !unfolded.has(fp)),
+                at: new Date().toISOString(),
+            });
+            return folded;
+        } catch (error) {
+            // Folding duplicates is housekeeping: the scan's own result stands.
+            logger.warn({
+                message: `Security scan ${scan.uuid} could not fold duplicate issues`,
+                context: SecurityScanJobProcessor.name,
+                error,
+                metadata: {
+                    scanId: scan.uuid,
+                    organizationId: scan.organizationId,
+                    repositoryId: scan.repository.id,
+                },
+            });
+            return 0;
+        }
     }
 
     private async storeFinding(
@@ -809,6 +995,26 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         commitSha: string | undefined,
         owners: ScanOwnerResolver,
     ) {
+        if (finding.occurrenceOf) {
+            // One more place of an issue's root cause: recorded on that issue.
+            const folded = await this.issuesService.addScanFindingOccurrence({
+                organizationId: scan.organizationId,
+                repositoryPlatform: scan.repository.platform as PlatformType,
+                repositoryHost: scan.repository.host ?? '',
+                repositoryId: scan.repository.id,
+                holderFingerprint: finding.occurrenceOf,
+                occurrence: occurrenceOf(
+                    finding,
+                    ownFingerprintOf(scan, finding),
+                ),
+                scanId: scan.uuid,
+            });
+            if (folded) {
+                return folded.outcome;
+            }
+            // The issue it belongs to is gone: the place is an issue of its own.
+            finding.occurrenceOf = undefined;
+        }
         try {
             const owner = await owners.ownerOf(finding.filePath);
             const { outcome } = await this.issuesService.upsertScanFinding({
@@ -838,6 +1044,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     attackPath: finding.attackPath,
                     ...(finding.reproduction
                         ? { reproduction: finding.reproduction }
+                        : {}),
+                    ...(finding.assumption
+                        ? { assumption: finding.assumption }
                         : {}),
                 },
                 lastSeenScanId: scan.uuid,
@@ -900,6 +1109,34 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             result,
         } as any);
     }
+}
+
+/** How long the end of a scan may spend folding duplicate issues. */
+const CONSOLIDATION_WINDOW_MS = 6 * 60 * 1000;
+
+/**
+ * The limit the lenses run within: the scan's, less what folding duplicate
+ * issues at the end may spend (5% of it, at least $0.05 and at most $0.50,
+ * or the same share of a token limit, never more than half of a small one).
+ * No limit, no reserve.
+ */
+export function withFoldingReserve(
+    budget: SecurityScanRecord['budget'],
+): SecurityScanRecord['budget'] {
+    const share = (total: number, floor: number, ceiling: number) =>
+        total - Math.min(ceiling, Math.max(floor, total * 0.05), total / 2);
+    return {
+        ...(budget.maxUsd !== undefined
+            ? { maxUsd: share(budget.maxUsd, 0.05, 0.5) }
+            : {}),
+        ...(budget.maxTokens !== undefined
+            ? {
+                  maxTokens: Math.floor(
+                      share(budget.maxTokens, 50_000, 1_000_000),
+                  ),
+              }
+            : {}),
+    };
 }
 
 /**

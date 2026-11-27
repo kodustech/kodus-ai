@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
     auditWriteTools,
     isConversationWriteTool,
+    performedWrites,
     writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
@@ -116,5 +117,17 @@ describe('auditWriteTools', () => {
         expect(isWrite('KODUS_FIND_MEMORIES')).toBe(false);
         expect(isWrite('SOME_THIRD_PARTY_TOOL')).toBe(true);
         expect(isWrite('grep')).toBe(false);
+    });
+});
+
+describe('performedWrites', () => {
+    it('lists the writes that returned and leaves out the ones that threw', () => {
+        expect(
+            performedWrites([
+                { tool: 'kodus_save_memory', args: {}, result: 'saved' },
+                { tool: 'kodus_create_rule', args: {}, error: 'boom' },
+                { tool: 'kodus_create_issue', args: {}, result: '' },
+            ]),
+        ).toEqual(['kodus_save_memory', 'kodus_create_issue']);
     });
 });

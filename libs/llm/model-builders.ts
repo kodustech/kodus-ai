@@ -9,7 +9,9 @@
  * No LangChain runtime dependency: the bedrock config is
  * typed structurally, not via NormalizedByokConfig.
  */
-import type { LanguageModel } from 'ai';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { bedrockRegion } from '@libs/llm/providers/bedrock/region';
+import { wrapLanguageModel, type LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
@@ -126,6 +128,90 @@ export interface BedrockCredentials {
 }
 
 /**
+ * The `json` tool inputs of the Converse answer a call is waiting on, read from
+ * the response body itself (`toolUse` blocks named `json`), written as
+ * `@ai-sdk/amazon-bedrock` writes them into the text part:
+ * `JSON.stringify(toolUse.input)`. One store per `doGenerate`, so concurrent
+ * calls never read each other's answer.
+ */
+const converseToolInputs = new AsyncLocalStorage<{ inputs?: string[] }>();
+
+/** The SDK's fetch, also reading the json tool inputs off a Converse answer. */
+const fetchReadingToolInputs: typeof fetch = async (input, init) => {
+    const response = await fetch(input, init);
+    const store = converseToolInputs.getStore();
+    const url =
+        typeof input === 'string'
+            ? input
+            : ((input as any)?.url ?? String(input));
+    if (store && response.ok && /\/converse$/.test(url)) {
+        try {
+            const body: any = await response.clone().json();
+            const blocks = body?.output?.message?.content;
+            store.inputs = Array.isArray(blocks)
+                ? blocks
+                      .filter((b: any) => b?.toolUse?.name === 'json')
+                      .map((b: any) => JSON.stringify(b.toolUse.input))
+                : [];
+        } catch {
+            store.inputs = undefined;
+        }
+    }
+    return response;
+};
+
+/**
+ * When Bedrock answers through the forced `json` tool, `@ai-sdk/amazon-bedrock`
+ * emits the tool input as one more text part next to the model's own text, and
+ * the SDK joins them: a prose example the model wrote first (`If nothing is
+ * wrong I would return {"violations":[]}`) then beat the tool answer and
+ * shipped as an empty review. The tool input is the answer, as
+ * `@ai-sdk/anthropic` treats it (it drops the text): keep only the text part
+ * that IS the tool input, identified from the response body
+ * (`fetchReadingToolInputs`), not by position. Two json tool calls in one turn,
+ * or a body that could not be read, cannot say which is the answer: the result
+ * is left as it came, and the call fails as it did before this.
+ */
+function keepJsonToolAnswerOnly(model: LanguageModel): LanguageModel {
+    return wrapLanguageModel({
+        model: model as any,
+        middleware: {
+            specificationVersion: 'v3',
+            wrapGenerate: async ({ doGenerate }: any) => {
+                const store: { inputs?: string[] } = {};
+                const result = await converseToolInputs.run(store, () =>
+                    doGenerate(),
+                );
+                const fromTool =
+                    result?.providerMetadata?.bedrock
+                        ?.isJsonResponseFromTool === true;
+                if (
+                    !fromTool ||
+                    !Array.isArray(result.content) ||
+                    store.inputs?.length !== 1
+                ) {
+                    return result;
+                }
+                const [toolText] = store.inputs;
+                const toolIndex = result.content.findLastIndex(
+                    (p: any) => p?.type === 'text' && p.text === toolText,
+                );
+                if (toolIndex < 0) {
+                    return result;
+                }
+                return {
+                    ...result,
+                    content: result.content.filter(
+                        (p: any, i: number) =>
+                            p?.type !== 'text' || i === toolIndex,
+                    ),
+                };
+            },
+        } as any,
+    }) as LanguageModel;
+}
+
+/**
  * Build a Vercel AI SDK model for Amazon Bedrock. Two auth paths, in priority:
  *   1. Bearer API key (recommended) — takes precedence over any SigV4 config.
  *   2. Static IAM user credentials (SigV4) — legacy path.
@@ -136,13 +222,16 @@ export function bedrockModelFromCredentials(
     config: BedrockCredentials | undefined,
     modelId: string,
 ): LanguageModel {
-    const region = config?.awsRegion?.trim() || 'us-east-1';
+    const region = bedrockRegion(config?.awsRegion);
 
     if (byokAuthKind('amazon_bedrock', config) === 'bedrock-bearer') {
-        return createAmazonBedrock({
-            region,
-            apiKey: decrypt(config!.awsBearerToken!),
-        })(modelId);
+        return keepJsonToolAnswerOnly(
+            createAmazonBedrock({
+                region,
+                apiKey: decrypt(config!.awsBearerToken!),
+                fetch: fetchReadingToolInputs,
+            })(modelId),
+        );
     }
 
     const accessKeyId = config?.awsAccessKeyId
@@ -155,10 +244,13 @@ export function bedrockModelFromCredentials(
         ? decrypt(config.awsSessionToken)
         : undefined;
 
-    return createAmazonBedrock({
-        region,
-        accessKeyId,
-        secretAccessKey,
-        sessionToken,
-    })(modelId);
+    return keepJsonToolAnswerOnly(
+        createAmazonBedrock({
+            region,
+            accessKeyId,
+            secretAccessKey,
+            sessionToken,
+            fetch: fetchReadingToolInputs,
+        })(modelId),
+    );
 }
