@@ -112,6 +112,30 @@ describe('findFile — a find walk the exec cap stopped', () => {
         expect(listDir).not.toHaveBeenCalled();
     });
 
+    // stderr counts toward the cap: a walk flooded with permission errors
+    // can be stopped with few names printed, the last one cut.
+    it('says a short list from a stopped walk may be incomplete', async () => {
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : {
+                          stdout: 'pkg/a.test.ts\npkg/b.test.ts\npkg/c.te',
+                          stderr: 'find: Permission denied\n'.repeat(80_000),
+                          exitCode: -1,
+                          truncated: true,
+                      },
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({
+            pattern: '*.test.ts',
+        });
+
+        expect(out).toBe(
+            'pkg/a.test.ts\npkg/b.test.ts\n... (the search output was cut: more files may match — narrow with a path or glob)',
+        );
+    });
+
     it('still falls back when a stopped walk printed nothing', async () => {
         const remote = makeRemote({
             exec: async (cmd: string) =>

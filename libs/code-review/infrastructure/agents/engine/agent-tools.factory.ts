@@ -1125,8 +1125,20 @@ export function buildAgentTools(
                             // filters literally and would answer "No files
                             // matching" for a glob such as *.test.ts.
                             if ((exitCode === 0 || truncated) && stdout.trim()) {
-                                const lines = stdout.trim().split('\n');
-                                return lines.slice(0, 30).join('\n');
+                                let lines = stdout.trim().split('\n');
+                                if (!truncated) {
+                                    return lines.slice(0, 30).join('\n');
+                                }
+                                // The cut can end mid-name, and stderr counts
+                                // toward the cap too: keep whole names, and
+                                // say the list may be short when it is.
+                                lines = lines.slice(0, -1);
+                                if (lines.length >= 30) {
+                                    return lines.slice(0, 30).join('\n');
+                                }
+                                if (lines.length > 0) {
+                                    return `${lines.join('\n')}\n${PARTIAL_NAMES_NOTE}`;
+                                }
                             }
                         } catch {
                             // find also failed, fall through to listDir
