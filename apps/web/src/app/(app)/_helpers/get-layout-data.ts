@@ -35,6 +35,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         conditionalPrApprovalFeatureFlag,
         kodyRuntimeFeatureFlag,
         deepScanFeatureFlag,
+        ultraReviewFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -80,6 +81,15 @@ export const getLayoutData = cache(async (teamId: string) => {
             .catch(() => false),
         isKodyRuntimeReleased(releaseTrackPromise),
         isDeepScanEnabled().catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.ultraReview,
+                    identifier: "organization",
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
     ]);
 
     return {
@@ -95,6 +105,7 @@ export const getLayoutData = cache(async (teamId: string) => {
             conditionalPrApproval: conditionalPrApprovalFeatureFlag,
             kodyRuntime: kodyRuntimeFeatureFlag,
             deepScan: deepScanFeatureFlag,
+            ultraReview: ultraReviewFeatureFlag,
         },
     };
 });

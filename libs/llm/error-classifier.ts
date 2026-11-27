@@ -1,6 +1,11 @@
 import { extractProviderMessage } from './review-error-diagnostics';
 import { AgentContextWindowTooSmallError } from './errors';
 import { isRoutingRefusal } from './routing-refusal';
+import {
+    ALLOWED_PRIVATE_HOSTS_ENV,
+    isMetadataAddress,
+} from './gateway-address-guard';
+import { environment } from '@libs/ee/configs/environment';
 
 /**
  * Canonical categories for LLM/provider errors surfaced when calling a model.
@@ -134,9 +139,19 @@ export function classifyLLMError(
         extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
-    let category = matchByHttpStatus(httpStatus, lower);
+    // Read from the error's structure, never its text: a validation or parse
+    // error carries the model's own output, which can quote "ENOTFOUND".
+    const connect =
+        httpStatus === undefined ? connectFailureOf(err) : undefined;
+    // A configuration the call refused to send (a Bedrock region that is no
+    // region name): the org's to fix, said in its own words.
+    const configRefusal = byokConfigRefusal(err);
+    let category =
+        configRefusal || refusedByAddressGuard(err, httpStatus === undefined)
+            ? LlmErrorCategory.CONFIG_INVALID
+            : matchByHttpStatus(httpStatus, lower);
     if (category === LlmErrorCategory.UNKNOWN) {
-        category = matchByMessage(lower);
+        category = matchByMessage(lower, httpStatus, !!connect);
     }
     // A gateway that refuses to route a valid model (allowed providers, a
     // region pin) answers 400 or 404 as it likes; the body is the same
@@ -170,7 +185,14 @@ export function classifyLLMError(
                 : category === LlmErrorCategory.REQUEST_REJECTED &&
                     providerMessage
                   ? `The provider${provider ? ` (${provider})` : ''} refused the request for this model: ${providerMessage}`
-                  : buildFriendlyMessage(category, provider, lower),
+                  : configRefusal
+                    ? configRefusal
+                    : category === LlmErrorCategory.TRANSIENT && connect
+                      ? `Couldn't connect to the provider${provider ? ` (${provider})` : ''}: ${connect}. If it keeps failing, check the base URL.`
+                      : buildFriendlyMessage(category, provider, lower) +
+                        (category === LlmErrorCategory.CONFIG_INVALID
+                            ? selfHostedAllowanceHint(err)
+                            : ''),
         providerMessage,
         ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(lower)
@@ -192,7 +214,18 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     if (!err) return false;
     if ((err as { name?: string }).name === 'AbortError') return true;
     const text = err instanceof Error ? err.message : String(err ?? '');
-    return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
+    if (/\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text)) {
+        return true;
+    }
+    // A connect timeout can carry no word for it: Node's dual-stack connect
+    // throws an `AggregateError` with an empty message and code `ETIMEDOUT`,
+    // which the AI SDK wraps as "Cannot connect to API: ". Only the final
+    // failure counts: a RetryError's earlier attempts are history, and a
+    // timeout there must not keep a later 503 from failing over.
+    return errorTree(err, 0, [], { attempts: false }).some((e) => {
+        const code = String((e as { code?: unknown }).code ?? '');
+        return code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT';
+    });
 }
 
 const RETRIES_EXHAUSTED = Symbol.for('kodus.llm.retriesExhausted');
@@ -410,7 +443,19 @@ function matchByHttpStatus(
  * BOTH directions -- the wording it must catch, and the neighbouring
  * temporary wording it must leave on RATE_LIMIT.
  */
-function looksLikeQuota(lower: string): boolean {
+/**
+ * Words in a link are not the provider's words: Fireworks' rate-limit 429 links
+ * ".../guides/quotas_usage/rate-limits" and read as a spent quota, and a link to
+ * ".../limits#tokens-per-minute" is not a per-minute window. Bounded to URL
+ * characters: in minified JSON a link runs straight into
+ * `","code":"insufficient_quota"`, which must survive.
+ */
+function withoutLinks(text: string): string {
+    return text.replace(/https?:\/\/[^\s"'<>\\)\]}]+/g, ' ');
+}
+
+function looksLikeQuota(message: string): boolean {
+    const lower = withoutLinks(message);
     // A per-minute quota is a rate limit that clears on its own, not a spent
     // balance. Google words both as "You exceeded your current quota"; only the
     // quota id in the error body ("...InputTokensPerModelPerMinute...") tells a
@@ -418,8 +463,15 @@ function looksLikeQuota(lower: string): boolean {
     if (looksLikePerMinuteLimit(lower)) {
         return false;
     }
+    return lower.includes('quota') || namesSpentBalance(lower);
+}
+
+/**
+ * The spent-balance and spent-cap vocabulary, without the bare word "quota"
+ * (Google words a per-minute limit as "You exceeded your current quota").
+ */
+function namesSpentBalance(lower: string): boolean {
     return (
-        lower.includes('quota') ||
         lower.includes('credit') ||
         lower.includes('billing') ||
         lower.includes('payment') ||
@@ -457,10 +509,114 @@ function looksLikeQuota(lower: string): boolean {
         // OpenRouter's per-key spend cap: "Key limit exceeded (monthly
         // limit) ... $10.02 of $10.00 used; resets 2026-12-01".
         lower.includes('key limit exceeded') ||
+        // Google AI Studio's project cap, a 429: "Your project has exceeded
+        // its monthly spending cap". 4,593 kody-rules shards were retried
+        // against it in one day (Nov 2026).
+        lower.includes('monthly spending cap') ||
+        // A subscription account's weekly allowance: "you (<user>) have
+        // reached your weekly usage limit". It reopens in days, not minutes.
+        lower.includes('reached your weekly usage limit') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
     );
+}
+
+/** Socket codes of a connection that never got an answer: refused, no DNS,
+ *  no route. */
+const UNREACHABLE_CODES = new Set([
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+]);
+
+/** The AI SDK's own wording for a fetch that never got an answer, alone
+ *  (`maxRetries: 0`) or as the last attempt of its retries:
+ *  "Failed after 4 attempts. Last error: AI_APICallError: Cannot connect to
+ *  API: getaddrinfo ENOTFOUND api.x.cm". Read only on errors the SDK named. */
+const SDK_CONNECT_FAILURE =
+    /^(?:failed after \d+ attempts\. last error: (?:ai_apicallerror: )?)?cannot connect to api\b/i;
+
+/** "<CODE> <host or address[:port]>" in a socket message; the host stops at
+ *  the first character a hostname or address cannot hold. */
+const UNREACHABLE_IN_TEXT =
+    /\b(ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH)\s+([A-Za-z0-9.:[\]-]+)/;
+
+/** The errors an error is made of: itself, its `cause`, the AI SDK's
+ *  `RetryError` attempts, an `AggregateError`'s members (dual-stack connect). */
+function errorTree(
+    err: unknown,
+    depth = 0,
+    out: object[] = [],
+    opts: { attempts?: boolean } = {},
+): object[] {
+    if (!err || typeof err !== 'object' || depth > 4 || out.includes(err)) {
+        return out;
+    }
+    out.push(err);
+    const e = err as {
+        name?: unknown;
+        cause?: unknown;
+        lastError?: unknown;
+        errors?: unknown;
+    };
+    errorTree(e.cause, depth + 1, out, opts);
+    errorTree(e.lastError, depth + 1, out, opts);
+    // A RetryError's `errors` are its attempts; an AggregateError's are one
+    // failure's parts (a dual-stack connect), read always.
+    const attempts = e.name === 'AI_RetryError';
+    if (Array.isArray(e.errors) && (!attempts || opts.attempts !== false)) {
+        for (const member of e.errors) errorTree(member, depth + 1, out, opts);
+    }
+    return out;
+}
+
+/**
+ * Why a call never reached the provider, read from the error's structure: a
+ * socket code (`ENOTFOUND`, `ECONNREFUSED`…) on the error or its causes, or the
+ * AI SDK's own connect failure (`APICallError` "Cannot connect to API"). The
+ * text of a validation or parse error is the model's output and is never read.
+ * Returns the deepest cause's message (`getaddrinfo ENOTFOUND api.x.cm`), or
+ * the code, for the message the user sees; undefined when it was reached.
+ */
+function connectFailureOf(err: unknown): string | undefined {
+    const tree = errorTree(err, 0, [], { attempts: false });
+    // The deepest error carrying the code: the socket's own, not a wrapper.
+    const coded = tree.findLast((e) =>
+        UNREACHABLE_CODES.has(String((e as { code?: unknown }).code ?? '')),
+    ) as { code?: string; message?: string } | undefined;
+    const sdkConnect = tree.find((e) => {
+        const { name, message } = e as { name?: string; message?: string };
+        return (
+            (name === 'AI_APICallError' || name === 'AI_RetryError') &&
+            SDK_CONNECT_FAILURE.test(String(message ?? ''))
+        );
+    }) as { message?: string } | undefined;
+    if (!coded && !sdkConnect) return undefined;
+    // Published in a public comment: only the code and the host the org
+    // configured, never a raw message (it can carry a URL with a key in it).
+    if (!coded) {
+        // The agent runner keeps only name + message: the SDK put the socket's
+        // own message after its prefix, so the code and host are read there.
+        const named = UNREACHABLE_IN_TEXT.exec(String(sdkConnect?.message));
+        return named
+            ? `${named[1]} ${named[2]}`.slice(0, 200)
+            : 'the connection failed';
+    }
+    const { hostname, address, port } = coded as {
+        hostname?: unknown;
+        address?: unknown;
+        port?: unknown;
+    };
+    const where =
+        typeof hostname === 'string'
+            ? hostname
+            : typeof address === 'string'
+              ? `${address}${typeof port === 'number' ? `:${port}` : ''}`
+              : '';
+    return `${coded.code}${where ? ` ${where}` : ''}`.slice(0, 200);
 }
 
 /** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */
@@ -471,13 +627,38 @@ function namesASpentCap(lower: string): boolean {
 }
 
 /**
- * True for a quota the provider resets every minute (Google's
- * "...PerModelPerMinute..." quota ids, "per minute" prose). A daily quota in
- * the same text is not a per-minute limit.
+ * True for a quota the provider resets every minute: Google's
+ * "...PerModelPerMinute..." quota ids or "per minute" prose, or, when only the
+ * message reached us (#2130), a retry delay of a minute or less. A per-minute
+ * quota clears within the minute; a daily one asks for hours, and a spent
+ * billing quota gives no delay. A daily quota in the same text is never a
+ * per-minute limit.
  */
-function looksLikePerMinuteLimit(lower: string): boolean {
-    return /per[\s_-]?minute/.test(lower) && !/per[\s_-]?day/.test(lower);
+function looksLikePerMinuteLimit(text: string): boolean {
+    const lower = withoutLinks(text);
+    if (/per[\s_-]?day/.test(lower)) {
+        return false;
+    }
+    if (/per[\s_-]?minute/.test(lower)) {
+        return true;
+    }
+    // A short delay does not make a spent balance a rate limit: "Insufficient
+    // balance … Please retry in 10s" is still a balance to top up. Google's
+    // "please check your plan and billing details" is boilerplate on its
+    // per-minute 429 too (#2130), so it says nothing about the balance.
+    if (
+        namesSpentBalance(
+            lower.replace(/please check your plan and billing details/g, ' '),
+        )
+    ) {
+        return false;
+    }
+    const delay = /retry in (\d+(?:\.\d+)?)\s*s\b/.exec(lower);
+    return !!delay && Number(delay[1]) <= PER_MINUTE_RETRY_MAX_SECONDS;
 }
+
+/** The longest retry delay a per-minute quota asks for. */
+const PER_MINUTE_RETRY_MAX_SECONDS = 60;
 
 /**
  * Detects the "model exists but you're not entitled to it" shape. Vertex is
@@ -494,7 +675,99 @@ function looksLikeModelAccessDenied(lower: string): boolean {
     );
 }
 
-function matchByMessage(lower: string): LlmErrorCategory {
+/** The message of a `EBYOK_CONFIG_INVALID` error on `err` or its causes. */
+function byokConfigRefusal(err: unknown): string | undefined {
+    for (let e = err as any, depth = 0; e && depth < 6; e = e.cause, depth++) {
+        if (
+            e?.code === 'EBYOK_CONFIG_INVALID' &&
+            typeof e.message === 'string'
+        ) {
+            return e.message;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * On a self-hosted install a gateway on the operator's network is the usual
+ * setup, and "point it at a public endpoint" is no fix there: the operator's
+ * allowance is (#2381). Never offered for the metadata service, which no
+ * allowance opens: its address is on the refusal, or in its sentence when the
+ * org typed it.
+ */
+function selfHostedAllowanceHint(err: unknown): string {
+    if (environment.API_CLOUD_MODE === true) return '';
+    const addresses: string[] = [];
+    const walk = (e: unknown, depth: number) => {
+        if (!e || typeof e !== 'object' || depth > 5) return;
+        const node = e as Record<string, unknown>;
+        if (typeof node.address === 'string') addresses.push(node.address);
+        const named =
+            /resolves to a private or reserved address \(([^)]+)\)/.exec(
+                String(node.message ?? ''),
+            );
+        if (named) addresses.push(named[1]);
+        walk(node.cause, depth + 1);
+        walk(node.lastError, depth + 1);
+        if (Array.isArray(node.errors)) {
+            node.errors.forEach((m) => walk(m, depth + 1));
+        }
+    };
+    walk(err, 0);
+    if (addresses.some((a) => isMetadataAddress(a))) return '';
+    return ` On a self-hosted install, the operator can allow a gateway on its own network with ${ALLOWED_PRIVATE_HOSTS_ENV} (host[:port], IP or range); a host named there may use http.`;
+}
+
+/**
+ * The gateway address check refused to connect (gateway-address-guard.ts): the
+ * base URL is the org's to fix, and retrying or cascading to another model would
+ * not change where it points. Read from the error itself, never from a body: the
+ * refusal carries its code (`EBYOK_GATEWAY_ADDRESS`) on the cause fetch wraps it
+ * in ("fetch failed", which reads as transient), and a cause rebuilt across
+ * realms keeps at least its own sentence. The code and the name are read
+ * whatever else the error carries; the sentence only with no HTTP status, since
+ * a provider that answered was reached and its words are not the guard's.
+ */
+function refusedByAddressGuard(err: unknown, readSentence: boolean): boolean {
+    const seen = new Set<object>();
+    const walk = (e: unknown, depth: number): boolean => {
+        if (!e || typeof e !== 'object' || depth > 5 || seen.has(e)) {
+            return false;
+        }
+        seen.add(e);
+        const node = e as {
+            code?: unknown;
+            name?: unknown;
+            message?: unknown;
+            cause?: unknown;
+            lastError?: unknown;
+            errors?: unknown;
+        };
+        if (
+            node.code === 'EBYOK_GATEWAY_ADDRESS' ||
+            node.name === 'GatewayAddressRefusedError' ||
+            (readSentence &&
+                /\bhost "[^"]*" resolves to a private or reserved address\b.*the call was not sent/.test(
+                    String(node.message ?? ''),
+                ))
+        ) {
+            return true;
+        }
+        return (
+            walk(node.cause, depth + 1) ||
+            walk(node.lastError, depth + 1) ||
+            (Array.isArray(node.errors) &&
+                node.errors.some((m) => walk(m, depth + 1)))
+        );
+    };
+    return walk(err, 0);
+}
+
+function matchByMessage(
+    lower: string,
+    httpStatus?: number,
+    unreachableEndpoint = false,
+): LlmErrorCategory {
     // Same vocabulary the 429 branch uses -- see looksLikeQuota.
     if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
@@ -548,13 +821,23 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // Anthropic: "prompt is too long: 212345 tokens > 200000 maximum", and
         // "input length and `max_tokens` exceed context limit: …".
         lower.includes('prompt is too long') ||
-        lower.includes('exceed context limit')
+        lower.includes('exceed context limit') ||
+        // MiniMax: "invalid params, context window exceeds limit (2013)" (105
+        // production events read as a rejected request, so nothing shrank).
+        lower.includes('context window exceeds limit')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }
     if (
         lower.includes('econnreset') ||
         lower.includes('etimedout') ||
+        // An unreachable endpoint never answers with a status, so without these
+        // a provider that is down read as UNKNOWN and never reached the
+        // fallback (#1844). "cannot connect to api" is the AI SDK's own prefix
+        // for any fetch-level failure; the codes cover callers outside it.
+        // Only with no status: a provider that answered was reached, and a
+        // body that echoes a diff mentioning ENOTFOUND is a rejection.
+        unreachableEndpoint ||
         lower.includes('socket hang up') ||
         lower.includes('network error') ||
         lower.includes('fetch failed') ||
@@ -631,6 +914,8 @@ function buildFriendlyMessage(
             return `Transient error reaching the provider${providerLabel}. Try again.`;
         case LlmErrorCategory.REQUEST_REJECTED:
             return `The provider${providerLabel} refused the request for this model.`;
+        case LlmErrorCategory.CONFIG_INVALID:
+            return `The base URL of this model${providerLabel} resolves to a private or reserved address, so the call was not sent. Point it at a public provider endpoint.`;
         default:
             return `Unexpected error while running the code review${providerLabel}.`;
     }

@@ -168,6 +168,7 @@ function mount(
         ultraInUse?: boolean;
         deepScan?: boolean;
         kodyRuntime?: boolean;
+        ultraReview?: boolean;
     } = {},
 ) {
     const client = new QueryClient({
@@ -181,6 +182,7 @@ function mount(
                     featureFlags={{
                         deepScan: props.deepScan,
                         kodyRuntime: props.kodyRuntime,
+                        ultraReview: props.ultraReview ?? true,
                     }}>
                     <TooltipProvider>
                         <Harness {...props} />

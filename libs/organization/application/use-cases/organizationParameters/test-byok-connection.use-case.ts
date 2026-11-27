@@ -3,6 +3,7 @@ import {
     describeProtocolMismatch,
     suggestApiVersion,
 } from '@libs/llm/base-url-hygiene';
+import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { REGISTRY } from '@libs/llm/providers';
@@ -12,6 +13,15 @@ import {
     describeUnreachedKeys,
 } from '@libs/llm/override-reachability';
 import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
+import {
+    addressRefusal,
+    ALLOWED_PRIVATE_HOSTS_ENV,
+    ipLiteral,
+    isAllowedPrivateHostName,
+    isMetadataAddress,
+    urlPort,
+} from '@libs/llm/gateway-address-guard';
+import { environment } from '@libs/ee/configs/environment';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
@@ -22,7 +32,12 @@ import {
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Injectable, Optional, Inject } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    Optional,
+    Inject,
+} from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { lookup } from 'dns/promises';
 
@@ -51,9 +66,14 @@ function assertSafeRegion(region: string): void {
  *     authenticated caller from probing internal infra, the cloud
  *     metadata service (169.254.169.254), or localhost services.
  *
- * There is a small TOCTOU window between the lookup and the actual
- * axios.get — acceptable for a one-shot test probe that doesn't leak
- * response bodies back to the user.
+ * This vouches only for what the host resolves to NOW. A review call re-checks
+ * the address when it connects (`gatewayGuardedFetch`, applied in
+ * `buildModelFromSlot`), so a host whose answer changes later is refused then.
+ *
+ * A self-hosted operator can allow its private gateways
+ * (`API_ALLOWED_PRIVATE_HOSTS`, #2381); a host it names may also be
+ * reached over plain http, since a gateway inside the network rarely has a
+ * certificate. Metadata and link-local addresses stay refused regardless.
  */
 export async function assertSafeOpenAICompatibleUrl(
     rawUrl: string,
@@ -64,7 +84,11 @@ export async function assertSafeOpenAICompatibleUrl(
     } catch {
         throw new BadRequestException('baseURL is not a valid URL.');
     }
-    if (parsed.protocol !== 'https:') {
+    const port = urlPort(parsed);
+    const operatorNamedHost =
+        parsed.protocol === 'http:' &&
+        isAllowedPrivateHostName(parsed.hostname, port);
+    if (parsed.protocol !== 'https:' && !operatorNamedHost) {
         throw new BadRequestException(
             'baseURL must use https:// for security.',
         );
@@ -81,41 +105,36 @@ export async function assertSafeOpenAICompatibleUrl(
     if (hygiene) {
         throw new BadRequestException(hygiene);
     }
+    // An IP literal is the address itself; a bracketed IPv6 one is not a name
+    // the resolver knows, so it is judged as written instead of looked up.
+    const literal = ipLiteral(parsed.hostname);
     let addresses: Array<{ address: string; family: number }>;
     try {
-        addresses = await lookup(parsed.hostname, { all: true });
+        addresses = literal
+            ? [{ address: literal, family: literal.includes(':') ? 6 : 4 }]
+            : await lookup(parsed.hostname, { all: true });
     } catch {
         throw new BadRequestException(
             `Couldn't resolve host "${parsed.hostname}". Check the base URL.`,
         );
     }
+    const refuses = addressRefusal(parsed.hostname, port);
     for (const { address } of addresses) {
-        if (isPrivateOrReservedIp(address)) {
+        if (refuses(address)) {
             throw new BadRequestException(
-                `baseURL resolves to a private or reserved address (${address}). Point it at a public provider endpoint.`,
+                // The address is named only when the org typed it: what a
+                // name resolved to on the platform's network stays there.
+                `baseURL resolves to a private or reserved address${literal ? ` (${address})` : ''}. Point it at a public provider endpoint.${allowanceHint(address)}`,
             );
         }
     }
 }
 
-function isPrivateOrReservedIp(ip: string): boolean {
-    // IPv4
-    if (ip === '0.0.0.0' || ip.startsWith('127.')) return true; // loopback / unspecified
-    if (ip.startsWith('10.')) return true; // RFC1918
-    if (ip.startsWith('192.168.')) return true; // RFC1918
-    if (ip.startsWith('169.254.')) return true; // link-local (incl. cloud metadata)
-    if (ip.startsWith('100.64.')) return true; // CGNAT
-    const m172 = ip.match(/^172\.(\d+)\./);
-    if (m172) {
-        const n = parseInt(m172[1], 10);
-        if (n >= 16 && n <= 31) return true; // RFC1918
-    }
-    // IPv6
-    const lower = ip.toLowerCase();
-    if (lower === '::1' || lower === '::') return true;
-    if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true; // fc00::/7 ULA
-    if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true; // fe80::/10 link-local
-    return false;
+/** On a self-hosted install, where the gateway may live on the private
+ *  network, say who can allow it. Cloud has no such setting to point at. */
+function allowanceHint(address: string): string {
+    if (environment.API_CLOUD_MODE || isMetadataAddress(address)) return '';
+    return ` On a self-hosted install, the operator can allow a private gateway with ${ALLOWED_PRIVATE_HOSTS_ENV}.`;
 }
 
 /** A 404 whose message says the requested MODEL is missing (OpenAI's
@@ -157,7 +176,7 @@ export function notFoundAdvice(providerMessage: string | undefined): string {
         said.includes('allowed providers') ||
         (said.includes('no allowed') && said.includes('provider'))
     ) {
-        return "Your provider account allows no upstream that serves this model, so the request has nowhere to route. Allow one of the providers the model is served by, or choose a model your current ones serve — this is a routing setting on the provider account, not a problem with the key.";
+        return 'Your provider account allows no upstream that serves this model, so the request has nowhere to route. Allow one of the providers the model is served by, or choose a model your current ones serve — this is a routing setting on the provider account, not a problem with the key.';
     }
 
     if (said.trim()) {
@@ -275,11 +294,14 @@ export class TestByokConnectionUseCase {
                 !(await this.kodusGate?.isEnabledFor(organizationId))
             ) {
                 this.logger.warn({
-                    message: 'Refused to probe the Kodus provider: org outside the private alpha',
+                    message:
+                        'Refused to probe the Kodus provider: org outside the private alpha',
                     context: TestByokConnectionUseCase.name,
                     metadata: { organizationId, provider: input?.provider },
                 });
-                throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
+                throw new BadRequestException(
+                    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+                );
             }
             const result = await this.runTest(input);
             this.logTestOutcome(input, result);
@@ -288,7 +310,9 @@ export class TestByokConnectionUseCase {
             // rather than on each of the six success returns keeps the next one
             // honest by default — an unstamped pass would silently read as the
             // weaker catalog check on the screen.
-            return result.ok ? { verifiedBy: 'probe' as const, ...result } : result;
+            return result.ok
+                ? { verifiedBy: 'probe' as const, ...result }
+                : result;
         } catch (err) {
             this.logger.warn({
                 message: `${LLM_ERROR_TAG} BYOK connection test rejected: provider=${input?.provider} model=${input?.model ?? '(none)'} — ${(err as Error)?.message ?? 'invalid request'}`,
@@ -536,7 +560,8 @@ export class TestByokConnectionUseCase {
         return versioned
             ? {
                   ...result,
-                  message: `${result.message ?? ''} The base URL has no API version, and OpenAI-protocol gateways usually serve under /v1: try ${versioned}.`.trim(),
+                  message:
+                      `${result.message ?? ''} The base URL has no API version, and OpenAI-protocol gateways usually serve under /v1: try ${versioned}.`.trim(),
               }
             : result;
     }
@@ -657,6 +682,17 @@ export class TestByokConnectionUseCase {
                 latencyMs: Date.now() - start,
                 message:
                     "The service account key isn't valid JSON (or base64-encoded JSON). Paste the contents of your service account JSON file.",
+            };
+        }
+
+        try {
+            assertVertexServiceAccountKey(JSON.stringify(credentials));
+        } catch (error) {
+            return {
+                ok: false,
+                code: 'bad_request',
+                latencyMs: Date.now() - start,
+                message: (error as Error).message,
             };
         }
 

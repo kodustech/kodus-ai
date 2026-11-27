@@ -24,6 +24,7 @@ import {
     Timezone,
 } from "@services/parameters/types";
 import { Controller, useForm, useWatch } from "react-hook-form";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { z } from "zod";
@@ -101,6 +102,7 @@ export const GeneralOrganizationSettingsPage = (props: {
     fixedEgressIpLoadFailed?: boolean;
 }) => {
     const router = useRouter();
+    const ultraEnabled = useFeatureFlags().ultraReview === true;
     const userDomain = props.email.split("@")[1];
 
     const form = useForm<SettingsFormData>({
@@ -341,7 +343,12 @@ export const GeneralOrganizationSettingsPage = (props: {
                         {(
                             [
                                 ["heavyBlocked", "Heavy", "--heavy"],
-                                ["ultraBlocked", "Ultra", "--ultra"],
+                                // In alpha: outside it, Ultra has no command.
+                                ...(ultraEnabled
+                                    ? ([
+                                          ["ultraBlocked", "Ultra", "--ultra"],
+                                      ] as const)
+                                    : []),
                             ] as const
                         ).map(([key, mode, flag]) => (
                             <Controller

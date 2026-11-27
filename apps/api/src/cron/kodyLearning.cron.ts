@@ -138,6 +138,7 @@ export class KodyLearningCronProvider {
                         message: 'Platform configs not found',
                         context: KodyLearningCronProvider.name,
                         metadata: {
+                            organizationId,
                             teamId,
                             timestamp: new Date().toISOString(),
                         },
@@ -206,6 +207,7 @@ export class KodyLearningCronProvider {
                                 'Kody learning stuck and exhausted retries — giving up',
                             context: KodyLearningCronProvider.name,
                             metadata: {
+                                organizationId,
                                 teamId,
                                 kodyLearningStatus,
                                 stuckRetries:

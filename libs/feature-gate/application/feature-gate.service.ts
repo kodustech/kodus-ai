@@ -14,7 +14,10 @@ import {
     evaluateCatalogGate,
     isBetaFeaturesEnabled,
 } from '../domain/decision';
-import { FEATURE_KEYS, type FeatureKey } from '../domain/feature-keys';
+import {
+    isReleaseTrackOnlyFeature,
+    type FeatureKey,
+} from '../domain/feature-keys';
 import type { ReleaseTrack } from '../domain/release-track';
 import type { FeaturesSnapshot } from '../domain/snapshot.types';
 import { loadSnapshot } from '../infrastructure/feature-snapshot.loader';
@@ -75,12 +78,12 @@ export class FeatureGateService implements IFeatureGateService {
     ): Promise<boolean> {
         const entry = this.snapshot.features[feature];
         const audience = environment.API_CLOUD_MODE ? 'cloud' : 'self-hosted';
-        const releaseTrackBeta = feature === FEATURE_KEYS.conditionalPrApproval;
+        const releaseTrackOnly = isReleaseTrackOnlyFeature(feature);
         const decision = evaluateCatalogGate({
             entry,
             audience,
             track:
-                entry?.stage === 'beta' && !releaseTrackBeta
+                entry?.stage === 'beta' && !releaseTrackOnly
                     ? 'beta'
                     : ctx.releaseTrack,
             // Self-hosted beta stays behind BETA_FEATURES whatever the
@@ -103,7 +106,7 @@ export class FeatureGateService implements IFeatureGateService {
 
         // Beta is controlled by the release track in the catalog. PostHog
         // remains available for private alpha and legacy rollout flags.
-        if (entry?.stage === 'beta' && releaseTrackBeta) return true;
+        if (entry && releaseTrackOnly) return true;
 
         const evaluationContext: FeatureEvaluationContext | undefined =
             ctx.groups ? { groups: ctx.groups } : undefined;

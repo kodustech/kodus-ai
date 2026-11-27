@@ -1,12 +1,40 @@
+import { registerMemoryGauge } from '@libs/core/infrastructure/memory/memory-gauges';
 import { createLogger } from '@libs/core/log/logger';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable } from '@nestjs/common';
 import { Cache } from 'cache-manager';
 
+/**
+ * What the in-process cache holds: entries, the characters of their values
+ * (JSON strings) and how many already expired. The store is a plain Map
+ * that drops an expired entry only when it is read again, so `expired`
+ * counts memory nothing will free. Reads the first store only, which is the
+ * one GlobalCacheModule configures.
+ */
+export function cacheFootprint(cache: Cache): Record<string, number> {
+    const map = (cache as any)?.stores?.[0]?.store;
+    if (!(map instanceof Map)) return { entries: -1 };
+    const now = Date.now();
+    let chars = 0;
+    let expired = 0;
+    for (const v of map.values()) {
+        const value = v?.value ?? v;
+        if (typeof value === 'string') chars += value.length;
+        if (typeof v?.expires === 'number' && v.expires < now) expired++;
+    }
+    return {
+        entries: map.size,
+        expired,
+        valueMb: Math.round((chars / 1024 / 1024) * 10) / 10,
+    };
+}
+
 @Injectable()
 export class CacheService {
     private readonly logger = createLogger(CacheService.name);
-    constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
+    constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {
+        registerMemoryGauge('cache', () => cacheFootprint(this.cacheManager));
+    }
 
     async addToCache<T>(
         key: string | number,

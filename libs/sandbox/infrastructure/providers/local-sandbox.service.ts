@@ -3,6 +3,7 @@ import {
     type RepositoryGrepOptions,
 } from '@libs/common/utils/repository-grep';
 import { buildGitAuthHeader } from './git-auth-header';
+import { withJudgedGitRedirects } from '@libs/llm/gateway-address-guard';
 import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
@@ -210,29 +211,46 @@ export class LocalSandboxService implements ISandboxProvider {
             );
 
             // Pass auth header via env vars instead of -c args
-            // to keep the token out of ps/proc/cmdline
-            const fetchEnv: Record<string, string> = sandboxEnv() as any;
-            if (authToken) {
-                fetchEnv.GIT_CONFIG_COUNT = '1';
-                fetchEnv.GIT_CONFIG_KEY_0 = 'http.extraHeader';
-                fetchEnv.GIT_CONFIG_VALUE_0 = authHeader;
-            }
+            // to keep the token out of ps/proc/cmdline.
+            // The git host can be the org's (a self-managed server): resolved
+            // and judged, then pinned, so git dials the address that was
+            // judged; a redirect is followed with every hop judged and the
+            // fetch runs again where it led, with the auth header only when
+            // that is the same origin (gateway-address-guard.ts).
+            const envFor = (gitConfig: Array<[string, string]>) => {
+                const env: Record<string, string> = sandboxEnv() as any;
+                if (gitConfig.length) {
+                    env.GIT_CONFIG_COUNT = String(gitConfig.length);
+                    gitConfig.forEach(([key, value], i) => {
+                        env[`GIT_CONFIG_KEY_${i}`] = key;
+                        env[`GIT_CONFIG_VALUE_${i}`] = value;
+                    });
+                }
+                return env;
+            };
 
-            await execFileAsync(
-                'git',
-                [
-                    '-C',
-                    tempDir,
-                    'fetch',
-                    '--depth=1',
-                    cloneUrl,
-                    `${refspec}:${localRef}`,
-                ],
-                {
-                    timeout: CLONE_TIMEOUT_MS,
-                    env: fetchEnv,
-                } as ExecFileOptions,
+            const fetched = await withJudgedGitRedirects(
+                cloneUrl,
+                authToken ? authHeader : undefined,
+                (url, pin) =>
+                    execFileAsync(
+                        'git',
+                        [
+                            '-C',
+                            tempDir,
+                            'fetch',
+                            '--depth=1',
+                            url,
+                            `${refspec}:${localRef}`,
+                        ],
+                        {
+                            timeout: CLONE_TIMEOUT_MS,
+                            env: envFor(pin),
+                        } as ExecFileOptions,
+                    ),
             );
+            const fetchUrl = fetched.url;
+            const fetchEnv = envFor(fetched.pin);
 
             await execFileAsync('git', ['-C', tempDir, 'checkout', localRef], {
                 timeout: CLONE_TIMEOUT_MS,
@@ -256,7 +274,7 @@ export class LocalSandboxService implements ISandboxProvider {
                             tempDir,
                             'fetch',
                             '--depth=1',
-                            cloneUrl,
+                            fetchUrl,
                             `refs/heads/${baseBranch}:${localBaseRef}`,
                         ],
                         {

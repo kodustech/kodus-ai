@@ -7,14 +7,15 @@ import { ByokAdvancedSettings } from "./advanced-settings";
 
 // The model reports it CAN reason (a thinking model like Kimi) so the toggle is
 // enabled — this is exactly the case the "Off doesn't persist" bug lived in.
+const mockCaps: { current: Record<string, unknown> } = {
+    current: {
+        supportsReasoning: true,
+        temperature: { kind: "adjustable" },
+        reasoningOptions: [],
+    },
+};
 jest.mock("@services/organizationParameters/hooks", () => ({
-    useModelCapabilities: () => ({
-        data: {
-            supportsReasoning: true,
-            temperature: { kind: "adjustable" },
-            reasoningOptions: [],
-        },
-    }),
+    useModelCapabilities: () => ({ data: mockCaps.current }),
 }));
 
 function Harness({ onValues }: { onValues: (v: any) => void }) {
@@ -53,5 +54,33 @@ describe("ByokAdvancedSettings — reasoning toggle persistence (regression)", (
         // 'none' so it persists and actually turns thinking off.
         expect(getValues().reasoningEffort).toBe("none");
         expect(getValues().reasoningEffort).not.toBeNull();
+    });
+});
+
+describe("ByokAdvancedSettings — a model with no reasoning level to set (#2036)", () => {
+    const withCaps = (caps: Record<string, unknown>) => {
+        mockCaps.current = {
+            temperature: { kind: "adjustable" },
+            reasoningOptions: [],
+            ...caps,
+        };
+        render(<Harness onValues={() => undefined} />);
+        const advanced = screen.queryByText("Advanced settings");
+        if (advanced) fireEvent.click(advanced);
+    };
+
+    it("says a model that always reasons does reason, not that it has none", () => {
+        withCaps({ supportsReasoning: false, reasoningAlwaysOn: true });
+        expect(screen.getByText(/always reasons/i)).toBeInTheDocument();
+        expect(
+            screen.queryByText(/doesn.t support reasoning/i),
+        ).not.toBeInTheDocument();
+    });
+
+    it("still says a model without reasoning has none", () => {
+        withCaps({ supportsReasoning: false });
+        expect(
+            screen.getByText(/doesn.t support reasoning/i),
+        ).toBeInTheDocument();
     });
 });

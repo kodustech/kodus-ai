@@ -1,5 +1,10 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import {
+    assertGitServerUrlAllowed,
+    gitServerRefusal,
+} from '../git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
+import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
@@ -188,6 +193,9 @@ export class BitbucketDataCenterService implements Omit<
             baseURL: `${baseURL}/rest/api/1.0`,
             headers,
             timeout: 30000,
+            // The host is the org's: the socket judges what it resolves to, and
+            // every redirect hop is judged again (gateway-address-guard.ts).
+            ...integrationRequestGuard(`${baseURL}/rest/api/1.0`, 'Git server'),
         });
     }
 
@@ -233,6 +241,7 @@ export class BitbucketDataCenterService implements Omit<
                 host,
                 authMode = AuthMode.TOKEN,
             } = params;
+            await assertGitServerUrlAllowed(host);
 
             if (!host) {
                 throw new BadRequestException(
@@ -301,8 +310,12 @@ export class BitbucketDataCenterService implements Omit<
                     host: params?.host,
                 },
             });
-            throw new BadRequestException(
-                'Error authenticating with Bitbucket Data Center.',
+            // A refused address is not a bad token: say which it was.
+            throw (
+                gitServerRefusal(err) ??
+                new BadRequestException(
+                    'Error authenticating with Bitbucket Data Center.',
+                )
             );
         }
     }

@@ -64,13 +64,11 @@ function snapshotWith(
     };
 }
 
-function fakePostHog(
-    impl?: (feature: string) => Promise<boolean>,
-): { isFeatureEnabled: jest.Mock } {
+function fakePostHog(impl?: (feature: string) => Promise<boolean>): {
+    isFeatureEnabled: jest.Mock;
+} {
     return {
-        isFeatureEnabled: jest.fn(
-            impl ?? (async () => true),
-        ),
+        isFeatureEnabled: jest.fn(impl ?? (async () => true)),
     };
 }
 
@@ -88,10 +86,13 @@ describe('FeatureGateService', () => {
         });
 
         it('enables beta by release track without consulting PostHog', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.conditionalPrApproval, {
-                stage: 'beta',
-                audience: ['cloud', 'self-hosted'],
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.conditionalPrApproval,
+                {
+                    stage: 'beta',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
             const posthog = fakePostHog(async () => false);
             const svc = new FeatureGateService(posthog as never);
 
@@ -104,10 +105,41 @@ describe('FeatureGateService', () => {
             expect(posthog.isFeatureEnabled).not.toHaveBeenCalled();
         });
 
+        it.each([
+            ['alpha', true],
+            ['beta', false],
+            ['stable', false],
+            [undefined, false],
+        ] as const)(
+            'Ultra review is decided by the release track alone, with no PostHog flag: track %s → %s',
+            async (releaseTrack, enabled) => {
+                mockedSnapshot.current = snapshotWith(
+                    FEATURE_KEYS.ultraReview,
+                    {
+                        stage: 'alpha',
+                        audience: ['cloud', 'self-hosted'],
+                    },
+                );
+                const posthog = fakePostHog(async () => false);
+                const svc = new FeatureGateService(posthog as never);
+
+                await expect(
+                    svc.isEnabled(FEATURE_KEYS.ultraReview, {
+                        ...orgCtx,
+                        releaseTrack,
+                    }),
+                ).resolves.toBe(enabled);
+                expect(posthog.isFeatureEnabled).not.toHaveBeenCalled();
+            },
+        );
+
         it('returns false for GA when PostHog says no', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'general-availability',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'general-availability',
+                },
+            );
             const posthog = fakePostHog(async () => false);
             const svc = new FeatureGateService(posthog as never);
 
@@ -117,9 +149,12 @@ describe('FeatureGateService', () => {
         });
 
         it('falls back to snapshot stage when PostHog throws (GA stays on)', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'general-availability',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'general-availability',
+                },
+            );
             const posthog = fakePostHog(async () => {
                 throw new Error('posthog down');
             });
@@ -131,9 +166,12 @@ describe('FeatureGateService', () => {
         });
 
         it('keeps beta enabled when PostHog is unavailable', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.conditionalPrApproval, {
-                stage: 'beta',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.conditionalPrApproval,
+                {
+                    stage: 'beta',
+                },
+            );
             const posthog = fakePostHog(async () => {
                 throw new Error('posthog down');
             });
@@ -156,9 +194,12 @@ describe('FeatureGateService', () => {
         });
 
         it('forwards a single group key to PostHog (rollout boundary)', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'alpha',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'alpha',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -177,9 +218,12 @@ describe('FeatureGateService', () => {
         });
 
         it('forwards multiple group keys together (one id per type)', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'alpha',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'alpha',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -206,9 +250,12 @@ describe('FeatureGateService', () => {
         });
 
         it('blocks stable-track orgs from beta features (track gate before flag)', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.conditionalPrApproval, {
-                stage: 'beta',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.conditionalPrApproval,
+                {
+                    stage: 'beta',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -222,9 +269,12 @@ describe('FeatureGateService', () => {
         });
 
         it('lets alpha-track orgs see beta features', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'beta',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'beta',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -237,9 +287,12 @@ describe('FeatureGateService', () => {
         });
 
         it('alpha-track orgs see alpha features', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'alpha',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'alpha',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -253,9 +306,12 @@ describe('FeatureGateService', () => {
         });
 
         it('beta-track orgs are blocked from alpha features', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'alpha',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'alpha',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -269,9 +325,12 @@ describe('FeatureGateService', () => {
         });
 
         it('alpha track still respects PostHog flag denial (operational tuning)', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'alpha',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'alpha',
+                },
+            );
             const posthog = fakePostHog(async () => false);
             const svc = new FeatureGateService(posthog as never);
 
@@ -284,9 +343,12 @@ describe('FeatureGateService', () => {
         });
 
         it('GA features ignore the track gate and always pass to PostHog', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'general-availability',
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'general-availability',
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -299,10 +361,13 @@ describe('FeatureGateService', () => {
         });
 
         it('blocks features whose audience excludes cloud', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'general-availability',
-                audience: ['self-hosted'],
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'general-availability',
+                    audience: ['self-hosted'],
+                },
+            );
             const posthog = fakePostHog(async () => true);
             const svc = new FeatureGateService(posthog as never);
 
@@ -336,10 +401,13 @@ describe('FeatureGateService', () => {
 
         it('returns true for beta features when BETA_FEATURES=true', async () => {
             process.env.BETA_FEATURES = 'true';
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'beta',
-                audience: ['cloud', 'self-hosted'],
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'beta',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
             const posthog = fakePostHog();
             const svc = new FeatureGateService(posthog as never);
 
@@ -349,10 +417,13 @@ describe('FeatureGateService', () => {
         });
 
         it('returns false for beta features when BETA_FEATURES is unset', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.conditionalPrApproval, {
-                stage: 'beta',
-                audience: ['cloud', 'self-hosted'],
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.conditionalPrApproval,
+                {
+                    stage: 'beta',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
             const posthog = fakePostHog();
             const svc = new FeatureGateService(posthog as never);
 
@@ -433,17 +504,23 @@ describe('FeatureGateService', () => {
                 else process.env.BETA_FEATURES = value;
 
                 await expect(
-                    svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
+                    svc.isEnabled(
+                        FEATURE_KEYS.githubEnterpriseServerPat,
+                        orgCtx,
+                    ),
                 ).resolves.toBe(expected);
             }
         });
 
         it('returns false for alpha features even with BETA_FEATURES=true', async () => {
             process.env.BETA_FEATURES = 'true';
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'alpha',
-                audience: ['cloud', 'self-hosted'],
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'alpha',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
             const posthog = fakePostHog();
             const svc = new FeatureGateService(posthog as never);
 
@@ -453,10 +530,13 @@ describe('FeatureGateService', () => {
         });
 
         it('returns false when audience excludes self-hosted', async () => {
-            mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {
-                stage: 'general-availability',
-                audience: ['cloud'],
-            });
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'general-availability',
+                    audience: ['cloud'],
+                },
+            );
             const posthog = fakePostHog();
             const svc = new FeatureGateService(posthog as never);
 

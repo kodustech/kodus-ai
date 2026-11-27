@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-11-17T23:09:24.727Z",
+    "generated_at": "2026-11-27T16:48:56.652Z",
     "source": "manual",
     "features": {
         "conditional-pr-approval": {
@@ -82,6 +82,15 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "name": "Kody Runtime",
             "stage": "alpha",
             "description": "Kody boots your app for a pull request, runs the changed entry points against the base and the head, and reports what it saw break on the PR instead of guessing from the diff.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "ultra-review": {
+            "name": "Ultra review",
+            "stage": "alpha",
+            "description": "Run the Heavy review on three of your own models and merge their comments into one review, for the pull requests where a second and third opinion are worth the extra model calls.",
             "audience": [
                 "cloud",
                 "self-hosted"

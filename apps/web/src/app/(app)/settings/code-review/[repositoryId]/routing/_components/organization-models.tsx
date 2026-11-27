@@ -51,6 +51,8 @@ export function OrganizationModels({
     canEdit: boolean;
 }) {
     const { pool, routing } = controller;
+    // In alpha: outside it, the Ultra models are not offered.
+    const ultraEnabled = useFeatureFlags().ultraReview === true;
     const single = pool.length === 1;
     const editable = canEdit && controller.canEdit;
     const defaultModel = pool.find(
@@ -260,14 +262,18 @@ export function OrganizationModels({
                                         )}
                                     </div>
                                 ))}
-                                <UltraModelsRow
-                                    pool={pool}
-                                    ultraModelIds={routing.ultraModelIds}
-                                    fallbackModelId={routing.fallbackModelId}
-                                    planAllowed={ultraAllowed}
-                                    editable={editable}
-                                    onSelect={controller.setUltraModel}
-                                />
+                                {ultraEnabled && (
+                                    <UltraModelsRow
+                                        pool={pool}
+                                        ultraModelIds={routing.ultraModelIds}
+                                        fallbackModelId={
+                                            routing.fallbackModelId
+                                        }
+                                        planAllowed={ultraAllowed}
+                                        editable={editable}
+                                        onSelect={controller.setUltraModel}
+                                    />
+                                )}
                             </div>
                             {single && (
                                 <p className="text-text-secondary mt-3 text-sm">

@@ -85,7 +85,7 @@ Each value in `~/.kodus-dev/config` can be either a plain value or a 1Password r
 # Example config mixing both:
 DIGITALOCEAN_TOKEN=op://Engineering/kodus-dev/do-token   # team ref
 SH_LICENSE_KEY=lic-paid-plain-value                      # plain
-API_OPEN_AI_API_KEY=op://Engineering/kodus-dev/openai-key # team ref
+API_LLM_API_KEY=op://Engineering/kodus-dev/openai-key     # team ref
 ```
 
 See [`op-references.md`](./op-references.md) for the team's standard paths and setup. The `op` CLI is auto-detected; if not installed, plain-value prompts are used.
@@ -155,8 +155,12 @@ Recommended: run `pnpm run selfhosted:setup`, which prompts for the fields below
 | `IMAGE_TAG` | `latest` | GHCR image tag for `provision`. Useful to test a specific RC (`selfhosted-X.Y.Z-rc.N`) |
 | `SH_LICENSE_KEY` | (none) | If set, stack boots with the license injected (paid features unlocked) |
 | `GH_DEV_TOKEN` | (none) | If set, auto-configures the GitHub integration after signup — dashboard ready to use |
-| `API_OPEN_AI_API_KEY` | (none) | OpenAI API key. **Required for Kodus to review PRs.** Without it, the dashboard shows a "No LLM provider configured" banner. Get one at https://platform.openai.com/api-keys. |
-| `API_OPENAI_FORCE_BASE_URL` | (none) | Optional. Override `api.openai.com` — set to e.g. `https://your-proxy/v1` for Azure OpenAI, OpenRouter, or local LLM proxies. |
+| `API_LLM_PROVIDER` | `openai_compatible` | Provider of the model, used as given: `openai`, `openai_compatible`, `anthropic`, `anthropic_compatible`, `google_gemini`, `google_vertex`. Gemini needs `google_gemini` (its OpenAI endpoint drops the thought signatures Gemini 3 tool calls require). |
+| `API_LLM_PROVIDER_MODEL` | `kimi-k2.6` | Model id the provider serves. |
+| `API_LLM_API_KEY` | (none) | Key for `API_LLM_PROVIDER`. **Required for Kodus to review PRs.** Without it, the dashboard shows a "No LLM provider configured" banner. |
+| `API_LLM_BASE_URL` | `https://api.moonshot.ai/v1` | Endpoint for `openai`, `openai_compatible`, `anthropic`, `anthropic_compatible` (required for the `_compatible` ones). Not used by the Google providers. |
+| `API_OPEN_AI_API_KEY` | (none) | OpenAI key for embeddings (always sent to `api.openai.com`). Configs written before `API_LLM_PROVIDER` also kept the LLM key here; they keep working, and re-running `selfhosted:setup` moves them to the vars above. |
+| `API_OPENAI_FORCE_BASE_URL` | (none) | Legacy LLM endpoint, still passed to the VM for old configs. `selfhosted:setup` moves it to `API_LLM_BASE_URL`. |
 | `DO_REGION` | `nyc3` | DigitalOcean region |
 | `DO_SIZE` | `s-2vcpu-4gb` | Droplet size (~$24/mo if left running) |
 

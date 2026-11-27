@@ -125,6 +125,37 @@ export interface ModelReasoningTraits {
      * user picked FOR its reasoning.
      */
     omittingDisablesReasoning?: boolean;
+    /**
+     * Reasons on every call, measured, where `thinksByDefault` stays
+     * conservative because no safe parameter is known (MiniMax M3.1: thinking
+     * blocks with the field omitted, `disabled` a hard 400, #2036). Read only by
+     * `alwaysReasons`; nothing sent on the wire depends on it. Absent ⇒ derived:
+     * thinks by default and exposes no disable.
+     */
+    alwaysReasons?: boolean;
+}
+
+/** The model reasons on every call, whatever is sent. */
+export function alwaysReasons(t: ModelReasoningTraits): boolean {
+    return t.alwaysReasons ?? (t.thinksByDefault && !t.canDisableThinking);
+}
+
+/**
+ * A slot that saves no level is still sent one (`defaultReasoningEffortFor`):
+ * the model thinks by default and omitting the parameter would not leave its
+ * own default in force.
+ */
+export function sendsDefaultReasoningLevel(t: ModelReasoningTraits): boolean {
+    return t.thinksByDefault && t.omittingDisablesReasoning !== false;
+}
+
+/**
+ * What `ModelCapabilities.reasoningAlwaysOn` reports on a transport that takes
+ * a level only when the slot's default sends one: the model reasons on every
+ * call and, with no level picked, none is sent.
+ */
+export function reasonsWithNoLevelSent(t: ModelReasoningTraits): boolean {
+    return alwaysReasons(t) && !sendsDefaultReasoningLevel(t);
 }
 
 /**
@@ -295,15 +326,23 @@ export function resolveCompatibleReasoningTraits(
     // of 37 Kody Rules shards for one org, zero tool calls), while the same
     // shard asked for JSON in plain text answered correctly. So no forced tool
     // for a structured call (the plan below becomes 'reroute-json'), and no
-    // `disabled` either — nothing shows M3 accepts it. `thinksByDefault` stays
-    // false: its answers carry <think> blocks, but no parameter is known that
-    // would be safe to send.
+    // `disabled` either. `thinksByDefault` stays false: no parameter is known
+    // that would be safe to send.
+    //
+    // The generations differ (#2036, measured on api.minimax.io/anthropic):
+    // `MiniMax-M3` answers with NO thinking blocks whether the field is omitted
+    // or `disabled`; `MiniMax-M3.1-Flash-Preview` returns thinking blocks with
+    // the field omitted and 400s on `disabled`. Only the 3.1 line reasons on
+    // every call (`alwaysReasons`); what is sent is the same for both.
     if (family === 'minimax' && /minimax[-_.]?m3/.test(m)) {
         return {
             thinksByDefault: false,
             canDisableThinking: false,
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: true,
+            ...(/minimax[-_.]?m3\.[1-9]/.test(m)
+                ? { alwaysReasons: true }
+                : {}),
         };
     }
 

@@ -1,4 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { assertGitServerUrlAllowed } from '../git-server-url.guard';
+import { integrationGuardedFetch } from '@libs/llm/gateway-address-guard';
 import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -403,10 +405,15 @@ export class GithubService
             }) as unknown as Octokit;
         }
 
+        // A GHES host is the org's: every connection to it is judged by what
+        // it resolves to then (gateway-address-guard.ts).
         return new this.enterpriseOctokit({
             auth: params.auth,
             ...(baseUrl && { baseUrl }),
-            request: { retries: params.retries ?? 0 },
+            request: {
+                retries: params.retries ?? 0,
+                fetch: integrationGuardedFetch(undefined, 'Git server'),
+            },
             ...(params.retry && { retry: params.retry }),
             throttle: throttleConfig,
         }) as unknown as Octokit;
@@ -970,6 +977,7 @@ export class GithubService
         try {
             const { token } = params;
             const normalizedHost = this.normalizeGithubHost(params.host);
+            await assertGitServerUrlAllowed(normalizedHost);
             const userOctokit = this.createUserOctokitClient({
                 auth: token,
                 host: normalizedHost,
@@ -4320,7 +4328,15 @@ export class GithubService
                 );
 
                 const graphqlClient = graphql.defaults({
-                    ...(graphQlBaseUrl && { baseUrl: graphQlBaseUrl }),
+                    ...(graphQlBaseUrl && {
+                        baseUrl: graphQlBaseUrl,
+                        request: {
+                            fetch: integrationGuardedFetch(
+                                undefined,
+                                'Git server',
+                            ),
+                        },
+                    }),
                     headers: {
                         authorization: `token ${decryptedPAT}`,
                     },

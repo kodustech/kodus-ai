@@ -9,6 +9,7 @@ export {
     FEATURE_KEYS,
     ALL_FEATURE_KEYS,
     isFeatureKey,
+    isReleaseTrackOnlyFeature,
 } from './domain/feature-keys';
 export type { FeatureKey } from './domain/feature-keys';
 export type {

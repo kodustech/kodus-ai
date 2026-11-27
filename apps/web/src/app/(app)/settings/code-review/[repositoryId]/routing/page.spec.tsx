@@ -19,6 +19,7 @@ import { ReviewRoutingSummary } from "../general/_components/review-routing-summ
 import RoutingPage from "./page";
 
 let mockRepo = "global";
+let mockUltraReview = true;
 let mockTeam: string | undefined = "team";
 let mockDirectory: string | undefined;
 let mockCanEdit = true;
@@ -135,6 +136,7 @@ jest.mock("src/app/(app)/settings/_components/context", () => ({
     useFeatureFlags: () => ({
         deepScan: false,
         kodyRuntime: mockRuntimeReleased,
+        ultraReview: mockUltraReview,
     }),
     useCodeReviewModelData: () => ({
         llmConfigStatus: mockStatus,
@@ -238,6 +240,7 @@ beforeEach(() => {
     mockToast.mockClear();
     mockTeam = "team";
     mockRepo = "global";
+    mockUltraReview = true;
     mockDirectory = undefined;
     mockCanEdit = true;
     mockRuntimeReleased = false;
@@ -895,6 +898,25 @@ describe("Ultra review mode", () => {
         expect(
             screen.getByRole("option", { name: /Ultra · set up 3 models/ }),
         ).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("outside its alpha, Ultra is not offered: no mode option, no models row, no --ultra", async () => {
+        mockUltraReview = false;
+        mockStatus.modelRouting.ultraModelIds = ["c", "a", "b"];
+        mount(false);
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "All PRs" }), {
+            key: "Enter",
+        });
+        expect(
+            screen.getByRole("option", { name: "Heavy" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("option", { name: /Ultra/ }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("combobox", { name: "Ultra Model 1" }),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText("--ultra")).not.toBeInTheDocument();
     });
 
     it("saves Ultra and names the three models it runs on", async () => {

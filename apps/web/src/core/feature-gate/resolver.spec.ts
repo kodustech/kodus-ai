@@ -130,6 +130,26 @@ describe("isFeatureEnabled (web resolver)", () => {
         expect(isFeatureEnabledMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+        ["alpha", true],
+        ["beta", false],
+    ] as const)(
+        "decides Ultra review by the release track alone, without PostHog: track %s → %s",
+        async (releaseTrack, enabled) => {
+            featureMock.current = { ...baseFeature, stage: "alpha" };
+            isFeatureEnabledMock.mockResolvedValue(false);
+
+            expect(
+                await isFeatureEnabled({
+                    feature: "ultra-review",
+                    releaseTrack,
+                }),
+            ).toBe(enabled);
+            expect(authMock).not.toHaveBeenCalled();
+            expect(isFeatureEnabledMock).not.toHaveBeenCalled();
+        },
+    );
+
     it("keeps PostHog rollout for other cloud beta features", async () => {
         featureMock.current = { ...baseFeature, stage: "beta" };
         authMock.mockResolvedValue({

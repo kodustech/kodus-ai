@@ -28,6 +28,8 @@ function buildUseCase(
         teamConfigs?: unknown[];
         /** Each team's status; active when absent. */
         teamStatuses?: string[];
+        /** On the Ultra review alpha; on unless a test says otherwise. */
+        ultraEnabled?: boolean;
     } = {},
 ) {
     const persisted: { value?: any } = {};
@@ -80,6 +82,9 @@ function buildUseCase(
         kodusGate as any,
         parametersService as any,
         teamService as any,
+        {
+            isEnabledFor: jest.fn(async () => options.ultraEnabled ?? true),
+        } as any,
     );
 
     return {
@@ -1208,6 +1213,28 @@ describe('the Ultra trio while a review mode is Ultra', () => {
             } as any,
         });
 
+    it('outside the Ultra alpha, refuses picking Ultra models, but saves clearing them or an unrelated edit', async () => {
+        const fresh = buildUseCase(withTrio(), { ultraEnabled: false });
+        await expect(
+            saveByok(fresh.useCase, withTrio(['a', 'b', 'c'])),
+        ).rejects.toThrow(
+            'Ultra review is not available for this organization yet',
+        );
+        expect(fresh.createOrUpdateConfig).not.toHaveBeenCalled();
+
+        const kept = buildUseCase(withTrio(['a', 'b', 'c']), {
+            ultraEnabled: false,
+        });
+        await saveByok(kept.useCase, withTrio(['c', 'b', 'a']));
+        expect(kept.persisted.value).toBeDefined();
+
+        const cleared = buildUseCase(withTrio(['a', 'b', 'c']), {
+            ultraEnabled: false,
+        });
+        await saveByok(cleared.useCase, withTrio());
+        expect(cleared.persisted.value.routing?.ultraModelIds).toBeUndefined();
+    });
+
     it('refuses clearing it while a scope of any team runs Ultra, naming the scopes', async () => {
         const { useCase, createOrUpdateConfig } = buildUseCase(
             withTrio(['a', 'b', 'c']),
@@ -1279,5 +1306,156 @@ describe('the Ultra trio while a review mode is Ultra', () => {
         );
         await saveByok(useCase, withTrio(['c', 'b', 'a']));
         expect(teamService.find).not.toHaveBeenCalled();
+    });
+});
+
+// Review on #2709 (sartorijr92, round 2): the Bedrock host is built from the
+// region the org types (`bedrock-runtime.<region>.amazonaws.com`), so a
+// "region" that is a host and a path is refused before it is saved.
+describe('CreateOrUpdateOrganizationParametersUseCase — Bedrock region', () => {
+    const bedrock = (awsRegion: string) =>
+        v2({
+            credentials: [
+                {
+                    id: 'cred-bedrock',
+                    provider: 'amazon_bedrock',
+                    apiKey: '',
+                    settings: { awsRegion, awsBearerToken: 'ABSK-test' },
+                } as any,
+            ],
+            models: [
+                {
+                    id: 'model-a',
+                    credentialId: 'cred-bedrock',
+                    model: 'anthropic.claude-sonnet-4-5',
+                },
+            ],
+        });
+
+    it.each(['localhost:8080/#', 'x.attacker.test/#', 'us-east-1.evil.test'])(
+        'refuses %s',
+        async (region) => {
+            const { useCase, createOrUpdateConfig } = buildUseCase();
+            await expect(
+                saveByok(useCase, bedrock(region)),
+            ).rejects.toHaveProperty(
+                'message',
+                'The AWS region of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.',
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['us-east-1', 'eu-central-2', 'us-gov-west-1', ' ap-southeast-1 '])(
+        'accepts %s',
+        async (region) => {
+            const { useCase, createOrUpdateConfig } = buildUseCase();
+            await saveByok(useCase, bedrock(region));
+            expect(createOrUpdateConfig).toHaveBeenCalledTimes(1);
+        },
+    );
+});
+
+describe('CreateOrUpdateOrganizationParametersUseCase — Vertex key type', () => {
+    const vertex = (key: object) =>
+        v2({
+            credentials: [
+                {
+                    id: 'cred-vertex',
+                    provider: 'google_vertex',
+                    apiKey: Buffer.from(JSON.stringify(key)).toString('base64'),
+                } as any,
+            ],
+            models: [
+                {
+                    id: 'model-a',
+                    credentialId: 'cred-vertex',
+                    model: 'gemini-3.5-flash',
+                },
+            ],
+        });
+
+    it('refuses an external_account key', async () => {
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await expect(
+            saveByok(
+                useCase,
+                vertex({
+                    type: 'external_account',
+                    project_id: 'proj-test-123',
+                    token_url: 'https://collector.example.test/sts',
+                    credential_source: { url: 'http://169.254.169.254/x' },
+                }),
+            ),
+        ).rejects.toHaveProperty(
+            'message',
+            'The Vertex key is not a service account key (type "service_account"), so the call was not sent.',
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('saves a service account key', async () => {
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await saveByok(
+            useCase,
+            vertex({ type: 'service_account', project_id: 'proj-test-123' }),
+        );
+        expect(createOrUpdateConfig).toHaveBeenCalledTimes(1);
+    });
+});
+
+// Review on #2709 (sartorijr92, round 3): @ai-sdk/google-vertex builds the host
+// from the location (`https://<location>-aiplatform.googleapis.com`), so a
+// "location" that is a host and a path is refused before it is saved.
+describe('CreateOrUpdateOrganizationParametersUseCase — Vertex location', () => {
+    const vertexAt = (vertexLocation: string) =>
+        v2({
+            credentials: [
+                {
+                    id: 'cred-vertex',
+                    provider: 'google_vertex',
+                    apiKey: Buffer.from(
+                        JSON.stringify({
+                            type: 'service_account',
+                            project_id: 'proj-test-123',
+                        }),
+                    ).toString('base64'),
+                    settings: { vertexLocation },
+                } as any,
+            ],
+            models: [
+                {
+                    id: 'model-a',
+                    credentialId: 'cred-vertex',
+                    model: 'gemini-3.5-flash',
+                },
+            ],
+        });
+
+    it.each(['x.attacker.test/#', 'localhost:8443/#', 'us-central1.evil'])(
+        'refuses %s',
+        async (location) => {
+            const { useCase, createOrUpdateConfig } = buildUseCase();
+            await expect(
+                saveByok(useCase, vertexAt(location)),
+            ).rejects.toHaveProperty(
+                'message',
+                'The location of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.',
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        'global',
+        'us',
+        'eu',
+        'us-central1',
+        'europe-west4',
+        ' northamerica-northeast1 ',
+    ])('accepts %s', async (location) => {
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await saveByok(useCase, vertexAt(location));
+        expect(createOrUpdateConfig).toHaveBeenCalledTimes(1);
     });
 });

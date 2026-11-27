@@ -26,6 +26,8 @@ import type {
 } from '../kernel/types';
 import {
     NON_REASONING_TRAITS,
+    alwaysReasons,
+    resolveCompatibleReasoningTraits,
     type ModelReasoningTraits,
     type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
@@ -84,8 +86,15 @@ export const bedrockModule: ProviderModule = {
         const reasoningConfig = isAnthropicModel(model)
             ? reasoningConfigForModel(model)
             : undefined;
+        // Nothing is sent for a non-Anthropic id here, so a family that reasons
+        // on every call (Kimi k3, MiniMax M2) runs at its own level: say so
+        // rather than "without a thinking budget".
+        const alwaysOn =
+            !isAnthropicModel(model) &&
+            alwaysReasons(resolveCompatibleReasoningTraits(model));
         return {
             supportsReasoning: !!reasoningConfig,
+            ...(alwaysOn ? { reasoningAlwaysOn: true } : {}),
             reasoningConfig,
             structuredOutput: 'none',
             toolCalling: 'native',

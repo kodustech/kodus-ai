@@ -140,19 +140,21 @@ function ModeRow({
                                                 ? " · Teams/Enterprise"
                                                 : ""}
                                         </SelectItem>
-                                        <SelectItem
-                                            value="ultra"
-                                            disabled={
-                                                !routing.ultraAllowed ||
-                                                !routing.ultraSet
-                                            }>
-                                            Ultra
-                                            {!routing.ultraAllowed
-                                                ? " · Teams/Enterprise"
-                                                : !routing.ultraSet
-                                                  ? " · set up 3 models"
-                                                  : ""}
-                                        </SelectItem>
+                                        {routing.ultraEnabled && (
+                                            <SelectItem
+                                                value="ultra"
+                                                disabled={
+                                                    !routing.ultraAllowed ||
+                                                    !routing.ultraSet
+                                                }>
+                                                Ultra
+                                                {!routing.ultraAllowed
+                                                    ? " · Teams/Enterprise"
+                                                    : !routing.ultraSet
+                                                      ? " · set up 3 models"
+                                                      : ""}
+                                            </SelectItem>
+                                        )}
                                     </SelectContent>
                                 </Select>
                                 <p className="text-text-secondary text-sm break-words">
@@ -166,12 +168,15 @@ function ModeRow({
                                         </p>
                                     )}
                                 {(field.value ?? fallback) === "ultra" &&
-                                    (!routing.ultraAllowed ||
+                                    (!routing.ultraEnabled ||
+                                        !routing.ultraAllowed ||
                                         !routing.ultraSet) && (
                                         <p className="text-warning text-xs">
-                                            {!routing.ultraAllowed
-                                                ? "Ultra requires Teams or Enterprise, or a trial with three of your own models."
-                                                : "Ultra needs three different models under Models."}{" "}
+                                            {!routing.ultraEnabled
+                                                ? "Ultra review is not available for this organization yet."
+                                                : !routing.ultraAllowed
+                                                  ? "Ultra requires Teams or Enterprise, or a trial with three of your own models."
+                                                  : "Ultra needs three different models under Models."}{" "}
                                             Reviews in this mode do not run
                                             until then.
                                         </p>
@@ -740,9 +745,20 @@ function RoutingSettings() {
                                 Manual commands
                             </summary>
                             <p className="text-text-secondary mt-3 leading-6">
-                                An explicit <code>--heavy</code>,{" "}
-                                <code>--balanced</code> or <code>--ultra</code>{" "}
-                                command takes priority.
+                                {routing.ultraEnabled ? (
+                                    <>
+                                        An explicit <code>--heavy</code>,{" "}
+                                        <code>--balanced</code> or{" "}
+                                        <code>--ultra</code> command takes
+                                        priority.
+                                    </>
+                                ) : (
+                                    <>
+                                        An explicit <code>--heavy</code> or{" "}
+                                        <code>--balanced</code> command takes
+                                        priority.
+                                    </>
+                                )}
                             </p>
                         </details>
                     </CardContent>

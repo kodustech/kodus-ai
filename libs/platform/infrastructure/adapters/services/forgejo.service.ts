@@ -1,4 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { assertGitServerUrlAllowed } from './git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -277,6 +279,12 @@ export class ForgejoService implements Omit<
             headers: {
                 Authorization: `token ${token}`,
             },
+            // The host is the org's: the socket judges what it resolves to,
+            // and every redirect hop is judged again (gateway-address-guard.ts).
+            ...integrationRequestGuard(
+                `${authDetail.host}/api/v1`,
+                'Git server',
+            ),
         });
     }
 
@@ -1122,6 +1130,7 @@ export class ForgejoService implements Omit<
             if (!token) throw new Error('Forgejo access token is required');
 
             const normalizedHost = host.replace(/\/+$/, '');
+            await assertGitServerUrlAllowed(normalizedHost);
 
             const authDetails: ForgejoAuthDetail = {
                 accessToken: encrypt(token),

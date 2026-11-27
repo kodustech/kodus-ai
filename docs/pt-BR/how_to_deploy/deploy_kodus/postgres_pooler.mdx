@@ -9,6 +9,13 @@ PgBouncer, nos modos de pool **session ou transaction**. O CI roda os locks de
 coordenação da Kodus e a ponte de eventos entre api e worker através do
 PgBouncer 1.26 em modo transaction a cada mudança.
 
+<Warning>
+Requer uma release self-hosted da Kodus posterior à 2.2.12. A 2.2.12 e as
+anteriores ignoram a conexão direta, então migrations, LISTEN e os locks de
+coordenação passam pelo pooler e quebram em modo transaction. Confira o
+`IMAGE_TAG` (Docker Compose) ou o `imageTag` (Helm) antes de ligar o pooler.
+</Warning>
+
 Esta página cobre o que configurar no pooler, as duas conexões que a Kodus usa
 e como conferir o resultado.
 
@@ -89,8 +96,10 @@ as configurações acima por você.
 Configurar a conexão direta também muda os locks de coordenação da Kodus de
 locks de sessão para linhas no banco. Pods que ainda rodam sem ela não
 enxergam os novos locks, então ligue o pooler com os pods antigos parados:
-rode `docker compose down` antes, ou escale os Deployments de api, worker e
-webhooks para 0 antes do `helm upgrade`.
+rode `docker compose down` antes, ou escale os Deployments de api, worker,
+worker-analytics e webhooks para 0 antes do `helm upgrade` e de volta depois
+dele (para `autoscaling.minReplicas`, 2 por padrão): o HPA não sobe um
+Deployment que está em 0.
 
 ### Docker Compose
 
@@ -216,9 +225,10 @@ primary. Todos os componentes da Kodus escrevem, então réplicas de leitura nã
 são usadas.
 
 Durante um failover, as queries em andamento falham e os pools reconectam na
-próxima requisição. Atrás de um pooler, os locks de coordenação são linhas no
-banco, então sobrevivem ao failover junto com os dados; sem pooler são locks
-de sessão, liberados quando caem as sessões com o primário antigo.
+próxima requisição. Com a conexão direta configurada, os locks de coordenação
+são linhas no banco, então sobrevivem ao failover junto com os dados; sem ela
+(sem pooler, ou com um pooler em modo session) são locks de sessão, liberados
+quando caem as sessões com o primário antigo.
 
 ## Confira a configuração
 
