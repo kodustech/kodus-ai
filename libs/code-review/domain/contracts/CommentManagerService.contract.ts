@@ -98,6 +98,8 @@ export interface ICommentManagerService {
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         singleAgentRun?: boolean,
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string,
         extraLine?: string,
     ): Promise<void>;
 
@@ -179,6 +181,8 @@ export interface ICommentManagerService {
         reviewErrorCustomMessage?: string,
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string,
         extraLine?: string,
     ): Promise<void>;
 }

@@ -190,7 +190,7 @@ describe('ForgejoChecksService', () => {
             );
         });
 
-        it('should repost with warning state for neutral conclusion', async () => {
+        it('posts a partial review as success so a required check still passes', async () => {
             const result = await service.updateCheckRun({
                 organizationAndTeamData: mockOrganizationAndTeamData,
                 repository: mockRepository,
@@ -203,7 +203,7 @@ describe('ForgejoChecksService', () => {
             expect(mockRepoCreateStatus).toHaveBeenCalledWith(
                 expect.objectContaining({
                     body: expect.objectContaining({
-                        state: 'warning',
+                        state: 'success',
                         description: 'Code Review Completed with Warnings',
                     }),
                 }),

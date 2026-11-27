@@ -21,8 +21,9 @@ import { ForgejoService } from '../forgejo.service';
  * GitHub Checks API comparison:
  * - `name` (per-stage, shows in CI list) → `context` (fixed label)
  * - `output.title` / `output.summary` → `description`
- * - `status: in_progress/completed` → `state: pending/success/failure/warning`
- * - `conclusion: success/failure/neutral` → `state: success/failure/warning`
+ * - `status: in_progress/completed` → `state: pending/success`
+ * - `conclusion: success/failure` → `state: success/failure`
+ * - `conclusion: neutral/skipped` → `state: success` (a `warning` fails a required check)
  */
 const COMMIT_STATUS_CONTEXT = 'Kodus Code Review';
 
@@ -34,7 +35,10 @@ const statusStateMap: Record<CheckStatus, string> = {
 const conclusionStateMap: Record<CheckConclusion, string> = {
     [CheckConclusion.SUCCESS]: 'success',
     [CheckConclusion.FAILURE]: 'failure',
-    [CheckConclusion.NEUTRAL]: 'warning',
+    // Forgejo's `warning` fails a required status. GitHub's `neutral` does
+    // not, so a partial review is posted as `success` and the description
+    // still says the review completed with warnings.
+    [CheckConclusion.NEUTRAL]: 'success',
     // A required status must pass for Forgejo to allow the merge.
     // The commit status description still explains the skip.
     [CheckConclusion.SKIPPED]: 'success',

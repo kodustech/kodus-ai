@@ -75,6 +75,7 @@ import {
     type ReviewKnowledge,
 } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { resolveAgentReviewSettings } from './agent-review-settings';
+import { PRIMARY_REVIEW_AGENTS as CATEGORY_AGENTS } from './primary-review-agents';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService } from '@libs/feature-gate';
 import {
@@ -482,14 +483,6 @@ export function categoryAgentsCompletion(
     }
     return { completed: true };
 }
-
-/** The review's primary agents; Kody Rules and custom agents are auxiliary. */
-const CATEGORY_AGENTS: ReadonlySet<string> = new Set([
-    'generalist',
-    'bug',
-    'security',
-    'performance',
-]);
 
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {

@@ -58,7 +58,11 @@ jest.mock('@libs/core/log/langfuse', () => ({
 }));
 
 import { JSONParseError, NoObjectGeneratedError } from 'ai';
-import { getClassification } from '@libs/llm/error-classifier';
+import {
+    classifyLLMError,
+    getClassification,
+} from '@libs/llm/error-classifier';
+import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
@@ -1461,6 +1465,159 @@ describe('CommentManagerService — pure helpers', () => {
                 'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
             );
         });
+    });
+});
+
+describe('partial primary-agent failures name the reviewer that did not run', () => {
+    const securityOutOfCredits = buildReviewErrorMessage({
+        ...classifyLLMError(
+            Object.assign(new Error('Insufficient balance'), { status: 402 }),
+            'openai_compatible',
+        ),
+        agentName: 'security',
+        model: 'deepseek-v4-flash',
+    });
+    const org = { organizationId: 'org', teamId: 'team' };
+    const config = { languageResultPrompt: LanguageValue.ENGLISH };
+    const summaryService = () =>
+        new CommentManagerService(
+            {} as any,
+            { processTemplate: async (template: string) => template } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        ) as any;
+
+    const summary = (
+        reviewHasPartialErrors: boolean,
+        reviewErrorMessage?: string,
+        reviewErrorAgentName?: string,
+    ) =>
+        summaryService().generatePullRequestFinishSummaryMarkdown(
+            org,
+            7,
+            [],
+            config,
+            [],
+            false,
+            reviewErrorMessage,
+            reviewHasPartialErrors,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            reviewErrorAgentName,
+        );
+
+    it('names the security review when bug finished and the BYOK key returned 402', async () => {
+        const body = await summary(true, securityOutOfCredits, 'security');
+
+        expect(body).toContain('No issues were found');
+        expect(body).toContain("some checks couldn't be completed");
+        expect(body).toContain(
+            `The security review did not run: ${securityOutOfCredits}`,
+        );
+        expect(securityOutOfCredits).toContain(
+            'The configured API key (openai_compatible) is out of credits',
+        );
+    });
+
+    it('stays silent for a summary-only failure', async () => {
+        const body = await summary(
+            false,
+            'summary provider unreachable',
+            undefined,
+        );
+
+        expect(body).toContain('No issues were found');
+        expect(body).not.toContain('summary provider unreachable');
+        expect(body).not.toContain('review did not run');
+        expect(body).not.toContain("some checks couldn't be completed");
+    });
+
+    it('does not claim a primary reviewer failed for a Kody Rules partial', async () => {
+        const rulesMessage = buildReviewErrorMessage({
+            ...classifyLLMError(
+                Object.assign(new Error('Insufficient balance'), {
+                    status: 402,
+                }),
+                'openai_compatible',
+            ),
+            agentName: 'kody-rules',
+        });
+        const body = await summary(true, rulesMessage, 'kody-rules');
+
+        expect(body).toContain('No issues were found');
+        expect(body).toContain("some checks couldn't be completed");
+        expect(body).not.toContain('review did not run');
+        expect(body).not.toContain('out of credits');
+    });
+
+    it('names the security review on a custom end-review template', async () => {
+        const updateIssueComment = jest.fn().mockResolvedValue(undefined);
+        const createIssueComment = jest.fn().mockResolvedValue({ id: 1 });
+        const service = new CommentManagerService(
+            {} as any,
+            { processTemplate: async (template: string) => template } as any,
+            {} as any,
+            {} as any,
+            { updateIssueComment, createIssueComment } as any,
+            {} as any,
+        );
+
+        await service.updateOverallComment(
+            org as any,
+            7,
+            { name: 'repo', id: 'repo-1' },
+            11,
+            12,
+            PlatformType.GITHUB,
+            [],
+            config as any,
+            undefined,
+            'Custom end review',
+            false,
+            securityOutOfCredits,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            undefined,
+            'security',
+        );
+        await service.createComment(
+            org as any,
+            7,
+            { name: 'repo', id: 'repo-1' },
+            PlatformType.GITHUB,
+            [],
+            LanguageValue.ENGLISH,
+            [],
+            config as any,
+            'Custom end review',
+            undefined,
+            [],
+            false,
+            securityOutOfCredits,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            'security',
+        );
+
+        for (const body of [
+            updateIssueComment.mock.calls[0][0].body as string,
+            createIssueComment.mock.calls[0][0].body as string,
+        ]) {
+            expect(body).toContain('Custom end review');
+            expect(body).toContain("some checks couldn't be completed");
+            expect(body).toContain(
+                `The security review did not run: ${securityOutOfCredits}`,
+            );
+        }
     });
 });
 

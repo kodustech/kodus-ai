@@ -196,8 +196,20 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         ) {
             // An auxiliary agent can still publish a finding when every
             // primary agent runs out of credits. The posting stages record delivery.
+            // That same auxiliary agent dying on the exhausted org key is the
+            // outage, not a partial review: a Kody Rule on the same 402 must
+            // not turn a skipped check into "completed with warnings".
             const partialReview =
-                hasPartialError ||
+                context.statusInfo.status === AutomationStatus.PARTIAL_ERROR ||
+                errors.some(
+                    (e) =>
+                        e.severity === 'partial' &&
+                        !(
+                            e.metadata?.errorCategory ===
+                                LlmErrorCategory.QUOTA_EXCEEDED &&
+                            e.metadata?.orgOwnedKey === true
+                        ),
+                ) ||
                 [context.lineComments, context.prLevelCommentResults].some(
                     (comments) =>
                         comments?.some(

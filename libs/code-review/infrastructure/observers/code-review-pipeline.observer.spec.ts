@@ -453,6 +453,152 @@ describe('CodeReviewPipelineObserver', () => {
         );
     });
 
+    // An auxiliary agent that dies on the same exhausted org key is the
+    // outage. Only that shape changes (NEUTRAL → SKIPPED). The other six
+    // are the cases that must stay put.
+    describe('auxiliary exhausted-key failures', () => {
+        const quotaError = (
+            substage: string,
+            severity: 'critical' | 'partial',
+            metadata: Record<string, unknown> = {},
+        ) =>
+            ({
+                stage: 'AgentReviewStage',
+                substage,
+                error: new Error(
+                    'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
+                ),
+                severity,
+                metadata: {
+                    errorCategory: LlmErrorCategory.QUOTA_EXCEEDED,
+                    orgOwnedKey: true,
+                    ...metadata,
+                },
+            }) as any;
+
+        const finish = async (
+            conclusion: CheckConclusion,
+            stage: (typeof CheckStageNames)[keyof typeof CheckStageNames],
+        ) => {
+            await observer.onPipelineFinish(
+                context as CodeReviewPipelineContext,
+                observersContext,
+            );
+            expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+                observersContext,
+                context,
+                conclusion,
+                stage,
+                expect.any(String),
+            );
+        };
+
+        it('skips a full outage when kody-rules also exhausts the org key', async () => {
+            context.statusInfo = { status: AutomationStatus.ERROR } as any;
+            context.errors = [
+                quotaError('agent:generalist', 'critical'),
+                quotaError('agent:kody-rules', 'partial'),
+            ];
+
+            await finish(
+                CheckConclusion.SKIPPED,
+                CheckStageNames._pipelineEndSkipped,
+            );
+        });
+
+        it('stays NEUTRAL when bug finished and security exhausted the org key', async () => {
+            context.statusInfo = {
+                status: AutomationStatus.IN_PROGRESS,
+            } as any;
+            context.errors = [quotaError('agent:security', 'partial')];
+
+            await finish(
+                CheckConclusion.NEUTRAL,
+                CheckStageNames._pipelineEndPartial,
+            );
+        });
+
+        it('stays SKIPPED when only generalist exhausts the org key', async () => {
+            context.statusInfo = { status: AutomationStatus.ERROR } as any;
+            context.errors = [quotaError('agent:generalist', 'critical')];
+
+            await finish(
+                CheckConclusion.SKIPPED,
+                CheckStageNames._pipelineEndSkipped,
+            );
+        });
+
+        it('stays NEUTRAL when kody-rules fails with UNKNOWN beside the exhausted key', async () => {
+            context.statusInfo = { status: AutomationStatus.ERROR } as any;
+            context.errors = [
+                quotaError('agent:generalist', 'critical'),
+                {
+                    stage: 'AgentReviewStage',
+                    substage: 'agent:kody-rules',
+                    error: new Error('rules judge failed'),
+                    severity: 'partial',
+                    metadata: {
+                        errorCategory: LlmErrorCategory.UNKNOWN,
+                        orgOwnedKey: true,
+                    },
+                } as any,
+            ];
+
+            await finish(
+                CheckConclusion.NEUTRAL,
+                CheckStageNames._pipelineEndPartial,
+            );
+        });
+
+        it('stays NEUTRAL when a rules finding was sent', async () => {
+            context.statusInfo = { status: AutomationStatus.ERROR } as any;
+            context.errors = [quotaError('agent:generalist', 'critical')];
+            context.lineComments = [
+                { deliveryStatus: DeliveryStatus.SENT },
+            ] as any;
+
+            await finish(
+                CheckConclusion.NEUTRAL,
+                CheckStageNames._pipelineEndPartial,
+            );
+        });
+
+        it('stays NEUTRAL when a custom agent was truncated', async () => {
+            context.statusInfo = { status: AutomationStatus.ERROR } as any;
+            context.errors = [
+                quotaError('agent:generalist', 'critical'),
+                {
+                    stage: 'AgentReviewStage',
+                    substage: 'agent:custom-agent:style',
+                    error: new Error(
+                        'Agent "custom-agent:style" ran out of steps',
+                    ),
+                    severity: 'partial',
+                    metadata: { agentName: 'custom-agent:style' },
+                } as any,
+            ];
+
+            await finish(
+                CheckConclusion.NEUTRAL,
+                CheckStageNames._pipelineEndPartial,
+            );
+        });
+
+        it('stays FAILURE when the exhausted key is Kodus-managed', async () => {
+            context.statusInfo = { status: AutomationStatus.ERROR } as any;
+            context.errors = [
+                quotaError('agent:generalist', 'critical', {
+                    orgOwnedKey: false,
+                }),
+            ];
+
+            await finish(
+                CheckConclusion.FAILURE,
+                CheckStageNames._pipelineEndFailure,
+            );
+        });
+    });
+
     it('finalizes as NEUTRAL when an exhausted org quota comes with a partial error from another agent', async () => {
         context.statusInfo = { status: AutomationStatus.ERROR } as any;
         context.errors = [
