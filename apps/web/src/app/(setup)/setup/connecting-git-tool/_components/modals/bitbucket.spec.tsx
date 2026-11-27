@@ -28,51 +28,69 @@ jest.mock("src/core/components/system/git-token-docs", () => ({
     GitTokenDocs: () => null,
 }));
 
-it("shows a refused Data Center connection and allows retrying the same fields", async () => {
-    const message = "Error authenticating with Bitbucket Data Center.";
-    const create = jest.mocked(createCodeManagementIntegration);
-    create.mockRejectedValueOnce(
-        Object.assign(new AxiosError(message), {
-            status: 400,
-            response: { status: 400, data: { message } },
-        }),
-    );
-    create.mockResolvedValueOnce({
-        data: { success: true, status: "SUCCESS" },
-        statusCode: 201,
-    });
-    render(
-        <BitbucketTokenModal
-            teamId="team-1"
-            userId="user-1"
-            userEmail="user@example.test"
-        />,
-    );
-
-    fireEvent.click(
-        screen.getByRole("button", { name: /Bitbucket Data Center/ }),
-    );
-    for (const [placeholder, value] of [
-        ["Enter your Data Center username", "reviewer"],
-        ["https://bitbucket.your-company.com", "https://git.example.test"],
-        ["Enter your Data Center password", "password"],
-    ]) {
-        fireEvent.change(screen.getByPlaceholderText(placeholder), {
-            target: { value },
+it.each([
+    [
+        400,
+        "Could not connect to Bitbucket Data Center. Check the server URL and credentials, then try again.",
+    ],
+    [
+        500,
+        "Could not save the Bitbucket Data Center connection. Please try again.",
+    ],
+] as const)(
+    "shows a safe Data Center error for HTTP %i and allows retrying the same fields",
+    async (status, expectedMessage) => {
+        mockPush.mockClear();
+        const message = "Upstream diagnostic with private details";
+        const create = jest.mocked(createCodeManagementIntegration);
+        create.mockRejectedValueOnce(
+            Object.assign(new AxiosError(message), {
+                status,
+                response: { status, data: { message } },
+            }),
+        );
+        create.mockResolvedValueOnce({
+            data: { success: true, status: "SUCCESS" },
+            statusCode: 201,
         });
-    }
+        render(
+            <BitbucketTokenModal
+                teamId="team-1"
+                userId="user-1"
+                userEmail="user@example.test"
+            />,
+        );
 
-    const save = screen.getByRole<HTMLButtonElement>("button", {
-        name: "Validate and save",
-    });
-    await waitFor(() => expect(save.disabled).toBe(false));
-    fireEvent.click(save);
-    expect((await screen.findByRole("alert")).textContent).toBe(message);
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(save.disabled).toBe(false);
+        fireEvent.click(
+            screen.getByRole("button", { name: /Bitbucket Data Center/ }),
+        );
+        for (const [placeholder, value] of [
+            ["Enter your Data Center username", "reviewer"],
+            ["https://bitbucket.your-company.com", "https://git.example.test"],
+            ["Enter your Data Center password", "password"],
+        ]) {
+            fireEvent.change(screen.getByPlaceholderText(placeholder), {
+                target: { value },
+            });
+        }
 
-    fireEvent.click(save);
-    await waitFor(() =>
-        expect(mockPush).toHaveBeenCalledWith("/setup/choosing-repositories"),
-    );
-});
+        const save = screen.getByRole<HTMLButtonElement>("button", {
+            name: "Validate and save",
+        });
+        await waitFor(() => expect(save.disabled).toBe(false));
+        fireEvent.click(save);
+        expect((await screen.findByRole("alert")).textContent).toBe(
+            expectedMessage,
+        );
+        expect(screen.queryByText(message)).toBeNull();
+        expect(mockPush).not.toHaveBeenCalled();
+        expect(save.disabled).toBe(false);
+
+        fireEvent.click(save);
+        await waitFor(() =>
+            expect(mockPush).toHaveBeenCalledWith(
+                "/setup/choosing-repositories",
+            ),
+        );
+    },
+);

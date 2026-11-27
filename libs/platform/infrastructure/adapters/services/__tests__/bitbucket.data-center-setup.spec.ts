@@ -1,7 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
-import { IntegrationConfigKey } from '@libs/core/domain/enums';
+import {
+    CreateAuthIntegrationStatus,
+    IntegrationCategory,
+    IntegrationConfigKey,
+    PlatformType,
+} from '@libs/core/domain/enums';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 
 import { BitbucketService } from '../bitbucket.service';
@@ -263,8 +268,8 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
         { status: 401, data: {} },
         { status: 200, data: '<html>Sign in</html>' },
     ])(
-        'refuses a public repository list without an authenticated profile (%j)',
-        async (profile) => {
+        'refuses an anonymous repository page when the authenticated endpoint refuses access (%j)',
+        async (labels) => {
             const svc = dataCenter();
             const get = jest
                 .fn()
@@ -272,7 +277,7 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
                     status: 200,
                     data: { values: [{ public: true }] },
                 })
-                .mockResolvedValueOnce(profile);
+                .mockResolvedValueOnce(labels);
             jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
 
             await expect(
@@ -286,11 +291,100 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
             ).rejects.toBeInstanceOf(BadRequestException);
             expect(get.mock.calls).toEqual([
                 ['/repos?limit=1'],
-                ['/profile/recent/repos?limit=1'],
+                ['/labels?limit=1'],
             ]);
             expect(svc.addAccessToken).not.toHaveBeenCalled();
         },
     );
+
+    it.each([AuthMode.BASIC, AuthMode.TOKEN])(
+        'accepts a scoped %s token from its authenticated repository response',
+        async (authMode) => {
+            const svc = dataCenter();
+            const get = jest
+                .fn()
+                .mockResolvedValueOnce({
+                    status: 200,
+                    headers: { 'x-auserid': '1007' },
+                    data: { values: [] },
+                })
+                .mockRejectedValue(
+                    new Error('No personal profile for this token'),
+                );
+            jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+
+            await expect(
+                svc.createAuthIntegration({
+                    organizationAndTeamData: ORG,
+                    host: HOST,
+                    authMode,
+                    username: 'x-token-auth',
+                    token: 'repo-token',
+                }),
+            ).resolves.toEqual({
+                success: true,
+                status: CreateAuthIntegrationStatus.SUCCESS,
+            });
+            expect(get.mock.calls).toEqual([['/repos?limit=1']]);
+        },
+    );
+
+    it('accepts an authenticated labels page when identity headers are stripped', async () => {
+        const svc = dataCenter();
+        const get = jest.fn(async (path: string) => {
+            if (path === '/repos?limit=1')
+                return { status: 200, data: { values: [] } };
+            if (path === '/labels?limit=1')
+                return { status: 201, data: { values: [] } };
+            throw new Error('Resource unavailable for a repository token');
+        });
+        jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                host: HOST,
+                authMode: AuthMode.TOKEN,
+                token: 'repo-token',
+            }),
+        ).resolves.toEqual({
+            success: true,
+            status: CreateAuthIntegrationStatus.SUCCESS,
+        });
+        expect(get.mock.calls).toEqual([
+            ['/repos?limit=1'],
+            ['/labels?limit=1'],
+        ]);
+    });
+
+    it('logs only the tenant and status when a provider request fails', async () => {
+        const svc = dataCenter();
+        const error = Object.assign(new AxiosError('Request failed'), {
+            config: { headers: { Authorization: 'Bearer test-secret' } },
+            response: { status: 401, data: 'private upstream response' },
+        });
+        const get = jest
+            .fn()
+            .mockResolvedValueOnce({ status: 200, data: { values: [] } })
+            .mockRejectedValueOnce(error);
+        jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                host: HOST,
+                authMode: AuthMode.TOKEN,
+                token: 'test-secret',
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(svc.logger.error.mock.calls).toStrictEqual([
+            [
+                {
+                    message: 'Error authenticating with Data Center token',
+                    context: BitbucketDataCenterService.name,
+                    metadata: { organizationAndTeamData: ORG, httpStatus: 401 },
+                },
+            ],
+        ]);
+    });
 
     it('probes the repository list the setup reads next, not the project list', async () => {
         const svc = dataCenter();
@@ -450,10 +544,12 @@ describe('BitbucketDataCenterService.verifyConnection', () => {
 
             await expect(
                 dc.verifyConnection({ organizationAndTeamData: ORG }),
-            ).resolves.toMatchObject({
+            ).resolves.toStrictEqual({
+                platformName: PlatformType.BITBUCKET,
+                category: IntegrationCategory.CODE_MANAGEMENT,
                 hasConnection: true,
                 isSetupComplete: ready,
-                config: { hasRepositories: ready },
+                config: { hasRepositories: ready, status: undefined, host: '' },
             });
             expect(integrationConfigService.findOne).toHaveBeenCalledWith({
                 integration: { uuid: 'integration' },

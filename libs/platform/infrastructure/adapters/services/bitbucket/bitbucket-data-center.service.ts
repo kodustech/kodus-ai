@@ -264,14 +264,20 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            // The picker can list public repositories anonymously. The profile
-            // endpoint requires authentication even when both pages are empty.
-            for (const path of [
-                '/repos?limit=1',
-                '/profile/recent/repos?limit=1',
-            ]) {
-                const page = await axiosClient.get(path);
-                if (page.status !== 200 || !Array.isArray(page.data?.values)) {
+            const repos = await axiosClient.get('/repos?limit=1');
+            if (repos.status !== 200 || !Array.isArray(repos.data?.values)) {
+                throw new Error('Invalid Bitbucket repository page.');
+            }
+
+            // Bitbucket identifies the authenticated principal in X-AUSERID.
+            // Proxies may strip it. The labels endpoint requires authentication
+            // without requiring a personal profile for project or repo tokens.
+            if (!/^[1-9]\d*$/.test(repos.headers?.['x-auserid'] ?? '')) {
+                const labels = await axiosClient.get('/labels?limit=1');
+                if (
+                    ![200, 201].includes(labels.status) ||
+                    !Array.isArray(labels.data?.values)
+                ) {
                     throw new Error(
                         'Bitbucket Data Center failed to validate the provided token.',
                     );
@@ -281,11 +287,12 @@ export class BitbucketDataCenterService implements Omit<
             this.logger.error({
                 message: 'Error authenticating with Data Center token',
                 context: BitbucketDataCenterService.name,
-                error: err,
-                // Named fields only: params carries the PAT.
+                // Axios errors carry the request headers and upstream body.
                 metadata: {
-                    organizationAndTeamData: params?.organizationAndTeamData,
-                    host: params?.host,
+                    organizationAndTeamData,
+                    httpStatus: axios.isAxiosError(err)
+                        ? err.response?.status
+                        : undefined,
                 },
             });
             // A refused address is not a bad token: say which it was.

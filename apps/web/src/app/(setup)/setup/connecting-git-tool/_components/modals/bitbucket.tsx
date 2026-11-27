@@ -110,13 +110,10 @@ export const BitbucketTokenModal = (props: {
             magicModal.unlock();
 
             if (selfhosted) {
-                const message = isAxiosError<{ message?: unknown }>(error)
-                    ? error.response?.data?.message
-                    : undefined;
                 setDataCenterError(
-                    typeof message === "string" && message
-                        ? message
-                        : "Could not connect to Bitbucket Data Center. Check the server URL and credentials, then try again.",
+                    isAxiosError(error) && error.response?.status === 400
+                        ? "Could not connect to Bitbucket Data Center. Check the server URL and credentials, then try again."
+                        : "Could not save the Bitbucket Data Center connection. Please try again.",
                 );
             } else if (error instanceof AxiosError && error.status === 400) {
                 form.setError("token", {

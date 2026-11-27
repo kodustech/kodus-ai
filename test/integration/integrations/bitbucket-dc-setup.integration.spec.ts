@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import axios from 'axios';
 import { DataSource } from 'typeorm';
 
@@ -25,8 +26,10 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
     const organizationId = randomUUID();
     const teamId = randomUUID();
     const tenant = { organizationId, teamId };
+    const applicationName = `dc-setup-${teamId}`;
     const db = new DataSource({
         type: 'postgres',
+        applicationName,
         host: process.env.TEST_PG_HOST ?? 'localhost',
         port: Number(
             process.env.TEST_PG_PORT ?? process.env.API_PG_DB_PORT ?? 5432,
@@ -154,16 +157,40 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
     );
 
     it('reuses one pair for concurrent first-time setups and rotates its credentials in place', async () => {
-        // Hold the first insert open so the other setup reaches the lookup.
-        db.subscribers.push({
-            async beforeInsert(event) {
-                if (event.metadata.target === AuthIntegrationModel) {
-                    await event.queryRunner.query('SELECT pg_sleep(0.2)');
-                }
-            },
-        });
-        const submissions = await Promise.all([connect(), connect()]);
-        expect(submissions.every(({ success }) => success)).toBe(true);
+        // Both sessions must be waiting in Postgres before either can finish.
+        // Without the setup lock they reach the FK insert after both read "no pair".
+        const gate = db.createQueryRunner();
+        await gate.startTransaction();
+        let waiting = 0;
+        let submissions: Promise<PromiseSettledResult<unknown>[]> =
+            Promise.resolve([]);
+        try {
+            await gate.query('SELECT 1 FROM teams WHERE uuid = $1 FOR UPDATE', [
+                teamId,
+            ]);
+            submissions = Promise.allSettled([connect(), connect()]);
+            const deadline = Date.now() + 5000;
+            while (Date.now() < deadline) {
+                const [row] = await db.query(
+                    `SELECT count(*)::int AS waiting FROM pg_stat_activity
+                     WHERE application_name = $1 AND wait_event_type = 'Lock'`,
+                    [applicationName],
+                );
+                waiting = row.waiting;
+                if (waiting === 2) break;
+                await delay(20);
+            }
+        } finally {
+            await gate.rollbackTransaction();
+            await gate.release();
+            await submissions;
+        }
+        expect(waiting).toBe(2);
+        const connected = {
+            status: 'fulfilled',
+            value: { success: true, status: 'SUCCESS' },
+        };
+        expect(await submissions).toEqual([connected, connected]);
         expect(await counts()).toEqual({ integrations: 1, credentials: 1 });
         const first = await readPair();
         await connect('rotated-token');
@@ -173,7 +200,7 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
         expect(decrypt(rotated.authIntegration.authDetails.appPassword)).toBe(
             'rotated-token',
         );
-    });
+    }, 15000);
 
     it('keeps the previous credentials when reactivation fails', async () => {
         await connect();
