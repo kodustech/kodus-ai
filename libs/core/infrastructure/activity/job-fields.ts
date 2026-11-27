@@ -9,6 +9,13 @@ export interface JobFields {
     repository?: string;
     prNumber?: number;
     platform?: string;
+    /**
+     * The PR's size as the provider reported it in the webhook body. Only
+     * GitHub sends it there; the worker's memory line uses it to tell what a
+     * review of a given size holds.
+     */
+    changedFiles?: number;
+    changedLines?: number;
 }
 
 const num = (v: unknown): number | undefined => {
@@ -32,6 +39,8 @@ export function jobFields(job: {
     ) ?? p) as any;
     const repo =
         p.repository ?? w.repository ?? w.project ?? w.resource?.repository;
+    const additions = num(w.pull_request?.additions) ?? 0;
+    const deletions = num(w.pull_request?.deletions) ?? 0;
     return {
         organizationId:
             str(job.organizationAndTeamData?.organizationId) ??
@@ -55,5 +64,7 @@ export function jobFields(job: {
             num(w.pullrequest?.id) ??
             num(w.resource?.pullRequestId),
         platform: str(p.platformType) ?? str(p.platform),
+        changedFiles: num(w.pull_request?.changed_files),
+        changedLines: additions + deletions || undefined,
     };
 }

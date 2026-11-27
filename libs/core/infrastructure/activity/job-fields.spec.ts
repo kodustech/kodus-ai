@@ -111,6 +111,30 @@ describe('jobFields', () => {
             },
             { repository: 'r', prNumber: 77 },
         ],
+        [
+            'the size of a GitHub PR from its webhook body',
+            {
+                payload: {
+                    platformType: 'GITHUB',
+                    codeManagementPayload: {
+                        pull_request: {
+                            number: 3,
+                            changed_files: 14,
+                            additions: 300,
+                            deletions: 25,
+                        },
+                        repository: { full_name: 'acme/app' },
+                    },
+                },
+            },
+            {
+                repository: 'acme/app',
+                prNumber: 3,
+                platform: 'GITHUB',
+                changedFiles: 14,
+                changedLines: 325,
+            },
+        ],
         ['an empty job', {}, {}],
     ])('reads %s', (_l, job, expected) => {
         const out = jobFields(job as any);

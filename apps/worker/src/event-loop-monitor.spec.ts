@@ -66,6 +66,27 @@ describe('startEventLoopMonitor', () => {
         );
     });
 
+    it('reports memory, the jobs in flight and the gauges on the same line', () => {
+        const logger = { log: jest.fn(), warn: jest.fn() };
+        stop = startEventLoopMonitor({ intervalMs: 100, logger });
+
+        jest.advanceTimersByTime(100);
+
+        const { metadata } = logger.log.mock.calls[0][0];
+        expect(metadata.memory).toEqual(
+            expect.objectContaining({
+                rssMb: expect.any(Number),
+                heapUsedMb: expect.any(Number),
+                heapLimitMb: expect.any(Number),
+                majorGcs: expect.any(Number),
+            }),
+        );
+        expect(metadata.jobs).toEqual(
+            expect.objectContaining({ total: 0, byWorkflowType: {} }),
+        );
+        expect(metadata.gauges).toEqual(expect.any(Object));
+    });
+
     it('warns with the measured delay when the histogram reports a blocked thread', () => {
         const logger = { log: jest.fn(), warn: jest.fn() };
         histogram.max = 400e6;
