@@ -128,61 +128,36 @@ export class KodyLearningCronProvider {
                 const organizationId = team.organization?.uuid;
                 const teamId = team.uuid;
 
-                const platformConfigs = await this.parametersService.findByKey(
-                    ParametersKey.PLATFORM_CONFIGS,
-                    { organizationId, teamId },
-                );
+                try {
+                    const platformConfigs =
+                        await this.parametersService.findByKey(
+                            ParametersKey.PLATFORM_CONFIGS,
+                            { organizationId, teamId },
+                        );
 
-                if (!platformConfigs) {
-                    this.logger.error({
-                        message: 'Platform configs not found',
-                        context: KodyLearningCronProvider.name,
-                        metadata: {
-                            organizationId,
-                            teamId,
-                            timestamp: new Date().toISOString(),
-                        },
-                    });
+                    if (!platformConfigs) {
+                        this.logger.error({
+                            message: 'Platform configs not found',
+                            context: KodyLearningCronProvider.name,
+                            metadata: {
+                                organizationId,
+                                teamId,
+                                timestamp: new Date().toISOString(),
+                            },
+                        });
 
-                    continue;
-                }
+                        continue;
+                    }
 
-                const kodyLearningStatus =
-                    platformConfigs.configValue.kodyLearningStatus;
+                    const kodyLearningStatus =
+                        platformConfigs.configValue.kodyLearningStatus;
 
-                if (
-                    !kodyLearningStatus ||
-                    kodyLearningStatus === KodyLearningStatus.DISABLED
-                ) {
-                    this.logger.log({
-                        message: 'Kody learning is disabled',
-                        context: KodyLearningCronProvider.name,
-                        metadata: {
-                            teamId,
-                            timestamp: new Date().toISOString(),
-                        },
-                    });
-
-                    continue;
-                }
-
-                if (
-                    kodyLearningStatus ===
-                        KodyLearningStatus.GENERATING_CONFIG ||
-                    kodyLearningStatus === KodyLearningStatus.GENERATING_RULES
-                ) {
-                    // A `generating_*` status can be stale: rule generation
-                    // runs detached, so an API restart mid-run leaves a team
-                    // stuck. A fresh status is a genuine in-progress run —
-                    // skip it; an old one is a dead run we should restart.
                     if (
-                        !isKodyLearningStatusStale(
-                            kodyLearningStatus,
-                            platformConfigs.updatedAt,
-                        )
+                        !kodyLearningStatus ||
+                        kodyLearningStatus === KodyLearningStatus.DISABLED
                     ) {
                         this.logger.log({
-                            message: 'Kody learning is already generating',
+                            message: 'Kody learning is disabled',
                             context: KodyLearningCronProvider.name,
                             metadata: {
                                 teamId,
@@ -193,21 +168,66 @@ export class KodyLearningCronProvider {
                         continue;
                     }
 
-                    // A stuck run that keeps hard-crashing must not be
-                    // retried forever — give up after MAX_STUCK_RETRIES so
-                    // the cron stops re-crashing the process every tick.
                     if (
-                        hasExhaustedStuckRetries(
-                            platformConfigs.configValue
-                                .kodyLearningStuckRetries,
-                        )
+                        kodyLearningStatus ===
+                            KodyLearningStatus.GENERATING_CONFIG ||
+                        kodyLearningStatus ===
+                            KodyLearningStatus.GENERATING_RULES
                     ) {
-                        this.logger.error({
+                        // A `generating_*` status can be stale: rule generation
+                        // runs detached, so an API restart mid-run leaves a team
+                        // stuck. A fresh status is a genuine in-progress run —
+                        // skip it; an old one is a dead run we should restart.
+                        if (
+                            !isKodyLearningStatusStale(
+                                kodyLearningStatus,
+                                platformConfigs.updatedAt,
+                            )
+                        ) {
+                            this.logger.log({
+                                message: 'Kody learning is already generating',
+                                context: KodyLearningCronProvider.name,
+                                metadata: {
+                                    teamId,
+                                    timestamp: new Date().toISOString(),
+                                },
+                            });
+
+                            continue;
+                        }
+
+                        // A stuck run that keeps hard-crashing must not be
+                        // retried forever — give up after MAX_STUCK_RETRIES so
+                        // the cron stops re-crashing the process every tick.
+                        if (
+                            hasExhaustedStuckRetries(
+                                platformConfigs.configValue
+                                    .kodyLearningStuckRetries,
+                            )
+                        ) {
+                            this.logger.error({
+                                message:
+                                    'Kody learning stuck and exhausted retries — giving up',
+                                context: KodyLearningCronProvider.name,
+                                metadata: {
+                                    organizationId,
+                                    teamId,
+                                    kodyLearningStatus,
+                                    stuckRetries:
+                                        platformConfigs.configValue
+                                            .kodyLearningStuckRetries,
+                                    timestamp: new Date().toISOString(),
+                                },
+                            });
+
+                            continue;
+                        }
+
+                        this.logger.warn({
                             message:
-                                'Kody learning stuck and exhausted retries — giving up',
+                                'Kody learning stuck in a generating state — regenerating',
                             context: KodyLearningCronProvider.name,
                             metadata: {
-                                organizationId,
                                 teamId,
                                 kodyLearningStatus,
                                 stuckRetries:
@@ -216,26 +236,21 @@ export class KodyLearningCronProvider {
                                 timestamp: new Date().toISOString(),
                             },
                         });
-
-                        continue;
                     }
 
-                    this.logger.warn({
-                        message:
-                            'Kody learning stuck in a generating state — regenerating',
+                    await this.generateKodyRules({ organizationId, teamId });
+                } catch (error) {
+                    this.logger.error({
+                        message: 'Error in Kody Rules generator cron',
                         context: KodyLearningCronProvider.name,
+                        error,
                         metadata: {
+                            organizationId,
                             teamId,
-                            kodyLearningStatus,
-                            stuckRetries:
-                                platformConfigs.configValue
-                                    .kodyLearningStuckRetries,
                             timestamp: new Date().toISOString(),
                         },
                     });
                 }
-
-                await this.generateKodyRules({ organizationId, teamId });
             }
         } catch (error) {
             this.logger.error({
