@@ -73,6 +73,8 @@ pré-requisitos de cada store.
 
 Para um PostgreSQL externo que exige TLS, defina `global.config.API_DATABASE_DISABLE_SSL` como `"false"`.
 
+PostgreSQL atrás do PgBouncer, ou com o `Pooler` do CloudNativePG no modo `operator`? Veja [PostgreSQL atrás de um connection pooler](/pt-BR/how_to_deploy/deploy_kodus/postgres_pooler).
+
 ## OpenShift
 
 O OpenShift precisa do overlay `values-openshift.yaml`, a partir de um checkout do repositório.

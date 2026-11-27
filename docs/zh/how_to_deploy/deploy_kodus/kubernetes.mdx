@@ -73,6 +73,8 @@ RabbitMQ 需要 delayed message exchange 插件、`kodus-ai` 和
 
 如果外部 PostgreSQL 要求 TLS，请将 `global.config.API_DATABASE_DISABLE_SSL` 设为 `"false"`。
 
+通过 PgBouncer 访问 PostgreSQL,或在 `operator` 模式下使用 CloudNativePG 的 `Pooler`?请参阅[连接池后面的 PostgreSQL](/zh/how_to_deploy/deploy_kodus/postgres_pooler)。
+
 ## OpenShift
 
 OpenShift 需要仓库检出目录中的 `values-openshift.yaml` 覆盖文件。

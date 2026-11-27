@@ -8,6 +8,12 @@ Kodus 支持通过 PgBouncer 等连接池访问 PostgreSQL,池模式可以是 **
 transaction**。每次变更时,CI 都会通过 transaction 模式的 PgBouncer 1.26 运行
 Kodus 的协调锁以及 api 与 worker 之间的事件桥。
 
+<Warning>
+需要 2.2.12 之后的 Kodus 自托管版本。2.2.12 及更早版本会忽略直连配置,迁移、LISTEN 和协调锁
+都会经过连接池,在 transaction 模式下无法工作。启用连接池之前,请检查 `IMAGE_TAG`(Docker Compose)
+或 `imageTag`(Helm)。
+</Warning>
+
 本页介绍连接池需要的配置、Kodus 使用的两个连接,以及如何检查结果。
 
 ## 两个连接
@@ -81,8 +87,8 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 
 设置直连后，Kodus 的协调锁也会从会话锁改为数据库中的行。仍在没有直连配置下运行的
 Pod 看不到新的锁，因此请在旧 Pod 停止的情况下启用连接池：先运行
-`docker compose down`，或在 `helm upgrade` 之前把 api、worker 和 webhooks 的
-Deployment 缩容到 0。
+`docker compose down`，或在 `helm upgrade` 之前把 api、worker、worker-analytics 和
+webhooks 的 Deployment 缩容到 0。
 
 ### Docker Compose
 
@@ -196,9 +202,9 @@ Kodus 每个连接只连一个主机,不接受主机列表或 `target_session_at
 指向始终通往**当前主库**的端点:虚拟 IP、带 Patroni 健康检查的 HAProxy、CloudNativePG
 的 `-rw` 服务,或跟随主库的 PgBouncer。Kodus 的所有组件都会写入,因此不使用只读副本。
 
-故障切换期间,正在执行的查询会失败,连接池会在下一次请求时重新连接。使用连接池时,协调锁是
-数据库中的行,因此会随数据一起在故障切换后保留;不使用连接池时它们是会话锁,在与旧主库的会话
-断开时释放。
+故障切换期间,正在执行的查询会失败,连接池会在下一次请求时重新连接。设置了直连时,协调锁是
+数据库中的行,因此会随数据一起在故障切换后保留;没有直连时(不使用连接池,或使用 session 模式的连接池)
+它们是会话锁,在与旧主库的会话断开时释放。
 
 ## 检查配置
 
