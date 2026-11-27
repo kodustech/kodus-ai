@@ -184,7 +184,8 @@ describe('RuntimeCommandConsumer', () => {
         const prEditsRecipe = { ...req, diff: [...req.diff, { path: '.kodus/workspace.yaml', patch: '+  expose: [{ service: evil, port: 1, kind: http }]' }] };
         await consumer.handle(asMessage(prEditsRecipe));
         expect(engine.start).toHaveBeenCalledWith(expect.objectContaining({ environment: expect.objectContaining({ expose: recorded }) }));
-        expect((await projection.get(req.runId))?.recipe).toEqual({ sha: req.pullRequest.baseSha, state: 'found', digest: 'sha256:abc', prChangesRecipe: true });
+        // The path the setup recorded travels with it: the Run page says where the setup file came from.
+        expect((await projection.get(req.runId))?.recipe).toEqual({ sha: req.pullRequest.baseSha, state: 'found', digest: 'sha256:abc', prChangesRecipe: true, path: '.kodus/workspace.yaml' });
         expect((await projection.get(req.runId))?.recipeChangedInPr).toEqual(['.kodus/workspace.yaml']);
 
         // Another org's setup record for the same environment id is never used.
