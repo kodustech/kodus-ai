@@ -229,6 +229,8 @@ export function acquireRequest(req: RuntimeRunRequested, side: 'base' | 'pr', re
         idempotencyKey: `${acquireKey(req, side, renewed)}${cold ? ':cold' : ''}`,
         // A base built cold takes no bake and no pool machine: it confirms a PR's boot failure (confirmedByColdBase).
         ...(cold ? { skipBake: true } : {}),
+        // What the setup measured for its boot: a Run of a heavy environment waits for it (readyTimeoutMinutes).
+        ...(req.environment.setupBootMs ? { setupBootMs: req.environment.setupBootMs } : {}),
         ...(req.environment.recipe ? { recipe: req.environment.recipe } : {}),
         ...(req.environment.size ? { size: req.environment.size } : {}),
         // Planted by the cell in both sides' workloads: a sighting anywhere halts the Run.
@@ -308,7 +310,7 @@ async function creditedEnv(deps: RunDeps, req: RuntimeRunRequested, request: Acq
     const claimId = claimIdFor(req.organizationId, request.idempotencyKey);
     const hard = await deps.claims.hardExpiryOf(req.organizationId, claimId).catch(() => undefined);
     if (!hard) return deps.env;
-    const readyBy = readyDeadlineOf(hard, request.consumer, request.ref.side);
+    const readyBy = readyDeadlineOf(hard, request.consumer, request.ref.side, request.setupBootMs);
     deps.log?.info({ msg: 'run.acquire.ready_credited', runId: req.runId, side: request.ref.side, claimId, readyBy: new Date(readyBy).toISOString() });
     return { acquire: (r) => deps.env.acquire(r, { readyBy }) };
 }

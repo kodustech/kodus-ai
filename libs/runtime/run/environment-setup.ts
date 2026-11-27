@@ -362,3 +362,9 @@ export interface EnvironmentLearnRecord {
  * and the product compute the same one.
  */
 export const setupLearnScopeId = (key: string) => uuidV4ShapeFrom(nulJoinedHex(['kody-runtime/setup-learn', key]));
+
+/** How long the setup's last finished boot took (ms): the boot step that is done, the latest one; undefined when none has a duration. */
+export function setupBootMsOf(steps: readonly Pick<EnvironmentSetupStep, 'name' | 'state' | 'durationMs'>[] | undefined): number | undefined {
+    const boot = [...(steps ?? [])].reverse().find((s) => s.name === 'boot' && s.state === 'done' && typeof s.durationMs === 'number' && s.durationMs > 0);
+    return boot ? Math.round(boot.durationMs!) : undefined;
+}

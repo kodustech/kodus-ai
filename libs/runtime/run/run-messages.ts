@@ -231,6 +231,11 @@ export const RuntimeRunRequestedSchema = z.strictObject({
          */
         size: MachineSizeSchema.optional(),
         /**
+         * How long the setup measured its boot (ms), added by the runtime-worker from the setup
+         * record (never by the product): a Run's ready wait grows to it (readyTimeoutMinutes).
+         */
+        setupBootMs: z.number().int().positive().max(86_400_000).optional(),
+        /**
          * The setup's ready check, added by the runtime-worker from the setup
          * record (never by the product): after every machine.reset the Run
          * waits for it before a probe, because compose up does not wait for

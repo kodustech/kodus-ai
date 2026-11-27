@@ -1,4 +1,5 @@
 import { HARD_EXPIRY_MINUTES, LEASE_TTL_MINUTES, READY_TIMEOUT_MINUTES } from './environment-runtime';
+import { setupBootMsOf } from '../run/environment-setup';
 
 // Every wait on a claim comes from its ceiling: a boot the hub still waits
 // for is never one the cell already destroyed, and the lease never outlives it.
@@ -26,5 +27,13 @@ describe('claim ceilings', () => {
         expect(HARD_EXPIRY_MINUTES.suite).toBeLessThan(120);
         // Renewed like a Run's: the first lease is a Run's, never past the ceiling.
         expect(LEASE_TTL_MINUTES.suite).toBe(LEASE_TTL_MINUTES.runtime);
+    });
+});
+
+describe('setupBootMsOf', () => {
+    it('is the latest done boot step, and nothing without one', () => {
+        expect(setupBootMsOf([{ name: 'boot', state: 'failed', durationMs: 5 }, { name: 'boot', state: 'done', durationMs: 878_000 }, { name: 'ready', state: 'done', durationMs: 9 }])).toBe(878_000);
+        expect(setupBootMsOf([{ name: 'boot', state: 'failed', durationMs: 5 }])).toBeUndefined();
+        expect(setupBootMsOf(undefined)).toBeUndefined();
     });
 });

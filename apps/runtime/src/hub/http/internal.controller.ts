@@ -47,6 +47,8 @@ const AcquireBody = z.strictObject({
     diagnosticHold: z.boolean().optional(),
     seedsCache: z.boolean().optional(),
     skipBake: z.boolean().optional(),
+    // A Run's claim: the setup's measured boot, which stretches the ready wait (readyTimeoutMinutes); the hub clamps it.
+    setupBootMs: z.number().int().positive().max(86_400_000).optional(),
     recipe: ClaimRecipeSchema.optional(),
     size: MachineSizeSchema.optional(),
     // The least isolation the claim runs under (isolation-architecture.md C1): a cell that does not satisfy it blocks the claim.

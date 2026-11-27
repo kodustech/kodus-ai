@@ -551,7 +551,7 @@ export class ClaimService {
         }
         if (req.consumer === 'runtime' && req.ref.side === 'pr') {
             const evicted = await this.evictedBuildState(cellId, req);
-            const refusal = evictedStateRefusal(evicted, readyTimeoutMinutes(req.consumer, req.ref.side) * 60_000);
+            const refusal = evictedStateRefusal(evicted, readyTimeoutMinutes(req.consumer, req.ref.side, req.setupBootMs) * 60_000);
             if (refusal) {
                 this.log('warn', 'claim.build_state_evicted', { ...ids, evictedAt: evicted!.evictedAt, rebuildSeconds: evicted!.rebuildSeconds ?? null });
                 return refusal;
@@ -634,7 +634,7 @@ export class ClaimService {
         // A new round: what the cell settled for this claimId before no longer answers it.
         this.settledClaimOutcomes.delete(claimId);
         // From claim.acquire to claim.ready (machines, code, observer), never past the claim's ceiling.
-        const ready = this.awaitReady(conn, claimId, readyWaitMs(req.consumer, deadlines, at, req.ref.side));
+        const ready = this.awaitReady(conn, claimId, readyWaitMs(req.consumer, deadlines, at, req.ref.side, req.setupBootMs));
         // A diagnostic hold is only ever asked for a setup claim that is not a PR.
         const hold = req.diagnosticHold === true && req.consumer === 'setup' && req.ref.side !== 'pr';
         // Optional work a cell that cannot read the field simply goes without (the cache is seeded at the bake).

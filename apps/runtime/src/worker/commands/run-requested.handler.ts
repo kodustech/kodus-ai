@@ -8,6 +8,7 @@ import {
     RuntimeRunRequested,
     RuntimeRunRequestedSchema,
     isTerminal,
+    setupBootMsOf,
     memberPullRequestAliasOf,
     type RunProjectionStore,
 } from '@libs/runtime/run';
@@ -88,8 +89,8 @@ export class RunRequestedHandler implements CommandHandler {
      */
     private async withRecordedRecipe(req: RuntimeRunRequested): Promise<{ req: RuntimeRunRequested; recipe?: RuntimeRunProjection['recipe'] }> {
         // The size comes only from a setup record (the schema: never the product's); without one the cell's default applies.
-        if (req.environment.size || req.environment.ready) {
-            const { size: _ignored, ready: _notTheProducts, ...environment } = req.environment;
+        if (req.environment.size || req.environment.ready || req.environment.setupBootMs) {
+            const { size: _ignored, ready: _notTheProducts, setupBootMs: _notEither, ...environment } = req.environment;
             req = { ...req, environment };
         }
         // Authored files come only from the setup's record, never from the request (the product's, or anything a PR could steer).
@@ -122,6 +123,9 @@ export class RunRequestedHandler implements CommandHandler {
             : undefined;
         // The Run boots at the size its setup booted with, never at one the request names.
         if (setup.machineSize) environment.size = setup.machineSize;
+        // How long that setup's boot took, so a Run of a heavy environment waits as long as the boot needs.
+        const setupBootMs = setupBootMsOf(setup.steps);
+        if (setupBootMs) environment.setupBootMs = setupBootMs;
         // The ready check the setup passed, so a Run waits for the app after each reset as the setup did after its boot.
         const ready = readyTarget(environment.expose, setup.recipe ?? {}, this.opts.healthPath);
         if (ready) environment.ready = { ...ready, waitSeconds: Math.ceil(ready.waitSeconds) };

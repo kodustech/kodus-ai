@@ -95,7 +95,7 @@ export function mtlsPost(tls: WorkerTls | undefined): Post {
 /** Per-route deadlines: the hub answers a step after the step's own timeout, an acquire after the boot. */
 // An acquire waits for the hub's own wait for claim.ready (READY_TIMEOUT_MINUTES), and a minute more.
 const TIMEOUT = {
-    acquire: (consumer: Consumer, side?: string) => (readyTimeoutMinutes(consumer, side) + 1) * 60_000,
+    acquire: (consumer: Consumer, side?: string, setupBootMs?: number) => (readyTimeoutMinutes(consumer, side, setupBootMs) + 1) * 60_000,
     step: (ms: number) => ms + 30_000,
     short: 30_000,
 } as const;
@@ -411,13 +411,13 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
 
     private async acquireUntyped(req: AcquireRequest, opts: AcquireOptions): Promise<Claim | Blocked> {
         const { readyBy } = opts;
-        if (readyBy === undefined) return this.sendAcquire(req, TIMEOUT.acquire(req.consumer, req.ref?.side));
+        if (readyBy === undefined) return this.sendAcquire(req, TIMEOUT.acquire(req.consumer, req.ref?.side, req.setupBootMs));
         const leftMs = readyBy - Date.now();
-        if (leftMs <= 0) return bootTimedOut(req.consumer, req.ref?.side);
+        if (leftMs <= 0) return bootTimedOut(req.consumer, req.ref?.side, req.setupBootMs);
         try {
-            return await this.sendAcquire(req, Math.min(TIMEOUT.acquire(req.consumer, req.ref?.side), leftMs + READY_ANSWER_GRACE_MS));
+            return await this.sendAcquire(req, Math.min(TIMEOUT.acquire(req.consumer, req.ref?.side, req.setupBootMs), leftMs + READY_ANSWER_GRACE_MS));
         } catch (e) {
-            if (e instanceof HubUnreachableError && Date.now() >= readyBy) return bootTimedOut(req.consumer, req.ref?.side);
+            if (e instanceof HubUnreachableError && Date.now() >= readyBy) return bootTimedOut(req.consumer, req.ref?.side, req.setupBootMs);
             throw e;
         }
     }

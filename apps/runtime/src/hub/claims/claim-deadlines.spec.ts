@@ -46,4 +46,30 @@ describe('claim deadlines', () => {
         expect(readyWaitMs('setup', freshDeadlines('setup', T0), T0 + 40 * MIN)).toBe(4 * MIN);
         expect(readyWaitMs('setup', freshDeadlines('setup', T0), T0 + 44.5 * MIN)).toBe(0);
     });
+
+    it('a Run of an environment whose setup booted in 14 min 38 s waits past 15 min on both sides', () => {
+        const d = freshDeadlines('runtime', T0);
+        const booted = (14 * 60 + 38) * 1000;
+        expect(readyWaitMs('runtime', d, T0, 'base', booted)).toBe(22 * MIN);
+        expect(readyWaitMs('runtime', d, T0, 'pr', booted)).toBe(30 * MIN);
+    });
+
+    it('a fast environment keeps the default wait', () => {
+        const d = freshDeadlines('runtime', T0);
+        expect(readyWaitMs('runtime', d, T0, 'base', 3 * MIN)).toBe(15 * MIN);
+        expect(readyWaitMs('runtime', d, T0, 'pr', 3 * MIN)).toBe(30 * MIN);
+        expect(readyWaitMs('runtime', d, T0, 'base', undefined)).toBe(15 * MIN);
+    });
+
+    it("the measured boot never stretches the wait past a setup's, nor a Run's own ceiling", () => {
+        const d = freshDeadlines('runtime', T0);
+        expect(readyWaitMs('runtime', d, T0, 'base', 40 * MIN)).toBe(44 * MIN);
+        // A retried round with 10 minutes left of the 60 waits 9, whatever the setup measured.
+        expect(readyWaitMs('runtime', d, T0 + 50 * MIN, 'base', 40 * MIN)).toBe(9 * MIN);
+    });
+
+    it('a setup and the other consumers ignore the measured boot', () => {
+        expect(readyWaitMs('setup', freshDeadlines('setup', T0), T0, undefined, 40 * MIN)).toBe(44 * MIN);
+        expect(readyWaitMs('mcp', freshDeadlines('mcp', T0), T0, undefined, 40 * MIN)).toBe(15 * MIN);
+    });
 });

@@ -35,6 +35,11 @@ export interface AcquireRequest {
      */
     skipBake?: boolean;
     /**
+     * A Run's claim: how long the environment's active setup measured its boot (ms), read by the worker from the setup
+     * record. The ready wait grows to it times RUN_BOOT_MEASURED_MARGIN (readyTimeoutMinutes), capped at a setup's wait.
+     */
+    setupBootMs?: number;
+    /**
      * A template's setup (`template:<org>/<env>`, setup only): placement alone reads it, to reserve only the cell
      * bound to that key. The worker never sends it to the cell or the hub.
      */
@@ -457,9 +462,22 @@ export const READY_TIMEOUT_MINUTES: Record<Consumer, number> = {
  */
 export const PR_BUILD_READY_TIMEOUT_MINUTES = PR_BUILD_READY_TIMEOUT_MINUTES_VALUE;
 
-/** READY_TIMEOUT_MINUTES for one claim: the PR side of a Run waits for its build. */
-export function readyTimeoutMinutes(consumer: Consumer, side?: string): number {
-    return consumer === 'runtime' && side === 'pr' ? PR_BUILD_READY_TIMEOUT_MINUTES : READY_TIMEOUT_MINUTES[consumer];
+/**
+ * Both sides of a Run can build cold on one host (the environment's template is still building, so the host boots from
+ * the cell base): each side then takes longer than the setup's lone boot measured. The Run waits this much longer.
+ */
+export const RUN_BOOT_MEASURED_MARGIN = 1.5;
+
+/**
+ * READY_TIMEOUT_MINUTES for one claim: the PR side of a Run waits for its build. A Run whose environment's setup
+ * measured a boot (`setupBootMs`, the active setup's boot step) waits at least that boot times the margin, never
+ * less than the default and never more than a setup waits (READY_TIMEOUT_MINUTES.setup): the setup proved the
+ * environment boots in that time, so a Run that waited less could never boot it.
+ */
+export function readyTimeoutMinutes(consumer: Consumer, side?: string, setupBootMs?: number): number {
+    const base = consumer === 'runtime' && side === 'pr' ? PR_BUILD_READY_TIMEOUT_MINUTES : READY_TIMEOUT_MINUTES[consumer];
+    if (consumer !== 'runtime' || !Number.isFinite(setupBootMs) || (setupBootMs as number) <= 0) return base;
+    return Math.min(READY_TIMEOUT_MINUTES.setup, Math.max(base, Math.ceil(((setupBootMs as number) * RUN_BOOT_MEASURED_MARGIN) / 60_000)));
 }
 
 /**
@@ -468,13 +486,13 @@ export function readyTimeoutMinutes(consumer: Consumer, side?: string): number {
  * HARD_EXPIRY_MINUTES and keeps it for a retried round on the same cell):
  * the round's start plus the claim's ready wait.
  */
-export function readyDeadlineOf(hardExpiresAt: string, consumer: Consumer, side?: string): number {
-    return Date.parse(hardExpiresAt) - HARD_EXPIRY_MINUTES[consumer] * 60_000 + readyTimeoutMinutes(consumer, side) * 60_000;
+export function readyDeadlineOf(hardExpiresAt: string, consumer: Consumer, side?: string, setupBootMs?: number): number {
+    return Date.parse(hardExpiresAt) - HARD_EXPIRY_MINUTES[consumer] * 60_000 + readyTimeoutMinutes(consumer, side, setupBootMs) * 60_000;
 }
 
 /** A boot that outlived its ready wait, as the hub answers it (kind resources, boot_timeout). */
-export function bootTimedOut(consumer: Consumer, side?: string): Blocked {
-    const minutes = readyTimeoutMinutes(consumer, side);
+export function bootTimedOut(consumer: Consumer, side?: string, setupBootMs?: number): Blocked {
+    const minutes = readyTimeoutMinutes(consumer, side, setupBootMs);
     return { status: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: `the boot did not finish in ${minutes} min, the most a boot of this claim waits` }] };
 }
 

@@ -49,6 +49,6 @@ export function retryDeadlines(previous: Pick<ClaimRow, 'cellId' | 'hardExpiresA
  * past a minute before the ceiling the cell enforces (READY_TIMEOUT_MINUTES),
  * which a retried round may have nearer than a first one.
  */
-export function readyWaitMs(consumer: Consumer, deadlines: ClaimDeadlines, at: number, side?: string): number {
-    return Math.max(0, Math.min(readyTimeoutMinutes(consumer, side) * MINUTE, Date.parse(deadlines.hardExpiresAt) - at - MINUTE));
+export function readyWaitMs(consumer: Consumer, deadlines: ClaimDeadlines, at: number, side?: string, setupBootMs?: number): number {
+    return Math.max(0, Math.min(readyTimeoutMinutes(consumer, side, setupBootMs) * MINUTE, Date.parse(deadlines.hardExpiresAt) - at - MINUTE));
 }
