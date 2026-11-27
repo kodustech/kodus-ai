@@ -93,8 +93,15 @@ describe('KodyLearningCronProvider — organization on error logs', () => {
         return { cron, lock };
     };
 
+    const loggedAt = '2026-11-27T03:00:00.000Z';
+
     beforeEach(() => {
         loggerSpy.error.mockClear();
+        jest.spyOn(Date.prototype, 'toISOString').mockReturnValue(loggedAt);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     it('logs the organization when platform configs are missing', async () => {
@@ -102,15 +109,15 @@ describe('KodyLearningCronProvider — organization on error logs', () => {
 
         await cron.handleCron();
 
-        expect(loggerSpy.error).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: 'Platform configs not found',
-                metadata: expect.objectContaining({
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                }),
-            }),
-        );
+        expect(loggerSpy.error).toHaveBeenCalledWith({
+            message: 'Platform configs not found',
+            context: KodyLearningCronProvider.name,
+            metadata: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                timestamp: loggedAt,
+            },
+        });
     });
 
     it('logs the organization when a stuck team has exhausted retries', async () => {
@@ -124,15 +131,16 @@ describe('KodyLearningCronProvider — organization on error logs', () => {
 
         await cron.handleCron();
 
-        expect(loggerSpy.error).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message:
-                    'Kody learning stuck and exhausted retries — giving up',
-                metadata: expect.objectContaining({
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                }),
-            }),
-        );
+        expect(loggerSpy.error).toHaveBeenCalledWith({
+            message: 'Kody learning stuck and exhausted retries — giving up',
+            context: KodyLearningCronProvider.name,
+            metadata: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                kodyLearningStatus: KodyLearningStatus.GENERATING_RULES,
+                stuckRetries: MAX_STUCK_RETRIES,
+                timestamp: loggedAt,
+            },
+        });
     });
 });
