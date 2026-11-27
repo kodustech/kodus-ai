@@ -1,13 +1,13 @@
-import { constants, PerformanceObserver } from 'perf_hooks';
-import { getHeapStatistics } from 'v8';
+import { GCProfiler, getHeapStatistics } from 'v8';
 
 /**
  * What the worker holds in memory over one window, to size how many reviews
  * fit in a process. RSS and heapUsed alone overstate the live set: V8 lets
  * the heap grow up to --max-old-space-size before collecting. The heap
- * right after a major (mark-sweep-compact) collection is the closest view of
- * what is actually reachable, and it needs no --expose-gc: the GC
- * observer's callback runs just after the collection ends.
+ * right after a full (mark-sweep-compact) collection is the closest view of
+ * what is actually reachable. V8's GC profiler records it inside the
+ * collection itself, so allocations after the GC do not leak into the
+ * reading, and it needs no --expose-gc.
  */
 export interface MemoryWindow {
     rssMb: number;
@@ -16,46 +16,55 @@ export interface MemoryWindow {
     heapLimitMb: number;
     externalMb: number;
     arrayBuffersMb: number;
-    /** Heap after the last major GC in the window; null when none ran. */
+    /** Heap after the last full GC; carried over from an earlier window. */
     heapAfterMajorGcMb: number | null;
-    /** Smallest heap after a major GC in the window. */
+    /** Smallest heap after a full GC in this window; null when none ran. */
     heapAfterMajorGcMinMb: number | null;
     majorGcs: number;
     gcPauseMs: number;
     gcMaxPauseMs: number;
 }
 
+/** One collection as the window needs it. */
+export interface GcRecord {
+    major: boolean;
+    /** Time the collection took, in ms. */
+    costMs: number;
+    /** Heap in use when the collection ended, in bytes. */
+    heapAfterBytes: number;
+}
+
 export interface MemoryWindowSources {
     memoryUsage: () => NodeJS.MemoryUsage;
-    heapUsed: () => number;
     heapLimit: () => number;
 }
 
 const MB = 1024 * 1024;
 const mb = (bytes: number) => Math.round(bytes / MB);
 
-/** The window's arithmetic, apart from the GC observer so it can be tested. */
+/** The window's arithmetic, apart from the profiler so it can be tested. */
 export function createMemoryWindow(sources: MemoryWindowSources) {
     let lastAfterMajor: number | null = null;
-    let minAfterMajor: number | null = null;
-    let majorGcs = 0;
-    let pauseMs = 0;
-    let maxPauseMs = 0;
 
     return {
-        onGc(major: boolean, durationMs: number): void {
-            pauseMs += durationMs;
-            maxPauseMs = Math.max(maxPauseMs, durationMs);
-            if (!major) return;
-            majorGcs++;
-            const used = sources.heapUsed();
-            lastAfterMajor = used;
-            minAfterMajor =
-                minAfterMajor === null ? used : Math.min(minAfterMajor, used);
-        },
-        take(): MemoryWindow {
+        take(gcs: GcRecord[]): MemoryWindow {
+            let minAfterMajor: number | null = null;
+            let majorGcs = 0;
+            let pauseMs = 0;
+            let maxPauseMs = 0;
+            for (const gc of gcs) {
+                pauseMs += gc.costMs;
+                maxPauseMs = Math.max(maxPauseMs, gc.costMs);
+                if (!gc.major) continue;
+                majorGcs++;
+                lastAfterMajor = gc.heapAfterBytes;
+                minAfterMajor =
+                    minAfterMajor === null
+                        ? gc.heapAfterBytes
+                        : Math.min(minAfterMajor, gc.heapAfterBytes);
+            }
             const m = sources.memoryUsage();
-            const out: MemoryWindow = {
+            return {
                 rssMb: mb(m.rss),
                 heapUsedMb: mb(m.heapUsed),
                 heapTotalMb: mb(m.heapTotal),
@@ -70,40 +79,60 @@ export function createMemoryWindow(sources: MemoryWindowSources) {
                 gcPauseMs: Math.round(pauseMs),
                 gcMaxPauseMs: Math.round(maxPauseMs),
             };
-            // The last reading carries over: a quiet window with no major GC
-            // still says what the last one left.
-            minAfterMajor = null;
-            majorGcs = 0;
-            pauseMs = 0;
-            maxPauseMs = 0;
-            return out;
         },
     };
 }
 
-/** Starts observing GC; `take()` returns and resets the current window. */
+/** V8 profiler entries to the records the window reads. */
+export function gcRecordsOf(profile: {
+    statistics?: Array<{
+        gcType?: string;
+        cost?: number;
+        afterGC?: { heapStatistics?: { usedHeapSize?: number } };
+    }>;
+}): GcRecord[] {
+    return (profile.statistics ?? []).map((s) => ({
+        major: s.gcType === 'MarkSweepCompact',
+        // V8 reports the cost in microseconds.
+        costMs: (s.cost ?? 0) / 1000,
+        heapAfterBytes: s.afterGC?.heapStatistics?.usedHeapSize ?? 0,
+    }));
+}
+
+/**
+ * Starts profiling GC; `take()` returns the window since the last call and
+ * starts the next one. The profiler keeps one record per collection until
+ * `take()` drains it, so the window length bounds its memory.
+ */
 export function startMemorySampler(): {
     take: () => MemoryWindow;
     stop: () => void;
 } {
     const window = createMemoryWindow({
         memoryUsage: () => process.memoryUsage(),
-        heapUsed: () => getHeapStatistics().used_heap_size,
         heapLimit: () => getHeapStatistics().heap_size_limit,
     });
-    const observer = new PerformanceObserver((list) => {
-        try {
-            for (const entry of list.getEntries()) {
-                const kind = (entry as any).detail?.kind;
-                window.onGc(
-                    kind === constants.NODE_PERFORMANCE_GC_MAJOR,
-                    entry.duration,
-                );
+    let profiler = new GCProfiler();
+    profiler.start();
+
+    return {
+        take: () => {
+            let records: GcRecord[] = [];
+            try {
+                records = gcRecordsOf(profiler.stop() ?? {});
+            } catch {
+                // diagnostics must never take the worker down
             }
-        } catch {
-            // diagnostics must never take the worker down
-        }
-    });
-    observer.observe({ entryTypes: ['gc'] });
-    return { take: () => window.take(), stop: () => observer.disconnect() };
+            profiler = new GCProfiler();
+            profiler.start();
+            return window.take(records);
+        },
+        stop: () => {
+            try {
+                profiler.stop();
+            } catch {
+                // already stopped
+            }
+        },
+    };
 }

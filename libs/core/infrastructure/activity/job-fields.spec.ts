@@ -135,6 +135,22 @@ describe('jobFields', () => {
                 changedLines: 325,
             },
         ],
+        [
+            'a GitHub PR that changes no lines as size 0, not unknown',
+            {
+                payload: {
+                    codeManagementPayload: {
+                        pull_request: {
+                            number: 4,
+                            changed_files: 0,
+                            additions: 0,
+                            deletions: 0,
+                        },
+                    },
+                },
+            },
+            { prNumber: 4, changedFiles: 0, changedLines: 0 },
+        ],
         ['an empty job', {}, {}],
     ])('reads %s', (_l, job, expected) => {
         const out = jobFields(job as any);

@@ -146,6 +146,14 @@ describe('activity registry', () => {
                 updateActivity({ workflowType: 'CODE_REVIEW' });
                 await hold();
             }),
+            // A PR with no changed files has a known size of 0.
+            runActivity('r4', {}, async () => {
+                updateActivity({
+                    workflowType: 'CODE_REVIEW',
+                    changedFiles: 0,
+                });
+                await hold();
+            }),
             runActivity('w1', {}, async () => {
                 updateActivity({ workflowType: 'WEBHOOK_PROCESSING' });
                 await hold();
@@ -157,10 +165,10 @@ describe('activity registry', () => {
         await Promise.all(jobs);
 
         expect(counts).toEqual({
-            total: 4,
-            byWorkflowType: { CODE_REVIEW: 3, WEBHOOK_PROCESSING: 1 },
+            total: 5,
+            byWorkflowType: { CODE_REVIEW: 4, WEBHOOK_PROCESSING: 1 },
             reviews: {
-                withSize: 2,
+                withSize: 3,
                 changedFilesSum: 13,
                 changedFilesMax: 10,
                 changedLinesSum: 400,

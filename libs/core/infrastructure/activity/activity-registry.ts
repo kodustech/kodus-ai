@@ -180,8 +180,11 @@ export function activityCounts(): ActivityCounts {
     for (const e of active.values()) {
         counts.total++;
         const type = e.workflowType ?? 'unknown';
-        counts.byWorkflowType[type] = (counts.byWorkflowType[type] ?? 0) + 1;
-        if (type === 'CODE_REVIEW' && e.changedFiles) {
+        counts.byWorkflowType[type] =
+            (Object.hasOwn(counts.byWorkflowType, type)
+                ? counts.byWorkflowType[type]
+                : 0) + 1;
+        if (type === 'CODE_REVIEW' && e.changedFiles !== undefined) {
             const r = counts.reviews;
             r.withSize++;
             r.changedFilesSum += e.changedFiles;

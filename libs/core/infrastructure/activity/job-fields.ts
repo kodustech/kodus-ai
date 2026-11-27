@@ -22,6 +22,11 @@ const num = (v: unknown): number | undefined => {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : undefined;
 };
+// A size can be 0 (a PR with no changed lines), unlike an id.
+const count = (v: unknown): number | undefined => {
+    const n = typeof v === 'number' ? v : Number.NaN;
+    return Number.isInteger(n) && n >= 0 ? n : undefined;
+};
 const str = (v: unknown): string | undefined =>
     typeof v === 'string' && v ? v.slice(0, 200) : undefined;
 
@@ -39,8 +44,8 @@ export function jobFields(job: {
     ) ?? p) as any;
     const repo =
         p.repository ?? w.repository ?? w.project ?? w.resource?.repository;
-    const additions = num(w.pull_request?.additions) ?? 0;
-    const deletions = num(w.pull_request?.deletions) ?? 0;
+    const additions = count(w.pull_request?.additions);
+    const deletions = count(w.pull_request?.deletions);
     return {
         organizationId:
             str(job.organizationAndTeamData?.organizationId) ??
@@ -64,7 +69,10 @@ export function jobFields(job: {
             num(w.pullrequest?.id) ??
             num(w.resource?.pullRequestId),
         platform: str(p.platformType) ?? str(p.platform),
-        changedFiles: num(w.pull_request?.changed_files),
-        changedLines: additions + deletions || undefined,
+        changedFiles: count(w.pull_request?.changed_files),
+        changedLines:
+            additions === undefined && deletions === undefined
+                ? undefined
+                : (additions ?? 0) + (deletions ?? 0),
     };
 }

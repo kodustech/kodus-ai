@@ -24,9 +24,17 @@ describe('cacheFootprint', () => {
         await cache.set('old', 'v', 1);
         await wait(10);
 
-        expect(cacheFootprint(cache)).toMatchObject({ entries: 1, expired: 1 });
+        expect(cacheFootprint(cache)).toEqual({
+            entries: 1,
+            expired: 1,
+            valueMb: 0,
+        });
         await cache.get('old');
-        expect(cacheFootprint(cache)).toMatchObject({ entries: 0, expired: 0 });
+        expect(cacheFootprint(cache)).toEqual({
+            entries: 0,
+            expired: 0,
+            valueMb: 0,
+        });
     });
 
     it('reports an unknown store instead of guessing', () => {
