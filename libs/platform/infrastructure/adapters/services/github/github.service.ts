@@ -5838,6 +5838,20 @@ This is an experimental feature that generates committable changes. Review the d
             const removed = settled.filter(
                 (result) => result.status === 'fulfilled',
             ).length;
+            // 403 is someone else's reaction (GitHub only lets an account
+            // delete its own) and 404 one already gone: both are expected.
+            // Anything else (rate limit, 5xx) is transient and must surface
+            // instead of reading as a completed cleanup.
+            const unexpected = settled.filter(
+                (result): result is PromiseRejectedResult =>
+                    result.status === 'rejected' &&
+                    ![403, 404].includes(
+                        (result.reason as { status?: number })?.status ?? 0,
+                    ),
+            );
+            if (unexpected.length > 0) {
+                throw unexpected[0].reason;
+            }
 
             this.logger.log({
                 message: `Removed reactions from ${isReviewComment ? 'review' : 'issue'} comment ${params.commentId}`,
