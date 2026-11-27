@@ -3759,12 +3759,34 @@ export class GithubService
         }
     }
 
+    /** HTTP 429, or 403 with no quota left or a secondary rate limit. */
+    private isRateLimitError(error: unknown): boolean {
+        const { status, message, response } = (error ?? {}) as {
+            status?: unknown;
+            message?: unknown;
+            response?: { headers?: Record<string, unknown> };
+        };
+        if (status === 429) {
+            return true;
+        }
+        if (status !== 403) {
+            return false;
+        }
+        const remaining = response?.headers?.['x-ratelimit-remaining'];
+        return (
+            String(remaining) === '0' ||
+            (typeof message === 'string' &&
+                /secondary rate limit/i.test(message))
+        );
+    }
+
     /**
      * The artifacts GitHub attaches to an issue (public preview), from the
      * List endpoint alone: each item carries its name and current body. Read
-     * through the issue's own repository only. Never throws: what could not
-     * be read is named in `unreadArtifacts`, so the review can say its
-     * Business Logic coverage is incomplete.
+     * through the issue's own repository only. What could not be read is named
+     * in `unreadArtifacts`, so the review can say its Business Logic coverage
+     * is incomplete; only a rate limit throws, as `getIssue` does for the
+     * issue itself.
      */
     private async issueArtifacts(
         octokit: Awaited<ReturnType<typeof this.getAuthenticatedOctokit>>,
@@ -3796,14 +3818,16 @@ export class GithubService
             ).data;
         } catch (error) {
             const status = (error as { status?: unknown })?.status;
-            // 404: the feature is unavailable here (GHES, older API, preview off).
-            if (status === 404) {
-                return {};
+            if (this.isRateLimitError(error)) {
+                // Not an artifact problem: the review cannot go on as if it were.
+                throw error;
             }
             return {
                 unreadArtifacts: [
                     {
-                        reason: 'list_failed',
+                        // 404: the list is unavailable here (GHES, older API,
+                        // preview off). Not the same as an empty list.
+                        reason: status === 404 ? 'not_found' : 'list_failed',
                         ...(typeof status === 'number' ? { status } : {}),
                     },
                 ],

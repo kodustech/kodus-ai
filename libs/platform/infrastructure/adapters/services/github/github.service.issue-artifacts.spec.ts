@@ -75,15 +75,15 @@ describe('GithubService.getIssue: issue artifacts', () => {
         ]);
         expect(unreadOf(result) ?? []).toEqual([]);
         expect(request).toHaveBeenCalledTimes(1);
-        expect(request).toHaveBeenCalledWith(
+        expect(request.mock.calls[0][0]).toBe(
             'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts',
-            expect.objectContaining({
-                owner: 'acme',
-                repo: 'web',
-                issue_number: 12,
-                per_page: 100,
-            }),
         );
+        expect(request.mock.calls[0][1]).toMatchObject({
+            owner: 'acme',
+            repo: 'web',
+            issue_number: 12,
+            per_page: 100,
+        });
     });
 
     it('sends the preview API version and a timeout only on the artifact call', async () => {
@@ -93,7 +93,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
         await get(service);
         expect(request).toHaveBeenCalledTimes(1);
         const [, params] = request.mock.calls[0];
-        expect(params.headers).toMatchObject({
+        expect(params.headers).toEqual({
             'X-GitHub-Api-Version': API_VERSION,
         });
         expect(params.request.signal).toBeInstanceOf(AbortSignal);
@@ -119,8 +119,9 @@ describe('GithubService.getIssue: issue artifacts', () => {
         expect(request).toHaveBeenCalledTimes(1);
         const [route, params] = request.mock.calls[0];
         expect(isList(route)).toBe(true);
-        expect(params).toMatchObject({ owner: 'acme', repo: 'web' });
-        expect(JSON.stringify(params)).not.toContain('other');
+        expect(params.owner).toBe('acme');
+        expect(params.repo).toBe('web');
+        expect(params.issue_number).toBe(12);
     });
 
     it.each([403, 500])(
@@ -133,7 +134,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
             expect(result?.number).toBe(12);
             expect(artifactsOf(result) ?? []).toEqual([]);
             expect(unreadOf(result)).toEqual([
-                expect.objectContaining({ reason: 'list_failed', status }),
+                { reason: 'list_failed', status },
             ]);
         },
     );
@@ -146,19 +147,58 @@ describe('GithubService.getIssue: issue artifacts', () => {
         });
         const result = await get(service);
         expect(result?.number).toBe(12);
-        expect(unreadOf(result)).toEqual([
-            expect.objectContaining({ reason: 'list_failed' }),
-        ]);
+        expect(unreadOf(result)).toEqual([{ reason: 'list_failed' }]);
     });
 
-    it('treats a 404 on the artifact list as no artifacts: no note', async () => {
+    it('flags a 404 on the artifact list as unavailable, not as no artifacts', async () => {
         const { service } = serviceWith(issue(), () => {
             throw httpError(404);
         });
         const result = await get(service);
         expect(result?.number).toBe(12);
-        expect(artifactsOf(result) ?? []).toEqual([]);
-        expect(unreadOf(result) ?? []).toEqual([]);
+        expect(artifactsOf(result)).toBeUndefined();
+        expect(unreadOf(result)).toEqual([
+            { reason: 'not_found', status: 404 },
+        ]);
+    });
+
+    it.each([
+        ['a 429', httpError(429)],
+        [
+            'a 403 with no quota left',
+            Object.assign(httpError(403), {
+                response: { headers: { 'x-ratelimit-remaining': '0' } },
+            }),
+        ],
+        [
+            'a 403 naming a secondary rate limit',
+            Object.assign(
+                new Error('You have exceeded a secondary rate limit'),
+                {
+                    status: 403,
+                },
+            ),
+        ],
+    ])(
+        'rethrows %s, as getIssue does for the issue itself',
+        async (_label, error) => {
+            const { service } = serviceWith(issue(), () => {
+                throw error;
+            });
+            await expect(get(service)).rejects.toBe(error);
+        },
+    );
+
+    it('still reports a 403 with quota left as unread', async () => {
+        const { service } = serviceWith(issue(), () => {
+            throw Object.assign(httpError(403), {
+                response: { headers: { 'x-ratelimit-remaining': '42' } },
+            });
+        });
+        const result = await get(service);
+        expect(unreadOf(result)).toEqual([
+            { reason: 'list_failed', status: 403 },
+        ]);
     });
 
     it('treats a list that is not an array as unread', async () => {
@@ -166,9 +206,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
             unexpected: 'shape',
         }));
         const result = await get(service);
-        expect(unreadOf(result)).toEqual([
-            expect.objectContaining({ reason: 'invalid_payload' }),
-        ]);
+        expect(unreadOf(result)).toEqual([{ reason: 'invalid_payload' }]);
     });
 
     it('names an invalid or empty item as unread and keeps the valid ones', async () => {
@@ -183,9 +221,9 @@ describe('GithubService.getIssue: issue artifacts', () => {
             { number: 1, name: 'qa.md', content: 'Returns 422.' },
         ]);
         expect(unreadOf(result)).toEqual([
-            expect.objectContaining({ number: 2, name: 'empty.md' }),
-            expect.objectContaining({ name: 'bad.md' }),
-            expect.objectContaining({ number: 4, name: 'nobody.md' }),
+            { number: 2, name: 'empty.md', reason: 'invalid_payload' },
+            { name: 'bad.md', reason: 'invalid_payload' },
+            { number: 4, name: 'nobody.md', reason: 'invalid_payload' },
         ]);
     });
 
@@ -197,9 +235,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
         );
         const result = await get(service);
         expect(artifactsOf(result)).toHaveLength(100);
-        expect(unreadOf(result)).toEqual([
-            expect.objectContaining({ reason: 'may_have_more' }),
-        ]);
+        expect(unreadOf(result)).toEqual([{ reason: 'may_have_more' }]);
     });
 
     it('makes no artifact call unless the caller asks for them', async () => {
