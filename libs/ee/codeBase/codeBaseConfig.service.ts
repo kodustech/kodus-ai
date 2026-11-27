@@ -77,6 +77,13 @@ import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/g
 const IP_E2B_CACHE_KEY = 'global:ip_e2b';
 const IP_E2B_CACHE_TTL = 604800000; // 1 week
 
+/** `typeof null` is `object`, and arrays are objects too. */
+function implicitRepliesValueType(value: unknown): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    return typeof value;
+}
+
 @Injectable()
 export default class CodeBaseConfigService implements ICodeBaseConfigService {
     private readonly logger = createLogger(CodeBaseConfigService.name);
@@ -828,6 +835,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         onDroppedKeys?: (keys: string[]) => void;
         /** Pipeline reads isolate policy errors; settings editing stays strict. */
         tolerateReviewSettingsErrors?: boolean;
+        /** A non-boolean `conversation.implicitReplies` was dropped. */
+        onRejectedImplicitReplies?: () => void;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -882,6 +891,25 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         }
         if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
 
+        kodusConfigYMLfile = this.withoutInvalidConversation(
+            kodusConfigYMLfile,
+            (valueType) => {
+                // The value comes from repository YAML. Log its type only:
+                // the field can hold an arbitrary string or object.
+                this.logger.warn({
+                    message:
+                        'Ignoring an invalid conversation.implicitReplies in kodus-config.yml: the stored setting applies',
+                    context: CodeBaseConfigService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repository,
+                        valueType,
+                    },
+                });
+                params.onRejectedImplicitReplies?.();
+            },
+        );
+
         const contractErrors = validateRiskApprovalSettings(kodusConfigYMLfile);
         let settingsError = contractErrors.length
             ? `Invalid code review settings in kodus-config.yml: ${contractErrors.map((error) => error.instancePath).join(', ')}`
@@ -913,6 +941,46 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         }
 
         return kodusConfigYMLfile;
+    }
+
+    /**
+     * `conversation.implicitReplies` (#2576) is only meaningful as a boolean.
+     * Any other value (a quoted "false", YAML 1.2 `no`, `0`, an empty key) is
+     * dropped, so a reply reads the file as if the key were missing. `onRejected`
+     * tells sync, which would otherwise treat the missing key as a deletion of
+     * a boolean already stored for that scope.
+     */
+    private withoutInvalidConversation(
+        file: KodusConfigFile,
+        onRejected: (valueType: string) => void,
+    ): KodusConfigFile {
+        const conversation: unknown = file.conversation;
+        if (conversation === undefined) return file;
+
+        const block =
+            conversation !== null &&
+            typeof conversation === 'object' &&
+            !Array.isArray(conversation)
+                ? (conversation as Record<string, unknown>)
+                : undefined;
+        if (
+            block &&
+            (block.implicitReplies === undefined ||
+                typeof block.implicitReplies === 'boolean')
+        ) {
+            return file;
+        }
+
+        onRejected(
+            implicitRepliesValueType(
+                block ? block.implicitReplies : conversation,
+            ),
+        );
+
+        const { conversation: _, ...rest } = file;
+        if (!block) return rest as KodusConfigFile;
+        const { implicitReplies: __, ...validConversation } = block;
+        return { ...rest, conversation: validConversation } as KodusConfigFile;
     }
 
     private async getConfigurationFile(

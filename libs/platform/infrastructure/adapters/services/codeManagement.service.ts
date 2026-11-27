@@ -1552,6 +1552,50 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getPullRequestReviewThreads(params);
     }
 
+    async getAnsweredReviewThreadRootIds(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        type?: PlatformType,
+    ): Promise<Set<string> | null> {
+        try {
+            if (!type) {
+                type = await this.getTypeIntegration(
+                    extractOrganizationAndTeamData(params),
+                );
+            }
+            if (!type) return null;
+
+            const codeManagementService =
+                this.platformIntegrationFactory.getCodeManagementService(type);
+
+            if (!codeManagementService.getAnsweredReviewThreadRootIds) {
+                return null;
+            }
+
+            return await codeManagementService.getAnsweredReviewThreadRootIds(
+                params,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${params.prNumber}`,
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData?.organizationId,
+                    teamId: params.organizationAndTeamData?.teamId,
+                    repositoryId: params.repository?.id,
+                    prNumber: params.prNumber,
+                    platformType: type,
+                },
+            });
+            return null;
+        }
+    }
+
     async getPullRequestsWithChangesRequested(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;

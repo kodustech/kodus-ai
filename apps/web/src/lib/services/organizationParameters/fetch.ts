@@ -412,6 +412,9 @@ export type ModelUiCapabilities = {
      *  function of (provider, model) and the toggle never refetches. */
     temperatureWhenReasoningOff?: TemperaturePolicy;
     supportsReasoning: boolean;
+    /** It always reasons, and no level can be set for it on this endpoint.
+     *  The API sends it only when true; absent means the model does not. */
+    reasoningAlwaysOn?: boolean;
     reasoningOptions: Array<"low" | "medium" | "high">;
     /** Provider-owned example for the "Custom" reasoning-override textarea. */
     reasoningOverrideExample?: string;

@@ -710,6 +710,136 @@ describe('repairAndValidate', () => {
             ).toBeUndefined();
         });
 
+        it('re-asks, never ships the empty example, when a prose example precedes a quoted code block and the findings', async () => {
+            // The shape-3 sentence, but the first fence quotes code (Kody,
+            // PR #2566 thread 4603260661). Main returned {"violations":[]}
+            // here: real findings became an empty review.
+            const text =
+                'If nothing is wrong I would return {"violations":[]}.\n' +
+                '```ts\nconst a = 1;\n```\n' +
+                findings;
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('re-asks when the findings precede a quoted code block and an empty example follows', async () => {
+            // The mirror order: position alone cannot tell the answer from
+            // the example, so a valid object on both sides of the quote is
+            // ambiguous.
+            const text =
+                findings +
+                '\n```ts\nconst a = 1;\n```\n' +
+                'Empty would be {"violations":[]}';
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('re-asks when a prose empty example precedes a quoted code block and an invalid answer', async () => {
+            const text =
+                'If nothing is wrong I would return {"violations":[]}.\n' +
+                '```ts\nconst a = 1;\n```\n' +
+                '{"violations":[{"body":"bug","line":"12"}]}';
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('re-asks when the only object sits before a quoted code block (a reply cut off after the quote)', async () => {
+            // Kody, PR #2700: alone, the object before the quote is as likely
+            // the prose example of a truncated reply as the answer.
+            expect(
+                await repairAndValidate(
+                    violationsWire,
+                    'If nothing is wrong I would return {"violations":[]}.\n' +
+                        '```ts\nconst a = 1;\n```\n',
+                ),
+            ).toBeUndefined();
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    answer('const real = 1;') +
+                        '\nThe change in context:\n```ts\nconst real = 1;\n```',
+                ),
+            ).toBeUndefined();
+        });
+
+        it('gives up (re-ask) instead of stalling on a reply made of unclosed openers', async () => {
+            // Kody, PR #2700: each opener rescanned the rest — `{` × 1M was
+            // ~10^12 steps. 40k took 1.7s before the scan budget.
+            const started = Date.now();
+            expect(
+                await repairAndValidate(violationsWire, '{'.repeat(1_000_000)),
+            ).toBeUndefined();
+            expect(
+                await repairAndValidate(
+                    violationsWire,
+                    '{'.repeat(500_000) + 'x' + '}'.repeat(500_000),
+                ),
+            ).toBeUndefined();
+            // Not a speed target: the quadratic walk took ~18 min here, and
+            // Stryker's instrumented dry run takes ~7s on CI.
+            expect(Date.now() - started).toBeLessThan(30_000);
+        }, 60_000);
+
+        it('keeps an answer already found when the scan budget runs out after it', async () => {
+            // Kody, PR #2700: the budget dropped the candidates it had parsed,
+            // so a valid answer followed by a run of unclosed openers re-asked.
+            const text =
+                '```json\n{"improvedCode":1,"fixStatus":"fixed"}\n```\n' +
+                answer('const real = 1;') +
+                '\n' +
+                '{'.repeat(10_000);
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const real = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('still recovers the answer behind a long quote of real code under the scan budget', async () => {
+            // Balanced braces in ordinary code cost their own span, not the
+            // rest of the reply: 100k chars of nested functions stay cheap.
+            const code = 'function f() { if (a) { g({ x: 1 }); } }\n'.repeat(
+                2_500,
+            );
+            const started = Date.now();
+            expect(
+                await repairAndValidate(
+                    violationsWire,
+                    '```ts\n' + code + '```\n' + findings,
+                ),
+            ).toEqual({ violations: [{ body: 'bug', line: 12 }] });
+            expect(Date.now() - started).toBeLessThan(15_000);
+        });
+
+        it('recovers an answer whose own string value holds the fence the primary took', async () => {
+            // The first fence sits INSIDE the answer's improvedCode, so the
+            // answer starts before the primary's span and encloses it (Kody,
+            // PR #2566 review thread 4603261797).
+            const fenced = '```\n{a:1}\n```';
+            expect(await repairAndValidate(codeWire, answer(fenced))).toEqual({
+                improvedCode: fenced,
+                fixStatus: 'fixed',
+            });
+            const fencedJs = '```js\nconst o = {a:1};\n```';
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    'Here is the fix:\n' + answer(fencedJs),
+                ),
+            ).toEqual({ improvedCode: fencedJs, fixStatus: 'fixed' });
+        });
+
+        it('does NOT let a prose example that ends before the primary compete', async () => {
+            // The enclosing rule admits only objects that run PAST the
+            // primary's span; one that ends before it is still skipped.
+            const text =
+                'Format: {"improvedCode":"x","fixStatus":"fixed"}\n' +
+                '```json\n{"improvedCode":1,"fixStatus":"fixed"}\n```';
+            expect(await repairAndValidate(codeWire, text)).toBeUndefined();
+        });
+
         it('does NOT let a nested child stand in for the answer', async () => {
             // Top-level-only: the array-member and wrapper-nested `keep`
             // objects stay undefined (→ the caller re-asks), as before the
@@ -1655,5 +1785,204 @@ describe('extractLastJsonObjectWith', () => {
                 ['keep'],
             ),
         ).toEqual({ keep: false, cited: { keep: true } });
+    });
+});
+
+// Review on #2700 (sartorijr92): each case is the reviewer's reproduction.
+describe('repairAndValidate: review on #2700', () => {
+    const wire = ensureValidatingSchema(
+        jsonSchema({
+            type: 'object',
+            properties: {
+                violations: { type: 'array', items: { type: 'object' } },
+            },
+            required: ['violations'],
+            additionalProperties: false,
+        } as any),
+    );
+    const answer = '{"violations":[{"ruleId":"r1","line":3}]}';
+
+    it('a quote with braces in it is a quote too: the "Empty would be" after it does not win', async () => {
+        const text = `${answer}\n\`\`\`ts\nif (a) { b() }\n\`\`\`\nEmpty would be {"violations":[]}`;
+        await expect(repairAndValidate(wire, text)).resolves.toBeUndefined();
+    });
+
+    it('the same answer on both sides of a quote is no ambiguity', async () => {
+        const text = `${answer}\n\`\`\`ts\nconst x = await fetchUser(id);\n\`\`\`\n${answer}`;
+        await expect(repairAndValidate(wire, text)).resolves.toEqual(
+            JSON.parse(answer),
+        );
+    });
+
+    it('the same answer restated with its keys reordered is no ambiguity either', async () => {
+        const reordered = '{"violations":[{"line":3,"ruleId":"r1"}]}';
+        const text = `${answer}\n\`\`\`ts\nconst x = await fetchUser(id);\n\`\`\`\n${reordered}`;
+        await expect(repairAndValidate(wire, text)).resolves.toEqual(
+            JSON.parse(answer),
+        );
+    });
+
+    it('an answer followed by a quote: re-asked when a re-ask is left, taken when none is', async () => {
+        const text = `${answer}\n\`\`\`ts\nconst x = await fetchUser(id);\n\`\`\``;
+        await expect(repairAndValidate(wire, text)).resolves.toBeUndefined();
+        await expect(
+            repairAndValidate(wire, text, { lastChance: true }),
+        ).resolves.toEqual(JSON.parse(answer));
+    });
+
+    it('last chance: a fenced answer that fails the schema is no quote, so the example before it is not shipped', async () => {
+        // Round 2: the reply restates the prompt's empty example, then gives
+        // its violation in a ```json fence with a string line.
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    reasoning: { type: 'string' },
+                    suggestions: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                ruleId: { type: 'string' },
+                                line: { type: 'integer' },
+                            },
+                            required: ['ruleId', 'line'],
+                        },
+                    },
+                },
+                required: ['reasoning', 'suggestions'],
+            } as any),
+        );
+        const example =
+            '{"reasoning":"Checked all rules, no violations found","suggestions":[]}';
+        const text = `If no violations: ${example}\n\n\`\`\`json\n{"reasoning":"found","suggestions":[{"ruleId":"r1","line":"42"}]}\n\`\`\``;
+        await expect(
+            repairAndValidate(strict, text, { lastChance: true }),
+        ).resolves.toBeUndefined();
+        // A fence of code that is no JSON still lets the answer before it stand.
+        const quoted = `${example}\n\`\`\`ts\nif (a) { b() }\n\`\`\``;
+        await expect(
+            repairAndValidate(strict, quoted, { lastChance: true }),
+        ).resolves.toEqual(JSON.parse(example));
+    });
+
+    it('last chance: a jsonc or json5 fence is the model answer, not a quote', async () => {
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    suggestions: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: { line: { type: 'integer' } },
+                            required: ['line'],
+                        },
+                    },
+                },
+                required: ['suggestions'],
+            } as any),
+        );
+        for (const tag of ['jsonc', 'json5', 'JSON']) {
+            const text = `If no violations: {"suggestions":[]}\n\n\`\`\`${tag}\n{"suggestions":[{"line":"42"}]}\n\`\`\``;
+            await expect(
+                repairAndValidate(strict, text, { lastChance: true }),
+            ).resolves.toBeUndefined();
+        }
+    });
+
+    it('an unclosed fence followed by a long run of spaces is read in linear time', async () => {
+        // Kody on #2700: the fence regexes backtracked over the run once per
+        // space, quadratic in model-generated text.
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: { ok: { type: 'boolean' } },
+                required: ['ok'],
+            } as any),
+        );
+        const text = `{"ok":true} \`\`\`${' '.repeat(200_000)}x`;
+        const start = performance.now();
+        await expect(
+            repairAndValidate(strict, text, { lastChance: true }),
+        ).resolves.toEqual({ ok: true });
+        expect(extractJsonFromText(text)).toBe('{"ok":true}');
+        expect(performance.now() - start).toBeLessThan(1000);
+    });
+
+    it('last chance: a quoted code fence with a parseable bracket in it is still a quote', async () => {
+        // Round 3: the answer, then the offending line quoted in a fence of
+        // code whose first bracket span happens to parse as JSON.
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    reasoning: { type: 'string' },
+                    suggestions: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                ruleId: { type: 'string' },
+                                line: { type: 'integer' },
+                            },
+                            required: ['ruleId', 'line'],
+                        },
+                    },
+                },
+                required: ['reasoning', 'suggestions'],
+            } as any),
+        );
+        const answer =
+            '{"reasoning":"found","suggestions":[{"ruleId":"r1","line":42}]}';
+        const quotes = [
+            '```python\nuser_id = request.args["id"]\n```',
+            '```ts\nconst retries = [100, 200];\n```',
+            '```ts\nconst first = items[0];\n```',
+            '```ts\nconst opts = {};\nrun(opts);\n```',
+            // Only json, jsonc and json5 name an answer; jsonnet is code.
+            '```jsonnet\nlocal ids = ["id"];\n```',
+        ];
+        for (const quote of quotes) {
+            await expect(
+                repairAndValidate(strict, `${answer}\n\nThe line:\n${quote}`, {
+                    lastChance: true,
+                }),
+            ).resolves.toEqual(JSON.parse(answer));
+        }
+        // A fence whose body is JSON is the model's answer, even when it does
+        // not parse cleanly: the object before it is still not taken.
+        const example =
+            '{"reasoning":"Checked all rules, no violations found","suggestions":[]}';
+        const answers = [
+            '```json\n[{"ruleId":"r1","line":42},]\n```',
+            '```json\n// the violation\n{"reasoning":"found","suggestions":[{"ruleId":"r1","line":"42"}]}\n```',
+            '```\n{"reasoning":"found","suggestions":[{"ruleId":"r1","line":"42"}]}\n```',
+        ];
+        for (const fence of answers) {
+            await expect(
+                repairAndValidate(
+                    strict,
+                    `If no violations: ${example}\n\n${fence}`,
+                    {
+                        lastChance: true,
+                    },
+                ),
+            ).resolves.toBeUndefined();
+        }
+    });
+
+    it('prose quoting many unclosed diff lines before a long reply still finds the answer', async () => {
+        const quoted = Array.from(
+            { length: 20 },
+            (_, i) =>
+                `- In \`export async function handler${i}(req) {\` the input is not validated.`,
+        ).join('\n');
+        const text = `${quoted}\n${'x'.repeat(300_000)}\n${answer}`;
+        const started = Date.now();
+        await expect(repairAndValidate(wire, text)).resolves.toEqual(
+            JSON.parse(answer),
+        );
+        expect(Date.now() - started).toBeLessThan(2_000);
     });
 });

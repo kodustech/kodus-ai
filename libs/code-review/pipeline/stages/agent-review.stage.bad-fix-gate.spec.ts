@@ -119,6 +119,20 @@ afterEach(() => {
 
 describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
     it('adds the revision reference after formatting to both the comment and the correction prompt', async () => {
+        // The repeat check judges the linked finding a consequence (#2676).
+        runSpy.mockImplementation(async (params: any) =>
+            params.runName === 'code-review-repeat-check'
+                ? {
+                      verdicts: [
+                          {
+                              finding: 0,
+                              verdict: 'caused_by_earlier',
+                              earlierId: 'prior-1',
+                          },
+                      ],
+                  }
+                : { groups: [], unique: [0, 1, 2, 3] },
+        );
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([

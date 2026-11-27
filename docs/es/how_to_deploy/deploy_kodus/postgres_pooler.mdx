@@ -9,6 +9,14 @@ en modo de pool **session o transaction**. En cada cambio, el CI ejecuta los
 locks de coordinación de Kodus y el puente de eventos entre api y worker a
 través de PgBouncer 1.26 en modo transaction.
 
+<Warning>
+Requiere una release self-hosted de Kodus posterior a 2.2.12. La 2.2.12 y las
+anteriores ignoran la conexión directa, así que las migraciones, LISTEN y los
+locks de coordinación pasan por el pooler y fallan en modo transaction.
+Revisa `IMAGE_TAG` (Docker Compose) o `imageTag` (Helm) antes de activar el
+pooler.
+</Warning>
+
 Esta página explica qué configurar en el pooler, las dos conexiones que usa
 Kodus y cómo comprobar el resultado.
 
@@ -90,7 +98,9 @@ Configurar la conexión directa también cambia los locks de coordinación de
 Kodus de locks de sesión a filas en la base. Los pods que aún corren sin ella
 no ven los nuevos locks, así que activa el pooler con los pods anteriores
 detenidos: ejecuta `docker compose down` antes, o escala los Deployments de
-api, worker y webhooks a 0 antes del `helm upgrade`.
+api, worker, worker-analytics y webhooks a 0 antes del `helm upgrade` y de
+vuelta después (a `autoscaling.minReplicas`, 2 por defecto): el HPA no escala
+un Deployment que está en 0.
 
 ### Docker Compose
 
@@ -214,10 +224,10 @@ el service `-rw` de CloudNativePG o un PgBouncer que siga al primary. Todos los
 componentes de Kodus escriben, así que no se usan réplicas de lectura.
 
 Durante un failover, las consultas en curso fallan y los pools se reconectan
-en la siguiente petición. Detrás de un pooler, los locks de coordinación son
-filas en la base, así que sobreviven al failover junto con los datos; sin
-pooler son locks de sesión, liberados cuando caen las sesiones con el primario
-anterior.
+en la siguiente petición. Con la conexión directa configurada, los locks de
+coordinación son filas en la base, así que sobreviven al failover junto con los
+datos; sin ella (sin pooler, o con un pooler en modo session) son locks de
+sesión, liberados cuando caen las sesiones con el primario anterior.
 
 ## Comprueba la configuración
 

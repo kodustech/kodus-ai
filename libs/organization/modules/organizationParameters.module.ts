@@ -30,6 +30,7 @@ import { ProviderModule } from '@libs/core/infrastructure/services/providers/pro
 import { ParametersModule } from './parameters.module';
 import { TeamModule } from './team.module';
 import { OrganizationModule } from './organization.module';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import {
     KODUS_PROVIDER_GATE_TOKEN,
     KodusProviderGate,
@@ -67,6 +68,7 @@ import {
         GetLLMConfigStatusUseCase,
         GetByokProvidersUseCase,
         { provide: KODUS_PROVIDER_GATE_TOKEN, useClass: KodusProviderGate },
+        UltraReviewGate,
         IgnoreBotsUseCase,
         UpdateAuthorFiltersUseCase,
         GetModelsByProviderUseCase,

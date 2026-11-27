@@ -104,6 +104,8 @@ function prOf(c) {
         baseFiles: c.prBase ?? baseTreeOf(c),
         ...(c.prBase ? { lastReviewedFiles: baseTreeOf(c) } : {}),
         commits: platformCommits(c.commits),
+        ...(c.heavy ? { heavy: true } : {}),
+        ...(c.reviewThreads ? { reviewThreads: c.reviewThreads } : {}),
     };
 }
 

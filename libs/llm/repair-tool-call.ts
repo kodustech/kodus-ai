@@ -100,7 +100,10 @@ export async function repairInvalidToolInput(opts: {
         // wrapped JSON), held to the SAME tool schema — a valid recovery is
         // accepted, a still-wrong shape (or any other error) → null = the SDK's
         // default "don't repair, fail the step" (kept fully fail-soft).
-        const recovered = await salvageStructuredError(err, validatingSchema);
+        // The correction is the last attempt: nothing re-asks after it.
+        const recovered = await salvageStructuredError(err, validatingSchema, {
+            lastChance: true,
+        });
         if (recovered !== undefined) {
             logger.log({
                 message: `[tool-repair] repaired "${toolCall.toolName}" via deterministic salvage`,

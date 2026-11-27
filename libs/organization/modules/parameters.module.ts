@@ -21,9 +21,13 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 
 @Module({
     imports: [
+        // The release track, for the Ultra review alpha gate.
+        forwardRef(() => OrganizationModule),
         TypeOrmModule.forFeature([ParametersModel]),
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => IntegrationModule),
@@ -52,6 +56,7 @@ import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
             useClass: ParametersService,
         },
         UpdateOrCreateCodeReviewParameterUseCase,
+        UltraReviewGate,
     ],
     exports: [
         PARAMETERS_REPOSITORY_TOKEN,

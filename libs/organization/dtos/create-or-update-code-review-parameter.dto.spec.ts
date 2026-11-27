@@ -246,4 +246,70 @@ describe('CreateOrUpdateCodeReviewParameterDto — conversation.implicitReplies'
         // asserting the key is what pins the declaration.
         expect(JSON.stringify(response)).toContain('answerEveryone');
     });
+
+    const rejection = async (configValue: Record<string, unknown>) => {
+        try {
+            await through(configValue);
+        } catch (error) {
+            return (error as { getResponse: () => unknown }).getResponse();
+        }
+        throw new Error('expected the pipe to reject');
+    };
+
+    // Implicit conversion turned these strings into `true`: the request
+    // returned 201 and erased a stored opt-out. `0` was stored as `false`.
+    it.each([['false'], ['no'], ['off'], ['true'], [0], [1], [null]])(
+        'rejects a non-boolean implicitReplies (%j)',
+        async (value) => {
+            await expect(
+                rejection({ conversation: { implicitReplies: value } }),
+            ).resolves.toEqual({
+                statusCode: 400,
+                message: [
+                    'configValue.conversation.implicitReplies must be a boolean value',
+                ],
+                error: 'Bad Request',
+            });
+        },
+    );
+
+    it.each([
+        [
+            null,
+            [
+                'configValue.conversation must be an object',
+                'configValue.nested property conversation must be either object or array',
+            ],
+        ],
+        [
+            [{ implicitReplies: false }],
+            ['configValue.conversation must be an object'],
+        ],
+        [
+            'off',
+            [
+                'configValue.conversation must be an object',
+                'configValue.nested property conversation must be either object or array',
+            ],
+        ],
+    ])(
+        'rejects a conversation block that is not an object (%j)',
+        async (conversation, message) => {
+            await expect(rejection({ conversation })).resolves.toEqual({
+                statusCode: 400,
+                message,
+                error: 'Bad Request',
+            });
+        },
+    );
+
+    it('keeps an opt-in as the boolean true', async () => {
+        const result = await through({
+            conversation: { implicitReplies: true },
+        });
+
+        expect(result.configValue.conversation).toEqual({
+            implicitReplies: true,
+        });
+    });
 });

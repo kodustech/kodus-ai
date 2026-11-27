@@ -407,7 +407,11 @@ function truncateToolMessage(
             return next;
         });
 
-        return { msg: { ...msg, content: newContent }, truncated };
+        // An untouched message stays the same object, so a caller can find
+        // the first message a pass changed (see withoutThinkingAfterFirstEdit).
+        return truncated
+            ? { msg: { ...msg, content: newContent }, truncated }
+            : { msg, truncated };
     }
 
     return { msg, truncated };
@@ -640,4 +644,80 @@ export function clampMessagesToBudget(
 
     // Phase 3: shrink every remaining message's content until the window fits.
     return hardTruncateToFit(work, budgetTokens, counts);
+}
+
+/**
+ * A reasoning part signed by Anthropic (directly or through Bedrock): the only
+ * kind bound to the conversation before it. Other providers' reasoning stays:
+ * OpenAI's Responses API, for one, can require a reasoning item next to the
+ * function call it produced, so dropping it would trade one 400 for another.
+ */
+function isReasoningPart(part: unknown): boolean {
+    if (!part || typeof part !== 'object') return false;
+    const { type, providerOptions } = part as {
+        type?: unknown;
+        providerOptions?: Record<string, Record<string, unknown> | undefined>;
+    };
+    if (type !== 'reasoning' && type !== 'redacted-reasoning') return false;
+    // An empty signature is no signature: `withThinkingSignatureRepair`
+    // gives `signature: ''` to the unsigned thinking of Anthropic-compatible
+    // upstreams (DeepSeek, Kimi, GLM, MiniMax), which bind it to nothing and
+    // may require it replayed.
+    return ['anthropic', 'bedrock'].some((provider) => {
+        const meta = providerOptions?.[provider];
+        return (
+            (typeof meta?.signature === 'string' && meta.signature !== '') ||
+            meta?.redactedData != null
+        );
+    });
+}
+
+/**
+ * Drops the signed reasoning parts of every assistant message from the first
+ * message a compression pass changed onward.
+ *
+ * Anthropic signs each thinking block with the conversation before it and
+ * rejects a replayed block whose prefix changed: "Invalid `signature` in
+ * `thinking` block. The block is bound to a different conversation" (400).
+ * The passes above truncate tool results and evict rounds in the middle of
+ * the window, so every thinking block after that point would fail the check,
+ * and the batch lost all its work (PR reviews in Nov 2026, 64-153s each).
+ * The API accepts a history with a trailing run of thinking blocks removed,
+ * and the text and tool calls of those turns stay. Other providers lose only
+ * reasoning they can do without.
+ *
+ * `window` must reuse the objects of `original` for the messages it kept
+ * unchanged; the first object that differs marks the edit.
+ */
+export function withoutThinkingAfterFirstEdit(
+    original: readonly ModelMessage[],
+    window: ModelMessage[],
+): ModelMessage[] {
+    let firstEdit = 0;
+    while (
+        firstEdit < window.length &&
+        firstEdit < original.length &&
+        window[firstEdit] === original[firstEdit]
+    ) {
+        firstEdit++;
+    }
+    if (firstEdit >= window.length) return window;
+
+    const out: ModelMessage[] = [];
+    for (let i = 0; i < window.length; i++) {
+        const msg = window[i];
+        if (
+            i < firstEdit ||
+            msg.role !== 'assistant' ||
+            !Array.isArray(msg.content) ||
+            !msg.content.some(isReasoningPart)
+        ) {
+            out.push(msg);
+            continue;
+        }
+        const kept = msg.content.filter((part) => !isReasoningPart(part));
+        // A turn that was only reasoning has nothing left to send.
+        if (kept.length > 0) out.push({ ...msg, content: kept });
+    }
+    return out;
 }

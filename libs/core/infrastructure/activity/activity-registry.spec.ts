@@ -1,4 +1,5 @@
 import {
+    activityCounts,
     activitySnapshot,
     beginToolActivity,
     onActivityChange,
@@ -119,6 +120,70 @@ describe('activity registry', () => {
             );
             end();
         });
+    });
+
+    it('counts every job in flight by type and sums the size of the reviews', async () => {
+        const release: Array<() => void> = [];
+        const hold = () => new Promise<void>((r) => release.push(r));
+        const jobs = [
+            runActivity('r1', {}, async () => {
+                updateActivity({
+                    workflowType: 'CODE_REVIEW',
+                    changedFiles: 10,
+                    changedLines: 400,
+                });
+                await hold();
+            }),
+            runActivity('r2', {}, async () => {
+                updateActivity({
+                    workflowType: 'CODE_REVIEW',
+                    changedFiles: 3,
+                });
+                await hold();
+            }),
+            // A review whose provider sends no size is counted, not sized.
+            runActivity('r3', {}, async () => {
+                updateActivity({ workflowType: 'CODE_REVIEW' });
+                await hold();
+            }),
+            // Lines without a file count still count toward the line total.
+            runActivity('r5', {}, async () => {
+                updateActivity({
+                    workflowType: 'CODE_REVIEW',
+                    changedLines: 50,
+                });
+                await hold();
+            }),
+            // A PR with no changed files has a known size of 0.
+            runActivity('r4', {}, async () => {
+                updateActivity({
+                    workflowType: 'CODE_REVIEW',
+                    changedFiles: 0,
+                });
+                await hold();
+            }),
+            runActivity('w1', {}, async () => {
+                updateActivity({ workflowType: 'WEBHOOK_PROCESSING' });
+                await hold();
+            }),
+        ];
+        await tick();
+        const counts = activityCounts();
+        release.forEach((r) => r());
+        await Promise.all(jobs);
+
+        expect(counts).toEqual({
+            total: 6,
+            byWorkflowType: { CODE_REVIEW: 5, WEBHOOK_PROCESSING: 1 },
+            reviews: {
+                withSize: 3,
+                withLines: 2,
+                changedFilesSum: 13,
+                changedFilesMax: 10,
+                changedLinesSum: 450,
+            },
+        });
+        expect(activityCounts().total).toBe(0);
     });
 
     it('bounds the text it keeps', async () => {

@@ -1,7 +1,10 @@
 import { monitorEventLoopDelay } from 'perf_hooks';
+import { activityCounts } from '@libs/core/infrastructure/activity/activity-registry';
+import { readMemoryGauges } from '@libs/core/infrastructure/memory/memory-gauges';
 import { createLogger } from '@libs/core/log/logger';
 
 import { getLastHealthProbe } from './health-probe';
+import { startMemorySampler } from './memory-sampler';
 import { StallWatchdogOptions, startStallWatchdog } from './stall-watchdog';
 
 type MonitorLogger = Pick<ReturnType<typeof createLogger>, 'log' | 'warn'>;
@@ -49,6 +52,10 @@ export function startEventLoopMonitor(
 
     const histogram = monitorEventLoopDelay({ resolution: 20 });
     histogram.enable();
+    // Memory and jobs ride on the same line, so one line per window says
+    // how much the process held, how many jobs of what size held it, and
+    // whether the thread was blocked.
+    const memory = startMemorySampler();
 
     const timer = setInterval(() => {
         // A throw inside a timer callback would crash the process — this is
@@ -67,6 +74,9 @@ export function startEventLoopMonitor(
                     windowMs: intervalMs,
                     msSinceLastProbe: probe ? Date.now() - probe.at : null,
                     lastProbeStatus: probe?.status ?? null,
+                    memory: memory.take(),
+                    jobs: activityCounts(),
+                    gauges: readMemoryGauges(),
                 },
             };
             histogram.reset();
@@ -86,6 +96,7 @@ export function startEventLoopMonitor(
     return () => {
         clearInterval(timer);
         histogram.disable();
+        memory.stop();
         stopWatchdog();
     };
 }

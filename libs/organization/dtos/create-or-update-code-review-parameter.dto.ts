@@ -444,8 +444,13 @@ class ConversationConfigDto {
     /**
      * `false` makes Kody answer an unmentioned reply in its own thread only
      * when someone writes `@kody`. Unset leaves the classifier deciding.
+     *
+     * The API pipe's `enableImplicitConversion` turns any non-empty string
+     * into `true` before validation, so `"false"` would be stored as on and
+     * erase an opt-out. Validate the raw value instead: only a boolean passes.
      */
-    @IsOptional()
+    @ValidateIf((_, value) => value !== undefined)
+    @Transform(({ obj, key }) => obj[key])
     @IsBoolean()
     @ApiPropertyOptional()
     implicitReplies?: boolean;
@@ -1051,7 +1056,8 @@ class CodeReviewConfigWithoutLLMProviderDto {
      * `implicitReplies: false` makes Kody answer an unmentioned reply in its
      * own review thread only when someone writes `@kody`.
      */
-    @IsOptional()
+    @ValidateIf((_, value) => value !== undefined)
+    @IsObject()
     @ValidateNested()
     @Type(() => ConversationConfigDto)
     @ApiPropertyOptional({ type: ConversationConfigDto })

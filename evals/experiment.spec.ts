@@ -111,6 +111,12 @@ describe('evals/experiment.js affectedSteps', () => {
         expect(affectedSteps(['libs/code-review/pipeline/stages/agent-review.stage.ts', 'README.md'], filesOf, steps)).toEqual(['dedup']);
     });
 
+    it('runs a step listed by its own files only when one of them changed', () => {
+        const byFile = { 'repeat-check': { smoke: [], files: ['libs/code-review/infrastructure/agents/engine/repeat-check.ts'] } };
+        expect(affectedSteps(['libs/code-review/infrastructure/agents/engine/repeat-check.ts'], filesOf, byFile)).toEqual(['repeat-check']);
+        expect(affectedSteps(['libs/code-review/pipeline/stages/agent-review.stage.ts'], filesOf, byFile)).toEqual([]);
+    });
+
     it('ignores a change to the eval or to files no step loads', () => {
         expect(affectedSteps(['evals/funnel/dedup/run.js', 'apps/web/page.tsx'], filesOf, steps)).toEqual([]);
     });

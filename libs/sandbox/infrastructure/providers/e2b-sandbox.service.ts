@@ -6,7 +6,11 @@ import { createLogger, SimpleLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CommandExitError, Sandbox } from 'e2b';
+import { CommandExitError, Sandbox, type CommandHandle } from 'e2b';
+import {
+    cutAt,
+    MAX_TOOL_SCAN_CHARS,
+} from '@libs/common/utils/tool-output/scan-prefix';
 
 import {
     CreateSandboxParams,
@@ -150,6 +154,31 @@ const TIMEOUTS = {
     COMMAND_SHORT_MS: 10_000,
 };
 
+/**
+ * Most stdout characters `exec` keeps; the command is stopped past it.
+ *
+ * E2B buffers a command's whole stdout in the worker before `run` returns,
+ * and nothing downstream reads more than MAX_TOOL_SCAN_CHARS of it. A
+ * conversation `exec` of a `git log -p` over JSON fixtures printed 424 MB
+ * twice (Nov 2026): the worker held the string, then froze 125 s filtering
+ * it. Twice the scan limit, so a reader still sees that more was printed.
+ * The local provider caps the same output at 5 MB.
+ */
+export const MAX_EXEC_OUTPUT_CHARS = 2 * MAX_TOOL_SCAN_CHARS;
+
+/** Shortens `text` to at most `max` characters, at a line end when it can. */
+function headOf(text: string, max: number): string {
+    if (!text || text.length <= max) return text;
+    const head = cutAt(text, max);
+    const lastLine = head.lastIndexOf('\n');
+    return lastLine > 0 ? head.slice(0, lastLine) : head;
+}
+
+/** First word of a shell command, without its arguments. */
+function programOf(command: string): string {
+    return (command.trim().split(/[\s;|&<>()]+/)[0] ?? '').slice(0, 40);
+}
+
 export interface BuildE2BRemoteCommandsOptions {
     /** Logger for the [SANDBOX-READ] empty-read warning (optional). */
     logger?: SimpleLogger;
@@ -221,6 +250,83 @@ export function buildE2BRemoteCommands(
                     stdout: err.stdout,
                     stderr: err.stderr,
                     exitCode: err.exitCode,
+                };
+            }
+            throw err;
+        }
+    };
+
+    // `exec` runs whatever the agent asked for, so its output has no natural
+    // bound: count stdout as it streams and stop the command past the cap,
+    // instead of letting E2B buffer all of it.
+    const runCapped = async (
+        cmd: string,
+        timeoutMs: number,
+        maxChars: number,
+    ): Promise<{
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        stopped: boolean;
+    }> => {
+        // stdout and stderr together: a command can flood either one.
+        let seen = 0;
+        let stopped = false;
+        const count = (data: string) => {
+            seen += data.length;
+            if (!stopped && seen > maxChars) {
+                stopped = true;
+                // Before `run` returns there is no handle yet: the check
+                // right after it stops the command then.
+                stop();
+            }
+        };
+        // Filled once `run` returns; onStdout can fire before that.
+        const started: { handle?: CommandHandle } = {};
+        // `kill()` ends the process, not the stream: E2B keeps appending the
+        // output already produced to the handle, and `wait()` settles only
+        // when the stream ends (30 s and 30 MB on a real sandbox).
+        // `disconnect()` drops the stream, so `wait()` rejects at once and the
+        // stopped branch below returns the head.
+        const stop = () => {
+            const handle = started.handle;
+            if (!handle) return;
+            void handle.kill().catch(() => undefined);
+            void handle.disconnect().catch(() => undefined);
+        };
+        const handle = await sandbox.commands.run(cmd, {
+            background: true,
+            timeoutMs,
+            onStdout: count,
+            onStderr: count,
+        });
+        started.handle = handle;
+        if (stopped) stop();
+        try {
+            const res = await handle.wait();
+            return {
+                stdout: headOf(res.stdout, maxChars),
+                stderr: headOf(res.stderr, maxChars),
+                exitCode: res.exitCode,
+                stopped,
+            };
+        } catch (err) {
+            if (err instanceof CommandExitError) {
+                return {
+                    stdout: headOf(err.stdout, maxChars),
+                    stderr: headOf(err.stderr, maxChars),
+                    exitCode: err.exitCode,
+                    stopped,
+                };
+            }
+            // A killed command can end its stream with an error instead of
+            // an exit code; what it printed before is still the answer.
+            if (stopped) {
+                return {
+                    stdout: headOf(handle.stdout, maxChars),
+                    stderr: headOf(handle.stderr, maxChars),
+                    exitCode: handle.exitCode ?? -1,
+                    stopped,
                 };
             }
             throw err;
@@ -334,16 +440,36 @@ export function buildE2BRemoteCommands(
 
         exec: async (
             command: string,
-        ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
-            const result = await runCmd(`cd ${REPO_DIR} && ${command}`, {
-                timeoutMs: TIMEOUTS.COMMAND_LONG_MS,
-            });
+        ): Promise<{
+            stdout: string;
+            stderr: string;
+            exitCode: number;
+            truncated?: boolean;
+        }> => {
+            const result = await runCapped(
+                `cd ${REPO_DIR} && ${command}`,
+                TIMEOUTS.COMMAND_LONG_MS,
+                MAX_EXEC_OUTPUT_CHARS,
+            );
             // stdout and stderr kept SEPARATE — merging let a subprocess error
             // masquerade as command output. Tools that want diagnostics use 2>&1.
+            if (result.stopped) {
+                logger?.warn({
+                    message: `[SANDBOX-EXEC] command stopped after ${MAX_EXEC_OUTPUT_CHARS} output characters`,
+                    context: logContext,
+                    metadata: {
+                        ...logMetadata,
+                        // The program only: arguments can carry a token.
+                        program: programOf(command),
+                        maxChars: MAX_EXEC_OUTPUT_CHARS,
+                    },
+                });
+            }
             return {
                 stdout: result.stdout,
                 stderr: result.stderr || '',
                 exitCode: result.exitCode,
+                ...(result.stopped ? { truncated: true } : {}),
             };
         },
     };

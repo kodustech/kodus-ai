@@ -64,6 +64,16 @@ export interface PrDecisionRecord {
      *  (`engine/repeat-check.ts`) recognize the same occurrence without a
      *  model call. Absent on PR-level records. */
     readonly existingCode?: string;
+    /** The code the suggestion proposed. On an applied suggestion it names
+     *  what the developer added, so a later finding about that code in
+     *  another file still meets the comment in the repeat check (#2676). */
+    readonly improvedCode?: string;
+    /** The posted comment's id on the git host, as `suggestion.comment.id`
+     *  stores it. Matches the comment's thread at review time. */
+    readonly commentId?: string;
+    /** Someone replied in the comment's thread (the developer, or Kody
+     *  answering them). Read from the host at review time (#2676). */
+    readonly answered?: boolean;
     readonly outcome: PrDecisionOutcome;
     /** `createdAt` of the original suggestion. */
     readonly decidedAt: string;
