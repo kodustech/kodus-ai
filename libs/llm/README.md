@@ -110,9 +110,9 @@ that means "no BYOK configured" returns `undefined`; don't reintroduce `null`.
   asks the provider module (`prefixCacheHint`, else `systemCacheControl`) for its
   marker: Claude native and on Vertex `anthropic.cacheControl`, Claude on Bedrock
   `bedrock.cachePoint`, OpenAI gpt-5.6+ `promptCacheBreakpoint` plus explicit mode.
-  A declared call never keeps an automatic `cacheControl` from the slot, even when
-  it marks nothing (`userPrefixes: []`): it would write a turn nothing reads. A call
-  that declares nothing is sent unchanged.
+  A marked call drops an automatic `cacheControl` from the slot: it would write a
+  turn nothing reads. A call that declares nothing, or has nothing to mark, is sent
+  unchanged.
 
 Consumed by `code-review`, `cli-review`, `organization`, … — any lib that needs to
 create or describe an LLM model. Keep this free of review/agent-specific shapes

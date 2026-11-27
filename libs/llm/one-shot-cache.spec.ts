@@ -317,19 +317,18 @@ describe('applyOneShotCache', () => {
         });
     });
 
-    it('applies request options to a declared call with nothing marked, so explicit mode caches nothing', () => {
+    it('leaves request options alone when nothing was marked', () => {
+        const providerOptions = { openai: { store: false } };
         const out = applyOneShotCache({
             system,
             prompt: 'no head here',
             cache: { userPrefixes: [head] },
             hint: { part: OPENAI_PART, request: OPENAI_REQUEST },
-            providerOptions: { openai: { store: false } },
+            providerOptions,
         });
         expect(out.args).toEqual({ system, prompt: 'no head here' });
         expect(out.marked).toEqual([]);
-        expect(out.providerOptions).toEqual({
-            openai: { store: false, promptCacheOptions: { mode: 'explicit' } },
-        });
+        expect(out.providerOptions).toBe(providerOptions);
     });
 
     it('leaves request options alone on a call that declares no cache', () => {
@@ -376,25 +375,21 @@ describe('applyOneShotCache', () => {
         expect(out.droppedAutoCache).toBe(true);
     });
 
-    it('drops an automatic cacheControl from a call that declares a cache but has nothing to mark', () => {
+    it('sends a call with nothing to mark as if it declared nothing, automatic cache included', () => {
+        const providerOptions = {
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+        };
         const out = applyOneShotCache({
             system,
             prompt,
             cache: { userPrefixes: [] },
             hint: { part: ANTHROPIC },
-            providerOptions: {
-                anthropic: {
-                    cacheControl: { type: 'ephemeral' },
-                    thinking: { type: 'adaptive' },
-                },
-            },
+            providerOptions,
         });
         expect(out.args).toEqual({ system, prompt });
         expect(out.marked).toEqual([]);
-        expect(out.providerOptions).toEqual({
-            anthropic: { thinking: { type: 'adaptive' } },
-        });
-        expect(out.droppedAutoCache).toBe(true);
+        expect(out.providerOptions).toBe(providerOptions);
+        expect(out.droppedAutoCache).toBe(false);
     });
 
     it('keeps an automatic cacheControl on a call that declares no cache', () => {

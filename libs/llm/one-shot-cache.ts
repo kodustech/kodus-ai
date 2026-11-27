@@ -6,9 +6,9 @@
  * of one-shot calls is different when its calls open with the same text — the
  * Kody Rules shards of a review all start with the same rules head. The caller
  * that knows that declares it (`promptCache`), and this module turns the
- * declaration into the provider's marker. A call that declares a cache never
- * keeps an automatic one: its unique tail would be written and never read.
- * A call that declares nothing is sent exactly as before.
+ * declaration into the provider's marker. A marked call never keeps an
+ * automatic one: its unique tail would be written and never read. A call that
+ * declares nothing, or has nothing to mark, is sent exactly as before.
  */
 import type { ModelMessage, SystemModelMessage } from 'ai';
 import { REGISTRY } from '@libs/llm/providers';
@@ -25,8 +25,7 @@ export interface OneShotPromptCache {
     /** The system prompt is the same on every sibling call. */
     system?: boolean;
     /** Texts the user turn starts with, each shared by some sibling calls;
-     *  a longer one extends a shorter one. Each gets its own breakpoint. Empty:
-     *  nothing to mark, and still no automatic cache. */
+     *  a longer one extends a shorter one. Each gets its own breakpoint. */
     userPrefixes?: string[];
 }
 
@@ -205,9 +204,9 @@ export function applyOneShotCache(
         : undefined;
     if (messages) marked.push('userPrefix');
 
-    // Declared, so the caller manages this call's cache: an automatic marker
-    // would write the whole unique turn whether or not anything was marked,
-    // and the request options (OpenAI's explicit mode) cache only what is.
+    if (!marked.length)
+        return { ...untouched, ...(skipped ? { skipped } : {}) };
+
     const cleaned = withoutAutomaticCache(providerOptions);
     return {
         args: {

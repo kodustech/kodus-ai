@@ -105,9 +105,8 @@ const AUTO_CACHE_LOG_ATTRS = [
 ] as const;
 
 /** A slot whose custom provider options turn on Anthropic's automatic cache
- *  makes every call write its whole prompt; a call that declares its own cache
- *  drops it, marked or not. Logged once an hour per org and run, not once per
- *  call. */
+ *  makes every call write its whole prompt; a call carrying its own marker
+ *  drops it. Logged once an hour per org and run, not once per call. */
 function logAutomaticCacheDropped(
     runName: string,
     organizationId: string | undefined,
@@ -119,7 +118,7 @@ function logAutomaticCacheDropped(
     if (last !== undefined && now - last < AUTO_CACHE_LOG_INTERVAL_MS) return;
     autoCacheLoggedAt.set(key, now);
     logger.log({
-        message: `[prompt-cache] dropped an automatic cacheControl from the provider options of ${runName}; the call manages its own cache`,
+        message: `[prompt-cache] dropped an automatic cacheControl from the provider options of ${runName}; the call carries its own breakpoint`,
         context: 'runReviewCall',
         metadata: {
             ...Object.fromEntries(

@@ -204,20 +204,31 @@ describe('native Claude: the shared head gets cache_control', () => {
         });
     });
 
-    it('sends no cache_control at all on a declared call with nothing to mark, whatever the slot asks for', async () => {
-        const captured: Captured = { body: undefined };
-        const anthropic = createAnthropic({
-            apiKey: 'test-key',
-            fetch: stubFetch(captured, messagesOk),
-        });
+    it('sends a call with nothing to mark exactly as one that declares nothing', async () => {
+        const slot = { anthropic: { cacheControl: { type: 'ephemeral' } } };
+        const declared: Captured = { body: undefined };
         await send(
-            anthropic(MODEL),
+            createAnthropic({
+                apiKey: 'test-key',
+                fetch: stubFetch(declared, messagesOk),
+            })(MODEL),
             'anthropic',
             MODEL,
             { userPrefixes: [] },
-            { anthropic: { cacheControl: { type: 'ephemeral' } } },
+            slot,
         );
-        expect(JSON.stringify(captured.body)).not.toContain('cache_control');
+        const undeclared: Captured = { body: undefined };
+        await send(
+            createAnthropic({
+                apiKey: 'test-key',
+                fetch: stubFetch(undeclared, messagesOk),
+            })(MODEL),
+            'anthropic',
+            MODEL,
+            undefined,
+            slot,
+        );
+        expect(declared.body).toEqual(undeclared.body);
     });
 
     it("keeps the slot's automatic cache on a call that declares none", async () => {
@@ -329,7 +340,7 @@ describe('OpenAI gpt-5.6+: the shared head gets an explicit breakpoint', () => {
         ]);
     });
 
-    it('sends a declared call with nothing to mark in explicit mode with no breakpoint, so nothing is written', async () => {
+    it('sends a declared call with nothing to mark exactly as before: no breakpoint, default mode', async () => {
         const captured: Captured = { body: undefined };
         const openai = createOpenAI({
             apiKey: 'test-key',
@@ -338,12 +349,10 @@ describe('OpenAI gpt-5.6+: the shared head gets an explicit breakpoint', () => {
         await send(openai('gpt-6.1-sol'), 'openai', 'gpt-6.1-sol', {
             userPrefixes: [],
         });
-        expect(JSON.stringify(captured.body.input)).not.toContain(
+        expect(JSON.stringify(captured.body)).not.toContain(
             'prompt_cache_breakpoint',
         );
-        expect(captured.body.prompt_cache_options).toEqual({
-            mode: 'explicit',
-        });
+        expect(captured.body.prompt_cache_options).toBeUndefined();
     });
 
     it('sends a model before 5.6 exactly as before', async () => {

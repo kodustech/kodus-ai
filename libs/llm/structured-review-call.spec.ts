@@ -1883,12 +1883,10 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
         expect(spanAttrs().promptCacheUserBreakpoints).toBe(2);
     });
 
-    it('drops and logs the automatic cacheControl on a declared call that marks nothing', async () => {
+    it('leaves the automatic cacheControl of a call that marks nothing alone', async () => {
         mockGenerate.mockResolvedValueOnce(answer);
         await runStructuredReviewCall({
             ...base,
-            runName: 'unmarked-declared-run',
-            organizationId: 'org-unmarked',
             user,
             byokConfig: claude,
             promptCache: { userPrefixes: [] },
@@ -1897,18 +1895,10 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             },
         });
         expect(sent().prompt).toBe(user);
-        expect(sent().providerOptions).toEqual({ anthropic: {} });
-        expect(spanAttrs().promptCacheMarked).toBeUndefined();
-        expect(spanAttrs().promptCacheAutoDropped).toBe(true);
-        const logged = mockLoggerLog.mock.calls
-            .map(([entry]) => entry)
-            .find((e: any) =>
-                String(e?.message).includes('unmarked-declared-run'),
-            );
-        expect(logged?.metadata).toMatchObject({
-            runName: 'unmarked-declared-run',
-            organizationId: 'org-unmarked',
+        expect(sent().providerOptions).toEqual({
+            anthropic: { cacheControl: { type: 'ephemeral' } },
         });
+        expect(spanAttrs().promptCacheAutoDropped).toBeUndefined();
     });
 
     it('records a declared head the turn does not start with', async () => {
