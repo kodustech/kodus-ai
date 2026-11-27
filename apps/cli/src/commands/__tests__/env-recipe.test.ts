@@ -32,10 +32,11 @@ describe('kodus env recipe', () => {
         await fs.rm(dir, { recursive: true, force: true });
     });
 
-    it('registers check and submit under env recipe', () => {
+    it('registers check, guide and submit under env recipe', () => {
         const recipe = envCommand.commands.find((c) => c.name() === 'recipe')!;
         expect(recipe.commands.map((c) => c.name()).sort()).toEqual([
             'check',
+            'guide',
             'submit',
         ]);
         const submit = recipe.commands.find((c) => c.name() === 'submit')!;
@@ -106,7 +107,8 @@ describe('kodus env recipe', () => {
                 setupKey: 'env-1:t',
             }),
         );
-        const service = new EnvService(requester as any);
+        // A directory with no git remote: nothing names the repository.
+        const service = new EnvService(requester as any, async () => null);
         await service.submitRecipe({
             recipe: RECIPE,
             files: [{ path: '.kodus/compose.yaml', content: 'x' }],
@@ -119,6 +121,31 @@ describe('kodus env recipe', () => {
                 files: [{ path: '.kodus/compose.yaml', content: 'x' }],
             },
         });
+    });
+
+    it("names the repository by this directory's git remote when no environment is given, so the first recipe makes its environment", async () => {
+        const requester = vi.fn(async () =>
+            rpc({
+                setupRequested: true,
+                environmentId: 'env-new',
+                recipeDigest: 'sha256:abc',
+                setupKey: 'env-new:t',
+            }),
+        );
+        const service = new EnvService(
+            requester as any,
+            async () => 'git@github.com:Acme/mobile-app.git',
+        );
+        await service.submitRecipe({ recipe: RECIPE });
+        await service.checkRecipe({ recipe: RECIPE });
+        await service.submitRecipe({ recipe: RECIPE, environmentId: 'env-9' });
+        const args = requester.mock.calls.map(
+            (c: any[]) => JSON.parse(c[1].body).params.arguments,
+        );
+        expect(args[0]).toEqual({ repository: 'Acme/mobile-app', recipe: RECIPE });
+        expect(args[1]).toEqual({ repository: 'Acme/mobile-app', recipe: RECIPE });
+        // An environment named wins: the remote is not read into the call.
+        expect(args[2]).toEqual({ environmentId: 'env-9', recipe: RECIPE });
     });
 
     it("a refused recipe surfaces the API's own message", async () => {

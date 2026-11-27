@@ -38,7 +38,12 @@ export type EnvFixResult =
           pullRequest: { number: number; url: string };
       };
 
-export type EnvTarget = { environmentId?: string; repositoryId?: string };
+export type EnvTarget = {
+    environmentId?: string;
+    repositoryId?: string;
+    /** owner/name, from the working directory's git remote: a recipe reaches a repository with no environment yet. */
+    repository?: string;
+};
 
 /** A build file a recipe carries, directly under .kodus/ (env_recipe_check / env_recipe_submit). */
 export type EnvRecipeFile = { path: string; content: string };
@@ -55,7 +60,8 @@ export type EnvRecipeCheck = {
     warnings?: string[];
     /** The default-branch head the repository checks read. */
     readAt?: string;
-    environment: { environmentId: string; repositoryName: string };
+    /** No environmentId: the repository has none yet, and `kodus env recipe submit` makes it. */
+    environment: { environmentId?: string; repositoryName: string };
     summary?: {
         public?: string;
         health?: string;

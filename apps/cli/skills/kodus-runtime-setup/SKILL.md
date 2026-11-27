@@ -31,7 +31,7 @@ Run `kodus env recipe guide` before writing anything. It prints the recipe forma
 
 1. Write or edit the recipe and the build files.
 2. `kodus env recipe check` until it has no errors: it reads the repository at its default-branch head, so fix every error; warnings are advice. In a repository with several environments it picks the one of the git remote `origin`; add `--env <id>` when it asks you to name it.
-3. `kodus env recipe submit --wait` (30 minutes by default, `--timeout <minutes>`): Kodus sets the environment up from it on a clean machine.
+3. `kodus env recipe submit --wait` (30 minutes by default, `--timeout <minutes>`): Kodus sets the environment up from it on a clean machine. The repository needs no environment beforehand: the first recipe sent for the git remote's repository makes it (the team key must list the repository).
 4. Blocked: read each blocker's failed step and its evidence lines (the output of that step) and fixes; `kodus env status` prints them again. Fix the recipe or the files, then go back to step 2.
 5. Stop after 5 attempts and tell the user what still blocks it, with the evidence.
 6. Active: open a pull request that commits the recipe and the `.kodus/` files. Until it is merged, Kodus keeps booting the sent one; once merged, the committed one wins.

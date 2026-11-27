@@ -103,7 +103,15 @@ class FakeEnvSessionPort implements RuntimeEnvSessionPort {
 }
 
 function harness(
-    opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[]; membership?: InMemoryEnvironmentRepositories; heads?: Record<string, string>; repoFiles?: Record<string, string> | 'unreadable' } = {},
+    opts: {
+        setup?: EnvironmentSetupRecord | null;
+        environments?: ProductEnvironment[];
+        membership?: InMemoryEnvironmentRepositories;
+        heads?: Record<string, string>;
+        repoFiles?: Record<string, string> | 'unreadable';
+        /** The org's connected repositories (RUNTIME_ORG_REPOSITORIES); absent: the service has none to read. */
+        orgRepositories?: { teamId: string; repositories: Array<{ repositoryId: string; repositoryName: string }> };
+    } = {},
 ) {
     const environments = opts.environments ?? [
         env(),
@@ -115,7 +123,17 @@ function harness(
         findByRepository: async (org: string, repo: string) => environments.find((e) => e.organizationId === org && e.repositoryId === repo) ?? null,
         listByOrganization: async (org: string) => environments.filter((e) => e.organizationId === org),
         setSubmittedRecipe: async () => undefined,
+        create: async (input: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string }) => {
+            const made = env({ ...input, environmentId: `env-new-${environments.length}`, state: 'setup_requested' });
+            environments.push(made);
+            return made;
+        },
     };
+    const settingsRows: Array<{ repositoryId: string; mode?: string }> = [];
+    const settings = {
+        listRepositories: async () => settingsRows,
+        upsertRepository: async (_org: string, row: { repositoryId: string; mode?: string }) => void settingsRows.push(row),
+    } as any;
     const setupReads: Array<{ organizationId: string; environmentId: string }> = [];
     const views = {
         setup: async (organizationId: string, environmentId: string) => (
@@ -153,13 +171,15 @@ function harness(
         { secretSealKey: SEAL_KEY },
         sessions,
         audit,
-        { request: async (e: any, u: any) => (setupRequests.push({ e, u }), e) },
+        { request: async (e: any, u: any, o?: any) => (setupRequests.push({ e, u, o }), e) },
         { openRecipePullRequest: async (...args: any[]) => (prs.push(args), { number: 7, url: 'https://example.invalid/pr/7' }) },
         () => now,
         undefined,
         opts.membership ? new RuntimeEnvironmentMembers(products, opts.membership) : undefined,
+        opts.orgRepositories ? { list: async () => opts.orgRepositories! } : undefined,
+        settings,
     );
-    return { service, sessions, audit, setupRequests, setupReads, prs, tokens, advance: (ms: number) => (now = new Date(now.getTime() + ms)) };
+    return { service, sessions, audit, setupRequests, setupReads, prs, tokens, environments, settingsRows, advance: (ms: number) => (now = new Date(now.getTime() + ms)) };
 }
 
 describe('RuntimeEnvToolsService (/mcp/env)', () => {
@@ -542,6 +562,67 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
                 { environmentId: 'env-a', repositoryName: 'acme/shop' },
                 { environmentId: 'env-c', repositoryName: 'acme/billing' },
             ],
+        });
+    });
+
+    describe("a recipe sent for a repository that has no environment yet (the developer's agent, before any Set up)", () => {
+        const RECIPE = 'version: 1\nservices:\n  compose:\n    files: [.kodus/compose.yaml]\n    public: app\n  expose:\n    - { service: app, port: 3000, kind: http }\n';
+        const KEY_NEW: EnvKeyPrincipal = { ...KEY, repositoryIds: ['repo-a', 'repo-new'] };
+        const connected = { teamId: 'team-a', repositories: [{ repositoryId: 'repo-a', repositoryName: 'acme/shop' }, { repositoryId: 'repo-new', repositoryName: 'Acme/Mobile-App' }] };
+        const fresh = () => harness({ environments: [env()], orgRepositories: connected });
+
+        it('submit makes the environment, turns the repository On request, and asks for one setup: the one that boots this recipe', async () => {
+            const h = fresh();
+            const out = await h.service.submitRecipe(KEY_NEW, { repository: 'acme/mobile-app', recipe: RECIPE });
+            const made = h.environments.find((e) => e.repositoryId === 'repo-new');
+            expect(made).toMatchObject({ organizationId: ORG, teamId: 'team-a', repositoryName: 'Acme/Mobile-App' });
+            expect(out).toMatchObject({ setupRequested: true, environmentId: made!.environmentId });
+            expect(h.setupRequests).toHaveLength(1);
+            expect(h.setupRequests[0].e).toMatchObject({ environmentId: made!.environmentId, submittedRecipe: { content: RECIPE, keyId: 'key-a' } });
+            expect(h.setupRequests[0].o).toEqual({ key: out.setupKey });
+            expect(h.settingsRows).toEqual([expect.objectContaining({ repositoryId: 'repo-new', mode: 'on_request' })]);
+        });
+
+        it('a second submit reuses the environment the first one made', async () => {
+            const h = fresh();
+            const first = await h.service.submitRecipe(KEY_NEW, { repository: 'acme/mobile-app', recipe: RECIPE });
+            h.advance(1000);
+            const second = await h.service.submitRecipe(KEY_NEW, { repository: 'acme/mobile-app', recipe: RECIPE });
+            expect(second.environmentId).toBe(first.environmentId);
+            expect(h.environments.filter((e) => e.repositoryId === 'repo-new')).toHaveLength(1);
+        });
+
+        it('check reads the repository and keeps nothing: no environment, no setup', async () => {
+            const h = fresh();
+            const check = await h.service.checkRecipe(KEY_NEW, { repository: 'acme/mobile-app', recipe: RECIPE });
+            expect(check.environment).toEqual({ repositoryName: 'Acme/Mobile-App' });
+            expect(h.environments.some((e) => e.repositoryId === 'repo-new')).toBe(false);
+            expect(h.setupRequests).toHaveLength(0);
+        });
+
+        it("a repository outside the key's list, not connected, or of another team is not found, and nothing is made", async () => {
+            for (const [key, repository, repos] of [
+                [KEY, 'acme/mobile-app', connected],
+                [KEY_NEW, 'acme/unknown', connected],
+                [KEY_NEW, 'acme/mobile-app', { ...connected, teamId: 'team-z' }],
+            ] as const) {
+                const h = harness({ environments: [env()], orgRepositories: repos });
+                await expect(h.service.submitRecipe(key, { repository, recipe: RECIPE })).rejects.toBeInstanceOf(NotFoundException);
+                expect(h.environments).toHaveLength(1);
+                expect(h.setupRequests).toHaveLength(0);
+            }
+        });
+
+        it('a refused recipe makes no environment', async () => {
+            const h = fresh();
+            await expect(h.service.submitRecipe(KEY_NEW, { repository: 'acme/mobile-app', recipe: 'version: 9\n' })).rejects.toBeInstanceOf(BadRequestException);
+            expect(h.environments).toHaveLength(1);
+        });
+
+        it('a repository that has an environment resolves to it by owner/name, for every tool', async () => {
+            const h = fresh();
+            await expect(h.service.status(KEY_NEW, { repository: 'ACME/shop' })).resolves.toBeDefined();
+            expect(h.setupReads).toEqual([{ organizationId: ORG, environmentId: 'env-a' }]);
         });
     });
 

@@ -15,6 +15,7 @@ import {
 } from '../../domain/ports';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { RuntimeEnvironmentMembers } from '../environment-members.service';
+import { ensureEnvironment } from '../environment-provisioning';
 import { RuntimeSetupRequester } from '../runtime-setup-requester.service';
 import { orgOf, validId } from './environment-view';
 
@@ -53,30 +54,12 @@ export class CreateRuntimeEnvironmentUseCase {
             resource: ResourceType.CodeReviewSettings,
             repoIds: [repo.repositoryId],
         });
-        const existing = await this.environments.findByRepository(organizationId, repo.repositoryId);
-        if (existing) {
-            // Idempotent: an environment whose primary row is missing gets it here.
-            await this.members?.ensurePrimary(existing);
-            return existing;
-        }
-        const env = await this.environments.create({ organizationId, teamId, repositoryId: repo.repositoryId, repositoryName: repo.repositoryName });
-        // The environment's own repository is its primary, in membership as everywhere else.
-        await this.members?.ensurePrimary(env);
-        await this.turnOnIfUnset(organizationId, repo.repositoryId);
+        const { env, created } = await ensureEnvironment(
+            { environments: this.environments, members: this.members, settings: this.settings },
+            { organizationId, teamId, repositoryId: repo.repositoryId, repositoryName: repo.repositoryName },
+        );
+        // Idempotent: an existing environment is answered as it is, with no new setup.
+        if (!created) return env;
         return this.setups.request(env, input.user);
-    }
-
-    /**
-     * Set up is the opt-in: a repository with no Runtime settings of its own
-     * starts On request (it runs only when someone asks), so the first
-     * `@kody runtime` after a ready setup runs instead of answering "off". A
-     * repository someone turned off keeps its row and stays off.
-     */
-    private async turnOnIfUnset(organizationId: string, repositoryId: string): Promise<void> {
-        if (!this.settings) return;
-        const rows = await this.settings.listRepositories(organizationId);
-        if (rows.some((r) => r.repositoryId === repositoryId)) return;
-        // 'writers': DEFAULT_WHO_CAN_ASK (settings.use-cases.ts imports this file, so not imported back).
-        await this.settings.upsertRepository(organizationId, { repositoryId, pilot: true, whoCanAsk: 'writers', mode: 'on_request' });
     }
 }

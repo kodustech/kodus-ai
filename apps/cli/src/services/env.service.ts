@@ -186,23 +186,37 @@ export class EnvService {
     }
 
     /** env_recipe_check: what Kodus would refuse in the recipe; keeps nothing. */
-    checkRecipe(input: EnvRecipeInput): Promise<EnvRecipeCheck> {
-        return this.targeted(input, (t) =>
+    async checkRecipe(input: EnvRecipeInput): Promise<EnvRecipeCheck> {
+        const named = await this.withRemoteRepository(input);
+        return this.targeted(named, (t) =>
             this.callTool<EnvRecipeCheck>(
                 'env_recipe_check',
-                recipeArgs({ ...input, ...t }),
+                recipeArgs({ ...named, ...t }),
             ),
         );
     }
 
-    /** env_recipe_submit: Kodus keeps the recipe and sets the environment up from it. */
-    submitRecipe(input: EnvRecipeInput): Promise<EnvRecipeSubmit> {
-        return this.targeted(input, (t) =>
+    /**
+     * env_recipe_submit: Kodus keeps the recipe and sets the environment up from it. The first recipe of a repository
+     * makes its environment: the call names the repository by this directory's git remote.
+     */
+    async submitRecipe(input: EnvRecipeInput): Promise<EnvRecipeSubmit> {
+        const named = await this.withRemoteRepository(input);
+        return this.targeted(named, (t) =>
             this.callTool<EnvRecipeSubmit>(
                 'env_recipe_submit',
-                recipeArgs({ ...input, ...t }),
+                recipeArgs({ ...named, ...t }),
             ),
         );
+    }
+
+    /** A recipe call that names no environment nor repository: the repository of this directory's git remote, when there is one. */
+    private async withRemoteRepository<T extends EnvTarget>(input: T): Promise<T> {
+        if (input.environmentId || input.repositoryId || input.repository) {
+            return input;
+        }
+        const parsed = extractOrgRepoFromRemote(await this.remoteUrl());
+        return parsed ? { ...input, repository: `${parsed.org}/${parsed.repo}` } : input;
     }
 }
 
@@ -210,6 +224,7 @@ const recipeArgs = (input: EnvRecipeInput) => ({
     ...compact({
         environmentId: input.environmentId,
         repositoryId: input.repositoryId,
+        repository: input.repository,
     }),
     recipe: input.recipe,
     ...(input.files?.length ? { files: input.files } : {}),

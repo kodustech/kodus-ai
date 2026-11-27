@@ -49,8 +49,10 @@ import {
     RUNTIME_ENV_SESSION_PORT,
     RUNTIME_GIT_PORT,
     RUNTIME_LESSON_READER,
+    RUNTIME_ORG_REPOSITORIES,
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
     RUNTIME_REPO_TOKEN_ISSUER,
+    RUNTIME_SETTINGS_STORE,
     type Clock,
     type ProductEnvironment,
     type ProductEnvironmentStore,
@@ -59,8 +61,11 @@ import {
     type RuntimeEnvSessionPort,
     type RuntimeGitPort,
     type RuntimeLessonReader,
+    type RuntimeOrgRepositories,
     type RuntimeRepoTokenIssuer,
+    type RuntimeSettingsStore,
 } from '../domain/ports';
+import { ensureEnvironment } from './environment-provisioning';
 import { membersOr, RuntimeEnvironmentMembers } from './environment-members.service';
 import { RuntimeSetupRequester } from './runtime-setup-requester.service';
 import { checkAuthoredSubmission } from './recipe-author/authored-files-policy';
@@ -89,6 +94,16 @@ const EnvValidateInputSchema = z.strictObject({
 export interface EnvTarget {
     environmentId?: unknown;
     repositoryId?: unknown;
+    /** `owner/name`, as the working directory's git remote names it (the CLI sends it): its environment, or none yet. */
+    repository?: unknown;
+}
+
+/** A connected repository the key reaches, named by a call before it has an environment. */
+interface NamedRepository {
+    organizationId: string;
+    teamId: string;
+    repositoryId: string;
+    repositoryName: string;
 }
 
 export interface EnvBlockersView {
@@ -104,7 +119,8 @@ export interface EnvRecipeCheckView {
     warnings: string[];
     /** The default-branch head the repository checks read; absent when they did not run (a warning says why). */
     readAt?: string;
-    environment: { environmentId: string; repositoryName: string };
+    /** `environmentId` is absent when the repository has no environment yet: env_recipe_submit makes it. */
+    environment: { environmentId?: string; repositoryName: string };
     summary?: { public?: string; health?: string; expose: RecipeExpose[] };
 }
 
@@ -154,7 +170,7 @@ export class RuntimeEnvToolsService {
 
     constructor(
         @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE)
-        private readonly products: Pick<ProductEnvironmentStore, 'get' | 'findByRepository' | 'listByOrganization' | 'setSubmittedRecipe'>,
+        private readonly products: Pick<ProductEnvironmentStore, 'get' | 'findByRepository' | 'listByOrganization' | 'setSubmittedRecipe' | 'create'>,
         private readonly views: EnvironmentViewBuilder,
         @Inject(RUNTIME_GIT_PORT)
         private readonly git: Pick<RuntimeGitPort, 'getDefaultBranchHead' | 'readFileAtCommit' | 'listFilesAtCommit'>,
@@ -175,7 +191,43 @@ export class RuntimeEnvToolsService {
         // Required by Nest; made without it (the older tests), an environment is its primary repository alone.
         @Inject(RuntimeEnvironmentMembers)
         private readonly members?: RuntimeEnvironmentMembers,
+        // Required by Nest; without them (the older tests) a recipe reaches only a repository that already has an environment.
+        @Optional() @Inject(RUNTIME_ORG_REPOSITORIES)
+        private readonly orgRepositories?: RuntimeOrgRepositories,
+        @Optional() @Inject(RUNTIME_SETTINGS_STORE)
+        private readonly settings?: RuntimeSettingsStore,
     ) {}
+
+    /**
+     * The repository a call names by id or by `owner/name` (case-insensitive), when it is connected to the org, in the
+     * key's team and in the key's repository list; else null. What a recipe sent before the first setup boots.
+     */
+    private async namedRepository(p: EnvKeyPrincipal, target: EnvTarget): Promise<NamedRepository | null> {
+        if (!this.orgRepositories) return null;
+        const byId = isId(target.repositoryId) ? target.repositoryId : null;
+        const byName = typeof target.repository === 'string' && target.repository.includes('/') && target.repository.length <= 256 ? target.repository.toLowerCase() : null;
+        if (!byId && !byName) return null;
+        const { teamId, repositories } = await this.orgRepositories.list(p.organizationId);
+        if (!teamId || teamId !== p.teamId) return null;
+        const repo = repositories.find((r) => (byId ? r.repositoryId === byId : r.repositoryName.toLowerCase() === byName));
+        if (!repo || !p.repositoryIds.includes(repo.repositoryId)) return null;
+        return { organizationId: p.organizationId, teamId, ...repo };
+    }
+
+    /**
+     * The environment a recipe call is about: the one the target resolves to, else (a repository named that has none
+     * yet) that repository, so a developer's agent can send the first recipe without Kody setting the repository up.
+     */
+    private async recipeTarget(p: EnvKeyPrincipal, target: EnvTarget): Promise<{ env: ProductEnvironment } | { repo: NamedRepository }> {
+        try {
+            return { env: await this.resolve(p, target) };
+        } catch (e) {
+            if (!(e instanceof NotFoundException)) throw e;
+            const repo = await this.namedRepository(p, target);
+            if (!repo || (await this.products.findByRepository(repo.organizationId, repo.repositoryId))) throw e;
+            return { repo };
+        }
+    }
 
     /** The key reaches an environment only when its repository list holds every repository of it: the machine holds all their code. */
     private async covers(p: EnvKeyPrincipal, env: ProductEnvironment): Promise<boolean> {
@@ -218,6 +270,15 @@ export class RuntimeEnvToolsService {
         let env: ProductEnvironment | null;
         if (target.environmentId !== undefined && target.environmentId !== null && target.environmentId !== '') {
             env = isId(target.environmentId) ? await this.products.get(p.organizationId, target.environmentId) : null;
+        } else if (
+            (target.repositoryId === undefined || target.repositoryId === null || target.repositoryId === '') &&
+            typeof target.repository === 'string' &&
+            target.repository !== ''
+        ) {
+            // `owner/name`: the repository's environment, through its id.
+            const repo = await this.namedRepository(p, target);
+            if (!repo) throw notFound();
+            return this.resolve(p, { repositoryId: repo.repositoryId });
         } else if (target.repositoryId !== undefined && target.repositoryId !== null && target.repositoryId !== '') {
             // Every environment the repository is part of that the key reaches; several must be named.
             const found = isId(target.repositoryId) ? await membersOr(this.members, this.products).environmentsOf(p.organizationId, target.repositoryId) : [];
@@ -569,17 +630,18 @@ export class RuntimeEnvToolsService {
      * repositories (whose paths are checked against their members), skips them with a warning: it is no verdict.
      */
     private async repositoryProblems(
-        env: ProductEnvironment,
+        where: Pick<ProductEnvironment, 'organizationId' | 'teamId' | 'repositoryId' | 'repositoryName'>,
+        env: ProductEnvironment | null,
         recipe: string,
         files: AuthoredFile[] | undefined,
     ): Promise<{ errors: string[]; warnings: string[]; readAt?: string }> {
         const skipped = (why: string) => ({ errors: [], warnings: [`The checks that read the repository were skipped: ${why}.`] });
-        if ((await membersOr(this.members, this.products).list(env)).length > 1) return skipped('this environment has several repositories');
-        const orgTeam = { organizationId: env.organizationId, teamId: env.teamId };
-        const head = await this.git.getDefaultBranchHead({ ...orgTeam, repositoryId: env.repositoryId, repositoryName: env.repositoryName }).catch(() => null);
+        if (env && (await membersOr(this.members, this.products).list(env)).length > 1) return skipped('this environment has several repositories');
+        const orgTeam = { organizationId: where.organizationId, teamId: where.teamId };
+        const head = await this.git.getDefaultBranchHead({ ...orgTeam, repositoryId: where.repositoryId, repositoryName: where.repositoryName }).catch(() => null);
         if (!head || head.status !== 'ok') return skipped('Kodus could not read the default branch');
         try {
-            const reader = new GitRepoReader(this.git, { ...orgTeam, repositoryId: env.repositoryId, repositoryName: env.repositoryName, sha: head.sha });
+            const reader = new GitRepoReader(this.git, { ...orgTeam, repositoryId: where.repositoryId, repositoryName: where.repositoryName, sha: head.sha });
             const read = (path: string) =>
                 reader.read(path, READ_LIMITS.fileBytes).catch((e: unknown) => {
                     if (e instanceof RepoPathError) return null;
@@ -600,17 +662,19 @@ export class RuntimeEnvToolsService {
     /** env_recipe_check: would Kodus boot this recipe, on this repository; nothing is kept and nothing boots. */
     async checkRecipe(p: EnvKeyPrincipal, input: EnvTarget & { recipe?: unknown; files?: unknown }): Promise<EnvRecipeCheckView> {
         this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
-        const env = await this.resolve(p, input);
+        const target = await this.recipeTarget(p, input);
+        const env = 'env' in target ? target.env : null;
+        const where = 'env' in target ? target.env : target.repo;
         const { errors, summary, recipe, files } = this.recipeProblems(input);
         // A recipe that does not parse has nothing the repository checks could read.
-        const repo = summary && recipe ? await this.repositoryProblems(env, recipe, files) : { errors: [], warnings: [] as string[] };
+        const repo = summary && recipe ? await this.repositoryProblems(where, env, recipe, files) : { errors: [], warnings: [] as string[] };
         const all = [...errors, ...repo.errors];
         return {
             ok: all.length === 0,
             errors: all,
             warnings: repo.warnings,
             ...('readAt' in repo && repo.readAt ? { readAt: repo.readAt } : {}),
-            environment: { environmentId: env.environmentId, repositoryName: env.repositoryName },
+            environment: env ? { environmentId: env.environmentId, repositoryName: env.repositoryName } : { repositoryName: where.repositoryName },
             ...(summary ? { summary } : {}),
         };
     }
@@ -623,11 +687,13 @@ export class RuntimeEnvToolsService {
      */
     async submitRecipe(p: EnvKeyPrincipal, input: EnvTarget & { recipe?: unknown; files?: unknown }): Promise<EnvRecipeSubmitResult> {
         this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
-        const env = await this.resolve(p, input);
+        const target = await this.recipeTarget(p, input);
         const checked = this.recipeProblems(input);
         if (checked.errors.length || !checked.recipe) {
             throw new BadRequestException({ code: 'recipe_refused', message: `Kodus refused the recipe: ${checked.errors.join('; ')}` });
         }
+        // The first recipe of a repository makes its environment, as Set up does, and asks for one setup: this one.
+        const env = 'env' in target ? target.env : (await ensureEnvironment({ environments: this.products, members: this.members, settings: this.settings }, target.repo)).env;
         const submitted = {
             content: checked.recipe,
             ...(checked.files?.length ? { files: checked.files } : {}),

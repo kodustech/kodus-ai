@@ -31,6 +31,13 @@ const target = {
         .max(128)
         .optional()
         .describe('Alternatively, the repository id whose environment to use.'),
+    repository: z
+        .string()
+        .max(256)
+        .optional()
+        .describe(
+            "Alternatively, the repository as owner/name (the working directory's git remote). env_recipe_check and env_recipe_submit also take a repository that has no environment yet: the first recipe sent makes it.",
+        ),
 };
 
 export interface EnvToolDefinition {
