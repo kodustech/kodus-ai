@@ -306,6 +306,9 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
  * `error`. Pure — safe to call in any catch block.
  */
 export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
+    // The configured window cannot hold the fixed prompt: the user's model
+    // choice, not a Kodus fault. A provider's own overflow stays `error`.
+    if (err instanceof AgentContextWindowTooSmallError) return 'warn';
     return isTerminalCategory(classifyLLMError(err).category)
         ? 'warn'
         : 'error';

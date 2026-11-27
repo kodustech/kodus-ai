@@ -3,118 +3,47 @@ import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 
 describe('assertContextWindowFitsOverhead', () => {
-    it('error carries the numeric context for telemetry/UI', () => {
+    const check = (overheadTokens: number, contextWindow: number) => () =>
+        assertContextWindowFitsOverhead({
+            overheadTokens,
+            adaptiveProfile: resolveAdaptiveProfile(contextWindow),
+            contextWindow,
+            modelName: 'llama',
+        });
+
+    it('error carries the measured overhead for telemetry/UI', () => {
         try {
-            assertContextWindowFitsOverhead({
-                input: {
-                    changedFiles: [],
-                    prTitle: '',
-                    prBody: '',
-                },
-                contextWindow: 12_288,
-                modelName: 'llama',
-            });
+            check(7_000, 12_288)();
             throw new Error('should have thrown');
         } catch (e) {
             expect(e).toBeInstanceOf(AgentContextWindowTooSmallError);
             const err = e as AgentContextWindowTooSmallError;
             expect(err.contextWindow).toBe(12_288);
-            expect(err.overheadTokens).toBeGreaterThan(12_288);
+            expect(err.overheadTokens).toBe(7_000);
             expect(err.modelName).toBe('llama');
         }
     });
 
-    it('does NOT throw at 32_768 (Llama 32K still fits the overhead with margin)', () => {
-        expect(() =>
-            assertContextWindowFitsOverhead({
-                input: {
-                    changedFiles: [],
-                    prTitle: '',
-                    prBody: '',
-                },
-                contextWindow: 32_768,
-                modelName: 'llama-32k',
-            }),
-        ).not.toThrow();
+    describe('on a small window the overhead must leave room in the prompt budget', () => {
+        it('throws once the overhead reaches 55% of the window', () => {
+            expect(check(6_758, 12_288)).toThrow(
+                AgentContextWindowTooSmallError,
+            );
+            expect(check(6_757, 12_288)).not.toThrow();
+        });
+
+        it('runs a small PR whose real fixed prompt fits (#2205 QA)', () => {
+            // ~2K tokens: the compact prompt and tool schemas of a 1-file PR.
+            for (const window of [8_000, 12_288, 16_000, 20_000]) {
+                expect(check(2_000, window)).not.toThrow();
+            }
+        });
     });
 
-    describe('the overhead must leave room in the prompt budget', () => {
-        it('throws at 16K: the compact overhead fills the 55% budget', () => {
-            expect(() =>
-                assertContextWindowFitsOverhead({
-                    input: {
-                        changedFiles: [
-                            { filename: 'a.ts', patch: 'small' } as any,
-                        ],
-                        prTitle: 'tiny',
-                        prBody: 'tiny',
-                        adaptiveProfile: resolveAdaptiveProfile(16_000),
-                    },
-                    contextWindow: 16_000,
-                    modelName: 'llama-16k',
-                }),
-            ).toThrow(AgentContextWindowTooSmallError);
-        });
-
-        it('throws at 12K even though the overhead fits the window', () => {
-            expect(() =>
-                assertContextWindowFitsOverhead({
-                    input: {
-                        changedFiles: [
-                            { filename: 'a.ts', patch: 'small' } as any,
-                        ],
-                        adaptiveProfile: resolveAdaptiveProfile(12_288),
-                    },
-                    contextWindow: 12_288,
-                    modelName: 'llama-12k',
-                }),
-            ).toThrow(AgentContextWindowTooSmallError);
-        });
-
-        it('fits a 24K window only with the compact overhead', () => {
-            const compact = resolveAdaptiveProfile(24_000);
-            const check = (adaptiveProfile: any) => () =>
-                assertContextWindowFitsOverhead({
-                    input: { changedFiles: [], adaptiveProfile },
-                    contextWindow: 24_000,
-                    modelName: 'llama-24k',
-                });
-            expect(check(compact)).not.toThrow();
-            expect(check({ ...compact, compactPrompt: false })).toThrow(
-                AgentContextWindowTooSmallError,
-            );
-        });
-
-        it('leaves out a callGraph the profile drops', () => {
-            const light = resolveAdaptiveProfile(32_768);
-            const check = (adaptiveProfile: any) => () =>
-                assertContextWindowFitsOverhead({
-                    input: {
-                        changedFiles: [],
-                        callGraph: 'edge: a→b\n'.repeat(2_000), // ~20K chars
-                        adaptiveProfile,
-                    },
-                    contextWindow: 32_768,
-                    modelName: 'llama-32k',
-                });
-            expect(check({ ...light, dropCallGraph: false })).toThrow(
-                AgentContextWindowTooSmallError,
-            );
-            expect(check(light)).not.toThrow();
-        });
-
-        it('a full-size window still allows overhead past the budget', () => {
-            expect(() =>
-                assertContextWindowFitsOverhead({
-                    input: {
-                        changedFiles: [],
-                        callGraph: 'x'.repeat(400_000),
-                        adaptiveProfile: resolveAdaptiveProfile(200_000),
-                    },
-                    contextWindow: 200_000,
-                    modelName: 'big',
-                }),
-            ).not.toThrow();
-        });
+    it('a full-size window still allows overhead past the budget', () => {
+        expect(check(150_000, 200_000)).not.toThrow();
+        expect(check(200_000, 200_000)).toThrow(
+            AgentContextWindowTooSmallError,
+        );
     });
 });

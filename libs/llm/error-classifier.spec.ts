@@ -915,6 +915,15 @@ describe('isTerminalCategory', () => {
 });
 
 describe('llmErrorLogLevel', () => {
+    it('a window too small for the fixed prompt is the user config: warn', () => {
+        const err = new AgentContextWindowTooSmallError({
+            contextWindow: 8_000,
+            overheadTokens: 5_000,
+            modelName: 'small',
+        });
+        expect(llmErrorLogLevel(err)).toBe('warn');
+    });
+
     it('terminal BYOK billing (suspended account) → warn', () => {
         const err = new Error(
             'Account xxx is suspended, spending limit reached',
