@@ -15,7 +15,16 @@
  * first (a read or a re-set moves the key to the end). An entry larger than
  * `maxEntryChars` is not stored at all: it would evict many useful entries to
  * cache one value that is unlikely to repeat.
+ *
+ * The character budget evicts only large values. The same cache holds small
+ * flags that must last their TTL, such as the once-a-day "review skipped (no
+ * license)" notice dedupe: evicted with the file contents, the author got the
+ * notice again every few hours. Small entries leave by the entry cap alone,
+ * which bounds them at maxEntries × SMALL_ENTRY_CHARS.
  */
+
+/** Values below this size are evicted only by the entry cap, not by size. */
+export const SMALL_ENTRY_CHARS = 1_024;
 export interface BoundedMemoryStoreOptions {
     maxEntries: number;
     /** Total characters held across all values (UTF-16: ~2 bytes each). */
@@ -30,6 +39,11 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         super();
     }
 
+    /** The bounds this store enforces. */
+    get bounds(): Readonly<BoundedMemoryStoreOptions> {
+        return this.opts;
+    }
+
     /** Characters currently held, for metrics and tests. */
     get heldChars(): number {
         return this.chars;
@@ -41,13 +55,11 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         if (size > this.opts.maxEntryChars) return this;
         super.set(key, value);
         this.chars += size;
-        for (const oldest of this.keys()) {
-            if (
-                this.size <= this.opts.maxEntries &&
-                this.chars <= this.opts.maxChars
-            )
-                break;
+        for (const [oldest, held] of this.entries()) {
+            const overEntries = this.size > this.opts.maxEntries;
+            if (!overEntries && this.chars <= this.opts.maxChars) break;
             if (oldest === key) continue;
+            if (!overEntries && sizeOf(held) < SMALL_ENTRY_CHARS) continue;
             this.delete(oldest);
         }
         return this;
