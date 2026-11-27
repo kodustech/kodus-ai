@@ -93,9 +93,20 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
                     otherLocations: otherLocations.length,
                 });
             }
-            return otherLocations.length
-                ? { ...kept, kodyRuleOtherLocations: otherLocations }
-                : kept;
+            // Each folded file keeps its claim, for the repeat check of the
+            // next round: the comment itself names only the kept file.
+            const repeatClaims = same.flatMap((s) =>
+                s.relevantFile && s.repeatClaim
+                    ? [{ file: s.relevantFile, claim: s.repeatClaim }]
+                    : [],
+            );
+            return {
+                ...kept,
+                ...(otherLocations.length && {
+                    kodyRuleOtherLocations: otherLocations,
+                }),
+                ...(repeatClaims.length > 1 && { repeatClaims }),
+            };
         });
 
         if (lined.size <= 1) {

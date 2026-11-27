@@ -92,6 +92,9 @@ export function toRecordFromPrLevel(
             relevantFile: suggestion.relevantFile,
         }),
         ...(suggestion.repeatClaim && { claim: suggestion.repeatClaim }),
+        ...(suggestion.repeatClaims?.length && {
+            claims: suggestion.repeatClaims,
+        }),
         suggestionContent:
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,

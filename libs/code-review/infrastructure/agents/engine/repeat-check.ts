@@ -621,6 +621,21 @@ function plausibleRepeat(
 ): boolean {
     if (isRule(finding) !== isRule(earlier)) return false;
     const file = normalizePath(finding.relevantFile);
+    // One PR-level comment can stand for a rule's line-less findings on
+    // several files (#2420); it names one file, the record keeps them all.
+    if (
+        file &&
+        !finding.relevantLinesStart &&
+        isRule(finding) &&
+        sharesRule(finding, earlier) &&
+        earlier.claims?.some(
+            (c) =>
+                normalizePath(c.file) === file &&
+                c.claim.trim() === finding.suggestionContent?.trim(),
+        )
+    ) {
+        return true;
+    }
     if (file !== normalizePath(earlier.relevantFile)) return false;
     if (!file) {
         // PR-level history has no source anchor. A paraphrase needs a model

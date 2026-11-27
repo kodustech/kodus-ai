@@ -249,6 +249,13 @@ export type CodeSuggestion = {
      * round's repeat check compares against this, not the posted comment.
      */
     repeatClaim?: string;
+    /**
+     * Every `{file, claim}` folded into this finding when a rule's line-less
+     * findings on several files merge into one PR-level comment (#2420). The
+     * comment keeps one file; the repeat check of the next round needs the
+     * others to recognize their reposts.
+     */
+    repeatClaims?: Array<{ file: string; claim: string }>;
     /** Merged finding locations, rendered after the content formatter. */
     alsoFoundIn?: string[];
     /** The custom agent that produced the finding (#2172); drives its tag. */

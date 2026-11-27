@@ -2535,6 +2535,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         // with the comments on the same file (#2420).
                         ...(s.relevantFile && { relevantFile: s.relevantFile }),
                         ...(s.repeatClaim && { repeatClaim: s.repeatClaim }),
+                        ...(s.repeatClaims && {
+                            repeatClaims: s.repeatClaims,
+                        }),
                         // Any finding that named a file has to say WHERE,
                         // since a PR-level comment carries no anchor of
                         // its own — true whether it's fileAnchored

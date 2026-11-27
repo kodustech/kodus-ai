@@ -313,6 +313,8 @@ export interface ISuggestionByPR {
     /** The finding's claim before formatting; what the repeat check of the
      *  next round compares (#2420). */
     repeatClaim?: string;
+    /** Every folded file's claim, when the finding spans several files. */
+    repeatClaims?: Array<{ file: string; claim: string }>;
     suggestionContent: string;
     fullExplanation?: string;
     oneSentenceSummary: string;

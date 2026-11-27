@@ -228,6 +228,23 @@ describe('mergeKodyRuleFindings', () => {
         ]);
     });
 
+    it('keeps the claim of every file a line-less finding folded', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>(
+            ['src/A.cs', 'src/B.cs'].map((file) => ({
+                brokenKodyRulesIds: ['rule-name'],
+                relevantFile: file,
+                suggestionContent: `${file} lacks the prefix, rewritten`,
+                repeatClaim: `${file} lacks the prefix.`,
+            })),
+        );
+
+        expect(out).toHaveLength(1);
+        expect(out[0].repeatClaims).toEqual([
+            { file: 'src/A.cs', claim: 'src/A.cs lacks the prefix.' },
+            { file: 'src/B.cs', claim: 'src/B.cs lacks the prefix.' },
+        ]);
+    });
+
     it('keeps the lines of file-anchored findings collapsed on one file', () => {
         const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
             {

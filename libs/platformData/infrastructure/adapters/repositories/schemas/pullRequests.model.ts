@@ -192,6 +192,7 @@ export class PullRequestsModel extends CoreDocument {
         id: string;
         relevantFile?: string;
         repeatClaim?: string;
+        repeatClaims?: Array<{ file: string; claim: string }>;
         suggestionContent: string;
         fullExplanation?: string;
         oneSentenceSummary: string;

@@ -115,6 +115,18 @@ describe('decision records read the full explanation', () => {
                 suggestionContent: '`src/CheckinReport.cs` — Rewritten.',
             } as any).claim,
         ).toBe('Lacks the prefix.');
+        const claims = [
+            { file: 'src/A.cs', claim: 'A.' },
+            { file: 'src/B.cs', claim: 'B.' },
+        ];
+        expect(
+            toRecordFromPrLevel({
+                id: 'p-6',
+                relevantFile: 'src/A.cs',
+                repeatClaims: claims,
+                suggestionContent: 'x',
+            } as any).claims,
+        ).toEqual(claims);
         expect(
             toRecordFromPrLevel({ id: 'p-4', suggestionContent: 'x' } as any),
         ).not.toHaveProperty('relevantFile');

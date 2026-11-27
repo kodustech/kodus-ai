@@ -281,6 +281,13 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
                         id: 's-3',
                         relevantFile: 'src/CheckinReport.cs',
                         repeatClaim: 'Lacks the qa2420_ prefix.',
+                        repeatClaims: [
+                            {
+                                file: 'src/CheckinReport.cs',
+                                claim: 'Lacks the qa2420_ prefix.',
+                            },
+                            { file: 'src/Other.cs', claim: 'Other lacks it.' },
+                        ],
                         suggestionContent:
                             '`src/CheckinReport.cs` — Rewritten.',
                         oneSentenceSummary: 'Title',
@@ -299,6 +306,13 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
         expect(saved).toMatchObject({
             relevantFile: 'src/CheckinReport.cs',
             repeatClaim: 'Lacks the qa2420_ prefix.',
+            repeatClaims: [
+                {
+                    file: 'src/CheckinReport.cs',
+                    claim: 'Lacks the qa2420_ prefix.',
+                },
+                { file: 'src/Other.cs', claim: 'Other lacks it.' },
+            ],
         });
     });
 });

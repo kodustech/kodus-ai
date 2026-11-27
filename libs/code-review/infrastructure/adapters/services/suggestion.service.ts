@@ -2408,6 +2408,9 @@ export class SuggestionService implements ISuggestionService {
                         ...(suggestion.repeatClaim && {
                             repeatClaim: suggestion.repeatClaim,
                         }),
+                        ...(suggestion.repeatClaims?.length && {
+                            repeatClaims: suggestion.repeatClaims,
+                        }),
                         suggestionContent: suggestion.suggestionContent,
                         fullExplanation: suggestion.fullExplanation,
                         oneSentenceSummary: suggestion.oneSentenceSummary,
