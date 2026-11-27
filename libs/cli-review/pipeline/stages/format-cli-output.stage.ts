@@ -30,11 +30,13 @@ export class FormatCliOutputStage extends BasePipelineStage<CliReviewPipelineCon
             },
         });
 
-        // A Kody Rule finding that cites no line goes to the PR-level list,
-        // not to validSuggestions (#2420). The CLI has no PR to post it on,
-        // so it is listed with the rest, on its file when it names one.
+        // A Kody Rule finding that names a file but no line goes to the
+        // PR-level list, not to validSuggestions (#2420). The CLI has no PR to
+        // post it on, so it is listed with the rest, on its file. A finding
+        // with no file judged the CLI's placeholder PR (title "CLI Review", no
+        // description), so there is nothing in the change to act on.
         const prLevelRuleFindings = (context.validSuggestionsByPR ?? [])
-            .filter((s) => s.label === 'kody_rules')
+            .filter((s) => s.label === 'kody_rules' && !!s.relevantFile)
             .map((s) => ({
                 relevantFile: s.relevantFile,
                 severity: s.severity,

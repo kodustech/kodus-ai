@@ -33,6 +33,15 @@ describe('FormatCliOutputStage', () => {
                     suggestionContent: 'Rename the file with the prefix.',
                     brokenKodyRulesIds: ['rule-d'],
                 },
+                {
+                    // Judged against the CLI's placeholder PR, not the change.
+                    id: 'p-2',
+                    label: 'kody_rules',
+                    severity: 'high',
+                    oneSentenceSummary: 'PR description has no Jira ticket.',
+                    suggestionContent: 'Link a Jira ticket.',
+                    brokenKodyRulesIds: ['rule-pr'],
+                },
             ],
         } as never);
 
