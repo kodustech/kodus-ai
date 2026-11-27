@@ -12,7 +12,7 @@ import { type RuntimeLlmAgent, type RuntimeLlmSpendRow, sumLlmSpend } from './ll
 //     / the MB the cell may commit to claims × the host's US$/h. Time spent
 //     waiting for room holds nothing and costs nothing (the hub records a
 //     claim only once it is admitted). The host's US$/h is its list price on
-//     a Kodus cell (RUNTIME_CELL_PRICES), and on the org's own cell the price
+//     a Kodus cell (RUNTIME_CELL_PRICES, else the price the fleet recorded for the host the cell runs on), and on the org's own cell the price
 //     per host-hour the org set in Runtime settings (none set: not priced);
 //   - an aws-ec2 cell (one VM per claim): the Run's wall time times the list
 //     price of the machines the cell is sized with.
@@ -128,6 +128,8 @@ export interface RunClaimUsage {
     releasedAt: string | null;
     stateChangedAt: string | null;
     hardExpiresAt: string | null;
+    /** US$/h of the fleet host the claim's cell runs on (runtime_hosts.usd_per_hour, from the pool's price); null on a cell that is not a fleet host's, or a host with no price. */
+    hostUsdPerHour?: number | null;
 }
 
 /** Why the machine part is null although the Run held machines. */
@@ -301,7 +303,8 @@ export function estimateRunCost(args: {
 
     const machinesUsd = machines.usd;
     const pricedLlm = llm.source === 'telemetry' ? sumLlmSpend(args.spend ?? []).pricedUsd : 0;
-    const anyPriced = machinesUsd !== null || pricedLlm > 0 || llm.usd !== null;
+    // A total of 0 would read as "free": with the machine part unpriced, only a priced LLM part makes a (partial) total.
+    const anyPriced = machinesUsd !== null || pricedLlm > 0;
     const totalUsd = anyPriced ? round6((machinesUsd ?? 0) + pricedLlm) : null;
     return {
         estimate: true,
@@ -342,6 +345,21 @@ function llmCost(spend: readonly RuntimeLlmSpendRow[] | undefined): RuntimeRunCo
     };
 }
 
+/**
+ * The price of a Kodus-managed cell: the static map first (RUNTIME_CELL_PRICES), else the price of the fleet host the
+ * cell runs on, which the fleet recorded (a fleet host's cell has a fresh id per Run, so no map can name it).
+ */
+function kodusCellPriceOf(claims: readonly RunClaimUsage[], fromMap: ((cellId: string) => CellHostPrice | null) | undefined): (cellId: string) => CellHostPrice | null {
+    const fleet = new Map<string, number>();
+    for (const c of claims) if (c.hostUsdPerHour != null && Number.isFinite(c.hostUsdPerHour) && c.hostUsdPerHour > 0) fleet.set(c.cellId, c.hostUsdPerHour);
+    return (cellId) => {
+        const listed = fromMap?.(cellId) ?? null;
+        if (listed) return listed;
+        const usdPerHour = fleet.get(cellId);
+        return usdPerHour === undefined ? null : { instanceType: 'fleet host', usdPerHour, region: 'fleet' };
+    };
+}
+
 /** The machine part by the Run's claims: per VM on aws-ec2, by held memory on a shared cell, else honest about what is missing. */
 function machineCost(
     args: { claims?: RunClaimUsage[]; cellPriceOf?: (cellId: string) => CellHostPrice | null; ownHostPrice?: OwnHostPrice; now: Date },
@@ -355,7 +373,7 @@ function machineCost(
         return { model: 'vm', usd: paidBy === 'customer' ? null : round6(minutes * perMinute) };
     }
     if (claims.length && claims.some((c) => c.bootMb != null)) {
-        const shared = sharedCellCost(claims, args.cellPriceOf ?? (() => null), args.now);
+        const shared = sharedCellCost(claims, kodusCellPriceOf(claims, args.cellPriceOf), args.now);
         if (shared.mbMinutes === null) return { model: 'unknown', usd: null, unpriced: shared.unpriced };
         if (paidBy === 'customer') {
             if (!args.ownHostPrice) return { model: 'shared_cell', mbMinutes: shared.mbMinutes, usd: null };

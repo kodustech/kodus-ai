@@ -95,6 +95,46 @@ describe('estimateRunCost', () => {
     });
 });
 
+describe('estimateRunCost on a fleet host (pool lifecycle perRun)', () => {
+    // A fleet host's cell has a fresh id per Run: no static map names it, the host's own price does.
+    const fleet = (patch: Partial<RunClaimUsage> = {}) => claim({ cellId: 'cell-fleet-9f3a', hostUsdPerHour: 0.2016, ...patch });
+    const run = { bootingAt: at(-8), finishedAt: at(0) };
+
+    it("prices a claim on a fleet host's cell at the host's US$/h, by the same share of the host as any Kodus cell", () => {
+        const cost = estimateRunCost({ run, spend: [], claims: [fleet()], cellPriceOf, now: NOW });
+        // 20 650.67 MB·min / 14 745 MB × 0.2016 / 60
+        expect(cost.machines).toMatchObject({ model: 'shared_cell', paidBy: 'kodus', usd: 0.004706, host: { cellId: 'cell-fleet-9f3a', usdPerHour: 0.2016 } });
+        expect(cost.machines.unpriced).toBeUndefined();
+        expect(cost).toMatchObject({ totalUsd: 0.004706, complete: true });
+    });
+
+    it('keeps the static price for a cell the map names, even when a host price is also there', () => {
+        const cost = estimateRunCost({ run, spend: [], claims: [fleet({ cellId: 'cell-dev-1' })], cellPriceOf, now: NOW });
+        expect(cost.machines.host).toMatchObject({ instanceType: 't4g.xlarge', usdPerHour: 0.1344 });
+    });
+
+    it('a fleet host with no recorded price stays unpriced: null, never a zero, in the part and in the total', () => {
+        for (const hostUsdPerHour of [null, undefined, 0, Number.NaN]) {
+            const cost = estimateRunCost({ run, spend: [], claims: [fleet({ hostUsdPerHour })], cellPriceOf, now: NOW });
+            expect(cost.machines).toMatchObject({ usd: null, unpriced: 'cell_price_unknown' });
+            expect(cost.totalUsd).toBeNull();
+            expect(cost.complete).toBe(false);
+        }
+    });
+
+    it('with the machine part unpriced, a priced LLM part still gives a partial total', () => {
+        const cost = estimateRunCost({ run, spend: [spendRow({ usd: 0.5 })], claims: [fleet({ hostUsdPerHour: null })], cellPriceOf, now: NOW });
+        expect(cost.machines.usd).toBeNull();
+        expect(cost.totalUsd).toBe(0.5);
+        expect(cost.complete).toBe(false);
+    });
+
+    it("a customer's cell is never priced by a host price", () => {
+        const cost = estimateRunCost({ run: { ...run, cellOwner: 'customer' }, spend: [], claims: [fleet()], cellPriceOf, now: NOW });
+        expect(cost.machines).toMatchObject({ paidBy: 'customer', usd: null });
+    });
+});
+
 describe('estimateRunCost on a shared cell (docker-gvisor, ADR-070)', () => {
     // demo-shop-like: the Run waited 3 min for room (no claim recorded, nothing held), then the base held its
     // ready size 8 min and the PR its build size 25 s, then its ready size, on a t4g.xlarge with 14 745 MB to commit.

@@ -51,9 +51,10 @@ BEGIN
       EXECUTE 'GRANT SELECT (org_id, environment_id, state, setup_key, setup_requested_at) ON runtime.runtime_env_templates TO kodus_runtime_reader';
     END IF;
     -- The fleet's hosts of an e2e suite run (docs/runtime/e2e-suites.md section 13): the suite tab says where its time went.
-    -- The org, the bound key and the times only; never the provider's id, the price or an error.
+    -- The org, the bound key and the times, plus the host id and its US$/h (a Run on a fleet host's cell is priced by it);
+    -- never the provider's id or an error.
     IF to_regclass('runtime.runtime_hosts') IS NOT NULL THEN
-      EXECUTE 'GRANT SELECT (organization_id, bound_key, created_at, ready_at, terminated_at) ON runtime.runtime_hosts TO kodus_runtime_reader';
+      EXECUTE 'GRANT SELECT (host_id, organization_id, bound_key, created_at, ready_at, terminated_at, usd_per_hour) ON runtime.runtime_hosts TO kodus_runtime_reader';
     END IF;
     -- The template builds' setup records (v50): the pending-template reader only asks whether a key exists.
     IF to_regclass('runtime.runtime_template_setups') IS NOT NULL THEN

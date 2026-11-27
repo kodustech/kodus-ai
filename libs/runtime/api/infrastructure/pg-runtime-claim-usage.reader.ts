@@ -19,6 +19,7 @@ interface ClaimUsageRow {
     released_at: Date | null;
     state_changed_at: Date | null;
     hard_expires_at: Date | null;
+    host_usd_per_hour: string | number | null;
 }
 
 const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
@@ -26,7 +27,9 @@ const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
 /**
  * The claim rounds of Runs (runtime.runtime_claims, migration 11) from the
  * Runtime Postgres, through the shared read-only RuntimeReadDb (ADR-025): one
- * query for the whole page, org-scoped, on runtime_claims_run_idx. Without
+ * query for the whole page, org-scoped, on runtime_claims_run_idx. A claim on a
+ * fleet host's cell also carries that host's price (runtime_cells.host_id ->
+ * runtime_hosts.usd_per_hour, from the pool's price.usdPerHostHour). Without
  * RUNTIME_DATABASE_READ_URL it fails with 503, as every Runtime read does (the
  * Run cost then leaves the machine time unpriced).
  */
@@ -38,11 +41,14 @@ export class PgRuntimeClaimUsageReader implements RuntimeClaimUsageReader {
         if (!runIds.length) return out;
         const rows = (
             await this.db.query(
-                `SELECT claim_id, cell_id, run_id, side, state, driver, memory_mb_boot, memory_mb_ready, memory_allocatable_mb, cpus,
-                        admitted_at, ready_at, released_at, state_changed_at, hard_expires_at
-                   FROM runtime.runtime_claims
-                  WHERE run_id = ANY($2) AND org_id = $1
-                  ORDER BY created_at
+                `SELECT k.claim_id, k.cell_id, k.run_id, k.side, k.state, k.driver, k.memory_mb_boot, k.memory_mb_ready, k.memory_allocatable_mb, k.cpus,
+                        k.admitted_at, k.ready_at, k.released_at, k.state_changed_at, k.hard_expires_at,
+                        h.usd_per_hour AS host_usd_per_hour
+                   FROM runtime.runtime_claims k
+                   LEFT JOIN runtime.runtime_cells c ON c.cell_id = k.cell_id
+                   LEFT JOIN runtime.runtime_hosts h ON h.host_id = c.host_id
+                  WHERE k.run_id = ANY($2) AND k.org_id = $1
+                  ORDER BY k.created_at
                   LIMIT 1000`,
                 [organizationId, runIds],
             )
@@ -64,6 +70,7 @@ export class PgRuntimeClaimUsageReader implements RuntimeClaimUsageReader {
                 releasedAt: iso(r.released_at),
                 stateChangedAt: iso(r.state_changed_at),
                 hardExpiresAt: iso(r.hard_expires_at),
+                hostUsdPerHour: r.host_usd_per_hour == null ? null : Number(r.host_usd_per_hour),
             });
             out.set(r.run_id, list);
         }
