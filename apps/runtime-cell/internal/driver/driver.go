@@ -66,6 +66,9 @@ type Capabilities struct {
 	// BakeSpec.Shared; docs/runtime/shared-baked-environments.md). The cell
 	// names hello feature bakeShare only then.
 	ShareBakes bool
+	// ImageStore: the driver pushes the PR side's images to the org's store and pulls them by digest with the
+	// per-claim credential the hub gives (docs/runtime/shared-image-store.md); only the driver that builds images.
+	ImageStore bool
 	// ExecService: the driver runs a command in the container of the
 	// compose service a request names (kodyexec.Request.Service). The cell
 	// names hello feature execService only then.

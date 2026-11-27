@@ -408,6 +408,12 @@ export const CELL_FEATURES = [
     // refuses a field it does not know, so the hub sends the mode only to a cell that names this and sends no files to
     // the others, as before. At the end, like the features before it.
     'authoredFilesFill',
+    // The shared image store (docs/runtime/shared-image-store.md): claim.acquire imageStore (a short-lived, scoped
+    // credential for the org's store and the digests of the PR image a suite shard pulls instead of building),
+    // claim.renew imageStoreGrant (the same credential renewed), and the cell's image.pushed (the digest of the PR
+    // image it pushed). The hub sends the fields only to a cell that names it and the cell sends image.pushed only to
+    // a hub that accepts it. At the end, like the features before it.
+    'imageStore',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -480,7 +486,7 @@ export type ExercisedResult = z.infer<typeof ExercisedResultSchema>;
  * without `accepts`, so it never sees the field; an older cell never names
  * it, so it never gets an ack with `accepts` it would refuse.
  */
-export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool', 'buildStateDiskFacts', 'serviceStates'] as const satisfies readonly CellFeature[];
+export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool', 'buildStateDiskFacts', 'serviceStates', 'imageStore'] as const satisfies readonly CellFeature[];
 export type HubAcceptedFeature = (typeof HUB_ACCEPTED_FEATURES)[number];
 
 /** What a hello ack's `accepts` names: the cell's features this hub accepts fields of. Empty: send `accepts` not at all. */
@@ -877,6 +883,21 @@ export type SharedImage = z.infer<typeof SharedImageSchema>;
 /** The most images one bake shares, and one claim.acquire names (a bake keeps at most 128 per generation; a recipe far fewer services). */
 export const MAX_SHARED_IMAGES = 64;
 
+/**
+ * What a claim may do in the org's image store (feature imageStore): a bearer token the hub minted, scoped to the
+ * named repositories and short-lived, held by the cell in memory and never given to a builder. The cell uses the
+ * repository names as given and never builds one.
+ */
+export const IMAGE_STORE_SCOPES = ['main', 'pr', 'cache'] as const;
+export const ImageStoreGrantSchema = z.strictObject({
+    endpoint: z.url().max(512),
+    prefix: z.string().min(1).max(128).regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/),
+    token: z.string().min(1).max(4096),
+    expiresAt: z.iso.datetime(),
+    repos: z.array(z.strictObject({ scope: z.enum(IMAGE_STORE_SCOPES), name: z.string().min(1).max(256), pull: z.boolean(), push: z.boolean() })).min(1).max(8),
+});
+export type ImageStoreGrant = z.infer<typeof ImageStoreGrantSchema>;
+
 export const MessageBodySchemas = {
     'hello': z.strictObject({
         versions: z.array(z.number().int().min(1)).min(1).max(16),
@@ -987,6 +1008,9 @@ export const MessageBodySchemas = {
         // digest for a build whose fingerprint matches and that it holds no
         // image of, and builds as before on any failure. Never on a setup.
         sharedImages: z.array(SharedImageSchema).min(1).max(MAX_SHARED_IMAGES).optional(),
+        // Feature imageStore: the grant for the org's store, and the images the PR's builder pushed (by fingerprint and
+        // digest) that this claim pulls by digest instead of building. Absent digests: the claim builds as before.
+        imageStore: z.strictObject({ grant: ImageStoreGrantSchema, prImages: z.array(SharedImageSchema).min(1).max(MAX_SHARED_IMAGES).optional() }).optional(),
     }).refine((b) => claimSecretsError(b.secrets) === undefined, {
         message: 'each secret once, its id the lower case of its name',
         path: ['secrets'],
@@ -1102,7 +1126,8 @@ export const MessageBodySchemas = {
         // hello ack accepts bootPhases.
         phases: BootPhasesSchema.optional(),
     }),
-    'claim.renew': z.strictObject({ leaseExpiresAt: z.iso.datetime() }),
+    // imageStoreGrant (feature imageStore): the claim's store credential renewed with its lease, since a token is short.
+    'claim.renew': z.strictObject({ leaseExpiresAt: z.iso.datetime(), imageStoreGrant: ImageStoreGrantSchema.optional() }),
     'claim.release': z.strictObject({}),
     // evidence: only to a cell whose hello names the feature of each capture (evidenceRequestFor).
     'browser.explore': z.strictObject({ stepId: z.uuid(), request: BrowserExploreRequestSchema }),
@@ -1235,6 +1260,14 @@ export const MessageBodySchemas = {
         sha: z.string().regex(/^[0-9a-f]{40}$/),
         refsDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
         images: z.array(SharedImageSchema).min(1).max(MAX_SHARED_IMAGES),
+    }),
+    // Cell to hub, on the claim that built the PR side (feature imageStore, only to a hub that accepts it): the images it
+    // pushed to the PR's repository by fingerprint and digest, with what the push cost, or `failed` with a short code.
+    // The hub records the digest for the suite's shards, which pull it by digest. Never a name, a path or a layer.
+    'image.pushed': z.strictObject({
+        status: z.enum(['ok', 'failed']),
+        images: z.array(z.strictObject({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/), digest: z.string().regex(/^sha256:[0-9a-f]{64}$/), bytes: z.number().int().min(0), pushMs: z.number().int().min(0) })).max(MAX_SHARED_IMAGES),
+        reason: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/).optional(),
     }),
     // Cell to hub, on a layerBuild claim (feature toolLayers): the layer the
     // cell stored (its digest and size), or why it did not. Never content, and

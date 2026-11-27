@@ -47,6 +47,7 @@ const (
 	FeatureSkipBake              = "skipBake"
 	FeatureServiceStates         = "serviceStates"
 	FeatureAuthoredFilesFill     = "authoredFilesFill"
+	FeatureImageStore            = "imageStore"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -93,6 +94,7 @@ var CellFeatures = []string{
 	FeatureSkipBake,
 	FeatureServiceStates,
 	FeatureAuthoredFilesFill,
+	FeatureImageStore,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):
@@ -117,6 +119,7 @@ var HubAcceptedFeatures = []string{
 	FeatureSandboxPool,
 	FeatureBuildStateDiskFacts,
 	FeatureServiceStates,
+	FeatureImageStore,
 }
 
 // ClaimScopedTypeNames is CLAIM_SCOPED_TYPES (libs/runtime/protocol/envelope.ts): the message types that act on one claim, whose envelope must name it (claimId).
@@ -133,6 +136,7 @@ var ClaimScopedTypeNames = []string{
 	"egress.policy",
 	"exec",
 	"exec.cancel",
+	"image.pushed",
 	"machine.reset",
 	"preview.route",
 	"preview.unroute",

@@ -57,7 +57,8 @@
         "execService",
         "skipBake",
         "serviceStates",
-        "authoredFilesFill"
+        "authoredFilesFill",
+        "imageStore"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

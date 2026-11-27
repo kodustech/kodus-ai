@@ -39,6 +39,7 @@ const (
 	MessageTypeStepStream      MessageType = "step.stream"
 	MessageTypeImageBake       MessageType = "image.bake"
 	MessageTypeImageShared     MessageType = "image.shared"
+	MessageTypeImagePushed     MessageType = "image.pushed"
 	MessageTypeToollayerBuilt  MessageType = "toollayer.built"
 	MessageTypeToollayerFailed MessageType = "toollayer.failed"
 	MessageTypeOrgPurge        MessageType = "org.purge"
@@ -292,6 +293,34 @@ type ClaimAcquireBodySharedImagesItem struct {
 	Digest      string `json:"digest"`
 }
 
+type ClaimAcquireBodyImageStoreGrantReposItemScope string
+
+const (
+	ClaimAcquireBodyImageStoreGrantReposItemScopeMain  ClaimAcquireBodyImageStoreGrantReposItemScope = "main"
+	ClaimAcquireBodyImageStoreGrantReposItemScopePr    ClaimAcquireBodyImageStoreGrantReposItemScope = "pr"
+	ClaimAcquireBodyImageStoreGrantReposItemScopeCache ClaimAcquireBodyImageStoreGrantReposItemScope = "cache"
+)
+
+type ClaimAcquireBodyImageStoreGrantReposItem struct {
+	Scope ClaimAcquireBodyImageStoreGrantReposItemScope `json:"scope"`
+	Name  string                                        `json:"name"`
+	Pull  bool                                          `json:"pull"`
+	Push  bool                                          `json:"push"`
+}
+
+type ClaimAcquireBodyImageStoreGrant struct {
+	Endpoint  string                                     `json:"endpoint"`
+	Prefix    string                                     `json:"prefix"`
+	Token     string                                     `json:"token"`
+	ExpiresAt string                                     `json:"expiresAt"`
+	Repos     []ClaimAcquireBodyImageStoreGrantReposItem `json:"repos"`
+}
+
+type ClaimAcquireBodyImageStore struct {
+	Grant    ClaimAcquireBodyImageStoreGrant    `json:"grant"`
+	PrImages []ClaimAcquireBodySharedImagesItem `json:"prImages,omitempty"`
+}
+
 type ClaimAcquireBody struct {
 	OrgID             string                              `json:"orgId"`
 	EnvironmentID     string                              `json:"environmentId"`
@@ -318,6 +347,7 @@ type ClaimAcquireBody struct {
 	Repos             []ClaimAcquireBodyReposItem         `json:"repos,omitempty"`
 	Secrets           []ClaimAcquireBodySecretsItem       `json:"secrets,omitempty"`
 	SharedImages      []ClaimAcquireBodySharedImagesItem  `json:"sharedImages,omitempty"`
+	ImageStore        *ClaimAcquireBodyImageStore         `json:"imageStore,omitempty"`
 }
 
 type SandboxAcquireBodyToolLayersItem struct {
@@ -518,7 +548,8 @@ type ClaimFailedBody struct {
 }
 
 type ClaimRenewBody struct {
-	LeaseExpiresAt string `json:"leaseExpiresAt"`
+	LeaseExpiresAt  string                           `json:"leaseExpiresAt"`
+	ImageStoreGrant *ClaimAcquireBodyImageStoreGrant `json:"imageStoreGrant,omitempty"`
 }
 
 type ClaimReleaseBody struct{}
@@ -1306,6 +1337,19 @@ type ImageSharedBody struct {
 	Images        []ClaimAcquireBodySharedImagesItem `json:"images"`
 }
 
+type ImagePushedBodyImagesItem struct {
+	Fingerprint string `json:"fingerprint"`
+	Digest      string `json:"digest"`
+	Bytes       int64  `json:"bytes"`
+	PushMs      int64  `json:"pushMs"`
+}
+
+type ImagePushedBody struct {
+	Status ServiceHealth               `json:"status"`
+	Images []ImagePushedBodyImagesItem `json:"images"`
+	Reason *string                     `json:"reason,omitempty"`
+}
+
 type ToollayerBuiltBody struct {
 	Key      string `json:"key"`
 	ID       string `json:"id"`
@@ -1478,6 +1522,8 @@ func newBody(t MessageType) (any, bool) {
 		return new(ImageBakeBody), true
 	case MessageTypeImageShared:
 		return new(ImageSharedBody), true
+	case MessageTypeImagePushed:
+		return new(ImagePushedBody), true
 	case MessageTypeToollayerBuilt:
 		return new(ToollayerBuiltBody), true
 	case MessageTypeToollayerFailed:
@@ -1563,6 +1609,8 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeImageBake, true
 	case ImageSharedBody, *ImageSharedBody:
 		return MessageTypeImageShared, true
+	case ImagePushedBody, *ImagePushedBody:
+		return MessageTypeImagePushed, true
 	case ToollayerBuiltBody, *ToollayerBuiltBody:
 		return MessageTypeToollayerBuilt, true
 	case ToollayerFailedBody, *ToollayerFailedBody:

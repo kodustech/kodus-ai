@@ -356,6 +356,10 @@ func (a *Agent) hello(trim bool) *protocol.HelloBody {
 		if feature == protocol.FeatureBakeShare && !caps.ShareBakes {
 			continue
 		}
+		// Only a driver that builds images can push the PR side's and pull it by digest.
+		if feature == protocol.FeatureImageStore && !caps.ImageStore {
+			continue
+		}
 		// Only a driver that reads which of the project's services exited can say it.
 		if feature == protocol.FeatureServiceStates && a.cfg.Parts.ExitedServices == nil {
 			continue

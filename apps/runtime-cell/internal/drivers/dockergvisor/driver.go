@@ -663,7 +663,7 @@ func (d *Driver) Capabilities() driver.Capabilities {
 	return driver.Capabilities{
 		Isolation: b.Isolation, NestedContainers: b.NestedDocker, Arch: b.Arch, MaxClaimSize: d.maxSize, DefaultClaimSize: d.defaultSize,
 		Backends: []string{b.Backend}, KVM: d.host.KVM, HostArch: d.host.Arch,
-		SandboxCellTrust: d.cfg.Trust.Set(), ShareBakes: d.share != nil, ExecService: true,
+		SandboxCellTrust: d.cfg.Trust.Set(), ShareBakes: d.share != nil, ImageStore: true, ExecService: true,
 	}
 }
 
