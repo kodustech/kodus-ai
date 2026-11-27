@@ -530,7 +530,7 @@ func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b s
 				// off the cell (cache_remote.go).
 				gen, releaseCache := d.caches.Acquire(cacheDir)
 				pulled := false
-				if gen == "" && d.remote != nil {
+				if gen == "" && d.legacyRemote(ref.MachineID) {
 					releaseCache()
 					at := d.clock.Now()
 					pulled = d.pullRemote(ctx, ref.MachineID, org, env, b.Service)
@@ -562,7 +562,7 @@ func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b s
 		// and leaves this one where the builder mounted it.
 		gen, releaseCache := d.caches.Acquire(cacheDir)
 		pulled := false
-		if gen == "" && d.remote != nil {
+		if gen == "" && d.legacyRemote(ref.MachineID) {
 			// Neither the state nor an exported cache on this cell: the
 			// environment's cache off the cell, when its setup pushed one.
 			releaseCache()
@@ -808,9 +808,10 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 	// cell's mode is registry and the registry was never seeded); registryAddedBytes what
 	// the build added to its registry (the layers it pushed), the measure of
 	// what the registry path saved.
-	d.log().Info("build.timing", "machine", ref.MachineID, "service", b.Service, "buildMs", built.Milliseconds(), "loadMs", loaded.Milliseconds(),
+	timing := []any{"machine", ref.MachineID, "service", b.Service, "buildMs", built.Milliseconds(), "loadMs", loaded.Milliseconds(),
 		"outcome", outcome, "loadAttempted", loadAttempted, "imageTarBytes", imageBytes, "stateFallback", stateFallback,
-		"transfer", transfer, "registryAddedBytes", pushedBytes, "segfaultRetried", segfaultRetried, "phases", ran.Phases)
+		"transfer", transfer, "registryAddedBytes", pushedBytes, "segfaultRetried", segfaultRetried, "phases", ran.Phases}
+	d.log().Info("build.timing", append(timing, remoteCacheFactsOf(a.run, ran).attrs()...)...)
 	if a.oom {
 		return "", ran, fmt.Errorf("%w: build %s passed %s (%w)", driver.ErrOutOfMemory, b.Service, a.mem, err)
 	}
@@ -839,7 +840,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 		}
 		d.log().Info("build.cache.promoted", "machine", ref.MachineID, "service", b.Service)
 		// The environment's exported cache off the cell too, held while it goes.
-		if d.remote != nil {
+		if d.legacyRemote(ref.MachineID) {
 			gen, release := d.caches.Acquire(d.envCacheDir(org, env, b.Service))
 			if gen != "" {
 				d.pushRemote(ref.MachineID, org, env, b.Service, gen, release)
@@ -937,7 +938,11 @@ func (d *Driver) buildOnce(ctx context.Context, ref driver.MachineRef, b sandbox
 	var firstLine atomic.Int64
 	bootAt := d.clock.Now()
 	mark := func(string) { firstLine.CompareAndSwap(0, d.clock.Now().UnixNano()) }
+	// The registry cache the claim's grant allows: main's cache when no local one starts the build, and
+	// the seeding setup's export (cache_grant.go).
+	stopGrant := d.attachRemoteCache(ref, b.Service, &a.run, a.cacheInput == "cold" || a.cacheInput == "state_seed")
 	a.err = d.d.RunBuild(dockercli.WithOutput(bctx, alsoTo(alsoTo(dockercli.OutputFrom(ctx), a.steps.Line), mark)), a.run)
+	stopGrant()
 	if stall := unstall(); stall != nil && a.err != nil {
 		a.err, a.stalled = stall, true
 		d.log().Warn("build.stalled", "machine", ref.MachineID, "service", b.Service, "err", stall)

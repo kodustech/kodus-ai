@@ -819,10 +819,17 @@ type BuildRun struct {
 	// (the environment's); CacheTo is where it writes its own, a directory
 	// the builder's user can write. Either may be empty.
 	CacheFrom, CacheTo string
-	PidsLimit          int
-	MemLimit           string
-	CPUs               string
-	Labels             map[string]string
+	// RemoteCacheFrom and RemoteCacheTo are BuildKit registry cache refs (host/repo:tag) the build
+	// imports from and exports to; DockerConfig is a directory the builder's user can read, holding
+	// the config.json BuildKit's client takes the registry's credential from (mounted read-only,
+	// never in the build context). An export failure never fails the build (ignore-error).
+	RemoteCacheFrom, RemoteCacheTo string
+	RemoteCacheInsecure            bool
+	DockerConfig                   string
+	PidsLimit                      int
+	MemLimit                       string
+	CPUs                           string
+	Labels                         map[string]string
 	// RegistryMirror is the cell's registry mirror (host:port, plain HTTP on
 	// the claim network) BuildKit pulls docker.io images through; empty: none.
 	RegistryMirror string
@@ -902,6 +909,23 @@ const BuildTarball = "image.tar"
 // (a claim's builds start side by side).
 var builderSeq atomic.Int64
 
+// BuilderDockerConfig is where the builder sees BuildRun.DockerConfig.
+const BuilderDockerConfig = "/dockercfg"
+
+// cacheRef is host[:port]/repository:tag, lower-case, with no comma or "=" to add attributes of its own.
+var cacheRef = regexp.MustCompile(`^[a-z0-9][a-z0-9.:-]*(/[a-z0-9]+([._-][a-z0-9]+)*)+:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+
+// ValidCacheRef is whether ref is safe to put in a --import-cache or --export-cache list.
+func ValidCacheRef(ref string) bool { return cacheRef.MatchString(ref) }
+
+func registryCacheSpec(ref string, insecure bool, rest string) string {
+	s := "type=registry,ref=" + ref + rest
+	if insecure {
+		s += ",registry.insecure=true"
+	}
+	return s
+}
+
 func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 	if err := ValidateCgroupParent(b.CgroupParent); err != nil {
 		return err
@@ -942,6 +966,11 @@ func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 	}
 	if workerOCI != "" {
 		conf = append(conf, []byte("\n[worker.oci]\n"+workerOCI)...)
+	}
+	for _, ref := range []string{b.RemoteCacheFrom, b.RemoteCacheTo} {
+		if ref != "" && !ValidCacheRef(ref) {
+			return errors.New("dockercli: a registry cache ref is not host/repository:tag")
+		}
 	}
 	secretIDs := sortedKeys(b.Secrets)
 	for _, id := range secretIDs {
@@ -996,6 +1025,9 @@ func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 	if b.StateDir != "" {
 		args = append(args, "-v", b.StateDir+":"+BuildkitStateRoot)
 	}
+	if b.DockerConfig != "" {
+		args = append(args, "-v", b.DockerConfig+":"+BuilderDockerConfig+":ro", "-e", "DOCKER_CONFIG="+BuilderDockerConfig)
+	}
 	if b.MemLimit != "" {
 		args = append(args, "--memory", b.MemLimit)
 	}
@@ -1021,6 +1053,12 @@ func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 	}
 	if b.CacheFrom != "" {
 		args = append(args, "--import-cache", "type=local,src=/cache-in")
+	}
+	if b.RemoteCacheFrom != "" {
+		args = append(args, "--import-cache", registryCacheSpec(b.RemoteCacheFrom, b.RemoteCacheInsecure, ""))
+	}
+	if b.RemoteCacheTo != "" {
+		args = append(args, "--export-cache", registryCacheSpec(b.RemoteCacheTo, b.RemoteCacheInsecure, ",mode=max,compression=zstd,oci-mediatypes=true,ignore-error=true"))
 	}
 	if b.CacheTo != "" {
 		// zstd: several times faster than gzip on a large cache, and it stays on the cell's disk.

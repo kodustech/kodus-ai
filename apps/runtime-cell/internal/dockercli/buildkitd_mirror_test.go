@@ -222,3 +222,37 @@ func TestRunBuildRunsWithoutDockersSeccompProfile(t *testing.T) {
 		t.Fatalf("the builder gets Docker's default profile, which refuses buildkitd's mounts: %s", strings.Join(got, " "))
 	}
 }
+
+// The goal: a build with registry cache refs imports and exports them as BuildKit registry caches, reads the registry's
+// token from a read-only docker config directory (and says nothing of the token itself), and an export failure never
+// fails the build; a ref that could add an attribute is refused before any container starts.
+func TestRunBuildPassesTheRegistryCacheAndTheDockerConfig(t *testing.T) {
+	var got []string
+	c := CLI{Run: func(_ context.Context, _ []byte, _ string, args ...string) ([]byte, error) {
+		got = args
+		return nil, nil
+	}}
+	b := BuildRun{
+		Image: "buildkit", Runtime: "runsc", Network: "n", Address: "10.0.0.9", Resolv: "/r", Context: "/c", Dockerfile: "Dockerfile",
+		Tag: "t:claim", Out: t.TempDir(), DockerConfig: "/cfg/1",
+		RemoteCacheFrom: "store.example:5000/kodus-ci/o-a/e-b/cache:s-1", RemoteCacheTo: "store.example:5000/kodus-ci/o-a/e-b/cache:s-1",
+	}
+	if err := c.RunBuild(context.Background(), b); err != nil {
+		t.Fatal(err)
+	}
+	j := strings.Join(got, " ")
+	for _, want := range []string{
+		"-v /cfg/1:" + BuilderDockerConfig + ":ro", "-e DOCKER_CONFIG=" + BuilderDockerConfig,
+		"--import-cache type=registry,ref=store.example:5000/kodus-ci/o-a/e-b/cache:s-1 ",
+		"--export-cache type=registry,ref=store.example:5000/kodus-ci/o-a/e-b/cache:s-1,mode=max,compression=zstd,oci-mediatypes=true,ignore-error=true",
+	} {
+		if !strings.Contains(j+" ", want) {
+			t.Fatalf("args lack %q:\n%s", want, j)
+		}
+	}
+	got = nil
+	b.RemoteCacheFrom, b.RemoteCacheTo = "", "store/x:t,ref=evil"
+	if err := c.RunBuild(context.Background(), b); err == nil || got != nil {
+		t.Fatalf("a ref with an attribute started a build: %v %v", err, got)
+	}
+}

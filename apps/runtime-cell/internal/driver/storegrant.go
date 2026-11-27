@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -44,16 +45,37 @@ func (g StoreGrant) String() string { return "store-grant[redacted]" }
 // GoString is String's twin for %#v.
 func (g StoreGrant) GoString() string { return g.String() }
 
+// LogValue keeps the token out of a structured log: slog's JSON handler writes a struct's fields and never calls String.
+func (g StoreGrant) LogValue() slog.Value { return slog.StringValue(g.String()) }
+
+// MarshalJSON and MarshalText never say the token either.
+func (g StoreGrant) MarshalJSON() ([]byte, error) { return []byte(`"` + g.String() + `"`), nil }
+
+// MarshalText is MarshalJSON's twin for encoders that prefer it.
+func (g StoreGrant) MarshalText() ([]byte, error) { return []byte(g.String()), nil }
+
 // StoreCreds holds a claim's grant, renewed with the claim's lease. A renewal moves the
 // token and its expiry and never the repositories: what a claim may reach is what its
 // acquire said.
 type StoreCreds struct {
 	mu sync.RWMutex
 	g  StoreGrant
+	// changed is closed by the next renewal and replaced, so a holder of a copy of the token (a file a
+	// builder reads) learns to refresh it.
+	changed chan struct{}
 }
 
 // NewStoreCreds holds g.
-func NewStoreCreds(g StoreGrant) *StoreCreds { return &StoreCreds{g: g} }
+func NewStoreCreds(g StoreGrant) *StoreCreds {
+	return &StoreCreds{g: g, changed: make(chan struct{})}
+}
+
+// Changed is closed when the token next changes; call it again after it fires for the one after.
+func (c *StoreCreds) Changed() <-chan struct{} {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.changed
+}
 
 // Current is the grant now.
 func (c *StoreCreds) Current() StoreGrant {
@@ -73,6 +95,10 @@ func (c *StoreCreds) Renew(g StoreGrant) {
 		return
 	}
 	c.g.Token, c.g.ExpiresAt = g.Token, g.ExpiresAt
+	if c.changed != nil {
+		close(c.changed)
+	}
+	c.changed = make(chan struct{})
 }
 
 // Live is whether the token has not expired at now.
@@ -80,6 +106,9 @@ func (c *StoreCreds) Live(now time.Time) bool { return c.Current().ExpiresAt.Aft
 
 // String never says the token.
 func (c *StoreCreds) String() string { return "store-creds[redacted]" }
+
+// LogValue is String for a structured log.
+func (c *StoreCreds) LogValue() slog.Value { return slog.StringValue(c.String()) }
 
 // PushedImage is one service image the PR side pushed: its build fingerprint and the
 // manifest digest the hub gives the suite's shards.
