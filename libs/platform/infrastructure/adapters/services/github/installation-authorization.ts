@@ -92,14 +92,18 @@ export function installationAuthorizationRedirectUri(
 /**
  * GitHub's user authorization page for the App. `redirectUri` is always
  * given: without it GitHub would use the App's first callback URL, the
- * sign-in one.
+ * sign-in one. `webBaseUrl` is the server the App is registered on: a GitHub
+ * Enterprise Server host, or github.com.
  */
 export function githubUserAuthorizationUrl(
     clientId: string,
     state: string,
     redirectUri: string,
+    webBaseUrl = 'https://github.com',
 ): string {
-    const url = new URL('https://github.com/login/oauth/authorize');
+    const url = new URL(
+        `${webBaseUrl.replace(/\/+$/, '')}/login/oauth/authorize`,
+    );
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('state', state);

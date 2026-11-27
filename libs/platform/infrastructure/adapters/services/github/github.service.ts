@@ -315,6 +315,18 @@ export class GithubService
         return `${normalizedHost}/api/v3`;
     }
 
+    /**
+     * Host of the GitHub Enterprise Server the GitHub App is registered on
+     * (`API_GITHUB_APP_HOST`, e.g. `https://ghe.example.com`). The App is one
+     * per deployment, like its id and private key, so its host is deployment
+     * config too. Unset means github.com.
+     */
+    private getGithubAppHost(): string | undefined {
+        return this.normalizeGithubHost(
+            this.configService?.get<string>('API_GITHUB_APP_HOST'),
+        );
+    }
+
     private getGithubWebBaseUrl(host?: string): string {
         const normalizedHost = this.normalizeGithubHost(host);
 
@@ -480,7 +492,12 @@ export class GithubService
             });
         }
 
+        const appBaseUrl = this.getGithubApiBaseUrl(this.getGithubAppHost());
+
         return new Octokit({
+            // createAppAuth requests installation tokens through this client's
+            // request defaults, so the base URL also routes them to GHES.
+            ...(appBaseUrl && { baseUrl: appBaseUrl }),
             request: {
                 timeout: 60000,
             },
@@ -665,6 +682,7 @@ export class GithubService
                 this.configService.get<string>('GLOBAL_GITHUB_CLIENT_ID'),
                 state,
                 redirectUri,
+                this.getGithubWebBaseUrl(this.getGithubAppHost()),
             ),
         };
     }
@@ -784,7 +802,14 @@ export class GithubService
     }
 
     private createUserOctokit(userToken: string): Octokit {
-        return new Octokit({ auth: userToken, request: { timeout: 60000 } });
+        // The user authorized the App, so the token was issued where the App
+        // lives (API_GITHUB_APP_HOST, unset = github.com).
+        const appBaseUrl = this.getGithubApiBaseUrl(this.getGithubAppHost());
+        return new Octokit({
+            auth: userToken,
+            ...(appBaseUrl && { baseUrl: appBaseUrl }),
+            request: { timeout: 60000 },
+        });
     }
 
     async authenticateWithCodeOauth(
@@ -840,6 +865,9 @@ export class GithubService
                 org: accountLogin || null,
                 authMode: params.authMode || AuthMode.OAUTH,
                 accountType: accountType as 'organization' | 'user',
+                ...(this.getGithubAppHost() && {
+                    host: this.getGithubAppHost(),
+                }),
             };
 
             progress.step = 'list-repositories';
@@ -2168,21 +2196,51 @@ export class GithubService
                 PlatformType.GITHUB,
             );
 
-        const authDetail = {
-            ...githubAuthDetail,
-            authMode: githubAuthDetail?.authMode || AuthMode.OAUTH,
-        };
+        const authMode = githubAuthDetail?.authMode || AuthMode.OAUTH;
 
-        // An App installation only reaches its own account's repositories,
-        // so only a token can need another owner.
-        if (authDetail.authMode === AuthMode.TOKEN) {
-            this.connectedSelection?.set(
-                authDetail,
-                await this.readConnectedSelection(organizationAndTeamData),
-            );
+        if (authMode !== AuthMode.OAUTH) {
+            const authDetail = { ...githubAuthDetail, authMode };
+
+            // An App installation only reaches its own account's repositories,
+            // so only a token can need another owner.
+            if (authMode === AuthMode.TOKEN) {
+                this.connectedSelection?.set(
+                    authDetail,
+                    await this.readConnectedSelection(organizationAndTeamData),
+                );
+            }
+
+            return authDetail;
         }
 
-        return authDetail;
+        // An App installation lives where the App does: its installation
+        // tokens are issued and validated against API_GITHUB_APP_HOST (unset =
+        // github.com). The host is one per deployment, so the App host wins
+        // over whatever an older record stored; otherwise REST would go to the
+        // stored host with a token minted on another one.
+        const appHost = this.getGithubAppHost();
+        const storedHost = this.normalizeGithubHost(githubAuthDetail?.host);
+
+        if (storedHost && storedHost !== appHost) {
+            this.logger.warn({
+                message:
+                    'GitHub App installation has a stored host that differs from API_GITHUB_APP_HOST; using the App host',
+                context: GithubService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    storedHost,
+                    appHost: appHost ?? 'https://github.com',
+                },
+            });
+        }
+
+        const { host: _storedHost, ...rest } = githubAuthDetail ?? {};
+
+        return {
+            ...rest,
+            authMode,
+            ...(appHost && { host: appHost }),
+        } as GithubAuthDetail;
     }
 
     /**
@@ -3318,8 +3376,12 @@ export class GithubService
         auth: GitHubAuthResponse,
     ): Promise<boolean> {
         try {
+            const appBaseUrl = this.getGithubApiBaseUrl(
+                this.getGithubAppHost(),
+            );
             const octokit = new Octokit({
                 auth: auth.token,
+                ...(appBaseUrl && { baseUrl: appBaseUrl }),
                 request: { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
             });
 
@@ -3893,9 +3955,13 @@ export class GithubService
                     );
 
                 const MyOctokit = Octokit.plugin(retry, throttling);
+                const installationBaseUrl = this.getGithubApiBaseUrl(
+                    githubAuthDetail.host,
+                );
 
                 const octokit = new MyOctokit({
                     auth: installationAuthentication.token,
+                    ...(installationBaseUrl && { baseUrl: installationBaseUrl }),
                     request: { retries: 2 },
                     retry: {
                         doNotRetry: [400, 401, 403, 404, 422, 451],
@@ -4152,7 +4218,14 @@ export class GithubService
                         githubAuthDetail.installationId,
                     );
 
+                const installationGraphqlUrl = this.getGithubApiBaseUrl(
+                    githubAuthDetail.host,
+                );
+
                 const graphqlClient = graphql.defaults({
+                    ...(installationGraphqlUrl && {
+                        baseUrl: installationGraphqlUrl,
+                    }),
                     headers: {
                         authorization: `token ${installationAuthentication.token}`,
                     },
@@ -4211,7 +4284,11 @@ export class GithubService
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string | { isUserToken?: boolean }> {
         try {
+            const appBaseUrl = this.getGithubApiBaseUrl(
+                this.getGithubAppHost(),
+            );
             const appOctokit = await new Octokit({
+                ...(appBaseUrl && { baseUrl: appBaseUrl }),
                 authStrategy: createAppAuth,
                 auth: {
                     appId: this.configService.get<string>('API_GITHUB_APP_ID'),
@@ -4263,6 +4340,9 @@ export class GithubService
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
                 org: installationData.account.login || null,
+                ...(this.getGithubAppHost() && {
+                    host: this.getGithubAppHost(),
+                }),
             };
 
             if (!integration) {
