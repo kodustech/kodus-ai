@@ -349,12 +349,16 @@ describe('GitLab OAuth link', () => {
     const SECRET = 'gloas-client-secret-0000';
     const saved = { ...process.env };
     let server: http.Server;
+    // GitLab's answer to a wrong or rotated client secret, unless a test
+    // sets another.
+    let answer = { status: 401, body: { error: 'invalid_client' } };
 
     beforeAll(async () => {
-        // GitLab's answer to a wrong or rotated client secret.
         server = http.createServer((_req, res) => {
-            res.writeHead(401, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ error: 'invalid_client' }));
+            res.writeHead(answer.status, {
+                'content-type': 'application/json',
+            });
+            res.end(JSON.stringify(answer.body));
         });
         await new Promise<void>((resolve) =>
             server.listen(0, '127.0.0.1', resolve),
@@ -368,6 +372,62 @@ describe('GitLab OAuth link', () => {
     afterAll(async () => {
         process.env = saved;
         await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
+
+    afterEach(() => {
+        answer = { status: 401, body: { error: 'invalid_client' } };
+    });
+
+    const link = (svc: any) =>
+        svc
+            .createAuthIntegration({
+                authMode: 'oauth',
+                code: CODE,
+                organizationAndTeamData: ORG,
+            })
+            .catch((e: unknown) => e);
+
+    it('refuses in words a code GitLab no longer accepts (invalid_grant), logged as a warning', async () => {
+        // A callback reloaded or opened late: the code expired or was used.
+        answer = {
+            status: 400,
+            body: { error: 'invalid_grant' },
+        };
+        const svc = service(GitlabService);
+
+        const thrown = await link(svc);
+
+        const words =
+            'GitLab did not accept the authorization. Start the GitLab connection again.';
+        expect(thrown).toBeInstanceOf(BadRequestException);
+        expect((thrown as HttpException).message).toBe(words);
+        expect(svc.logger.error).not.toHaveBeenCalled();
+        expect(svc.logger.warn.mock.calls).toEqual([
+            [
+                {
+                    message: 'GitLab integration refused',
+                    context: 'GitlabService',
+                    metadata: {
+                        organizationAndTeamData: ORG,
+                        authMode: 'oauth',
+                        host: undefined,
+                        reason: words,
+                    },
+                },
+            ],
+        ]);
+        expect(serialized(thrown)).not.toContain(CODE);
+    });
+
+    it('leaves any other 400 from the token exchange to the exception filter', async () => {
+        answer = { status: 400, body: { error: 'invalid_request' } };
+        const svc = service(GitlabService);
+
+        const thrown = await link(svc);
+
+        expect(axios.isAxiosError(thrown)).toBe(true);
+        expect(svc.logger.warn).not.toHaveBeenCalled();
+        expect(svc.logger.error).toHaveBeenCalledTimes(1);
     });
 
     it('treats a 401 to the token exchange as a fault in Kodus credentials, logged once without the code or the secret', async () => {

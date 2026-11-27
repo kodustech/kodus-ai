@@ -1412,13 +1412,24 @@ export class GitlabService implements Omit<
                     { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
                 )
                 .catch((exchangeError: unknown) => {
+                    if (!axios.isAxiosError(exchangeError)) {
+                        throw exchangeError;
+                    }
                     // The body carries the user's authorization code, which log
                     // redaction keeps (`code` is also GitHub's installation id).
-                    if (
-                        axios.isAxiosError(exchangeError) &&
-                        exchangeError.config
-                    ) {
+                    if (exchangeError.config) {
                         exchangeError.config.data = undefined;
+                    }
+                    // A code that expired or was used (a callback reloaded or
+                    // opened late) is the user's to retry; any other 400 is ours.
+                    if (
+                        exchangeError.response?.status === 400 &&
+                        exchangeError.response.data?.error === 'invalid_grant'
+                    ) {
+                        throw new BadRequestException(
+                            'GitLab did not accept the authorization. Start the GitLab connection again.',
+                            { cause: exchangeError },
+                        );
                     }
                     throw exchangeError;
                 });
