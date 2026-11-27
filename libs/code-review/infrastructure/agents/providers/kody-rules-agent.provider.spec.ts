@@ -1598,7 +1598,7 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
         await invoke(runJudge, { user: 'HEAD\nTAIL', cachePrefix: 'HEAD\n' });
         const call = mockRunStructuredReviewCall.mock.calls[0][0];
-        expect(call.promptCache).toEqual({ userPrefix: 'HEAD\n' });
+        expect(call.promptCache).toEqual({ userPrefixes: ['HEAD\n'] });
     });
 
     it('declares nothing for a shard that shares no head', async () => {

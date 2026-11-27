@@ -155,7 +155,7 @@ describe('LLM.run — one-shot prompt cache', () => {
         runStructuredReviewCall
             .mockRejectedValueOnce(authErr())
             .mockResolvedValueOnce({ ok: true });
-        const promptCache = { userPrefix: '<Rules>\n</Rules>\n' };
+        const promptCache = { userPrefixes: ['<Rules>\n</Rules>\n'] };
 
         await LLM.run({
             byokConfig: slotWithFallback,

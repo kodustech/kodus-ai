@@ -8,10 +8,13 @@ import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { generateText, type LanguageModel } from 'ai';
+import { readAiSdkUsage } from './ai-sdk-usage';
 import { applyOneShotCache, resolvePrefixCacheHint } from './one-shot-cache';
 
 const SYSTEM = 'You check team rules against one file.';
-const HEAD = '<Rules>\n[1] no console.log\n</Rules>\n';
+const RULES = '<Rules>\n[1] no console.log\n</Rules>\n';
+const INTENT = '<PR title="Add logging">\n</PR>\n';
+const HEAD = RULES + INTENT;
 const TAIL = '<File path="a.ts">\n+console.log(1)\n</File>';
 
 type Captured = { body: any };
@@ -30,15 +33,17 @@ async function send(
     model: LanguageModel,
     provider: string,
     modelId: string,
-    cache: { userPrefix?: string; system?: boolean },
+    cache: { userPrefixes?: string[]; system?: boolean } | undefined,
+    slotOptions?: Record<string, unknown>,
 ) {
     const { args, providerOptions } = applyOneShotCache({
         system: SYSTEM,
         prompt: HEAD + TAIL,
         cache,
         hint: resolvePrefixCacheHint({ provider, model: modelId }),
+        providerOptions: slotOptions,
     });
-    await generateText({
+    return generateText({
         model,
         ...(args as any),
         ...(providerOptions ? { providerOptions } : {}),
@@ -62,7 +67,7 @@ describe('Claude on Bedrock: the shared head gets a Converse cachePoint', () => 
     it('puts the cachePoint right after the head, before the unique tail', async () => {
         const captured: Captured = { body: undefined };
         await send(bedrock(captured)(MODEL), 'amazon_bedrock', MODEL, {
-            userPrefix: HEAD,
+            userPrefixes: [HEAD],
         });
         const user = captured.body.messages.find((m: any) => m.role === 'user');
         expect(user.content).toEqual([
@@ -70,6 +75,47 @@ describe('Claude on Bedrock: the shared head gets a Converse cachePoint', () => 
             { cachePoint: { type: 'default' } },
             { text: TAIL },
         ]);
+    });
+
+    it('puts a cachePoint after the rules and another after the head', async () => {
+        const captured: Captured = { body: undefined };
+        await send(bedrock(captured)(MODEL), 'amazon_bedrock', MODEL, {
+            userPrefixes: [RULES, HEAD],
+        });
+        const user = captured.body.messages.find((m: any) => m.role === 'user');
+        expect(user.content).toEqual([
+            { text: RULES },
+            { cachePoint: { type: 'default' } },
+            { text: INTENT },
+            { cachePoint: { type: 'default' } },
+            { text: TAIL },
+        ]);
+    });
+
+    it('bills a two-breakpoint call from the counts Bedrock reports, each token once', async () => {
+        const captured: Captured = { body: undefined };
+        const withCache = createAmazonBedrock({
+            region: 'eu-central-1',
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, {
+                ...converseOk,
+                usage: {
+                    inputTokens: 40,
+                    outputTokens: 5,
+                    totalTokens: 1645,
+                    cacheReadInputTokens: 1200,
+                    cacheWriteInputTokens: 400,
+                },
+            }),
+        });
+        const result = await send(withCache(MODEL), 'amazon_bedrock', MODEL, {
+            userPrefixes: [RULES, HEAD],
+        });
+        expect(readAiSdkUsage(result.usage)).toMatchObject({
+            inputTokens: 1640,
+            cacheReadTokens: 1200,
+            cacheWriteTokens: 400,
+        });
     });
 
     it('marks the system prompt when it is the shared part', async () => {
@@ -102,13 +148,88 @@ describe('native Claude: the shared head gets cache_control', () => {
             apiKey: 'test-key',
             fetch: stubFetch(captured, messagesOk),
         });
-        await send(anthropic(MODEL), 'anthropic', MODEL, { userPrefix: HEAD });
+        await send(anthropic(MODEL), 'anthropic', MODEL, {
+            userPrefixes: [HEAD],
+        });
         const user = captured.body.messages.find((m: any) => m.role === 'user');
         expect(user.content).toEqual([
             { type: 'text', text: HEAD, cache_control: { type: 'ephemeral' } },
             { type: 'text', text: TAIL },
         ]);
         expect(captured.body.cache_control).toBeUndefined();
+    });
+
+    it('marks the rules block and the head block', async () => {
+        const captured: Captured = { body: undefined };
+        const anthropic = createAnthropic({
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, messagesOk),
+        });
+        await send(anthropic(MODEL), 'anthropic', MODEL, {
+            userPrefixes: [RULES, HEAD],
+        });
+        const user = captured.body.messages.find((m: any) => m.role === 'user');
+        expect(user.content).toEqual([
+            { type: 'text', text: RULES, cache_control: { type: 'ephemeral' } },
+            {
+                type: 'text',
+                text: INTENT,
+                cache_control: { type: 'ephemeral' },
+            },
+            { type: 'text', text: TAIL },
+        ]);
+    });
+
+    it('bills a two-breakpoint call from the counts Anthropic reports, each token once', async () => {
+        const captured: Captured = { body: undefined };
+        const anthropic = createAnthropic({
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, {
+                ...messagesOk,
+                usage: {
+                    input_tokens: 40,
+                    output_tokens: 5,
+                    cache_read_input_tokens: 1200,
+                    cache_creation_input_tokens: 400,
+                },
+            }),
+        });
+        const result = await send(anthropic(MODEL), 'anthropic', MODEL, {
+            userPrefixes: [RULES, HEAD],
+        });
+        expect(readAiSdkUsage(result.usage)).toMatchObject({
+            inputTokens: 1640,
+            cacheReadTokens: 1200,
+            cacheWriteTokens: 400,
+        });
+    });
+
+    it('sends no cache_control at all on a declared call with nothing to mark, whatever the slot asks for', async () => {
+        const captured: Captured = { body: undefined };
+        const anthropic = createAnthropic({
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, messagesOk),
+        });
+        await send(
+            anthropic(MODEL),
+            'anthropic',
+            MODEL,
+            { userPrefixes: [] },
+            { anthropic: { cacheControl: { type: 'ephemeral' } } },
+        );
+        expect(JSON.stringify(captured.body)).not.toContain('cache_control');
+    });
+
+    it("keeps the slot's automatic cache on a call that declares none", async () => {
+        const captured: Captured = { body: undefined };
+        const anthropic = createAnthropic({
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, messagesOk),
+        });
+        await send(anthropic(MODEL), 'anthropic', MODEL, undefined, {
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+        });
+        expect(captured.body.cache_control).toEqual({ type: 'ephemeral' });
     });
 });
 
@@ -140,7 +261,7 @@ describe('OpenAI gpt-5.6+: the shared head gets an explicit breakpoint', () => {
                 fetch: stubFetch(captured, { ...responsesOk, model: modelId }),
             });
             await send(openai(modelId), 'openai', modelId, {
-                userPrefix: HEAD,
+                userPrefixes: [HEAD],
             });
             const user = captured.body.input.find(
                 (m: any) => m.role === 'user',
@@ -183,6 +304,48 @@ describe('OpenAI gpt-5.6+: the shared head gets an explicit breakpoint', () => {
         });
     });
 
+    it('marks the rules and the head with a breakpoint each', async () => {
+        const captured: Captured = { body: undefined };
+        const openai = createOpenAI({
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, responsesOk),
+        });
+        await send(openai('gpt-6.1-sol'), 'openai', 'gpt-6.1-sol', {
+            userPrefixes: [RULES, HEAD],
+        });
+        const user = captured.body.input.find((m: any) => m.role === 'user');
+        expect(user.content).toEqual([
+            {
+                type: 'input_text',
+                text: RULES,
+                prompt_cache_breakpoint: { mode: 'explicit' },
+            },
+            {
+                type: 'input_text',
+                text: INTENT,
+                prompt_cache_breakpoint: { mode: 'explicit' },
+            },
+            { type: 'input_text', text: TAIL },
+        ]);
+    });
+
+    it('sends a declared call with nothing to mark in explicit mode with no breakpoint, so nothing is written', async () => {
+        const captured: Captured = { body: undefined };
+        const openai = createOpenAI({
+            apiKey: 'test-key',
+            fetch: stubFetch(captured, responsesOk),
+        });
+        await send(openai('gpt-6.1-sol'), 'openai', 'gpt-6.1-sol', {
+            userPrefixes: [],
+        });
+        expect(JSON.stringify(captured.body.input)).not.toContain(
+            'prompt_cache_breakpoint',
+        );
+        expect(captured.body.prompt_cache_options).toEqual({
+            mode: 'explicit',
+        });
+    });
+
     it('sends a model before 5.6 exactly as before', async () => {
         const captured: Captured = { body: undefined };
         const openai = createOpenAI({
@@ -190,7 +353,7 @@ describe('OpenAI gpt-5.6+: the shared head gets an explicit breakpoint', () => {
             fetch: stubFetch(captured, { ...responsesOk, model: 'gpt-5.5' }),
         });
         await send(openai('gpt-5.5'), 'openai', 'gpt-5.5', {
-            userPrefix: HEAD,
+            userPrefixes: [HEAD],
         });
         const user = captured.body.input.find((m: any) => m.role === 'user');
         expect(JSON.stringify(user)).not.toContain('prompt_cache_breakpoint');

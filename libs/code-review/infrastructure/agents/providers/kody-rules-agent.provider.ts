@@ -345,7 +345,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         // Shards with the same rules open with the same head;
                         // marking it lets the provider serve it from cache.
                         ...(cachePrefix
-                            ? { promptCache: { userPrefix: cachePrefix } }
+                            ? { promptCache: { userPrefixes: [cachePrefix] } }
                             : {}),
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
