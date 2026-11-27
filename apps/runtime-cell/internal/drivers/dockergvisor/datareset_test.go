@@ -23,6 +23,8 @@ type fakeDataOps struct {
 	failFirst map[string]int
 	unhealthy bool
 	healthErr error
+	// golden says the machine has its in-place copies.
+	golden bool
 }
 
 func (f *fakeDataOps) step(name string) error {
@@ -33,12 +35,15 @@ func (f *fakeDataOps) step(name string) error {
 	}
 	return nil
 }
-func (f *fakeDataOps) stopData(context.Context) error    { return f.step("stop") }
-func (f *fakeDataOps) restoreData(context.Context) error { return f.step("restore") }
-func (f *fakeDataOps) startData(context.Context) error   { return f.step("start") }
-func (f *fakeDataOps) awaitData(context.Context) error   { return f.step("await-data") }
-func (f *fakeDataOps) restartApp(context.Context) error  { return f.step("restart-app") }
-func (f *fakeDataOps) awaitApp(context.Context) error    { return f.step("await-app") }
+func (f *fakeDataOps) inPlace() bool                          { return f.golden }
+func (f *fakeDataOps) swapPostgres(context.Context) error     { return f.step("swap-postgres") }
+func (f *fakeDataOps) reimportFirebase(context.Context) error { return f.step("reimport-firebase") }
+func (f *fakeDataOps) stopData(context.Context) error         { return f.step("stop") }
+func (f *fakeDataOps) restoreData(context.Context) error      { return f.step("restore") }
+func (f *fakeDataOps) startData(context.Context) error        { return f.step("start") }
+func (f *fakeDataOps) awaitData(context.Context) error        { return f.step("await-data") }
+func (f *fakeDataOps) restartApp(context.Context) error       { return f.step("restart-app") }
+func (f *fakeDataOps) awaitApp(context.Context) error         { return f.step("await-app") }
 func (f *fakeDataOps) appHealthy(context.Context) (bool, error) {
 	f.calls = append(f.calls, "app-healthy")
 	return !f.unhealthy, f.healthErr
@@ -89,6 +94,23 @@ func TestADataResetFollowsItsModesInOrder(t *testing.T) {
 			calls: join(data, []string{"restart-app", "await-app"})},
 		{name: "restart-app failing is recreate", from: driver.ResetModeRestartApp, ops: fakeDataOps{failFirst: map[string]int{"restart-app": 1}}, want: driver.ResetModeRecreate, failedNum: 1,
 			calls: join(data, []string{"restart-app"})},
+		{name: "in place: the databases are swapped and the emulators reimported while the data services never stop, and a healthy app is left alone", from: driver.ResetModeInPlace, ops: fakeDataOps{golden: true}, want: driver.ResetModeInPlace,
+			calls: []string{"swap-postgres", "reimport-firebase", "app-healthy"}},
+		{name: "in place: an app that lost its connections is restarted and the mode stays in-place", from: driver.ResetModeInPlace, ops: fakeDataOps{golden: true, unhealthy: true}, want: driver.ResetModeInPlace,
+			calls: []string{"swap-postgres", "reimport-firebase", "app-healthy", "restart-app", "await-app"}},
+		{name: "in place: a swap that fails falls back to the volume restore, which stops the data services", from: driver.ResetModeInPlace, ops: fakeDataOps{golden: true, failFirst: map[string]int{"swap-postgres": 1}},
+			want: driver.ResetModeData, failedNum: 1,
+			calls: join([]string{"swap-postgres"}, data, []string{"app-healthy"})},
+		{name: "in place: emulators that do not come back fall back to the volume restore", from: driver.ResetModeInPlace, ops: fakeDataOps{golden: true, failFirst: map[string]int{"reimport-firebase": 1}},
+			want: driver.ResetModeData, failedNum: 1,
+			calls: join([]string{"swap-postgres", "reimport-firebase"}, data, []string{"app-healthy"})},
+		{name: "in place, then the volume restore, then restart-app, then recreate when each fails once more", from: driver.ResetModeInPlace, ops: fakeDataOps{golden: true, failFirst: map[string]int{"swap-postgres": 1, "restore": 2}},
+			want: driver.ResetModeRecreate, failedNum: 3,
+			calls: []string{"swap-postgres", "stop", "restore", "stop", "restore"}},
+		{name: "a machine without golden copies skips in-place whatever the environment learned", from: driver.ResetModeInPlace, want: driver.ResetModeData,
+			calls: join(data, []string{"app-healthy"})},
+		{name: "an environment that learned the volume restore does not try in-place", from: driver.ResetModeData, ops: fakeDataOps{golden: true}, want: driver.ResetModeData,
+			calls: join(data, []string{"app-healthy"})},
 		{name: "an environment known to need recreate tries nothing", from: driver.ResetModeRecreate, want: driver.ResetModeRecreate},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -179,14 +201,18 @@ func TestTheModeThatWorkedIsRememberedPerEnvironment(t *testing.T) {
 	clk := clock.NewFake(time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC))
 	d := &Driver{clock: clk}
 	a, b := machine("claim-1", "env-a"), machine("claim-2", "env-b")
-	if got := d.learnedDataMode(a); got != driver.ResetModeData {
+	if got := d.learnedDataMode(a); got != driver.ResetModeInPlace {
 		t.Fatalf("a new environment starts at %s", got)
+	}
+	d.learnDataMode(a, driver.ResetModeInPlace, driver.ResetModeData)
+	if got := d.learnedDataMode(a); got != driver.ResetModeData {
+		t.Fatalf("after in-place fell back %s", got)
 	}
 	d.learnDataMode(a, driver.ResetModeData, driver.ResetModeRestartApp)
 	if got := d.learnedDataMode(a); got != driver.ResetModeRestartApp {
 		t.Fatalf("after a fallback %s", got)
 	}
-	if got := d.learnedDataMode(b); got != driver.ResetModeData {
+	if got := d.learnedDataMode(b); got != driver.ResetModeInPlace {
 		t.Fatalf("another environment is at %s", got)
 	}
 	d.learnDataMode(a, driver.ResetModeRestartApp, driver.ResetModeRecreate)
@@ -194,13 +220,13 @@ func TestTheModeThatWorkedIsRememberedPerEnvironment(t *testing.T) {
 		t.Fatalf("after a second fallback %s", got)
 	}
 	clk.Advance(dataModeTTL + time.Minute)
-	if got := d.learnedDataMode(a); got != driver.ResetModeData {
+	if got := d.learnedDataMode(a); got != driver.ResetModeInPlace {
 		t.Fatalf("after the demotion expired %s", got)
 	}
-	d.learnDataMode(a, driver.ResetModeData, driver.ResetModeRestartApp)
+	d.learnDataMode(a, driver.ResetModeInPlace, driver.ResetModeRestartApp)
 	d.learnDataMode(a, driver.ResetModeRestartApp, driver.ResetModeData)
-	if got := d.learnedDataMode(a); got != driver.ResetModeData {
-		t.Fatalf("after data worked again %s", got)
+	if got := d.learnedDataMode(a); got != driver.ResetModeInPlace {
+		t.Fatalf("after a faster mode worked again %s", got)
 	}
 }
 
@@ -208,6 +234,12 @@ func TestTheModeThatWorkedIsRememberedPerEnvironment(t *testing.T) {
 // postgres (db, an anonymous data volume) and an app, planned for a
 // data-only reset, as Up and RunRecipe leave it.
 func dataMachine(t *testing.T) (*Driver, *memDocker, driver.MachineRef) {
+	t.Helper()
+	return dataMachineWith(t, "data: { reset: data-only, in_place: { off: true } }")
+}
+
+// dataMachineWith is dataMachine with the recipe's data block.
+func dataMachineWith(t *testing.T, data string) (*Driver, *memDocker, driver.MachineRef) {
 	t.Helper()
 	d, docker := withEgress(t)
 	d.clock = clock.NewFake(time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC))
@@ -230,7 +262,7 @@ func dataMachine(t *testing.T) (*Driver, *memDocker, driver.MachineRef) {
 	plant("cdb", "db", dockercli.Mount{Type: "volume", Name: "anon-1", Destination: "/var/lib/postgresql/data"})
 	plant("capp", "app")
 	docker.volumes["anon-1"] = memVolume{data: "migrated and seeded"}
-	rec, err := recipe.Parse([]byte("version: 1\nservices: { compose: { public: app } }\ndata: { reset: data-only }\n"))
+	rec, err := recipe.Parse([]byte("version: 1\nservices: { compose: { public: app } }\n" + data + "\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

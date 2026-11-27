@@ -57,6 +57,10 @@ type dataResetPlan struct {
 	pgUser map[string]string
 	// wait bounds each wait for health.
 	wait time.Duration
+	// inPlace is the faster reset that never stops the data services
+	// (datareset_inplace.go); nil, with inPlaceWhy, when it cannot be used.
+	inPlace    *inPlacePlan
+	inPlaceWhy string
 }
 
 // planDataReset says which services a data-only reset copies and restores,
@@ -107,9 +111,13 @@ func planDataReset(canonical []byte, rec *recipe.Recipe, built map[string]string
 		}
 	}
 	p := &dataResetPlan{services: sortedSet(chosen), pgUser: map[string]string{}, wait: rec.HealthTimeout()}
+	hinted := map[string]bool{}
+	for _, h := range rec.Data.InPlace.Postgres {
+		hinted[h.Service] = true
+	}
 	for _, name := range p.services {
 		s := doc.Services[name]
-		if !postgresImages[imageName(s.Image)] {
+		if !postgresImages[imageName(s.Image)] && !hinted[name] {
 			continue
 		}
 		p.pgUser[name] = "postgres"
@@ -117,6 +125,7 @@ func planDataReset(canonical []byte, rec *recipe.Recipe, built map[string]string
 			p.pgUser[name] = *u
 		}
 	}
+	p.inPlace, p.inPlaceWhy = planInPlace(rec, doc.Services, p)
 	return p, ""
 }
 
@@ -142,6 +151,10 @@ type dataVolume struct{ service, target, copy string }
 // one method per step, so the order and the fallbacks are tested apart from
 // Docker (datareset_test.go).
 type dataResetOps interface {
+	// inPlace is true when the in-place mode can run: the golden copies exist.
+	inPlace() bool
+	swapPostgres(ctx context.Context) error
+	reimportFirebase(ctx context.Context) error
 	stopData(ctx context.Context) error
 	restoreData(ctx context.Context) error
 	startData(ctx context.Context) error
@@ -151,13 +164,20 @@ type dataResetOps interface {
 	awaitApp(ctx context.Context) error
 }
 
-// runDataReset tries the modes from `from` down: data, restart-app, and
-// recreate, the last being no attempt at all. It returns the mode that
-// worked, and what each failed mode said.
+// dataModeOrder is the modes from the fastest down; recreate, the last, is
+// no attempt at all.
+var dataModeOrder = []driver.DataResetMode{driver.ResetModeInPlace, driver.ResetModeData, driver.ResetModeRestartApp, driver.ResetModeRecreate}
+
+func modeRank(m driver.DataResetMode) int { return slices.Index(dataModeOrder, m) }
+
+// runDataReset tries the modes from `from` down: in-place, data,
+// restart-app, and recreate, the last being no attempt at all. It returns the
+// mode that worked, and what each failed mode said. In-place is skipped when
+// the machine has no golden copy of its databases.
 func runDataReset(ctx context.Context, ops dataResetOps, from driver.DataResetMode) (driver.DataResetMode, []error) {
 	var failed []error
-	for _, mode := range []driver.DataResetMode{driver.ResetModeData, driver.ResetModeRestartApp} {
-		if from == driver.ResetModeRecreate || (from == driver.ResetModeRestartApp && mode == driver.ResetModeData) {
+	for _, mode := range dataModeOrder[:3] {
+		if modeRank(mode) < modeRank(from) || (mode == driver.ResetModeInPlace && !ops.inPlace()) {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -172,18 +192,24 @@ func runDataReset(ctx context.Context, ops dataResetOps, from driver.DataResetMo
 	return driver.ResetModeRecreate, failed
 }
 
-// tryDataMode runs one mode: the data services back from the copy, then the
-// app as the mode says.
+type dataStep struct {
+	name string
+	run  func(context.Context) error
+}
+
+// tryDataMode runs one mode: the data services back (in place, or from the
+// copy of their volumes), then the app as the mode says.
 func tryDataMode(ctx context.Context, ops dataResetOps, mode driver.DataResetMode) error {
-	for _, step := range []struct {
-		name string
-		run  func(context.Context) error
-	}{{"stop data", ops.stopData}, {"restore data", ops.restoreData}, {"start data", ops.startData}, {"await data", ops.awaitData}} {
+	steps := []dataStep{{"stop data", ops.stopData}, {"restore data", ops.restoreData}, {"start data", ops.startData}, {"await data", ops.awaitData}}
+	if mode == driver.ResetModeInPlace {
+		steps = []dataStep{{"swap postgres", ops.swapPostgres}, {"reimport firebase", ops.reimportFirebase}}
+	}
+	for _, step := range steps {
 		if err := step.run(ctx); err != nil {
 			return fmt.Errorf("%s: %w", step.name, err)
 		}
 	}
-	if mode == driver.ResetModeData {
+	if mode == driver.ResetModeData || mode == driver.ResetModeInPlace {
 		ok, err := ops.appHealthy(ctx)
 		if err != nil {
 			return fmt.Errorf("app health: %w", err)
@@ -216,7 +242,7 @@ func dataModeKey(ref driver.MachineRef) string {
 	return ref.Tags[driver.TagOrg] + "/" + ref.Tags[driver.TagEnv]
 }
 
-// learnedDataMode is the mode an environment starts from: data unless an
+// learnedDataMode is the mode an environment starts from: in-place unless an
 // earlier fallback demoted it less than dataModeTTL ago.
 func (d *Driver) learnedDataMode(ref driver.MachineRef) driver.DataResetMode {
 	d.mu.Lock()
@@ -224,19 +250,19 @@ func (d *Driver) learnedDataMode(ref driver.MachineRef) driver.DataResetMode {
 	f, ok := d.dataModes[dataModeKey(ref)]
 	if !ok || d.clock.Now().Sub(f.at) > dataModeTTL {
 		delete(d.dataModes, dataModeKey(ref))
-		return driver.ResetModeData
+		return driver.ResetModeInPlace
 	}
 	return f.mode
 }
 
-// learnDataMode remembers a demotion (worked is below data) and forgets it
-// when data worked again.
+// learnDataMode remembers a demotion (worked is below from) and forgets it
+// when a faster mode than the remembered one worked.
 func (d *Driver) learnDataMode(ref driver.MachineRef, from, worked driver.DataResetMode) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	key := dataModeKey(ref)
 	switch {
-	case worked == driver.ResetModeData:
+	case worked == driver.ResetModeInPlace || modeRank(worked) < modeRank(from):
 		delete(d.dataModes, key)
 	case worked != from:
 		if d.dataModes == nil {
@@ -270,6 +296,9 @@ func (d *Driver) ResetData(ctx context.Context, ref driver.MachineRef) (driver.D
 		return recreate("the app is instrumented for coverage, which only its exit flushes")
 	}
 	from := d.learnedDataMode(ref)
+	if from == driver.ResetModeInPlace && !m.inPlaceReady {
+		from = driver.ResetModeData
+	}
 	if from == driver.ResetModeRecreate {
 		return recreate("an earlier round of this environment fell back to recreate")
 	}
@@ -278,7 +307,7 @@ func (d *Driver) ResetData(ctx context.Context, ref driver.MachineRef) (driver.D
 	if err != nil {
 		return recreate("claim limits: " + err.Error())
 	}
-	ops := &dockerDataOps{d: d, project: project, plan: m.dataPlan, cp: m.dataCopy, targets: m.targets, parent: parent}
+	ops := &dockerDataOps{d: d, project: project, plan: m.dataPlan, cp: m.dataCopy, targets: m.targets, parent: parent, golden: m.inPlaceReady}
 	started := d.clock.Now()
 	mode, failed := runDataReset(ctx, ops, from)
 	if err := ctx.Err(); err != nil {
@@ -320,6 +349,9 @@ func (d *Driver) takeDataCopy(ctx context.Context, ref driver.MachineRef) error 
 	}
 	ops := &dockerDataOps{d: d, project: project, plan: m.dataPlan, targets: m.targets, parent: parent}
 	at := d.clock.Now()
+	// The golden databases first: the volume copy below then holds them too,
+	// so a volume restore (the fallback) brings them back after a recreate.
+	golden := d.takeInPlaceGolden(ctx, ref, ops)
 	var cp *dataCopy
 	err = ops.stopData(ctx)
 	if err == nil {
@@ -342,6 +374,7 @@ func (d *Driver) takeDataCopy(ctx context.Context, ref driver.MachineRef) error 
 	}
 	d.mu.Lock()
 	d.machineLocked(ref.MachineID).dataCopy = cp
+	d.machineLocked(ref.MachineID).inPlaceReady = golden
 	d.mu.Unlock()
 	d.log().Info("data.copy.taken", "machine", ref.MachineID, "services", strings.Join(m.dataPlan.services, ","), "volumes", len(cp.vols), "ms", d.clock.Now().Sub(at).Milliseconds())
 	return nil
@@ -400,6 +433,8 @@ type dockerDataOps struct {
 	cp      *dataCopy
 	targets map[string]execTarget
 	parent  string
+	// golden is true when the first boot left the in-place copies.
+	golden bool
 }
 
 func (o *dockerDataOps) apps() []string {

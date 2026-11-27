@@ -75,6 +75,9 @@ type machineState struct {
 	dataWhy  string
 	dataCopy *dataCopy
 	dataOff  bool
+	// inPlaceReady says the first boot left the golden databases (and the
+	// emulators' export) the in-place reset restores from.
+	inPlaceReady bool
 	// boot is its last boot, per phase, under the claim it booted for
 	// (BootTiming).
 	boot *claimBoot

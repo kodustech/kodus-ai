@@ -11,7 +11,7 @@ import (
 // Data-only reset (data.reset: data-only; docs/runtime/persistent-state.md
 // section 11). A machine.reset of a claim whose recipe opted in first asks the
 // driver to restore only the data services and keep the app running. The
-// driver tries its modes in order (data, restart-app) and says recreate
+// driver tries its modes in order (in-place, data, restart-app) and says recreate
 // when none worked: then the reset is the one it always was.
 
 // dataOnly is true when the claim's driver can reset data only and the

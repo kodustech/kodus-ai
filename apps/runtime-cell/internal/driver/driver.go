@@ -506,6 +506,11 @@ type MachineResetter interface {
 type DataResetMode string
 
 const (
+	// ResetModeInPlace: the data services never stopped: a Postgres database
+	// was dropped and made again from its golden template, and the Firebase
+	// emulators restarted on their exported data; the app was restarted only
+	// when its health check said it lost them.
+	ResetModeInPlace DataResetMode = "in-place"
 	// ResetModeData: the data services were stopped, restored from the copy
 	// of the first boot and started; the app kept running, and was
 	// restarted only when its health check said it lost them.

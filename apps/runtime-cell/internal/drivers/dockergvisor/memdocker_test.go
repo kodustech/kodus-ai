@@ -85,6 +85,8 @@ type memDocker struct {
 	inputs  []memInput // every exec with input, in order
 	// inputErr is what every ExecInput fails with.
 	inputErr error
+	// inputFor, when set, answers an exec with input instead of inputErr.
+	inputFor func(memInput) error
 	// securityOptions are what docker info lists (none: no user namespace).
 	securityOptions []string
 	// registries are the registry containers run, in order; pushed the
@@ -739,7 +741,11 @@ func (m *memDocker) Exec(_ context.Context, e dockercli.ExecSpec, req, host kody
 func (m *memDocker) ExecInput(_ context.Context, container string, stdin []byte, argv ...string) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.inputs = append(m.inputs, memInput{container: container, stdin: string(stdin), argv: argv})
+	in := memInput{container: container, stdin: string(stdin), argv: argv}
+	m.inputs = append(m.inputs, in)
+	if m.inputFor != nil {
+		return nil, m.inputFor(in)
+	}
 	return nil, m.inputErr
 }
 
