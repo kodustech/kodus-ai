@@ -957,9 +957,24 @@ const run =
             ).toBe('newer');
         });
 
-        it.each(['replacement', 'provider failure'] as const)(
-            'persists the incremental processor outcome after %s',
-            async (condition) => {
+        it.each([
+            ['replacement', undefined],
+            [
+                'a provider failure',
+                new Error('private-provider-query', {
+                    cause: { code: 'ECONNRESET' },
+                }),
+            ],
+            [
+                'a final connection reset after an earlier 403',
+                Object.assign(new Error('provider exhausted retries'), {
+                    lastError: { code: 'ECONNRESET' },
+                    errors: [{ response: { status: 403 } }],
+                }),
+            ],
+        ] as const)(
+            'persists the incremental processor outcome for %s',
+            async (_condition, providerError) => {
                 const rows = db.getRepository(WorkflowJobModel);
                 const jobs = new WorkflowJobRepository(rows);
                 const replacementId = randomUUID();
@@ -1000,10 +1015,7 @@ const run =
                     } as never,
                     {
                         incrementalUpdate: async ({ job: writing }) => {
-                            if (condition === 'provider failure')
-                                throw new Error('private-provider-query', {
-                                    cause: { code: 'ECONNRESET' },
-                                });
+                            if (providerError) throw providerError;
                             await rows.update(job.jobId, {
                                 status: JobStatus.PROCESSING,
                                 metadata: { attemptId: replacementId },
@@ -1026,10 +1038,8 @@ const run =
                     new GraphJobSandbox(),
                 );
                 const processing = processor.process(job.jobId);
-                if (condition === 'provider failure') {
-                    await expect(processing).rejects.toBeInstanceOf(
-                        RecordedJobFailure,
-                    );
+                if (providerError) {
+                    const failure = await processing.catch((error) => error);
                     expect(
                         await rows.findOneOrFail({
                             where: { uuid: job.jobId },
@@ -1045,6 +1055,7 @@ const run =
                             'Repository graph incremental update failed temporarily',
                         errorClassification: ErrorClassification.RETRYABLE,
                     });
+                    expect(failure).toBeInstanceOf(RecordedJobFailure);
                 } else {
                     await processing;
                     expect(

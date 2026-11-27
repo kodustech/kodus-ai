@@ -52,12 +52,6 @@ export function classifyGraphJobError(error: unknown): ErrorClassification {
         const error = pending.pop();
         if (!error || typeof error !== 'object' || seen.has(error)) continue;
         seen.add(error);
-        if (
-            error instanceof GraphBaselineChangedError ||
-            error instanceof GraphWorkerShutdownError ||
-            error instanceof GraphCheckoutRecoveryError
-        )
-            retryable = true;
         const fields = error as GraphErrorFields;
         const status = [
             fields.status,
@@ -72,8 +66,21 @@ export function classifyGraphJobError(error: unknown): ErrorClassification {
                 ? ErrorClassification.RETRYABLE
                 : ErrorClassification.PERMANENT;
         }
+        // A retry wrapper's other entries describe previous attempts.
+        const lastError = fields.lastError;
+        if (
+            lastError &&
+            typeof lastError === 'object' &&
+            !seen.has(lastError)
+        ) {
+            pending.push(lastError);
+            continue;
+        }
         const setup = fields.sandboxSetup;
         if (
+            error instanceof GraphBaselineChangedError ||
+            error instanceof GraphWorkerShutdownError ||
+            error instanceof GraphCheckoutRecoveryError ||
             retryableCodes.has(fields.code) ||
             retryableNames.has(fields.name) ||
             ((setup?.operation === 'git-fetch' ||
@@ -85,12 +92,11 @@ export function classifyGraphJobError(error: unknown): ErrorClassification {
         ) {
             retryable = true;
         }
-        // A retry wrapper's last failure is authoritative over earlier attempts.
         if (Array.isArray(fields.errors)) {
             for (let i = fields.errors.length - 1; i >= 0; i--)
                 pending.push(fields.errors[i]);
         }
-        pending.push(fields.cause, fields.lastError);
+        pending.push(fields.cause);
     }
     return retryable
         ? ErrorClassification.RETRYABLE

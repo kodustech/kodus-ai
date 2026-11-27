@@ -22,6 +22,31 @@ it.each([
         ErrorClassification.PERMANENT,
     ],
     [
+        {
+            lastError: { cause: { code: 'ECONNRESET' } },
+            errors: [{ response: { status: 403 } }],
+        },
+        ErrorClassification.RETRYABLE,
+    ],
+    [
+        {
+            lastError: { name: 'TimeoutError' },
+            cause: { status: 400 },
+        },
+        ErrorClassification.RETRYABLE,
+    ],
+    [
+        {
+            lastError: new SyntaxError('invalid graph'),
+            errors: [{ status: 503 }],
+        },
+        ErrorClassification.PERMANENT,
+    ],
+    [
+        { lastError: null, errors: [{ response: { status: 503 } }] },
+        ErrorClassification.RETRYABLE,
+    ],
+    [
         { status: 'invalid', response: { status: 503 } },
         ErrorClassification.RETRYABLE,
     ],
