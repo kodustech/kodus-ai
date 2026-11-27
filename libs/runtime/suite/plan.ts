@@ -23,6 +23,13 @@ export interface SuitePlanInput {
     ignore?: readonly string[];
     importersOf?: SelectInput['importersOf'];
     workspaceSpecsOf?: SelectInput['workspaceSpecsOf'];
+    /**
+     * The guards of `select`: never skip a spec with no recorded pass on main, `suite.unskippable`, `suite.full_run_files`. They decide
+     * what runs, not what the diff reaches, so `diffReach` reads only the last one: a diff too wide to narrow reaches everything.
+     */
+    passedOnMain?: SelectInput['passedOnMain'];
+    unskippable?: SelectInput['unskippable'];
+    fullRunFiles?: SelectInput['fullRunFiles'];
     /** The whole suite regardless of the map and of an earlier run (a shadow run; the brake of the shadow check): the reason says which. */
     forceFull?: SelectInput['forceFull'];
     /** The suite directory (relative to the repository root): `changed` is the repository's, the specs are the suite's. */
@@ -41,8 +48,14 @@ export interface DiffReach {
     unknown?: ReachUnknownReason;
 }
 
+const guardsOf = (i: SuitePlanInput): Pick<SelectInput, 'passedOnMain' | 'unskippable' | 'fullRunFiles'> => ({
+    ...(i.passedOnMain ? { passedOnMain: i.passedOnMain } : {}),
+    ...(i.unskippable ? { unskippable: i.unskippable } : {}),
+    ...(i.fullRunFiles !== undefined ? { fullRunFiles: i.fullRunFiles } : {}),
+});
+
 /** Whole-suite reasons that mean everything may be affected: the file alone says it, whatever the map holds. */
-const EVERYTHING: ReadonlySet<FullReason> = new Set<FullReason>(['manifest', 'lockfile', 'config', 'shared_routing']);
+const EVERYTHING: ReadonlySet<FullReason> = new Set<FullReason>(['manifest', 'lockfile', 'config', 'shared_routing', 'huge_diff']);
 
 export interface SuitePlan {
     /** In the order of `allSpecs`. */
@@ -64,7 +77,7 @@ export function diffReach(i: SuitePlanInput): DiffReach {
     // A spec the PR added or modified is always reached.
     const own = all.filter((s) => changed.has(s) || (i.cwd !== undefined && changed.has(`${i.cwd.replace(/\/$/, '')}/${s}`)));
     if (i.changed === undefined) return { specs: own, unknown: i.map ? 'changes_unknown' : 'map_missing' };
-    const s = select({ allSpecs: all, changed: i.changed, ...(i.map ? { map: i.map } : {}), suiteDigest: i.suiteDigest, ...(i.ignore ? { ignore: i.ignore } : {}), ...(i.importersOf ? { importersOf: i.importersOf } : {}), ...(i.workspaceSpecsOf ? { workspaceSpecsOf: i.workspaceSpecsOf } : {}) });
+    const s = select({ allSpecs: all, changed: i.changed, ...(i.map ? { map: i.map } : {}), suiteDigest: i.suiteDigest, ...(i.ignore ? { ignore: i.ignore } : {}), ...(i.importersOf ? { importersOf: i.importersOf } : {}), ...(i.workspaceSpecsOf ? { workspaceSpecsOf: i.workspaceSpecsOf } : {}), ...(i.fullRunFiles !== undefined ? { fullRunFiles: i.fullRunFiles } : {}) });
     if (s.mode === 'full') return EVERYTHING.has(s.reason) ? { specs: all } : { specs: own, unknown: s.reason as ReachUnknownReason };
     // Without a map nothing proves what the change reaches, not even an ignored-only one.
     if (!i.map) return { specs: own, unknown: 'map_missing' };
@@ -83,7 +96,7 @@ function planSpecs(i: SuitePlanInput): SuitePlan {
     const full = (reason: FullReason, text: string): Selection => ({ mode: 'full', specs: all, reason, text });
     const selectOver = (changed: readonly string[] | undefined): Selection => {
         if (changed === undefined) return full(i.map ? 'changes_unknown' : 'map_missing', i.map ? 'the changed files are unknown' : 'no coverage map for this environment yet');
-        const s = select({ allSpecs: all, changed, ...(i.map ? { map: i.map } : {}), suiteDigest: i.suiteDigest, ...(i.ignore ? { ignore: i.ignore } : {}), ...(i.importersOf ? { importersOf: i.importersOf } : {}), ...(i.workspaceSpecsOf ? { workspaceSpecsOf: i.workspaceSpecsOf } : {}) });
+        const s = select({ allSpecs: all, changed, ...(i.map ? { map: i.map } : {}), suiteDigest: i.suiteDigest, ...(i.ignore ? { ignore: i.ignore } : {}), ...(i.importersOf ? { importersOf: i.importersOf } : {}), ...(i.workspaceSpecsOf ? { workspaceSpecsOf: i.workspaceSpecsOf } : {}), ...guardsOf(i) });
         // Without a map nothing proves a spec can be skipped, not even an ignored-only change: the whole suite.
         return !i.map && s.mode === 'selected' ? full('map_missing', 'no coverage map for this environment yet') : s;
     };

@@ -682,6 +682,22 @@
             "maxLength": 512
           }
         },
+        "unskippable": {
+          "description": "Specs that always run, whatever a change reaches: globs of spec paths, or @tag for a whole part of the path (login.smoke.cy.ts is @smoke).",
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "full_run_files": {
+          "description": "A pull request that changes more files than this runs the whole suite (default 300; ignored files do not count).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
         "retries": {
           "type": "object",
           "properties": {

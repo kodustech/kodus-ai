@@ -493,6 +493,21 @@
             "cell": "refuse: bad database",
             "runo": "accept",
             "why": "data.in_place is the cell's own key; Runo ignores keys it does not know"
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-suite-guards.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-full-run-files-zero.yaml": {
+            "cell": "refuse: suite.full_run_files",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-unskippable-empty.yaml": {
+            "cell": "refuse: suite.unskippable",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
         }
     }
 }

@@ -1,0 +1,11 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+suite:
+  runner: cypress
+  command: npx cypress run --browser chrome --spec "{specs}"
+  specs: "cypress/e2e/**/*.cy.ts"
+  service: e2e
+  unskippable: ["cypress/e2e/checkout/**", "@smoke"]
+  full_run_files: 150

@@ -19,6 +19,8 @@ const (
 	maxSuiteEnv          = 16
 	maxSuiteArtifacts    = 8
 	maxSuiteIgnore       = 32
+	maxSuiteUnskippable  = 32
+	maxSuiteFullRunFiles = 10000
 	maxSuiteShards       = 16
 	maxSuiteTimeout      = 2 * time.Hour
 )
@@ -26,18 +28,23 @@ const (
 // suiteBlock is the decoded block. Unknown keys are refused before the decode
 // (checkSuite), so the struct only has to hold the known ones.
 type suiteBlock struct {
-	Runner  string              `yaml:"runner"`
-	Command string              `yaml:"command"`
-	Cwd     string              `yaml:"cwd"`
-	Specs   string              `yaml:"specs"`
-	Shards  *int                `yaml:"shards"`
-	Service string              `yaml:"service"`
-	Image   string              `yaml:"image"`
-	Ignore  []string            `yaml:"ignore"`
-	Gate    string              `yaml:"gate"`
-	Env     map[string]string   `yaml:"-"`
-	Timeout map[string]Duration `yaml:"-"`
-	Results struct {
+	Runner  string   `yaml:"runner"`
+	Command string   `yaml:"command"`
+	Cwd     string   `yaml:"cwd"`
+	Specs   string   `yaml:"specs"`
+	Shards  *int     `yaml:"shards"`
+	Service string   `yaml:"service"`
+	Image   string   `yaml:"image"`
+	Ignore  []string `yaml:"ignore"`
+	// Unskippable are spec globs or @tags that always run; FullRunFiles is
+	// the changed-file count above which a run is the whole suite. The
+	// worker acts on both (libs/runtime/suite/select.ts).
+	Unskippable  []string            `yaml:"unskippable"`
+	FullRunFiles *int                `yaml:"full_run_files"`
+	Gate         string              `yaml:"gate"`
+	Env          map[string]string   `yaml:"-"`
+	Timeout      map[string]Duration `yaml:"-"`
+	Results      struct {
 		Junit     string   `yaml:"junit"`
 		Artifacts []string `yaml:"artifacts"`
 	} `yaml:"-"`
@@ -62,7 +69,7 @@ func checkSuite(r *Recipe) error {
 		return nil
 	}
 	n := &r.Suite
-	f, err := fields(n, "runner", "command", "cwd", "specs", "shards", "service", "image", "timeout", "env", "results", "baseline", "ignore", "retries", "gate")
+	f, err := fields(n, "runner", "command", "cwd", "specs", "shards", "service", "image", "timeout", "env", "results", "baseline", "ignore", "retries", "gate", "unskippable", "full_run_files")
 	if err != nil {
 		return fmt.Errorf("suite: %w", err)
 	}
@@ -119,6 +126,21 @@ func checkSuite(r *Recipe) error {
 	if f["ignore"] != nil {
 		if f["ignore"].Decode(&s.Ignore) != nil || len(s.Ignore) > maxSuiteIgnore {
 			return fmt.Errorf("suite.ignore: a list of at most %d globs", maxSuiteIgnore)
+		}
+	}
+	if f["unskippable"] != nil {
+		if f["unskippable"].Decode(&s.Unskippable) != nil || len(s.Unskippable) > maxSuiteUnskippable {
+			return fmt.Errorf("suite.unskippable: a list of at most %d globs or @tags", maxSuiteUnskippable)
+		}
+		for _, u := range s.Unskippable {
+			if u == "" || u == "@" || len(u) > 512 {
+				return fmt.Errorf("suite.unskippable: bad entry %q", u)
+			}
+		}
+	}
+	if f["full_run_files"] != nil {
+		if f["full_run_files"].Decode(&s.FullRunFiles) != nil || s.FullRunFiles == nil || *s.FullRunFiles < 1 || *s.FullRunFiles > maxSuiteFullRunFiles {
+			return fmt.Errorf("suite.full_run_files: use 1 to %d", maxSuiteFullRunFiles)
 		}
 	}
 	if f["retries"] != nil {

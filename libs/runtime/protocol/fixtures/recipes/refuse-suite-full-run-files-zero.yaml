@@ -1,0 +1,9 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+suite:
+  runner: cypress
+  command: npx cypress run --spec "{specs}"
+  specs: "cypress/e2e/**/*.cy.ts"
+  full_run_files: 0

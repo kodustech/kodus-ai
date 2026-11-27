@@ -10,6 +10,8 @@ export const MAP_MAX_COMMITS_BEHIND = 20;
 export const MAP_MAX_AGE_MS = 3 * 86_400_000;
 /** D15: a file this share of the specs cover would select all of them; changing it is a full run. */
 export const NOISE_SHARE = 0.5;
+/** Changed files (not ignored) above which a run is the whole suite: a change this wide is not one a map can be trusted to narrow. `suite.full_run_files` sets it. */
+export const DEFAULT_FULL_RUN_FILES = 300;
 /** How far the importer walk goes, and how many files it visits (bounded like IMPORT_GRAPH_LIMITS). */
 export const IMPORTER_WALK = { depth: 6, nodes: 500 } as const;
 
@@ -43,6 +45,10 @@ export const FULL_REASONS = [
     'selection_miss',
     /** Two misses in ten shadows turned selection off until a person re-enables it (D14). */
     'selection_off',
+    /** The diff is wider than `suite.full_run_files`: nothing is narrowed on a change this big. */
+    'huge_diff',
+    /** No spec has a recorded pass on main yet: nothing proves any of them safe to skip. */
+    'no_main_pass',
 ] as const;
 export type FullReason = (typeof FULL_REASONS)[number];
 
@@ -60,6 +66,16 @@ export interface SelectInput {
     importersOf?: (file: string) => readonly string[];
     /** Specs of every app that depends on the workspace `file` is in (manifests only, reverse closure). */
     workspaceSpecsOf?: (file: string) => readonly string[];
+    /**
+     * The specs with a recorded pass on main (a complete baseline), as spelled in `allSpecs`. A spec outside it is never skipped
+     * (a new spec, or one that never passed on main has nothing to compare a skip with); when none is in it the whole suite runs.
+     * Absent: the guard is off (no baseline store to ask).
+     */
+    passedOnMain?: ReadonlySet<string> | readonly string[];
+    /** `suite.unskippable`: globs of spec paths, or `@tag` (a path part, as in `login.smoke.cy.ts` or `smoke/`), that always run. */
+    unskippable?: readonly string[];
+    /** `suite.full_run_files`: more changed files than this is the whole suite. Default `DEFAULT_FULL_RUN_FILES`. */
+    fullRunFiles?: number;
     forceFull?: Extract<FullReason, 'ready_for_review' | 'baseline' | 'shadow' | 'selection_miss' | 'selection_off'>;
 }
 
@@ -105,6 +121,17 @@ const files = (n: number) => `${n} changed file${n === 1 ? '' : 's'}`;
 
 const full = (specs: readonly string[], reason: FullReason, text: string): Selection => ({ mode: 'full', specs: [...specs], reason, text: `full suite: ${text}` });
 
+/** Whether a spec path is named by one `suite.unskippable` entry: a glob, or `@tag` read as a whole part of the path. */
+export function isUnskippable(spec: string, entries: readonly string[] | undefined): boolean {
+    if (!entries?.length) return false;
+    const parts = spec.split(/[/.]/);
+    const globs = entries.filter((e) => !e.startsWith('@'));
+    if (globs.length && picomatch([...globs], { dot: true })(spec)) return true;
+    return entries.some((e) => e.startsWith('@') && e.length > 1 && (parts.includes(e.slice(1)) || parts.includes(e) || spec.includes(e)));
+}
+
+const noun = (n: number) => `${n} spec${n === 1 ? '' : 's'}`;
+
 export function select(i: SelectInput): Selection {
     const all = [...i.allSpecs];
     if (i.forceFull === 'ready_for_review') return full(all, 'ready_for_review', 'the pull request is ready for review');
@@ -121,10 +148,26 @@ export function select(i: SelectInput): Selection {
         if (SHARED_ROUTING.some((r) => r.test(f))) return full(all, 'shared_routing', `${f} changed`);
     }
 
+    // Specs that always run, whatever the diff reaches: nothing on main proves them safe to skip, or the recipe says so.
+    const passed = i.passedOnMain ? new Set(i.passedOnMain) : undefined;
+    if (passed && all.length > 0 && all.every((s) => !passed.has(s))) return full(all, 'no_main_pass', 'no spec has a recorded pass on main yet');
+    const unproven = passed ? all.filter((s) => !passed.has(s)) : [];
+    const pinned = all.filter((s) => isUnskippable(s, i.unskippable));
+    const always = new Set([...unproven, ...pinned]);
+    const guarded = (base: Extract<Selection, { mode: 'selected' }>): Selection => {
+        const specs = all.filter((s) => always.has(s) || base.specs.includes(s));
+        const added = specs.length - base.specs.length;
+        if (added === 0) return base;
+        const why = [unproven.length ? `${noun(unproven.length)} with no recorded pass on main` : '', pinned.length ? `${noun(pinned.length)} unskippable` : ''].filter(Boolean).join(' and ');
+        return { ...base, specs, text: `${base.text}; plus ${noun(added)} that always run (${why})` };
+    };
+
     const ignored = matches(i.ignore);
     const relevant = i.changed.filter((f) => !ignored(f));
-    if (i.changed.length > 0 && relevant.length === 0) return { mode: 'selected', specs: [], diffCoverage: {}, reachedBy: {}, text: 'no spec selected: every changed file is ignored (suite.ignore)' };
-    if (relevant.length === 0) return { mode: 'selected', specs: [], diffCoverage: {}, reachedBy: {}, text: 'no spec selected: nothing changed' };
+    const limit = i.fullRunFiles ?? DEFAULT_FULL_RUN_FILES;
+    if (relevant.length > limit) return full(all, 'huge_diff', `${files(relevant.length)}, more than the ${limit} a map can be trusted to narrow`);
+    if (i.changed.length > 0 && relevant.length === 0) return guarded({ mode: 'selected', specs: [], diffCoverage: {}, reachedBy: {}, text: 'no spec selected: every changed file is ignored (suite.ignore)' });
+    if (relevant.length === 0) return guarded({ mode: 'selected', specs: [], diffCoverage: {}, reachedBy: {}, text: 'no spec selected: nothing changed' });
 
     // 5: the map.
     const map = i.map;
@@ -169,7 +212,15 @@ export function select(i: SelectInput): Selection {
     }
 
     const specs = all.filter((s) => selected.has(s));
-    return { mode: 'selected', specs, diffCoverage, reachedBy, text: `selected ${specs.length} of ${all.length} specs: covers the ${files(relevant.length)}` };
+    return guarded({ mode: 'selected', specs, diffCoverage, reachedBy, text: `selected ${specs.length} of ${all.length} specs: covers the ${files(relevant.length)}` });
+}
+
+/**
+ * The commit a PR's diff is taken against when the map is not the merge base's (the base is ahead of the last green main commit
+ * that has a map): the map's own commit, so what main changed in between is in the diff and a skip never rests on it.
+ */
+export function diffBaseFor(mergeBase: string, mapSha: string | undefined): string {
+    return mapSha && mapSha !== mergeBase ? mapSha : mergeBase;
 }
 
 /** The specs that cover the nearest importers of `file`, walking importers breadth first, bounded. */

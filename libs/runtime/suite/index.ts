@@ -7,7 +7,7 @@ export { isFlakyInRun, specResultOf } from './types';
 export type { SpecResult, SpecStatus, TestAttempt, TestResult, TestStatus } from './types';
 export { BASELINE_MAX_COMMITS_BEHIND, classifyFailures, MASS_FAILURE_RATIO, needsMainRerun, planReruns, RERUN_BUDGET, testKey } from './classifier';
 export type { BaselineEvidence, Classification, ClassifiedTest, ClassifyInput, FailureClass, MainSide, Rerun, RerunPlan, SuiteFailure, UnclassifiedReason } from './classifier';
-export { FULL_REASONS, IMPORTER_WALK, MAP_MAX_AGE_MS, MAP_MAX_COMMITS_BEHIND, NOISE_SHARE, select } from './select';
+export { DEFAULT_FULL_RUN_FILES, diffBaseFor, FULL_REASONS, IMPORTER_WALK, isUnskippable, MAP_MAX_AGE_MS, MAP_MAX_COMMITS_BEHIND, NOISE_SHARE, select } from './select';
 export type { CoverageMapInput, FullReason, SelectInput, Selection } from './select';
 export { planRepush } from './repush';
 export type { PreviousSuiteRun, RepushInput, RepushPlan } from './repush';

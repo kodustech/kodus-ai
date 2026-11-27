@@ -85,3 +85,27 @@ describe('recipe suite block', () => {
         expect(parseRecipe(suite('runner: cypress\ncommand: npx cypress run --record-video --spec "{specs}"\nspecs: "a/**"')).ok).toBe(true);
     });
 });
+
+describe('suite.unskippable and suite.full_run_files', () => {
+    // Behavior: the two selection guards are kept in the resolved suite, with an empty list when the recipe names none.
+    it('keeps the guards it names and defaults to none', () => {
+        const withGuards = parseRecipe(suite(`${CYPRESS}\nunskippable: ["e2e/checkout/**", "@smoke"]\nfull_run_files: 150`));
+        expect(withGuards.ok && withGuards.recipe.suite).toMatchObject({ unskippable: ['e2e/checkout/**', '@smoke'], fullRunFiles: 150 });
+        const without = parseRecipe(suite(CYPRESS));
+        expect(without.ok && without.recipe.suite?.unskippable).toEqual([]);
+        expect(without.ok && without.recipe.suite).not.toHaveProperty('fullRunFiles');
+    });
+
+    // Behavior: a count that is not a whole number from 1 to 10000, a list over 32 entries and an empty tag are refused, as the cell refuses them.
+    it.each([
+        ['zero files', `${CYPRESS}\nfull_run_files: 0`, 'full_run_files'],
+        ['too many files', `${CYPRESS}\nfull_run_files: 10001`, 'full_run_files'],
+        ['a fractional count', `${CYPRESS}\nfull_run_files: 1.5`, 'full_run_files'],
+        ['33 entries', `${CYPRESS}\nunskippable: [${Array.from({ length: 33 }, (_, i) => `a${i}`).join(', ')}]`, 'unskippable'],
+        ['a bare @', `${CYPRESS}\nunskippable: ["@"]`, 'suite.unskippable: bad entry'],
+    ])('refuses %s', (_name, body, why) => {
+        const r = parseRecipe(suite(body));
+        expect(r.ok).toBe(false);
+        expect('error' in r ? r.error : '').toContain(why);
+    });
+});

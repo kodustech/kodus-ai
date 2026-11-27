@@ -164,7 +164,7 @@ function resolvedSize(d: {
 
 /** The suite block (docs/runtime/e2e-suites.md section 3): the repository's own e2e suite, run by the worker. */
 export const SUITE_RUNNERS = ['cypress', 'playwright'] as const;
-export const SUITE_LIMITS = { commandBytes: 1024, env: 16, artifacts: 8, ignore: 32, shards: 16, maxTimeoutSeconds: 7200 } as const;
+export const SUITE_LIMITS = { commandBytes: 1024, env: 16, artifacts: 8, ignore: 32, unskippable: 32, fullRunFiles: 10_000, shards: 16, maxTimeoutSeconds: 7200 } as const;
 /**
  * The most hosts a suite spreads over. `suite.shards` is the customer's cost ceiling only when the customer committed the
  * recipe in the repository; a recipe the environment booted (Kody's or Kodus's) never sets it, so the limit of the suite
@@ -192,6 +192,18 @@ const RecipeSuiteSchema = z.strictObject({
         .describe('Where the runner writes its JUnit files, and the artifact paths to keep for failed specs.'),
     baseline: z.boolean().optional().describe('False: no run on main (a repository whose suite only runs in CI mode).'),
     ignore: z.array(z.string().max(512)).max(SUITE_LIMITS.ignore).optional().describe('Globs of files that never select specs (docs, assets).'),
+    unskippable: z
+        .array(z.string().min(1).max(512))
+        .max(SUITE_LIMITS.unskippable)
+        .optional()
+        .describe('Specs that always run, whatever a change reaches: globs of spec paths, or @tag for a whole part of the path (login.smoke.cy.ts is @smoke).'),
+    full_run_files: z
+        .number()
+        .int()
+        .min(1)
+        .max(SUITE_LIMITS.fullRunFiles)
+        .optional()
+        .describe('A pull request that changes more files than this runs the whole suite (default 300; ignored files do not count).'),
     retries: z.strictObject({ main: z.number().int().min(1).max(2).optional() }).optional(),
     gate: z.enum(['default', 'strict']).optional().describe('strict: any unclassified failure fails the check.'),
 });
@@ -319,6 +331,10 @@ export interface RecipeSuite {
     results?: { junit?: string; artifacts: string[] };
     baseline: boolean;
     ignore: string[];
+    /** suite.unskippable: spec globs or @tags that always run. */
+    unskippable: string[];
+    /** suite.full_run_files; absent: the engine's default. */
+    fullRunFiles?: number;
     retriesMain?: number;
     gate: 'default' | 'strict';
 }
@@ -512,6 +528,7 @@ function suiteRules(s: RecipeSuite): string | undefined {
     for (const [k, v] of Object.entries(s.timeoutSeconds ?? {})) {
         if (!(v > 0 && v <= SUITE_LIMITS.maxTimeoutSeconds)) return `suite.timeout.${k}: use a duration from 1s to 2h`;
     }
+    for (const u of s.unskippable) if (u === '@') return `suite.unskippable: bad entry ${JSON.stringify(u)}`;
     if (s.results?.junit !== undefined && !insideRepo(s.results.junit)) return `suite.results.junit: ${JSON.stringify(s.results.junit)} must be a path inside the repo`;
     if ((s.results?.artifacts.length ?? 0) > SUITE_LIMITS.artifacts) return `suite.results.artifacts: at most ${SUITE_LIMITS.artifacts} paths`;
     for (const a of s.results?.artifacts ?? []) if (!insideRepo(a)) return `suite.results.artifacts: ${JSON.stringify(a)} must be a path inside the repo`;
@@ -703,6 +720,8 @@ export function parseRecipe(text: string): RecipeParseResult {
             ...(x.results ? { results: { ...(x.results.junit !== undefined ? { junit: x.results.junit } : {}), artifacts: x.results.artifacts ?? [] } } : {}),
             baseline: x.baseline ?? true,
             ignore: x.ignore ?? [],
+            unskippable: x.unskippable ?? [],
+            ...(x.full_run_files !== undefined ? { fullRunFiles: x.full_run_files } : {}),
             ...(x.retries?.main !== undefined ? { retriesMain: x.retries.main } : {}),
             gate: x.gate ?? 'default',
         };
