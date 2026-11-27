@@ -327,7 +327,11 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
      */
     private async abandonBusyReview(
         job: IWorkflowJob,
-        error: Error & { target?: unknown; gate?: string },
+        error: Error & {
+            target?: unknown;
+            gate?: string;
+            fromCommand?: boolean;
+        },
     ): Promise<void> {
         this.logger.error({
             message: `Giving up on a code review command for job ${job.id} — the PR stayed busy`,
@@ -339,6 +343,11 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 gate: error.gate,
             },
         });
+
+        if (error.fromCommand === false) {
+            await this.handleFailure(job.id, error);
+            return;
+        }
 
         try {
             await this.codeReviewHandlerService.notifyCommandReviewRefused(
