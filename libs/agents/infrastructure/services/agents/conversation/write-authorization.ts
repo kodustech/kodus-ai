@@ -37,7 +37,7 @@ export function createWriteAuthorization(): WriteAuthorization {
     };
 }
 
-export const REFUSAL =
+const REFUSAL =
     `This action has NOT been performed. Before changing anything you must call ${CONVERSATION_DECISION_TOOL} ` +
     `with intent 'act', naming this tool and quoting the words the developer used to instruct it. ` +
     `If they did not instruct it, do not act — call ${CONVERSATION_DECISION_TOOL} with intent 'offer' and offer it to them instead.`;

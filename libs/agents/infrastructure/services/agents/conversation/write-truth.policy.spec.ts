@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { StepView } from '@libs/agent-harness/domain/contracts/policy.contract';
 
 import { auditWriteTools, performedWrites, type WriteToolEvent } from './conversation-tool-audit';
-import { createWriteAuthorization, REFUSAL, requireDeclaredAction } from './write-authorization';
+import { createWriteAuthorization, requireDeclaredAction } from './write-authorization';
 import { RUNTIME_NOTE_PREFIX, WriteTruthPolicy } from './write-truth.policy';
 
 const NONE = `${RUNTIME_NOTE_PREFIX} ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything — you may report an action only once its tool call has returned.`;
@@ -90,7 +90,11 @@ describe('WriteTruthPolicy', () => {
 
             const answer = await save();
 
-            expect(answer).toBe(REFUSAL);
+            // Spelled out here, not read from the constant: an empty or
+            // softened refusal must fail this test.
+            expect(answer).toBe(
+                "This action has NOT been performed. Before changing anything you must call kodusDecideAction with intent 'act', naming this tool and quoting the words the developer used to instruct it. If they did not instruct it, do not act — call kodusDecideAction with intent 'offer' and offer it to them instead.",
+            );
             expect(saved).toEqual([]);
             expect(noteNow()).toBe(NONE);
         });
