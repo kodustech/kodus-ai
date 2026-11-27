@@ -152,11 +152,11 @@ function detectCriteria(task: Task): Task {
     // read, AC-labelled items (`AC1: ...`). They beat the implicit list of
     // the description's bullets. All places are kept, deduplicated; those
     // from a document say which.
+    const body = explicitIn(description, !!task.sourceTexts?.length, own);
+    // Without artifacts the criteria stay as the tracker wrote them.
     const explicit = withArtifactCriteria(
         task,
-        uniqueCriteria(
-            explicitIn(description, !!task.sourceTexts?.length, own),
-        ),
+        task.hasArtifacts ? uniqueCriteria(body) : body,
     );
     if (explicit.length) {
         return { ...task, acceptanceCriteria: explicit };
@@ -281,7 +281,7 @@ function ownArtifactLink(task: Task): RegExp | undefined {
         text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const [, owner, repo, number] = match;
     return new RegExp(
-        `https?://${escape(url.host)}/${escape(owner)}/${escape(repo)}/issues/${number}/artifacts/\\d+(?!\\d)`,
+        `(?<![^\\s(<\\[])https?://${escape(url.host)}/${escape(owner)}/${escape(repo)}/issues/${number}/artifacts/\\d+(?!\\d)`,
         'i',
     );
 }
@@ -345,8 +345,9 @@ function withoutOwnLinks(line: string, own: RegExp): string {
             at = close + 1;
             continue;
         }
-        const link = line.slice(open, end + 1);
-        out += line.slice(at, open) + (own.test(link) ? ' ' : link);
+        const start = line.lastIndexOf('[', close);
+        const link = line.slice(start, end + 1);
+        out += line.slice(at, start) + (own.test(link) ? ' ' : link);
         at = end + 1;
     }
     out += line.slice(at);
@@ -380,7 +381,13 @@ function sectionUnder(
     const lines = description.split('\n');
     const wanted = normalize(heading);
     const start = lines.findIndex((line) => {
-        const match = line.match(/^\s*(?:#{1,6}\s+|\*\*)?(.+?)(?:\*\*)?:?\s*$/);
+        // A quoted line is document text, never the configured heading.
+        if (/^\s*>/.test(line)) {
+            return false;
+        }
+        const match = line
+            .trim()
+            .match(/^(?:#{1,6}\s+|\*\*)?(.+?)(?:\*\*)?:?$/);
         return match ? normalize(match[1]) === wanted : false;
     });
     if (start < 0) {
