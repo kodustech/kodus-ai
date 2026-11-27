@@ -243,6 +243,35 @@ describe("Environment page", () => {
         ).toBeTruthy();
     });
 
+    // Behavior: a blocker the API reports as fixed is not shown as a problem with a fix button; it is listed under Resolved.
+    it("ready: a blocker a later setup cleared is listed as resolved, not as an open blocker", () => {
+        mockEnvironment.data = env({ state: "active" });
+        mockBlockers.data = [
+            {
+                signature: "boot_timeout",
+                kind: "resources",
+                title: "The app did not become ready in time",
+                count: 1,
+                lastAt: at,
+                state: "fixed",
+                resolvedAt: at,
+                fixes: [
+                    {
+                        id: "bump",
+                        action: "bump_machine",
+                        who: "dev",
+                        label: "Fix the recipe",
+                    },
+                ],
+            },
+        ];
+        render(<EnvironmentDetailPage environmentId="env-1" />);
+        const blockers = section("Blockers")!;
+        expect(blockers).toHaveTextContent("No open blocker");
+        expect(blockers).toHaveTextContent("Resolved (1)");
+        expect(blockers).not.toHaveTextContent("Seen fewer than 10 times");
+    });
+
     it("lists every repository of a system in its own section", () => {
         const repo = (
             id: string,

@@ -66,3 +66,41 @@ describe('the "approve this host" card of a PR boot the egress proxy stopped (D7
         expect(blockerGroups(null, [denied({ state: 'regression' })])).toEqual([]);
     });
 });
+
+describe('a blocker that a later success cleared', () => {
+    const setup = (patch: Record<string, unknown>) => ({ state: 'active', blockers: [], finishedAt: '2026-11-17T06:00:00.000Z', ...patch }) as unknown as Parameters<typeof blockerGroups>[0];
+    const timedOut = run({ runId: 'a', prNumber: 6, reason: 'resources:boot_timeout', requestedAt: '2026-11-17T00:00:00.000Z', finishedAt: '2026-11-17T00:10:00.000Z' });
+
+    // Behavior: the environment's latest setup finished active after the blocker was last seen, so the blocker is reported fixed, with the moment.
+    it('is fixed when the latest setup finished active after its last sighting', () => {
+        const [g] = blockerGroups(setup({}), [timedOut]);
+        expect(g).toMatchObject({ signature: 'boot_timeout', state: 'fixed', resolvedAt: '2026-11-17T06:00:00.000Z' });
+    });
+
+    // Behavior: a setup that did not succeed clears nothing.
+    it('stays open when the latest setup did not finish active', () => {
+        const [g] = blockerGroups(setup({ state: 'blocked' }), [timedOut]);
+        expect(g.state).toBe('open');
+    });
+
+    // Behavior: a blocker seen after the successful setup is the current problem.
+    it('stays open when it was seen after the successful setup', () => {
+        const [g] = blockerGroups(setup({ finishedAt: '2026-11-16T23:00:00.000Z' }), [timedOut]);
+        expect(g.state).toBe('open');
+    });
+
+    // Behavior: a later Run of the same pull request that booted clears that pull request's blocker; another pull request's Run does not.
+    it('is fixed by a later booted Run of the same pull request only', () => {
+        const same = run({ runId: 'b', prNumber: 6, state: 'no_regressions', requestedAt: '2026-11-17T01:00:00.000Z', finishedAt: '2026-11-17T01:10:00.000Z' });
+        const other = run({ runId: 'c', prNumber: 7, state: 'no_regressions', requestedAt: '2026-11-17T01:00:00.000Z', finishedAt: '2026-11-17T01:10:00.000Z' });
+        expect(blockerGroups(null, [timedOut, same])[0]).toMatchObject({ state: 'fixed', resolvedAt: '2026-11-17T01:00:00.000Z' });
+        expect(blockerGroups(null, [timedOut, other])[0].state).toBe('open');
+    });
+
+    // Behavior: the open blockers come before the fixed ones, whatever their counts.
+    it('lists the open blockers before the fixed ones', () => {
+        const newer = run({ runId: 'n', prNumber: 8, reason: 'missing_env:API_KEY', requestedAt: '2026-11-17T07:00:00.000Z', finishedAt: '2026-11-17T07:10:00.000Z' });
+        const groups = blockerGroups(setup({}), [timedOut, { ...timedOut, runId: 'a2' }, newer]);
+        expect(groups.map((g) => [g.signature, g.state])).toEqual([['API_KEY', 'open'], ['boot_timeout', 'fixed']]);
+    });
+});

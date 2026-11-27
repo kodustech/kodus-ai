@@ -165,7 +165,9 @@ export interface RuntimeBlockerGroupView {
     count: number;
     lastAt?: string;
     lastPr?: number;
-    state: 'open';
+    /** `fixed`: a later successful setup (or a later booted Run of the same pull request) cleared it; `resolvedAt` is that moment (environment-blockers.ts). */
+    state: 'open' | 'fixed';
+    resolvedAt?: string;
     evidence?: BlockerEvidence;
     /** What Kody's learn loop already tried on this signature, in order, each with how it ended (docs §5 Blocker.tried); absent: nothing yet. */
     tried?: string[];

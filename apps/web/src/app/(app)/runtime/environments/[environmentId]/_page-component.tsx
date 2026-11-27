@@ -91,7 +91,10 @@ const BlockersSummary = ({
         () => groupBlockersBySignature(blockers.data ?? []),
         [blockers.data],
     );
-    const { frequent, occasional } = splitBlockersByFrequency(groups);
+    // A blocker a later setup or Run cleared (the API marks it `fixed`) is history, not what to fix now.
+    const open = groups.filter((g) => g.state !== "fixed");
+    const fixed = groups.filter((g) => g.state === "fixed");
+    const { frequent, occasional } = splitBlockersByFrequency(open);
     // Nothing to fix and nothing pointing here: no section.
     if (!blocked && !blockers.isLoading && !blockers.isError && !groups.length)
         return null;
@@ -122,6 +125,12 @@ const BlockersSummary = ({
                 </p>
             ) : (
                 <div className="flex flex-col gap-4">
+                    {open.length === 0 ? (
+                        <p className="text-text-secondary text-sm">
+                            No open blocker. What stopped the app before was
+                            cleared by a later setup or Run.
+                        </p>
+                    ) : null}
                     {(
                         [
                             ["Seen 10+ times", frequent],
@@ -147,6 +156,29 @@ const BlockersSummary = ({
                             </div>
                         ) : null,
                     )}
+                    {fixed.length ? (
+                        <RuntimeDisclosure
+                            title={`Resolved (${fixed.length})`}
+                            summary="Seen before a later setup or Run succeeded">
+                            <ul className="flex flex-col gap-2">
+                                {fixed.map((g) => (
+                                    <li
+                                        key={g.signature}
+                                        className="text-text-secondary text-sm">
+                                        <span className="text-text-primary">
+                                            {g.title ?? g.signature}
+                                        </span>
+                                        {g.lastAt
+                                            ? `, last seen ${new Date(g.lastAt).toLocaleString()}`
+                                            : ""}
+                                        {g.resolvedAt
+                                            ? `, cleared ${new Date(g.resolvedAt).toLocaleString()}`
+                                            : ""}
+                                    </li>
+                                ))}
+                            </ul>
+                        </RuntimeDisclosure>
+                    ) : null}
                 </div>
             )}
         </RuntimeSection>

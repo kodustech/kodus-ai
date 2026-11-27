@@ -69,7 +69,7 @@ export function blockerGroups(
             kind: c.kind,
             title: c.title,
             count: 0,
-            state: 'open' as const,
+            state: 'open' as 'open' | 'fixed',
             evidence: options.fullEvidence ? fullEvidenceOf(input, c) : c.evidence,
             fixes: c.fixes.map((f) => fixView(f, recipe)),
             recipeChanges: new Map(c.fixes.filter((f) => f.recipeChange).map((f) => [f.id, f.recipeChange])),
@@ -124,6 +124,21 @@ export function blockerGroups(
         const at = r.bootFailure!.at;
         add(deniedHostsBlockerInput(hosts, at), at, r.prNumber);
     }
+    // A blocker is fixed once something that boots the environment succeeded after its last sighting: the latest setup that
+    // finished active (it boots the default branch with the recipe as it is now), or, for a blocker of one pull request, a
+    // later Run of that same pull request that booted. A security_violation is never cleared by a success: it is a verdict
+    // about code, not about the environment's boot. Decided from the records the view already reads.
+    const setupOkAt = setup?.state === 'active' ? setup.finishedAt : undefined;
+    const before = (a: string | undefined, b: string | undefined) => !!a && !!b && Date.parse(a) < Date.parse(b);
+    for (const g of groups.values()) {
+        if (g.kind === 'security_violation' || !g.lastAt) continue;
+        const sameRunBootedAt = g.lastPr === undefined ? undefined : runs.filter((x) => x.prNumber === g.lastPr && BOOTED_STATES.has(x.state) && before(g.lastAt, x.requestedAt)).map((x) => x.requestedAt!).sort().at(-1);
+        const clearedAt = [before(g.lastAt, setupOkAt) ? setupOkAt : undefined, sameRunBootedAt].filter((x): x is string => !!x).sort().at(-1);
+        if (clearedAt) {
+            g.state = 'fixed';
+            g.resolvedAt = clearedAt;
+        }
+    }
     // What worked before comes first (ADR-018); the catalog's order stays among the rest.
     if (memory?.lessons.length) {
         for (const g of groups.values()) {
@@ -140,7 +155,8 @@ export function blockerGroups(
         const tried = triedOn(setup?.learn, g.signature);
         if (tried.length) g.tried = tried;
     }
-    return [...groups.values()].sort((a, b) => b.count - a.count);
+    // The open ones first, each by how often it was seen.
+    return [...groups.values()].sort((a, b) => Number(a.state === 'fixed') - Number(b.state === 'fixed') || b.count - a.count);
 }
 
 /** Why Kodus did not try a hypothesis Kody sent, in the dev's words (EnvironmentLearnAttempt.refusal). */
