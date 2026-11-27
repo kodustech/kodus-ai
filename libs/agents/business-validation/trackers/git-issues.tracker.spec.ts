@@ -1067,6 +1067,21 @@ describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
         const keep = 'Keep the form accessible';
         const fast = 'Keep the form fast';
 
+        const expectCriteria = async (
+            text: string,
+            withIntact: string[] | undefined,
+            withClipped: string[] | undefined,
+        ) => {
+            const read1 = await criteria(
+                issue({ body: text, artifacts: [intact] }),
+            );
+            const read2 = await criteria(
+                issue({ body: text, artifacts: [clipped] }),
+            );
+            expect(read1.graded.acceptanceCriteria).toEqual(withIntact);
+            expect(read2.graded.acceptanceCriteria).toEqual(withClipped);
+        };
+
         it.each([
             [
                 'labelled items',
@@ -1086,25 +1101,26 @@ describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
                 [ac1, keep, art],
                 [ac1, keep],
             ],
-            ['a single labelled item', `- ${ac1}`, [ac1, art], undefined],
             [
                 'a reference line and an item',
                 `- See the spec: [artifact #1](${own}/1)\n- ${keep}`,
                 [keep, art],
                 [keep],
             ],
-            ['a single unlabelled item', `- ${keep}`, [art], undefined],
         ])(
             'never drops a body criterion of %s because of an artifact',
             async (_label, text, withIntact, withClipped) => {
-                const read1 = await criteria(
-                    issue({ body: text, artifacts: [intact] }),
-                );
-                const read2 = await criteria(
-                    issue({ body: text, artifacts: [clipped] }),
-                );
-                expect(read1.graded.acceptanceCriteria).toEqual(withIntact);
-                expect(read2.graded.acceptanceCriteria).toEqual(withClipped);
+                await expectCriteria(text, withIntact, withClipped);
+            },
+        );
+
+        it.each([
+            ['a single labelled item', `- ${ac1}`, [ac1, art], undefined],
+            ['a single unlabelled item', `- ${keep}`, [art], undefined],
+        ])(
+            'reads a single bullet of the body as upstream does (%s): it is not a list on its own',
+            async (_label, text, withIntact, withClipped) => {
+                await expectCriteria(text, withIntact, withClipped);
             },
         );
     });
