@@ -8,6 +8,8 @@ export const KODY_RULE_DETECTOR_COMPILER_TOKEN = Symbol(
     'KODY_RULE_DETECTOR_COMPILER',
 );
 
+export const DETECTOR_INPUT_FIELDS = ['title', 'rule', 'examples'] as const;
+
 /** Compiles a rule into a gated T0 detector and persists it (#1449). */
 export interface IKodyRuleDetectorCompiler {
     /**

@@ -942,6 +942,82 @@ describe('CommentManagerService GitLab status note reuse (#1721)', () => {
     });
 });
 
+/**
+ * QA M11 on #2671: a rename-only PR got two findings posted at PR level and
+ * no line comment, then the end-of-review comment was edited to "No issues
+ * were found". updateOverallComment never looked at the PR-level results.
+ */
+describe('CommentManagerService.updateOverallComment — PR-level findings', () => {
+    const updateIssueComment = jest.fn().mockResolvedValue({ id: 1 });
+    const service = new CommentManagerService(
+        {} as any,
+        { processTemplate: async () => '' } as any,
+        {} as any,
+        {} as any,
+        { updateIssueComment } as any,
+        {} as any,
+    );
+    const prLevel = (deliveryStatus: string) => ({
+        comment: { type: 'pr_level', suggestion: { id: 's-1' } },
+        deliveryStatus,
+    });
+    const update = (
+        lineComments: any[],
+        prLevelCommentResults: any[],
+        finalCommentBody?: string,
+    ) =>
+        service.updateOverallComment(
+            { organizationId: 'org', teamId: 'team' } as any,
+            13,
+            { id: 'repo-1', name: 'repo' },
+            1,
+            1,
+            PlatformType.GITHUB,
+            lineComments,
+            { languageResultPrompt: LanguageValue.ENGLISH } as any,
+            undefined,
+            finalCommentBody,
+            false,
+            undefined,
+            false,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            undefined,
+            undefined,
+            prLevelCommentResults,
+        );
+    const postedBody = () => updateIssueComment.mock.calls.at(-1)[0].body;
+
+    beforeEach(() => updateIssueComment.mockClear());
+
+    it('does not call a PR with only PR-level findings clean', async () => {
+        await update([], [prLevel('sent'), prLevel('sent')]);
+
+        expect(postedBody()).not.toContain('No issues were found');
+        expect(postedBody()).toContain('Code Review Completed');
+    });
+
+    it('still says no issues when nothing was found at all', async () => {
+        await update([], []);
+
+        expect(postedBody()).toContain('No issues were found');
+    });
+
+    // A team's end-review template is replaced only when no comment reached
+    // the PR; a PR-level comment that did is a delivered comment.
+    it("keeps the team's template when only the PR-level comments were posted", async () => {
+        await update(
+            [{ comment: {}, deliveryStatus: 'failed' }],
+            [prLevel('sent')],
+            'Team template',
+        );
+
+        expect(postedBody()).toBe('Team template');
+    });
+});
+
 // repeatedCodeReviewSuggestionClustering was migrated from the legacy
 // STRING/JSON PromptRunner onto runStructuredReviewCall (REQ-NOLC-01). The
 // structured result is JSON.stringify'd and fed through LLMResponseProcessor

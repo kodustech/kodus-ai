@@ -1093,6 +1093,382 @@ describe('CentralizedConfigService', () => {
                 mockPullRequestMessagesService.delete,
             ).not.toHaveBeenCalled();
         });
+
+        /**
+         * Sync ignores the previous database row and deletes a key the file
+         * does not contain. Rejecting a non-boolean must not take a stored
+         * opt-out with it. Omitting the key still deletes it.
+         */
+        describe('rejected conversation.implicitReplies', () => {
+            const repoFile: IConfigFileMeta[] = [
+                {
+                    repositoryId: 'repo-1',
+                    centralizedDirectoryPath: 'repo1',
+                },
+            ];
+
+            function mockStored(configValue: Record<string, unknown>) {
+                mockParametersService.findByKey.mockImplementation(
+                    (key: string) => {
+                        if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                            return Promise.resolve({
+                                configValue: {
+                                    enabled: true,
+                                    repository: {
+                                        id: 'c-1',
+                                        name: 'centralized',
+                                    },
+                                },
+                            });
+                        }
+                        if (key === ParametersKey.CODE_REVIEW_CONFIG) {
+                            return Promise.resolve({ configValue });
+                        }
+                        return Promise.resolve({ configValue: {} });
+                    },
+                );
+            }
+
+            function savedConfig() {
+                return mockUpdateOrCreateCodeReviewParameterUseCase.execute.mock
+                    .calls[0][0].configValue;
+            }
+
+            it('keeps the stored repository opt-out when the file value is rejected', async () => {
+                mockStored({
+                    configs: {},
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {
+                                conversation: { implicitReplies: false },
+                            },
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+                    async (params: {
+                        onRejectedImplicitReplies?: () => void;
+                    }) => {
+                        params.onRejectedImplicitReplies?.();
+                        return {
+                            automatedReviewActive: false,
+                            conversation: {},
+                        };
+                    },
+                );
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: repoFile,
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                    conversation: { implicitReplies: false },
+                });
+            });
+
+            it('still deletes the opt-out when the file omits the key', async () => {
+                mockStored({
+                    configs: {},
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {
+                                conversation: { implicitReplies: false },
+                            },
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                    automatedReviewActive: false,
+                });
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: repoFile,
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                });
+            });
+
+            it('does not copy a stored non-boolean', async () => {
+                mockStored({
+                    configs: {},
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {
+                                conversation: { implicitReplies: 'false' },
+                            },
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+                    async (params: {
+                        onRejectedImplicitReplies?: () => void;
+                    }) => {
+                        params.onRejectedImplicitReplies?.();
+                        return {
+                            automatedReviewActive: false,
+                            conversation: {},
+                        };
+                    },
+                );
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: repoFile,
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                    conversation: {},
+                });
+            });
+
+            it('keeps the opt-out when the directory group has the same paths', async () => {
+                mockStored({
+                    configs: { conversation: { implicitReplies: true } },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {
+                                conversation: { implicitReplies: true },
+                            },
+                            directories: [
+                                {
+                                    id: 'dir-1',
+                                    folders: [
+                                        { id: 'f1', name: 'src', path: '/src' },
+                                        { id: 'f2', name: 'lib', path: '/lib' },
+                                    ],
+                                    configs: {
+                                        conversation: {
+                                            implicitReplies: false,
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+                    async (params: {
+                        onRejectedImplicitReplies?: () => void;
+                    }) => {
+                        params.onRejectedImplicitReplies?.();
+                        return {
+                            automatedReviewActive: false,
+                            conversation: {},
+                        };
+                    },
+                );
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: [
+                        {
+                            repositoryId: 'repo-1',
+                            centralizedDirectoryPath: 'repo1/src',
+                            directoryPaths: ['/src', '/lib'],
+                        },
+                    ],
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                    conversation: { implicitReplies: false },
+                });
+            });
+
+            it('does not invent a value when matching directories disagree', async () => {
+                mockStored({
+                    configs: {},
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {
+                                conversation: { implicitReplies: false },
+                            },
+                            directories: [
+                                {
+                                    id: 'dir-1',
+                                    folders: [
+                                        { id: 'f1', name: 'src', path: '/src' },
+                                    ],
+                                    configs: {
+                                        conversation: {
+                                            implicitReplies: false,
+                                        },
+                                    },
+                                },
+                                {
+                                    id: 'dir-2',
+                                    folders: [
+                                        { id: 'f2', name: 'lib', path: '/lib' },
+                                    ],
+                                    configs: {
+                                        conversation: { implicitReplies: true },
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+                    async (params: {
+                        onRejectedImplicitReplies?: () => void;
+                    }) => {
+                        params.onRejectedImplicitReplies?.();
+                        return {
+                            automatedReviewActive: false,
+                            conversation: {},
+                        };
+                    },
+                );
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: [
+                        {
+                            repositoryId: 'repo-1',
+                            centralizedDirectoryPath: 'repo1/src',
+                            directoryPaths: ['/src', '/lib'],
+                        },
+                    ],
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                    conversation: {},
+                });
+            });
+
+            it('does not copy a smaller group onto paths the file adds', async () => {
+                mockStored({
+                    configs: {},
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {},
+                            directories: [
+                                {
+                                    id: 'dir-1',
+                                    folders: [
+                                        { id: 'f1', name: 'src', path: '/src' },
+                                    ],
+                                    configs: {
+                                        conversation: {
+                                            implicitReplies: false,
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+                    async (params: {
+                        onRejectedImplicitReplies?: () => void;
+                    }) => {
+                        params.onRejectedImplicitReplies?.();
+                        return {
+                            automatedReviewActive: false,
+                            conversation: {},
+                        };
+                    },
+                );
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: [
+                        {
+                            repositoryId: 'repo-1',
+                            centralizedDirectoryPath: 'repo1/src',
+                            directoryPaths: ['/src', '/lib'],
+                        },
+                    ],
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                    conversation: {},
+                });
+            });
+
+            it('uses the group whose paths equal the file, not one that overlaps', async () => {
+                mockStored({
+                    configs: {},
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: {},
+                            directories: [
+                                {
+                                    id: 'dir-1',
+                                    folders: [
+                                        { id: 'f1', name: 'src', path: '/src' },
+                                    ],
+                                    configs: {
+                                        conversation: {
+                                            implicitReplies: false,
+                                        },
+                                    },
+                                },
+                                {
+                                    id: 'dir-2',
+                                    folders: [
+                                        { id: 'f2', name: 'src', path: '/src' },
+                                        { id: 'f3', name: 'lib', path: '/lib' },
+                                    ],
+                                    configs: {
+                                        conversation: { implicitReplies: true },
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                });
+                mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+                    async (params: {
+                        onRejectedImplicitReplies?: () => void;
+                    }) => {
+                        params.onRejectedImplicitReplies?.();
+                        return {
+                            automatedReviewActive: false,
+                            conversation: {},
+                        };
+                    },
+                );
+
+                await service.synchronizeConfigs({
+                    organizationAndTeamData,
+                    configFiles: [
+                        {
+                            repositoryId: 'repo-1',
+                            centralizedDirectoryPath: 'repo1/src',
+                            directoryPaths: ['/src', '/lib'],
+                        },
+                    ],
+                    actor,
+                });
+
+                expect(savedConfig()).toEqual({
+                    automatedReviewActive: false,
+                    conversation: { implicitReplies: true },
+                });
+            });
+        });
     });
 
     // Backfill for the four methods that had no direct unit test — the gap

@@ -92,6 +92,7 @@ describe('KodyRuleDetectorCompilerService.compileAndSave (#1449 T0)', () => {
             org.organizationId,
             'r1',
             null,
+            { ...mechanicalRule, detector: { type: 'regex', pattern: 'old' } },
         );
     });
 
@@ -315,6 +316,7 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
             org.organizationId,
             'r1',
             null,
+            { ...gatedRule, detector: { type: 'regex', pattern: 'old' } },
         );
     });
 });

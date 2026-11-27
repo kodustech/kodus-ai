@@ -438,6 +438,10 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
         );
     });
 
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
     it('records the auto-pause and keeps it out of the plan lock', async () => {
         const stored = withRule({});
 
@@ -486,49 +490,48 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
             .fn()
             .mockResolvedValue(false);
 
-        await svc.createOrUpdate(
+        const saved = await svc.createOrUpdate(
             ORG,
             { ...stored, status: KodyRulesStatus.ACTIVE } as any,
             SYSTEM,
         );
 
-        const patch = patchSent();
-        expect(patch.status).toBe(KodyRulesStatus.PAUSED);
-        expect(patch.lockedByPlan).toBe(true);
-        expect(patch.autoPause).toEqual(autoPause);
-        expect(patch.resumedAt).toBeUndefined();
+        expect(saved.status).toBe(KodyRulesStatus.PAUSED);
+        expect(saved.lockedByPlan).toBe(true);
+        expect(saved.autoPause).toEqual(autoPause);
+        expect(saved.resumedAt).toBeUndefined();
     });
 
     it('resuming a rule paused by hand stamps resumedAt and leaves lastAutoPause alone', async () => {
-        const previous = { ...autoPause, digestedAt: new Date() };
+        const resumedAt = new Date('2026-11-18T12:00:00Z');
+        jest.useFakeTimers({ now: resumedAt });
+        const previous = { ...autoPause, digestedAt: autoPause.windowEnd };
         const stored = withRule({
             status: KodyRulesStatus.PAUSED,
             lastAutoPause: previous,
         });
 
-        await svc.createOrUpdate(
+        const saved = await svc.createOrUpdate(
             ORG,
             { ...stored, status: KodyRulesStatus.ACTIVE } as any,
             SYSTEM,
         );
 
-        const patch = patchSent();
-        expect(patch.resumedAt).toBeInstanceOf(Date);
-        expect(patch.lastAutoPause).toEqual(previous);
+        expect(saved.resumedAt).toEqual(resumedAt);
+        expect(saved.lastAutoPause).toEqual(previous);
     });
 
     it('an edit that does not change the status keeps the auto-pause', async () => {
         withRule({ status: KodyRulesStatus.PAUSED, autoPause });
 
-        await svc.createOrUpdate(
+        const saved = await svc.createOrUpdate(
             ORG,
             { uuid: 'r1', title: 'Renamed' } as any,
             SYSTEM,
         );
 
-        const patch = patchSent();
-        expect(patch.autoPause).toEqual(autoPause);
-        expect(patch.resumedAt).toBeUndefined();
+        expect(saved.autoPause).toEqual(autoPause);
+        expect(saved.resumedAt).toBeUndefined();
     });
 });
 

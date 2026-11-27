@@ -43,6 +43,7 @@ import {
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
     auditWriteTools,
+    performedWrites,
     writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
@@ -52,6 +53,7 @@ import {
 } from './write-authorization';
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
+import { DecisionLoopPolicy } from './decision-loop.policy';
 import { conversationCompression } from './conversation-window';
 import {
     buildSystemPrompt,
@@ -263,7 +265,10 @@ export class ConversationAgentProvider {
             resultToolName: CONVERSATION_DECISION_TOOL,
             policies: [
                 new WriteGatePolicy(prompt, writeAuthorization),
-                new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
+                // Only writes that reached the tool and returned: a refused
+                // call never reaches the audit, a failed one carries `error`.
+                new WriteTruthPolicy(() => performedWrites(writes)),
+                new DecisionLoopPolicy(),
                 // A PR diff a tool read is re-sent on every step: without
                 // this, one large PR overflowed the model's window (#2233).
                 await conversationCompression({

@@ -402,7 +402,7 @@ async function teamStore({ language, memories = [], rules = [], codeReviewConfig
  * listing and reads the review does there (the coding-agent instructions a case
  * gives); without it that branch lists nothing.
  */
-function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}, filesSinceLastReview }) {
+function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}, filesSinceLastReview, reviewThreads }) {
     const onTarget = (ref) => ref === baseRef;
     return {
         // A read on the target branch answers from targetBranchFiles; any other
@@ -422,6 +422,14 @@ function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}
         getFilesByPullRequestId: async () => prFiles,
         ...(filesSinceLastReview ? { getChangedFilesSinceLastCommit: filesSinceLastReview } : {}),
         getCommitsForPullRequestForCodeReview: async () => prCommits,
+        // The PR's review threads as the host returns them, read through the
+        // providers' shared helper; only when the case gives them.
+        ...(reviewThreads
+            ? {
+                  getAnsweredReviewThreadRootIds: async () =>
+                      require('../../libs/common/utils/codeManagement/answered-review-threads.ts').answeredThreadRootIds(reviewThreads),
+              }
+            : {}),
         // Only when the case gives the target branch files: a review that lists
         // nothing there behaves as before this listing existed.
         ...(Object.keys(targetBranchFiles).length
@@ -658,6 +666,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             content: (file) => contentAt(repo.cloneUrl, repo.head, file),
             targetBranchFiles: pr.targetBranchFiles,
             filesSinceLastReview: repo.lastReviewed && (({ lastCommit }) => pullRequestFiles(repo.cloneUrl, lastCommit.sha, repo.branch)),
+            reviewThreads: pr.reviewThreads,
         });
         const codeReviewConfig = await routedTeamConfig({
             team,

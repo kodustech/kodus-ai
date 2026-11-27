@@ -1,7 +1,37 @@
 import { createHash } from 'crypto';
+import type { IKodyRuleCompileAttempt } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { isCosmeticRule } from './is-cosmetic-rule';
+
+type CompileInput = { rule?: string; examples?: unknown[] };
+type AttemptedRule = CompileInput & {
+    title?: string;
+    detector?: unknown;
+    compileAttempt?: Partial<IKodyRuleCompileAttempt>;
+};
+
+function needsCosmeticRecheck(rule: AttemptedRule): boolean {
+    // Older gates declined any mention of formatting. Revisit an unexplained
+    // decline once. A completed model recheck settles it for subsequent saves.
+    return (
+        rule.compileAttempt?.declineReason === 'cosmetic' &&
+        rule.compileAttempt.cosmeticSource !== 'model' &&
+        !isCosmeticRule(rule)
+    );
+}
+
+function hashCompileInput(
+    rule: CompileInput,
+    exampleFields?: string[],
+): string {
+    const examples = JSON.stringify(rule?.examples ?? [], exampleFields);
+    return createHash('sha256')
+        .update(`${rule?.rule ?? ''} ${examples}`)
+        .digest('hex');
+}
 
 /**
- * The fingerprint of everything the detector compiler's DECISION depends on.
+ * The compiler's fingerprint for rule text and examples. A rename that
+ * changes cosmetic eligibility invalidates the stored attempt on save.
  *
  * Why this exists (and why it is not just the rule text): the nightly sweep
  * decided what to compile by asking "does this rule have a detector yet?", and
@@ -17,17 +47,28 @@ import { createHash } from 'crypto';
  *
  * It covers the rule text AND the examples because the examples are the compile
  * gate: the same text with a different `incorrect` snippet can flip a rule from
- * compiled to declined. Same shape as `atomsHashOf` in the summary service, and
- * for the same reason — deliberately identical so the two cannot drift into
- * disagreeing about what "this rule changed" means.
+ * compiled to declined. Use the web DTO's field order for every example so an
+ * equivalent CLI payload also matches attempts already stored by web saves.
  */
-export function ruleCompileHash(rule: {
-    rule?: string;
-    examples?: unknown[];
-}): string {
-    return createHash('sha256')
-        .update(`${rule?.rule ?? ''} ${JSON.stringify(rule?.examples ?? [])}`)
-        .digest('hex');
+export function ruleCompileHash(rule: CompileInput): string {
+    return hashCompileInput(rule, ['snippet', 'isCorrect']);
+}
+
+function attemptMatchesInput(rule: AttemptedRule): boolean {
+    const stored = rule?.compileAttempt?.sourceHash;
+    // Older CLI attempts used the field order persisted on that rule.
+    return (
+        !!stored &&
+        (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
+    );
+}
+
+export function wasDeclinedByLegacyCosmeticGate(rule: AttemptedRule): boolean {
+    return (
+        rule.compileAttempt?.declineReason === 'cosmetic' &&
+        !rule.compileAttempt.cosmeticSource &&
+        attemptMatchesInput(rule)
+    );
 }
 
 /**
@@ -37,13 +78,12 @@ export function ruleCompileHash(rule: {
  * A rule whose attempt ERRORED is not recorded at all (see the compiler
  * service), so a transient failure never freezes a rule out of compilation.
  */
-export function compileAttemptIsCurrent(rule: {
-    rule?: string;
-    examples?: unknown[];
-    compileAttempt?: { sourceHash?: string };
-}): boolean {
-    const stored = rule?.compileAttempt?.sourceHash;
-    return !!stored && stored === ruleCompileHash(rule);
+export function compileAttemptIsCurrent(rule: AttemptedRule): boolean {
+    return (
+        attemptMatchesInput(rule) &&
+        !(rule.detector && isCosmeticRule(rule)) &&
+        !needsCosmeticRecheck(rule)
+    );
 }
 
 /**
@@ -99,12 +139,22 @@ export function ruleContextNeedHash(rule: { rule?: string }): string {
  * An `author` need is current by definition: the rule's owner outranks the
  * classifier, and a prompt version has no business overriding a human.
  */
-export function contextNeedIsCurrent(rule: {
-    rule?: string;
-    contextNeed?: { sourceHash?: string; source?: string };
-}): boolean {
+export function contextNeedIsCurrent(
+    rule: AttemptedRule & {
+        contextNeed?: { sourceHash?: string; source?: string; need?: string };
+    },
+): boolean {
     const stored = rule?.contextNeed;
     if (!stored) return false;
     if (stored.source === 'author') return true;
-    return !!stored.sourceHash && stored.sourceHash === ruleContextNeedHash(rule);
+    // A local decline used to store diff-only without consulting the model.
+    if (
+        stored.need === 'diff-only' &&
+        rule.compileAttempt?.declineReason === 'cosmetic' &&
+        !rule.compileAttempt.cosmeticSource
+    )
+        return false;
+    return (
+        !!stored.sourceHash && stored.sourceHash === ruleContextNeedHash(rule)
+    );
 }

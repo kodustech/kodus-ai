@@ -3,6 +3,8 @@ import {
     InternalServerErrorException,
 } from '@nestjs/common';
 
+import { GatewayAddressRefusedError } from '@libs/llm/gateway-address-guard';
+
 import { GithubService } from './github.service';
 import {
     githubUserAuthorizationUrl,
@@ -307,9 +309,10 @@ describe('GitHub installation linking', () => {
 
             const thrown = await link(svc).catch((e) => e);
 
-            expect(thrown).toBeInstanceOf(BadRequestException);
-            expect(thrown.message).toBe(original.message);
-            expect(thrown.cause).toBe(original);
+            // Not a 400 carrying the raw message: the exception filter
+            // answers 500 with its own words and reports it.
+            expect(thrown).toBe(original);
+            expect(svc.logger.error).toHaveBeenCalledTimes(1);
             expect(svc.logger.error).toHaveBeenCalledWith(
                 expect.objectContaining({
                     message: 'GitHub App installation link failed',
@@ -357,6 +360,65 @@ describe('GitHub installation linking', () => {
             },
         );
 
+        it('refuses in words when GitHub denies the App a token for the installation', async () => {
+            const { svc, appAuth } = setup({});
+            const denied = Object.assign(new Error('Not Found'), {
+                status: 404,
+                request: { url: '/app/installations/4242/access_tokens' },
+            });
+            appAuth.mockImplementation(async (args: any) => {
+                if (args.type === 'oauth-user') return { token: 'ghu_user' };
+                throw denied;
+            });
+
+            const thrown = await link(svc).catch((e) => e);
+
+            expect(thrown).toBeInstanceOf(BadRequestException);
+            expect(thrown.message).toBe(
+                'GitHub could not find what the connection points at (404). Check the host, the organization and the installation.',
+            );
+            expect(thrown.cause).toBe(denied);
+            expect(svc.logger.error).not.toHaveBeenCalled();
+            expect(svc.logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'GitHub App installation link refused',
+                    metadata: expect.objectContaining({
+                        step: 'mint-installation-token',
+                        githubStatus: 404,
+                    }),
+                }),
+            );
+        });
+
+        it('treats a 401 to the App as a fault in Kodus credentials, not a refusal', async () => {
+            // The user gives no token here: GitHub refusing the App's JWT
+            // means a wrong private key or a skewed clock on our side.
+            const { svc, appAuth } = setup({});
+            const rejected = Object.assign(new Error('Bad credentials'), {
+                status: 401,
+                request: { url: '/app/installations/4242/access_tokens' },
+            });
+            appAuth.mockImplementation(async (args: any) => {
+                if (args.type === 'oauth-user') return { token: 'ghu_user' };
+                throw rejected;
+            });
+
+            const thrown = await link(svc).catch((e) => e);
+
+            expect(thrown).toBe(rejected);
+            expect(svc.logger.warn).not.toHaveBeenCalled();
+            expect(svc.logger.error).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'GitHub App installation link failed',
+                    error: rejected,
+                    metadata: expect.objectContaining({
+                        step: 'mint-installation-token',
+                        githubStatus: 401,
+                    }),
+                }),
+            );
+        });
+
         it('never logs GitHub authorization code or state', async () => {
             const { svc, appOctokit } = setup({});
             appOctokit.rest.apps.getInstallation.mockRejectedValue(
@@ -389,55 +451,190 @@ describe('GitHub installation linking', () => {
         });
     });
 
-    it("logs a failed link without the token or GitHub's code and state", async () => {
-        const svc: any = Object.create(GithubService.prototype);
-        const error = jest.fn();
-        svc.logger = { error };
-        svc.authenticateWithCodeOauth = jest
-            .fn()
-            .mockRejectedValue(new Error('GitHub refused'));
-        svc.authenticateWithToken = svc.authenticateWithCodeOauth;
+    describe('createAuthIntegration', () => {
+        const PAT = 'ghp_secret_pat';
+        const base = {
+            organizationAndTeamData: { organizationId: ORG, teamId: 't1' },
+        };
+        const service = () => {
+            const svc: any = Object.create(GithubService.prototype);
+            svc.logger = { warn: jest.fn(), error: jest.fn() };
+            return svc;
+        };
 
-        for (const authMode of ['oauth', 'token']) {
-            await expect(
-                svc.createAuthIntegration({
-                    authMode,
+        it('leaves an App link failure to the link, which already logged it', async () => {
+            const svc = service();
+            const fault = new TypeError(
+                "Cannot read properties of null (reading 'id')",
+            );
+            svc.authenticateWithCodeOauth = jest.fn().mockRejectedValue(fault);
+
+            const thrown = await svc
+                .createAuthIntegration({
+                    ...base,
+                    authMode: 'oauth',
                     code: INSTALLATION,
-                    token: 'ghp_secret_pat',
                     githubCode: 'gh-oauth-code',
                     githubState: 'sealed.state',
-                    organizationAndTeamData: {
-                        organizationId: ORG,
-                        teamId: 't1',
+                })
+                .catch((e: unknown) => e);
+
+            expect(thrown).toBe(fault);
+            expect(svc.logger.error).not.toHaveBeenCalled();
+            expect(svc.logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('passes a host 401 from an App link through without mapping it again', async () => {
+            const svc = service();
+            const rejected = Object.assign(new Error('Bad credentials'), {
+                status: 401,
+                request: {},
+            });
+            svc.authenticateWithCodeOauth = jest
+                .fn()
+                .mockRejectedValue(rejected);
+
+            await expect(
+                svc.createAuthIntegration({ ...base, authMode: 'oauth' }),
+            ).rejects.toBe(rejected);
+        });
+
+        it('keeps an App link refusal and its words', async () => {
+            const svc = service();
+            const refusal = new BadRequestException(
+                'This GitHub installation is already connected to another Kodus organization.',
+            );
+            svc.authenticateWithCodeOauth = jest
+                .fn()
+                .mockRejectedValue(refusal);
+
+            await expect(
+                svc.createAuthIntegration({ ...base, authMode: 'oauth' }),
+            ).rejects.toBe(refusal);
+        });
+
+        it('logs an unexpected PAT link failure once, without the PAT, and leaves the answer to the filter', async () => {
+            const svc = service();
+            const fault = new TypeError(
+                "Cannot read properties of undefined (reading 'login')",
+            );
+            svc.authenticateWithToken = jest.fn().mockRejectedValue(fault);
+
+            const thrown = await svc
+                .createAuthIntegration({
+                    ...base,
+                    authMode: 'token',
+                    token: PAT,
+                })
+                .catch((e: unknown) => e);
+
+            expect(thrown).toBe(fault);
+            expect(svc.logger.error).toHaveBeenCalledTimes(1);
+            expect(svc.logger.error.mock.calls[0][0]).toEqual(
+                expect.objectContaining({
+                    message: 'Failed to create GitHub integration',
+                    error: fault,
+                    metadata: {
+                        organizationAndTeamData: base.organizationAndTeamData,
+                        authMode: 'token',
+                        host: undefined,
                     },
                 }),
-            ).rejects.toBeInstanceOf(BadRequestException);
-        }
+            );
+            expect(JSON.stringify(svc.logger.error.mock.calls)).not.toContain(
+                PAT,
+            );
+        });
 
-        // The web sends an OAuth code in `code` when there is no
-        // installation id: it is not logged either.
-        await expect(
-            svc.createAuthIntegration({
-                authMode: 'oauth',
-                code: 'gh-oauth-code-in-code',
-                organizationAndTeamData: { organizationId: ORG, teamId: 't1' },
-            }),
-        ).rejects.toBeInstanceOf(BadRequestException);
+        it('refuses in words a host Kodus refuses to connect to', async () => {
+            const svc = service();
+            // octokit's shape: RequestError(500) -> fetch's TypeError -> the guard.
+            const refused = new GatewayAddressRefusedError(
+                'ghes.example.test',
+                '10.0.0.7',
+                'Git server',
+            );
+            const err = Object.assign(new Error('fetch failed'), {
+                status: 500,
+                request: { url: '/user' },
+                cause: Object.assign(new TypeError('fetch failed'), {
+                    cause: refused,
+                }),
+            });
+            svc.createUserOctokitClient = jest.fn().mockReturnValue({
+                rest: {
+                    users: {
+                        getAuthenticated: jest.fn().mockRejectedValue(err),
+                    },
+                },
+            });
 
-        const logged = JSON.stringify(
-            error.mock.calls.map(([e]) => e.metadata),
-        );
-        expect(logged).not.toContain('gh-oauth-code-in-code');
-        expect(logged).not.toContain('ghp_secret_pat');
-        // Only whether `code` looked like an installation id, never its value.
-        expect(error.mock.calls[2][0].metadata.hasInstallationId).toBe(false);
-        expect(logged).not.toContain('gh-oauth-code');
-        expect(logged).not.toContain('sealed.state');
-        expect(error.mock.calls[0][0].metadata).toEqual({
-            organizationAndTeamData: { organizationId: ORG, teamId: 't1' },
-            authMode: 'oauth',
-            host: undefined,
-            hasInstallationId: true,
+            const thrown = await svc
+                .createAuthIntegration({
+                    ...base,
+                    authMode: 'token',
+                    token: PAT,
+                })
+                .catch((e: unknown) => e);
+
+            expect(thrown).toBeInstanceOf(BadRequestException);
+            expect(thrown.message).toBe(refused.message);
+            expect(svc.logger.error).not.toHaveBeenCalled();
+            expect(svc.logger.warn.mock.calls).toEqual([
+                [
+                    {
+                        message: 'GitHub integration refused',
+                        context: 'GithubService',
+                        metadata: {
+                            organizationAndTeamData:
+                                base.organizationAndTeamData,
+                            authMode: 'token',
+                            host: undefined,
+                            reason: refused.message,
+                        },
+                    },
+                ],
+            ]);
+        });
+
+        it('refuses a PAT GitHub does not accept in words, logged as a warning', async () => {
+            const svc = service();
+            const bad = Object.assign(new Error('Bad credentials'), {
+                status: 401,
+                request: { url: '/user' },
+            });
+            svc.createUserOctokitClient = jest.fn().mockReturnValue({
+                rest: {
+                    users: {
+                        getAuthenticated: jest.fn().mockRejectedValue(bad),
+                    },
+                },
+            });
+
+            const thrown = await svc
+                .createAuthIntegration({
+                    ...base,
+                    authMode: 'token',
+                    token: PAT,
+                })
+                .catch((e: unknown) => e);
+
+            expect(thrown).toBeInstanceOf(BadRequestException);
+            expect(thrown.message).toBe(
+                'GitHub did not accept the credentials (401). Check the token and try again.',
+            );
+            expect(svc.logger.error).not.toHaveBeenCalled();
+            expect(svc.logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'GitHub integration refused',
+                    metadata: expect.objectContaining({
+                        reason: thrown.message,
+                    }),
+                }),
+            );
+            expect(JSON.stringify(svc.logger.warn.mock.calls)).not.toContain(
+                PAT,
+            );
         });
     });
 

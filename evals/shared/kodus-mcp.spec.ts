@@ -59,14 +59,14 @@ describe('kodus mcp — the org stack the conversation eval runs', () => {
         pr = writePullRequestRemote({ files: FILES, changed: ['src/b.ts'] });
         github = await startGithubRest({ pr, owner: OWNER, repository: REPOSITORY });
         kodus = await startKodusMcp();
-        for (const n of [1, 2, 3]) {
+        for (const n of [1, 2, 3, 4]) {
             kodus.addOrganization({
                 organizationAndTeamData: org(n),
                 language: 'en-US',
                 github: { host: github.host, owner: OWNER },
                 repository: REPOSITORY,
                 pullRequest: { number: pr.number, title: pr.message, status: 'open', repository: REPOSITORY, user: { id: 1, username: 'dev' }, files: [] },
-                rules: n === 3 ? [RULE] : [],
+                rules: n >= 3 ? [RULE] : [],
             });
         }
     }, 60_000);
@@ -121,5 +121,56 @@ describe('kodus mcp — the org stack the conversation eval runs', () => {
         await call(mcp, 'KODUS_UPDATE_KODY_RULE', { organizationId: org(3).organizationId, ruleId: RULE.uuid, kodyRule: { teamId: org(3).teamId, path: 'src/**/*.ts' } });
 
         expect(kodus.writtenBy(org(3).organizationId)).toMatchObject({ count: 1, created: [], updated: [expect.objectContaining({ uuid: RULE.uuid, path: 'src/**/*.ts' })] });
+    }, 30_000);
+
+    it('compiles a text edit through the eval MCP and reuses the stored detector on the next save', async () => {
+        const { LLM } = require('../../libs/llm/llm');
+        const {
+            KodyRuleDetectorCompilerService,
+        } = require('../../libs/ee/kodyRules/service/kody-rule-detector-compiler.service');
+        const llm = jest.spyOn(LLM, 'run').mockResolvedValue({
+            mechanical: true,
+            pattern: 'console[.]log',
+            extensions: ['.ts'],
+            contextNeed: 'full-file',
+        });
+        const compile = jest.spyOn(
+            KodyRuleDetectorCompilerService.prototype,
+            'compileAndSave',
+        );
+        try {
+            const { mcp } = await connect(org(4));
+            const args = {
+                ...org(4),
+                ruleId: RULE.uuid,
+                kodyRule: {
+                    rule: 'Use the application logger.',
+                    teamId: org(4).teamId,
+                    examples: [
+                        { snippet: 'console.log(x)', isCorrect: false },
+                        { snippet: 'logger.info(x)', isCorrect: true },
+                    ],
+                },
+            };
+            await call(mcp, 'KODUS_UPDATE_KODY_RULE', args);
+            expect(compile).toHaveBeenCalledTimes(1);
+            await compile.mock.results[0].value;
+            const { data: saved } = await call(
+                mcp,
+                'KODUS_UPDATE_KODY_RULE',
+                args,
+            );
+            expect(saved.detector?.pattern).toBe('console[.]log');
+            expect(saved.fileScope?.extensions).toStrictEqual(['.ts']);
+            expect(saved.contextNeed?.need).toBe('full-file');
+            expect(saved.compileAttempt?.outcome).toBe('compiled');
+
+            expect(compile).toHaveBeenCalledTimes(2);
+            expect((await compile.mock.results[1].value).skipped).toBe(true);
+            expect(llm).toHaveBeenCalledTimes(1);
+        } finally {
+            compile.mockRestore();
+            llm.mockRestore();
+        }
     }, 30_000);
 });

@@ -9,6 +9,14 @@ Kodus works with PostgreSQL behind a connection pooler such as PgBouncer, in
 locks and the event bridge between api and worker through PgBouncer 1.26 in
 transaction mode on every change.
 
+<Warning>
+Requires a Kodus self-hosted release later than 2.2.12. Version 2.2.12 and
+earlier ignore the direct connection, so migrations, LISTEN and the
+coordination locks go through the pooler and break in transaction mode.
+Check `IMAGE_TAG` (Docker Compose) or `imageTag` (Helm) before turning the
+pooler on.
+</Warning>
+
 This page covers what to configure on the pooler, the two connections Kodus
 uses, and how to check the result.
 
@@ -89,8 +97,10 @@ fills in the settings above for you.
 Setting the direct connection also moves Kodus's coordination locks from
 session locks to rows in the database. Pods still running without it do not
 see the new locks, so turn the pooler on with the old pods stopped: run
-`docker compose down` first, or scale the api, worker and webhooks
-Deployments to 0 before the `helm upgrade`.
+`docker compose down` first, or scale the api, worker, worker-analytics and
+webhooks Deployments to 0 before the `helm upgrade` and back up after it
+(to `autoscaling.minReplicas`, 2 by default): the HPA does not scale a
+Deployment up from 0.
 
 ### Docker Compose
 
@@ -214,9 +224,10 @@ checks, the `-rw` service of CloudNativePG, or a PgBouncer that follows the
 primary. Kodus writes from every component, so read replicas are not used.
 
 During a failover, queries in flight fail and the pools reconnect on the
-next request. Behind a pooler, coordination locks are rows in the database,
-so they survive a failover with the data; without one they are session locks,
-freed when the sessions to the old primary drop.
+next request. With the direct connection set, coordination locks are rows in
+the database, so they survive a failover with the data; without it (no pooler,
+or a session-mode pooler) they are session locks, freed when the sessions to
+the old primary drop.
 
 ## Check the setup
 

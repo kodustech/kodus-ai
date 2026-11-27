@@ -31,6 +31,7 @@ import {
     clampMessagesToBudget,
     compressMessages,
     estimateMessagesTokens,
+    withoutThinkingAfterFirstEdit,
     type MessageTokenCounts,
     COMPRESSION_THRESHOLD_RATIO,
     worstCaseTokenCounts,
@@ -70,12 +71,46 @@ export interface ContextWindowCompressorOptions {
     countAtWorstCase?: boolean;
 }
 
+/** Sizes of a window for the slow-count log: serialized characters. */
+function messageSizes(
+    messages: readonly ModelMessage[],
+    worstCase: boolean,
+): Record<string, unknown> {
+    let chars = 0;
+    let largestChars = 0;
+    let largestRole = '';
+    for (const m of messages) {
+        let size: number;
+        try {
+            size =
+                typeof m.content === 'string'
+                    ? m.content.length
+                    : (JSON.stringify(m.content)?.length ?? 0);
+        } catch {
+            size = 0;
+        }
+        chars += size;
+        if (size > largestChars) {
+            largestChars = size;
+            largestRole = m.role;
+        }
+    }
+    return {
+        messages: messages.length,
+        chars,
+        largestChars,
+        largestRole,
+        worstCase,
+    };
+}
+
 export class ContextWindowCompressor implements Compressor {
     private readonly overheadTokens: number;
     /** Token counts of this run's messages (see MessageTokenCounts). */
     private readonly tokenCounts: MessageTokenCounts;
     private readonly safetyMarginTokens: number;
     private readonly onlyWhenOverBudget: boolean;
+    private readonly countAtWorstCase: boolean;
 
     constructor(
         private readonly contextWindowTokens: number,
@@ -86,6 +121,7 @@ export class ContextWindowCompressor implements Compressor {
             ? worstCaseTokenCounts()
             : new Map();
         this.onlyWhenOverBudget = options.onlyWhenOverBudget === true;
+        this.countAtWorstCase = options.countAtWorstCase === true;
         this.safetyMarginTokens = Math.max(
             0,
             options.safetyMarginTokens ??
@@ -115,7 +151,9 @@ export class ContextWindowCompressor implements Compressor {
         const current = timeSync(
             'context compressor token count',
             () => estimateMessagesTokens(modelMsgs, this.tokenCounts),
-            () => ({ messages: modelMsgs.length }),
+            // Only built for a slow count: tells a huge head (one message)
+            // from a long history, which need different fixes.
+            () => messageSizes(modelMsgs, this.countAtWorstCase),
         );
         const usage = current + this.overheadTokens;
 
@@ -149,6 +187,10 @@ export class ContextWindowCompressor implements Compressor {
         if (after >= current && !overBudget) {
             return null;
         }
+
+        // Thinking blocks after the first edit no longer match their signed
+        // prefix; Anthropic rejects the whole request if they are replayed.
+        compressed = withoutThinkingAfterFirstEdit(modelMsgs, compressed);
 
         return {
             // Return content as-is: the truncation/eviction above already

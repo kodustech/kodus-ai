@@ -9,6 +9,7 @@ ignorePaths:
     - 'package.json'
     - '.env'
     - '**/*.json'
+    - 'evals/**/fixtures/**'
 baseBranches: []
 reviewOptions:
     security: true

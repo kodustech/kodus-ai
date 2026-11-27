@@ -9,6 +9,12 @@ Kodus は PgBouncer などのコネクションプーラー越しの PostgreSQL 
 Kodus の協調ロックと api・worker 間のイベントブリッジを、transaction モードの
 PgBouncer 1.26 経由で実行しています。
 
+<Warning>
+2.2.12 より後の Kodus セルフホストリリースが必要です。2.2.12 以前は直接接続を無視するため、
+マイグレーション、LISTEN、協調ロックがプーラーを経由し、transaction モードでは動作しません。
+プーラーを有効にする前に `IMAGE_TAG` (Docker Compose) または `imageTag` (Helm) を確認してください。
+</Warning>
+
 このページでは、プーラー側の設定、Kodus が使う 2 つの接続、結果の確認方法を説明します。
 
 ## 2 つの接続
@@ -86,8 +92,9 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 直接接続を設定すると、Kodus の協調ロックもセッションロックからデータベースの行に
 切り替わります。直接接続なしで動いている Pod は新しいロックを認識できないため、
 古い Pod を止めた状態でプーラーを有効にしてください。先に `docker compose down`
-を実行するか、`helm upgrade` の前に api・worker・webhooks の Deployment を 0 に
-スケールします。
+を実行するか、`helm upgrade` の前に api・worker・worker-analytics・webhooks の Deployment を 0 に
+スケールし、アップグレード後に元に戻します (`autoscaling.minReplicas`、デフォルトは 2)。
+HPA は 0 の Deployment をスケールアップしません。
 
 ### Docker Compose
 
@@ -207,8 +214,9 @@ HAProxy、CloudNativePG の `-rw` サービス、またはプライマリに追�
 Kodus はすべてのコンポーネントから書き込むため、リードレプリカは使用しません。
 
 フェイルオーバー中は実行中のクエリが失敗し、プールは次のリクエストで再接続します。
-プーラーを使う場合、協調ロックはデータベースの行なので、データと一緒にフェイルオーバー後も残ります。
-プーラーなしではセッションロックで、旧プライマリーとのセッションが切れた時点で解放されます。
+直接接続を設定している場合、協調ロックはデータベースの行なので、データと一緒にフェイルオーバー後も残ります。
+直接接続がない場合 (プーラーなし、または session モードのプーラー) はセッションロックで、
+旧プライマリーとのセッションが切れた時点で解放されます。
 
 ## 設定の確認
 

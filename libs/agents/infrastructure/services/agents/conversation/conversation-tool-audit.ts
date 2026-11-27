@@ -25,6 +25,11 @@ export interface WriteToolEvent {
     error?: string;
 }
 
+/** The write tools that ran and returned: what the turn really changed. */
+export function performedWrites(writes: readonly WriteToolEvent[]): string[] {
+    return writes.filter((w) => w.error === undefined).map((w) => w.tool);
+}
+
 export function isConversationWriteTool(
     metadata: McpToolMetadata | undefined,
 ): boolean {

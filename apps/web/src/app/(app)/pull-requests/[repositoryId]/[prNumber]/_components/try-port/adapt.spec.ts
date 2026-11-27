@@ -4,11 +4,7 @@ import type {
     PullRequestSuggestion,
 } from "@services/pull-requests";
 
-import {
-    adaptForTryDiffViewer,
-    buildHeaderPrInfo,
-    buildPrInfo,
-} from "./adapt";
+import { adaptForTryDiffViewer, buildHeaderPrInfo, buildPrInfo } from "./adapt";
 
 /**
  * Replica of the DiffViewer's `patchByPath` splitter. The whole diff renders
@@ -39,7 +35,9 @@ const file = (over: Partial<PullRequestFile>): PullRequestFile => ({
 describe("adaptForTryDiffViewer", () => {
     it("synthesizes a matchable header when previous_filename is an empty string (regression: blank diff)", () => {
         const { rawDiff, files } = adaptForTryDiffViewer({
-            patchFiles: [file({ filename: "src/foo.ts", previous_filename: "" })],
+            patchFiles: [
+                file({ filename: "src/foo.ts", previous_filename: "" }),
+            ],
             suggestions: [],
         });
 
@@ -185,6 +183,56 @@ describe("adaptForTryDiffViewer", () => {
 
         expect(issues[0].suggestion).toBeUndefined();
     });
+
+    it("lists PR-level findings, which carry no file (regression: rename-only PR read 'Nothing to flag')", () => {
+        const { issues } = adaptForTryDiffViewer({
+            patchFiles: [],
+            suggestions: [],
+            prLevelSuggestions: [
+                {
+                    id: "pr-level",
+                    suggestionContent:
+                        "`src/moved.ts:19` Session token is logged.",
+                    severity: "high",
+                    label: "kody_rules",
+                    relevantLinesStart: 19,
+                } as PullRequestSuggestion,
+            ],
+        });
+
+        expect(issues).toEqual([
+            {
+                id: "pr-level",
+                file: "",
+                line: 0,
+                endLine: undefined,
+                severity: "high",
+                category: "kody_rules",
+                message: "`src/moved.ts:19` Session token is logged.",
+                suggestion: undefined,
+            },
+        ]);
+    });
+});
+
+describe("adaptForTryDiffViewer — Business Logic record", () => {
+    it("leaves the Business Logic validation comment out of the findings", () => {
+        const { issues } = adaptForTryDiffViewer({
+            patchFiles: [],
+            suggestions: [],
+            prLevelSuggestions: [
+                {
+                    id: "bl",
+                    suggestionContent: "Requirements met.",
+                    label: "business_logic",
+                    severity: "low",
+                    deliveryStatus: "sent",
+                } as PullRequestSuggestion,
+            ],
+        });
+
+        expect(issues).toEqual([]);
+    });
 });
 
 describe("buildHeaderPrInfo", () => {
@@ -225,7 +273,10 @@ describe("buildHeaderPrInfo", () => {
 
     it("flags merged, maps closed state, and falls back the title", () => {
         const merged = buildHeaderPrInfo({
-            execution: { status: "merged", merged: true } as PullRequestExecution,
+            execution: {
+                status: "merged",
+                merged: true,
+            } as PullRequestExecution,
             patchFiles: [],
             prNumber: 7,
         });
