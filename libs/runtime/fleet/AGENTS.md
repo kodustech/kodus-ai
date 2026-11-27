@@ -7,6 +7,7 @@ The host provider port and host pools (docs/runtime/host-providers.md §4.2, §5
 - The error: `provider-error.ts` `ProviderError` with a closed `kind` (`throttled`, `quota_exceeded`, `capacity_unavailable`, `invalid_class`, `unauthorized`, `transient`) and `retryable`.
 - The schemas: `pool.ts` `HostPoolSchema`, `HostClassSchema`, `PoolLifecycleSchema` (`perRun` | `pooled`), `poolIdOf`, `orgDefaultPoolId`, `KODUS_STATIC_POOL_ID`, `isControlled`, `poolSpecHash`.
 - The doubles: `testing.ts` `FakeHostProvider` and `describeHostProviderConformance`.
+- The shared image store port (docs/runtime/shared-image-store.md): `image-store.ts` `ImageStoreProvider`, `ImageStoreConfigSchema` (the pool's `imageStore`), `planGrant` (who reads and writes which repository, from the bound key), `storeRepoName`; `image-store-fake.ts` and `describeImageStoreConformance` in `testing.ts`.
 
 ## Does not own
 - Adapters (`apps/runtime/src/fleet/providers/<kind>/`), the reconcile loop and host workflows (`apps/runtime/src/fleet/`).

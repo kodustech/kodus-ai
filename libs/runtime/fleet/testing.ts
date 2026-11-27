@@ -1,4 +1,5 @@
 import type { CreateHostRequest, HostProvider } from './host-provider';
+import type { GrantRepo, ImageStoreConfig, ImageStoreProvider, StoreGrant } from './image-store';
 import type { HostClass } from './pool';
 import { isProviderError, ProviderError, type ProviderErrorKind } from './provider-error';
 
@@ -69,6 +70,58 @@ export function describeHostProviderConformance(name: string, make: () => Confor
             const e = await h.provider.create(request(h, 'host-1')).then(() => null, (x: unknown) => x);
             expect(isProviderError(e)).toBe(true);
             expect((e as ProviderError).kind).toBe(kind);
+        });
+    });
+}
+
+export { FakeImageStoreProvider } from './image-store-fake';
+
+// The conformance suite every image store provider runs (docs/runtime/shared-image-store.md section 2). Specs only.
+
+export interface ImageStoreConformanceHarness {
+    provider: ImageStoreProvider;
+    config: ImageStoreConfig;
+    /** The repositories the token a grant returned names, with what it may do: how this provider's token is read back. */
+    namedBy(grant: StoreGrant): Array<{ name: string; pull: boolean; push: boolean }>;
+}
+
+export function describeImageStoreConformance(name: string, make: () => ImageStoreConformanceHarness) {
+    const repos = (): GrantRepo[] => [
+        { scope: 'pr', name: 'p/o-a/e-b/pr-c', pull: true, push: true },
+        { scope: 'main', name: 'p/o-a/e-b/main', pull: true, push: false },
+    ];
+    const now = new Date('2026-11-27T12:00:00.000Z');
+    describe(`image store provider conformance: ${name}`, () => {
+        it('a grant names exactly the repositories it was asked for, with the same rights, and no more', async () => {
+            const h = make();
+            const g = await h.provider.grant(h.config, { claimId: 'c1', organizationId: 'o', repos: repos(), ttlSeconds: 600 }, now);
+            expect(h.namedBy(g).sort((a, b) => a.name.localeCompare(b.name))).toEqual([
+                { name: 'p/o-a/e-b/main', pull: true, push: false },
+                { name: 'p/o-a/e-b/pr-c', pull: true, push: true },
+            ]);
+        });
+
+        it('a grant expires ttlSeconds after now, never later', async () => {
+            const h = make();
+            const g = await h.provider.grant(h.config, { claimId: 'c1', organizationId: 'o', repos: repos(), ttlSeconds: 600 }, now);
+            expect(g.expiresAt).toBe('2026-11-27T12:10:00.000Z');
+        });
+
+        it('the endpoint and prefix of a grant are the ones endpointFor says, so the cell and the registry agree', async () => {
+            const h = make();
+            const g = await h.provider.grant(h.config, { claimId: 'c1', organizationId: 'o', repos: repos(), ttlSeconds: 600 }, now);
+            expect({ endpoint: g.endpoint, prefix: g.prefix }).toEqual(h.provider.endpointFor(h.config));
+        });
+
+        it('a grant for a claim with no repositories is refused, so no empty credential is ever handed out', async () => {
+            const h = make();
+            await expect(h.provider.grant(h.config, { claimId: 'c1', organizationId: 'o', repos: [], ttlSeconds: 600 }, now)).rejects.toThrow();
+        });
+
+        it('revoke is idempotent', async () => {
+            const h = make();
+            await expect(h.provider.revoke('c1')).resolves.toBeUndefined();
+            await expect(h.provider.revoke('c1')).resolves.toBeUndefined();
         });
     });
 }

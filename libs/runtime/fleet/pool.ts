@@ -2,6 +2,8 @@ import { createHash } from 'crypto';
 
 import { z } from 'zod';
 
+import { ImageStoreConfigSchema } from './image-store';
+
 // Host pools and host classes (docs/runtime/host-providers.md §5.1). A pool is
 // what placement and the controller read; its class is what only the provider
 // reads. A stored pool carries its class resolved (runtime-fleet `apply`), so
@@ -94,6 +96,8 @@ export const HostPoolSchema = z
         health: z.strictObject({ maxConsecutiveFailures: z.number().int().min(1).max(100).default(3) }).default({ maxConsecutiveFailures: 3 }),
         /** pooled only; required for a pooled pool that a controller drives. */
         capacity: Capacity.optional(),
+        /** Where this pool's hosts share images (docs/runtime/shared-image-store.md). Absent: they build as before. Not part of the spec hash. */
+        imageStore: ImageStoreConfigSchema.optional(),
         price: z.strictObject({ usdPerHostHour: z.number().min(0).max(100), source: z.enum(['list', 'contract', 'org']) }).optional(),
     })
     .superRefine((p, ctx) => {
