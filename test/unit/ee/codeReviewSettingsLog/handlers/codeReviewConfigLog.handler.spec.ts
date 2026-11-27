@@ -112,9 +112,9 @@ describe('CodeReviewConfigLogHandler', () => {
 
             const data = extractChangedData(mockUnified.saveLogEntry);
             expect(data).toHaveLength(1);
-            expect(data[0].description).toContain('Implicit Replies');
-            expect(data[0].description).toContain('enabled');
-            expect(data[0].description).toContain('disabled');
+            expect(data[0].description).toEqual(
+                'User user@test.com changed Implicit Replies from enabled to disabled',
+            );
         });
 
         it('detects languageResultPrompt string change', async () => {

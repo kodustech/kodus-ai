@@ -4,8 +4,14 @@
  * sync stored that value because it saves whatever this loader returns.
  * The key has to come back missing, so the stored boolean applies and the
  * string is never written. A real boolean is kept.
+ *
+ * The warning names the caller and the type of the value. The value itself
+ * stays out of the log: repository YAML can put a secret in the field.
  */
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
+
+const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+const repository = { id: 'repo-1', name: 'hive-inventory' };
 
 function service(fileContent: string) {
     const svc = Object.create(CodeBaseConfigService.prototype) as any;
@@ -26,57 +32,107 @@ function service(fileContent: string) {
     return svc as CodeBaseConfigService & { logger: { warn: jest.Mock } };
 }
 
-const load = (fileContent: string) =>
-    service(fileContent).getKodusConfigFile({
-        organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
-        repository: { id: 'repo-1', name: 'hive-inventory' },
+function expectedWarn(valueType: string) {
+    return {
+        message:
+            'Ignoring an invalid conversation.implicitReplies in kodus-config.yml: the stored setting applies',
+        context: 'CodeBaseConfigService',
+        metadata: {
+            organizationAndTeamData,
+            repository,
+            valueType,
+        },
+    };
+}
+
+const load = (fileContent: string, onRejectedImplicitReplies?: () => void) => {
+    const svc = service(fileContent);
+    const file = svc.getKodusConfigFile({
+        organizationAndTeamData,
+        repository,
         defaultBranch: 'main',
+        onRejectedImplicitReplies,
     });
+    return { svc, file };
+};
 
 describe('kodus-config.yml conversation.implicitReplies', () => {
     it.each([
-        ['a quoted false', 'conversation:\n  implicitReplies: "false"\n'],
-        ['YAML 1.2 no', 'conversation:\n  implicitReplies: no\n'],
-        ['YAML 1.2 off', 'conversation:\n  implicitReplies: off\n'],
-        ['a number', 'conversation:\n  implicitReplies: 0\n'],
-        ['null', 'conversation:\n  implicitReplies: null\n'],
-        ['an empty key', 'conversation:\n  implicitReplies:\n'],
-    ])('drops %s and keeps the rest of the file', async (_label, yaml) => {
-        const svc = service(`automatedReviewActive: false\n${yaml}`);
-        const file = await svc.getKodusConfigFile({
-            organizationAndTeamData: {
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            },
-            repository: { id: 'repo-1', name: 'hive-inventory' },
-            defaultBranch: 'main',
-        });
+        [
+            'a quoted false',
+            'conversation:\n  implicitReplies: "false"\n',
+            'string',
+        ],
+        ['YAML 1.2 no', 'conversation:\n  implicitReplies: no\n', 'string'],
+        ['YAML 1.2 off', 'conversation:\n  implicitReplies: off\n', 'string'],
+        ['a number', 'conversation:\n  implicitReplies: 0\n', 'number'],
+        ['null', 'conversation:\n  implicitReplies: null\n', 'null'],
+        ['an empty key', 'conversation:\n  implicitReplies:\n', 'null'],
+    ])(
+        'drops %s and keeps the rest of the file',
+        async (_label, yaml, valueType) => {
+            const onRejectedImplicitReplies = jest.fn();
+            const { svc, file } = load(
+                `automatedReviewActive: false\n${yaml}`,
+                onRejectedImplicitReplies,
+            );
 
-        expect(file?.conversation?.implicitReplies).toBeUndefined();
-        expect(file?.automatedReviewActive).toBe(false);
-        expect(svc.logger.warn).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: expect.stringContaining(
-                    'invalid conversation.implicitReplies',
-                ),
-            }),
-        );
-    });
+            await expect(file).resolves.toMatchObject({
+                automatedReviewActive: false,
+            });
+            expect((await file)?.conversation?.implicitReplies).toBeUndefined();
+            expect(onRejectedImplicitReplies).toHaveBeenCalledTimes(1);
+            expect(svc.logger.warn).toHaveBeenCalledTimes(1);
+            expect(svc.logger.warn).toHaveBeenCalledWith(
+                expectedWarn(valueType),
+            );
+        },
+    );
 
     it('drops a conversation block that is not an object', async () => {
-        const file = await load('conversation: "false"\n');
+        const onRejectedImplicitReplies = jest.fn();
+        const { svc, file } = load(
+            'conversation: "false"\n',
+            onRejectedImplicitReplies,
+        );
 
-        expect(file?.conversation).toBeUndefined();
+        expect((await file)?.conversation).toBeUndefined();
+        expect(onRejectedImplicitReplies).toHaveBeenCalledTimes(1);
+        expect(svc.logger.warn).toHaveBeenCalledTimes(1);
+        expect(svc.logger.warn).toHaveBeenCalledWith(expectedWarn('string'));
+    });
+
+    it.each([
+        ['string', 'implicitReplies: "kodus-canary-secret-SHOULD-NOT-LOG"'],
+        [
+            'object',
+            'implicitReplies:\n    token: kodus-canary-secret-SHOULD-NOT-LOG',
+        ],
+    ])('logs the %s type and not the value', async (valueType, field) => {
+        const { svc, file } = load(
+            `conversation:\n  ${field}\nautomatedReviewActive: false\n`,
+        );
+
+        expect((await file)?.conversation?.implicitReplies).toBeUndefined();
+        expect(JSON.stringify(svc.logger.warn.mock.calls)).not.toContain(
+            'kodus-canary-secret-SHOULD-NOT-LOG',
+        );
+        expect(svc.logger.warn).toHaveBeenCalledTimes(1);
+        expect(svc.logger.warn).toHaveBeenCalledWith(expectedWarn(valueType));
     });
 
     it.each([
         ['false', false],
         ['true', true],
     ])('keeps a boolean %s', async (literal, expected) => {
-        const file = await load(
+        const onRejectedImplicitReplies = jest.fn();
+        const { svc, file } = load(
             `conversation:\n  implicitReplies: ${literal}\n`,
+            onRejectedImplicitReplies,
         );
 
-        expect(file?.conversation?.implicitReplies).toBe(expected);
+        expect((await file)?.conversation?.implicitReplies).toBe(expected);
+        expect(onRejectedImplicitReplies).not.toHaveBeenCalled();
+        expect(svc.logger.warn).not.toHaveBeenCalled();
     });
 });

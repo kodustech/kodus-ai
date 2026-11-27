@@ -304,9 +304,16 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         repository: { name: string; id: string };
         dir?: string;
         directoryId?: string;
+        /** Set when a non-boolean conversation.implicitReplies is dropped. */
+        onRejectedImplicitReplies?: () => void;
     }) {
-        const { organizationAndTeamData, repository, dir, directoryId } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            dir,
+            directoryId,
+            onRejectedImplicitReplies,
+        } = params;
 
         try {
             const file = await this.codeBaseConfigService.getKodusConfigFile({
@@ -315,6 +322,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 directoryPath: dir,
                 directoryId,
                 removeProperties: false,
+                onRejectedImplicitReplies,
             });
 
             return file;
@@ -383,12 +391,16 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     } = configFileMeta;
 
                     let configFile;
+                    let implicitRepliesRejected = false;
 
                     if (!this.isKodyRulesScope(configFileMeta)) {
                         configFile = await this.fetchConfigFile({
                             organizationAndTeamData,
                             repository: centralizedRepository,
                             dir: centralizedDirectoryPath,
+                            onRejectedImplicitReplies: () => {
+                                implicitRepliesRejected = true;
+                            },
                         });
                     }
 
@@ -416,6 +428,22 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                             configFile;
                         configToSave = restOfConfig;
                         configForMessages = configFile;
+                        // Sync rebuilds the scope from the file and deletes a
+                        // key the file no longer has. Dropping a rejected
+                        // value must not delete a boolean already stored for
+                        // this scope. A key the file simply omits still deletes.
+                        const preserved = implicitRepliesRejected
+                            ? this.storedImplicitReplies(
+                                  codeReviewConfig?.configValue,
+                                  configFileMeta,
+                              )
+                            : undefined;
+                        if (preserved !== undefined) {
+                            configToSave = this.withPreservedImplicitReplies(
+                                configToSave as KodusConfigFile,
+                                preserved,
+                            );
+                        }
                     } else {
                         // We know it's a KodyRulesScope missing a file here
                         this.logger.log({
@@ -510,6 +538,79 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 message: 'Error synchronizing config files',
             };
         }
+    }
+
+    /**
+     * The boolean already stored for the scope this file writes. A directory
+     * group written from one file is kept only when every matching directory
+     * stores the same boolean. Anything else stays absent, so sync deletes it.
+     */
+    private storedImplicitReplies(
+        parameter: CodeReviewParameter | undefined,
+        meta: IConfigFileMeta,
+    ): boolean | undefined {
+        if (!parameter) return undefined;
+
+        const onlyBoolean = (value: unknown): boolean | undefined =>
+            typeof value === 'boolean' ? value : undefined;
+
+        const repositoryId = meta.repositoryId;
+        if (!repositoryId || repositoryId === 'global') {
+            return onlyBoolean(
+                parameter.configs?.conversation?.implicitReplies,
+            );
+        }
+
+        const repository = parameter.repositories?.find(
+            (item) => item.id === repositoryId,
+        );
+        if (!repository) return undefined;
+
+        const paths =
+            meta.directoryPaths && meta.directoryPaths.length > 0
+                ? meta.directoryPaths
+                : meta.directoryPath
+                  ? [meta.directoryPath]
+                  : [];
+        if (paths.length === 0) {
+            return onlyBoolean(
+                repository.configs?.conversation?.implicitReplies,
+            );
+        }
+
+        const matches = (repository.directories ?? []).filter((directory) =>
+            (directory.folders ?? []).some((folder) =>
+                paths.includes(folder.path),
+            ),
+        );
+        if (matches.length === 0) return undefined;
+
+        const values = matches.map((directory) =>
+            onlyBoolean(directory.configs?.conversation?.implicitReplies),
+        );
+        const first = values[0];
+        if (first === undefined || values.some((value) => value !== first)) {
+            return undefined;
+        }
+        return first;
+    }
+
+    private withPreservedImplicitReplies(
+        config: KodusConfigFile,
+        implicitReplies: boolean,
+    ): KodusConfigFile {
+        const conversation = config.conversation;
+        const block =
+            conversation !== null &&
+            typeof conversation === 'object' &&
+            !Array.isArray(conversation)
+                ? conversation
+                : {};
+
+        return {
+            ...config,
+            conversation: { ...block, implicitReplies },
+        };
     }
 
     async removeStaleConfigs(params: {

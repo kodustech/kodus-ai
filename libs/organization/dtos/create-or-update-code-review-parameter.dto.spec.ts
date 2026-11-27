@@ -247,21 +247,59 @@ describe('CreateOrUpdateCodeReviewParameterDto — conversation.implicitReplies'
         expect(JSON.stringify(response)).toContain('answerEveryone');
     });
 
+    const rejection = async (configValue: Record<string, unknown>) => {
+        try {
+            await through(configValue);
+        } catch (error) {
+            return (error as { getResponse: () => unknown }).getResponse();
+        }
+        throw new Error('expected the pipe to reject');
+    };
+
     // Implicit conversion turned these strings into `true`: the request
     // returned 201 and erased a stored opt-out. `0` was stored as `false`.
     it.each([['false'], ['no'], ['off'], ['true'], [0], [1], [null]])(
         'rejects a non-boolean implicitReplies (%j)',
         async (value) => {
             await expect(
-                through({ conversation: { implicitReplies: value } }),
-            ).rejects.toThrow();
+                rejection({ conversation: { implicitReplies: value } }),
+            ).resolves.toEqual({
+                statusCode: 400,
+                message: [
+                    'configValue.conversation.implicitReplies must be a boolean value',
+                ],
+                error: 'Bad Request',
+            });
         },
     );
 
-    it.each([[null], [[{ implicitReplies: false }]], ['off']])(
+    it.each([
+        [
+            null,
+            [
+                'configValue.conversation must be an object',
+                'configValue.nested property conversation must be either object or array',
+            ],
+        ],
+        [
+            [{ implicitReplies: false }],
+            ['configValue.conversation must be an object'],
+        ],
+        [
+            'off',
+            [
+                'configValue.conversation must be an object',
+                'configValue.nested property conversation must be either object or array',
+            ],
+        ],
+    ])(
         'rejects a conversation block that is not an object (%j)',
-        async (conversation) => {
-            await expect(through({ conversation })).rejects.toThrow();
+        async (conversation, message) => {
+            await expect(rejection({ conversation })).resolves.toEqual({
+                statusCode: 400,
+                message,
+                error: 'Bad Request',
+            });
         },
     );
 
