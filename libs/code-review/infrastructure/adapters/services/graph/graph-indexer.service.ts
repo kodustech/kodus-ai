@@ -61,8 +61,10 @@ export class GraphIndexerService {
         repositoryId: string;
         sandbox: SandboxInstance;
         headSha: string;
+        signal?: AbortSignal;
     }): Promise<void> {
-        const { repositoryId, sandbox, headSha } = params;
+        const { repositoryId, sandbox, headSha, signal } = params;
+        signal?.throwIfAborted();
         const buildStart = Date.now();
 
         this.logger.log({
@@ -85,6 +87,7 @@ export class GraphIndexerService {
                 metadata: { repositoryId },
             });
 
+            signal?.throwIfAborted();
             const parseStart = Date.now();
             const { stderr: parseStderr } = await this.cli.parseAll(sandbox, {
                 outPath: GRAPH_PATH,
@@ -100,11 +103,13 @@ export class GraphIndexerService {
                 },
             });
 
+            signal?.throwIfAborted();
             const { nodes, edges } = await this.readGraphFromSandbox(
                 sandbox,
                 repositoryId,
             );
 
+            signal?.throwIfAborted();
             if (nodes.length === 0) {
                 this.logger.warn({
                     message: `[AST-GRAPH] Parse produced 0 nodes for repo ${repositoryId} — marking as FAILED`,
@@ -123,6 +128,7 @@ export class GraphIndexerService {
                 repositoryId,
                 nodes,
                 edges,
+                { sha: headSha, signal },
             );
 
             this.logger.log({
@@ -134,16 +140,6 @@ export class GraphIndexerService {
                     edgeCount: counts.edgeCount,
                 },
             });
-
-            await this.repositoryService.updateGraphStatus(
-                repositoryId,
-                AstGraphStatus.READY,
-                {
-                    sha: headSha,
-                    nodeCount: counts.nodeCount,
-                    edgeCount: counts.edgeCount,
-                },
-            );
 
             const totalMs = Date.now() - buildStart;
             this.logger.log({
@@ -158,6 +154,8 @@ export class GraphIndexerService {
                 },
             });
         } catch (error) {
+            // The processor owns the failure transition once the job is aborted.
+            signal?.throwIfAborted();
             const totalMs = Date.now() - buildStart;
             await this.repositoryService.updateGraphStatus(
                 repositoryId,
@@ -182,8 +180,15 @@ export class GraphIndexerService {
         sandbox: SandboxInstance;
         changedFiles: string[];
         newSha: string;
+        signal?: AbortSignal;
     }): Promise<void> {
-        const { repositoryId, sandbox, changedFiles, newSha } = params;
+        const { repositoryId, sandbox, newSha, signal } = params;
+        signal?.throwIfAborted();
+        // Azure reports paths from the repository root with a leading slash.
+        // The parser and the stored graph both use repository-relative paths.
+        const changedFiles = params.changedFiles.map((file) =>
+            file.replace(/^\/+/, ''),
+        );
         const updateStart = Date.now();
 
         this.logger.log({
@@ -206,6 +211,7 @@ export class GraphIndexerService {
                 metadata: { repositoryId },
             });
 
+            signal?.throwIfAborted();
             const parseStart = Date.now();
             await this.cli.parseFiles(sandbox, changedFiles, {
                 outPath: GRAPH_PATH,
@@ -220,17 +226,20 @@ export class GraphIndexerService {
                 },
             });
 
+            signal?.throwIfAborted();
             const { nodes, edges } = await this.readGraphFromSandbox(
                 sandbox,
                 repositoryId,
             );
 
+            signal?.throwIfAborted();
             const persistStart = Date.now();
             const counts = await this.astGraphRepo.incrementalUpdate(
                 repositoryId,
                 changedFiles,
                 nodes,
                 edges,
+                { sha: newSha, signal },
             );
 
             this.logger.log({
@@ -242,16 +251,6 @@ export class GraphIndexerService {
                     edgeCount: counts.edgeCount,
                 },
             });
-
-            await this.repositoryService.updateGraphStatus(
-                repositoryId,
-                AstGraphStatus.READY,
-                {
-                    sha: newSha,
-                    nodeCount: counts.nodeCount,
-                    edgeCount: counts.edgeCount,
-                },
-            );
 
             const totalMs = Date.now() - updateStart;
             this.logger.log({

@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 
 import { AstNodeModel } from './schemas/astNode.model';
 import { AstEdgeModel } from './schemas/astEdge.model';
+import { AstGraphStatus, RepositoryModel } from './schemas/repository.model';
+
+interface GraphRevision {
+    sha?: string;
+    signal?: AbortSignal;
+}
 
 // ---------------------------------------------------------------------------
 // JSON interfaces matching kodus-graph's GraphInputSchema (snake_case)
@@ -145,8 +151,10 @@ export class AstGraphRepository {
         repoId: string,
         nodes: GraphNodeJson[],
         edges: GraphEdgeJson[],
+        revision?: GraphRevision,
     ): Promise<{ nodeCount: number; edgeCount: number }> {
         return this.dataSource.transaction(async (manager) => {
+            revision?.signal?.throwIfAborted();
             await manager.query(`DELETE FROM ast_edges WHERE repo_id = $1`, [
                 repoId,
             ]);
@@ -174,20 +182,7 @@ export class AstGraphRepository {
                 await manager.query(sql, params);
             }
 
-            // Query actual counts — ON CONFLICT DO NOTHING may skip duplicates
-            const [nodeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_nodes WHERE repo_id = $1`,
-                [repoId],
-            );
-            const [edgeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_edges WHERE repo_id = $1`,
-                [repoId],
-            );
-
-            return {
-                nodeCount: nodeRows.cnt,
-                edgeCount: edgeRows.cnt,
-            };
+            return this.finishGraphWrite(manager, repoId, revision);
         });
     }
 
@@ -202,8 +197,10 @@ export class AstGraphRepository {
         filePaths: string[],
         nodes: GraphNodeJson[],
         edges: GraphEdgeJson[],
+        revision?: GraphRevision,
     ): Promise<{ nodeCount: number; edgeCount: number }> {
         return this.dataSource.transaction(async (manager) => {
+            revision?.signal?.throwIfAborted();
             if (filePaths.length > 0) {
                 await manager.query(
                     `DELETE FROM ast_edges WHERE repo_id = $1 AND file_path = ANY($2::text[])`,
@@ -235,21 +232,38 @@ export class AstGraphRepository {
                 await manager.query(sql, params);
             }
 
-            // Query actual total counts for the repo after the incremental update
-            const [nodeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_nodes WHERE repo_id = $1`,
-                [repoId],
-            );
-            const [edgeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_edges WHERE repo_id = $1`,
-                [repoId],
-            );
-
-            return {
-                nodeCount: nodeRows.cnt,
-                edgeCount: edgeRows.cnt,
-            };
+            return this.finishGraphWrite(manager, repoId, revision);
         });
+    }
+
+    private async finishGraphWrite(
+        manager: EntityManager,
+        repoId: string,
+        revision?: GraphRevision,
+    ): Promise<{ nodeCount: number; edgeCount: number }> {
+        // Count the stored rows: ON CONFLICT can skip duplicate parser output.
+        const [counts] = await manager.query(
+            `SELECT (SELECT count(*)::int FROM ast_nodes WHERE repo_id = $1) AS "nodeCount",
+                    (SELECT count(*)::int FROM ast_edges WHERE repo_id = $1) AS "edgeCount"`,
+            [repoId],
+        );
+        if (revision) {
+            // Publish the SHA, counts and rows in one transaction. An abort during
+            // any of these writes must leave the previous revision intact.
+            await manager.update(
+                RepositoryModel,
+                { uuid: repoId },
+                {
+                    astGraphStatus: AstGraphStatus.READY,
+                    astGraphBuiltAt: new Date(),
+                    astGraphSha: revision.sha,
+                    astGraphNodeCount: counts.nodeCount,
+                    astGraphEdgeCount: counts.edgeCount,
+                },
+            );
+            revision.signal?.throwIfAborted();
+        }
+        return counts;
     }
 
     // -----------------------------------------------------------------------

@@ -212,30 +212,42 @@ describe('GraphIndexerService', () => {
                         source_qualified: 'src/foo.ts::foo',
                     }),
                 ]),
+                { sha: HEAD_SHA, signal: undefined },
             );
         });
 
-        it('should set status to BUILDING then READY on success', async () => {
+        it('does not save the graph when the job aborted during the parse', async () => {
+            const controller = new AbortController();
+            mockSandbox.readFile.mockImplementation(async () => {
+                controller.abort();
+                return graphJson;
+            });
+
+            await expect(
+                service.fullBuild({
+                    repositoryId: REPO_ID,
+                    sandbox: mockSandbox,
+                    headSha: HEAD_SHA,
+                    signal: controller.signal,
+                }),
+            ).rejects.toThrow();
+
+            expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
+            expect(mockRepositoryRepo.updateGraphStatus.mock.calls).toEqual([
+                [REPO_ID, AstGraphStatus.BUILDING],
+            ]);
+        });
+
+        it('marks the graph BUILDING before parsing', async () => {
             await service.fullBuild({
                 repositoryId: REPO_ID,
                 sandbox: mockSandbox,
                 headSha: HEAD_SHA,
             });
 
-            const calls = mockRepositoryRepo.updateGraphStatus.mock.calls;
-
-            expect(calls[0]).toEqual([REPO_ID, AstGraphStatus.BUILDING]);
-
-            const lastCall = calls[calls.length - 1];
-            expect(lastCall[0]).toBe(REPO_ID);
-            expect(lastCall[1]).toBe(AstGraphStatus.READY);
-            expect(lastCall[2]).toEqual(
-                expect.objectContaining({
-                    sha: HEAD_SHA,
-                    nodeCount: 1,
-                    edgeCount: 1,
-                }),
-            );
+            expect(mockRepositoryRepo.updateGraphStatus.mock.calls).toEqual([
+                [REPO_ID, AstGraphStatus.BUILDING],
+            ]);
         });
 
         it('should throw error on parse failure (exitCode !== 0)', async () => {
@@ -345,6 +357,24 @@ describe('GraphIndexerService', () => {
             expect(parseCmd).toContain('src/bar.ts');
         });
 
+        it('parses and replaces Azure paths relative to the repository root', async () => {
+            await service.incrementalUpdate({
+                repositoryId: REPO_ID,
+                sandbox: mockSandbox,
+                changedFiles: ['/src/foo.ts', '/src/deleted.ts'],
+                newSha,
+            });
+            const parseCommand = mockSandbox.run.mock.calls.find(([cmd]) =>
+                cmd.includes('kodus-graph parse --files'),
+            )?.[0];
+            expect(parseCommand).toContain(
+                "--files 'src/foo.ts' 'src/deleted.ts'",
+            );
+            expect(mockAstGraphRepo.incrementalUpdate.mock.calls[0][1]).toEqual(
+                ['src/foo.ts', 'src/deleted.ts'],
+            );
+        });
+
         it('should call astGraphRepo.incrementalUpdate()', async () => {
             await service.incrementalUpdate({
                 repositoryId: REPO_ID,
@@ -358,26 +388,28 @@ describe('GraphIndexerService', () => {
                 changedFiles,
                 expect.any(Array),
                 expect.any(Array),
+                { sha: newSha, signal: undefined },
             );
         });
 
-        it('should update status to READY on success', async () => {
-            await service.incrementalUpdate({
-                repositoryId: REPO_ID,
-                sandbox: mockSandbox,
-                changedFiles,
-                newSha,
+        it('does not save when the job aborted during the parse', async () => {
+            const controller = new AbortController();
+            mockSandbox.readFile.mockImplementation(async () => {
+                controller.abort();
+                return graphJson;
             });
 
-            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
-                REPO_ID,
-                AstGraphStatus.READY,
-                expect.objectContaining({
-                    sha: newSha,
-                    nodeCount: 1,
-                    edgeCount: 1,
+            await expect(
+                service.incrementalUpdate({
+                    repositoryId: REPO_ID,
+                    sandbox: mockSandbox,
+                    changedFiles,
+                    newSha,
+                    signal: controller.signal,
                 }),
-            );
+            ).rejects.toThrow();
+
+            expect(mockAstGraphRepo.incrementalUpdate).not.toHaveBeenCalled();
         });
 
         it('should NOT set status to FAILED on error (graph is stale but usable)', async () => {

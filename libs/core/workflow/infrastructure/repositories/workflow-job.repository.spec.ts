@@ -13,6 +13,20 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
+it('checks the expected job status in the same UPDATE as completion', async () => {
+    const store = { update: jest.fn(), findOne: jest.fn() };
+    const repository = new WorkflowJobRepository(store as never);
+    await repository.update(
+        'job-1',
+        { status: JobStatus.COMPLETED },
+        JobStatus.PROCESSING,
+    );
+    expect(store.update).toHaveBeenCalledWith(
+        { uuid: 'job-1', status: JobStatus.PROCESSING },
+        { status: JobStatus.COMPLETED },
+    );
+});
+
 describe('WorkflowJobRepository.failStaleProcessing', () => {
     let qb: {
         update: jest.Mock;

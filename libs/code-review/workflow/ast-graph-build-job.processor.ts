@@ -9,8 +9,8 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { PlatformType } from '@libs/core/domain/enums';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
+    AcquireResult,
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -23,6 +23,7 @@ import {
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { acquireGraphJobSandbox } from './graph-job-sandbox';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. A full-repo AST build on a large repo can legitimately run
@@ -97,21 +98,49 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             );
         }
 
-        let sandbox: SandboxInstance | undefined;
+        const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
+        let lease: AcquireResult | undefined;
         let sandboxId: string | undefined;
-        let leaseId: string | undefined;
+        const releaseSandbox = async ({
+            leaseId,
+            sandboxId,
+        }: AcquireResult) => {
+            const metadata = {
+                jobId,
+                prKey,
+                sandboxId,
+                organizationId: payload.organizationAndTeamData?.organizationId,
+            };
+            try {
+                await this.leaseManager.release(leaseId, { idleMs: 0 });
+                this.logger.log({
+                    message: `[AST-GRAPH-JOB] Sandbox cleaned up for ${repoLabel}`,
+                    context: AstGraphBuildJobProcessor.name,
+                    metadata,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `[AST-GRAPH-JOB] Sandbox cleanup failed for ${repoLabel}`,
+                    context: AstGraphBuildJobProcessor.name,
+                    error,
+                    metadata,
+                });
+            }
+        };
 
         try {
-            // Race the AST build against the parent's AbortSignal. The
-            // pipeline issues clone + lots of /contents reads + indexing;
-            // any can stall on retry-after.
-            await raceWithAbortSignal((async () => {
+            signal?.throwIfAborted();
             // 1. Resolve auth
-            await this.updateJobStage(jobId, 'RESOLVING_AUTH');
+            await raceWithAbortSignal(
+                this.updateJobStage(jobId, 'RESOLVING_AUTH'),
+                signal,
+            );
             const authStart = Date.now();
 
-            const repoRecord = await this.repositoryService.findById(
-                payload.repositoryId,
+            signal?.throwIfAborted();
+            const repoRecord = await raceWithAbortSignal(
+                this.repositoryService.findById(payload.repositoryId),
+                signal,
             );
             if (!repoRecord) {
                 throw new Error(
@@ -119,19 +148,24 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 );
             }
 
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: {
-                        id: repoRecord.externalId,
-                        defaultBranch: repoRecord.defaultBranch,
-                        fullName: repoRecord.fullName,
-                        name:
-                            repoRecord.fullName.split('/').pop() ||
-                            repoRecord.fullName,
+            signal?.throwIfAborted();
+            const cloneParams = await raceWithAbortSignal(
+                this.codeManagementService.getCloneParams(
+                    {
+                        repository: {
+                            id: repoRecord.externalId,
+                            defaultBranch: repoRecord.defaultBranch,
+                            fullName: repoRecord.fullName,
+                            name:
+                                repoRecord.fullName.split('/').pop() ||
+                                repoRecord.fullName,
+                        },
+                        organizationAndTeamData:
+                            payload.organizationAndTeamData,
                     },
-                    organizationAndTeamData: payload.organizationAndTeamData,
-                },
-                payload.platform as PlatformType,
+                    payload.platform as PlatformType,
+                ),
+                signal,
             );
 
             if (!cloneParams) {
@@ -152,48 +186,52 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             });
 
             // 2. Create sandbox + clone
-            await this.updateJobStage(jobId, 'CLONING');
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.updateJobStage(jobId, 'CLONING'),
+                signal,
+            );
             const cloneStart = Date.now();
 
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            // Routed through the lease manager (not the raw provider) so a
-            // worker crash mid-build leaves a lease doc the GRAPH_BUILD_LEASE_TTL_MS
-            // + 5min reaper cron already cleans up. The prKey is unique
-            // per job (jobId), so this always takes the creator path — never
-            // joins another job's sandbox, same as the direct-create call it
-            // replaces. No PR is involved here (repo-level graph build), so
-            // the key uses "graph" in the prNumber slot instead.
-            const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
-            const acquired = await this.leaseManager.acquire(
-                prKey,
-                'graph-build',
-                GRAPH_BUILD_LEASE_TTL_MS,
-                {
-                    cloneUrl: cloneParams.url || payload.cloneUrl,
-                    authToken: cloneParams.auth?.token || '',
-                    authUsername: cloneParams.auth?.username,
-                    branch,
-                    platform: payload.platform as PlatformType,
-                    sandboxMetadata: { stage: 'graph-build' },
-                    organizationId:
-                        payload.organizationAndTeamData?.organizationId,
-                    teamId: payload.organizationAndTeamData?.teamId,
-                },
+            lease = await acquireGraphJobSandbox(
+                () =>
+                    this.leaseManager.acquire(
+                        prKey,
+                        'graph-build',
+                        GRAPH_BUILD_LEASE_TTL_MS,
+                        {
+                            cloneUrl: cloneParams.url || payload.cloneUrl,
+                            authToken: cloneParams.auth?.token || '',
+                            authUsername: cloneParams.auth?.username,
+                            branch,
+                            platform: payload.platform as PlatformType,
+                            sandboxMetadata: { stage: 'graph-build' },
+                            organizationId:
+                                payload.organizationAndTeamData?.organizationId,
+                            teamId: payload.organizationAndTeamData?.teamId,
+                        },
+                        { signal },
+                    ),
+                signal,
+                releaseSandbox,
             );
-            sandbox = acquired.sandbox;
-            leaseId = acquired.leaseId;
+            const { sandbox } = lease;
+            sandboxId = lease.sandboxId;
 
-            sandboxId =
-                (sandbox as any)?.sandboxId ||
-                (sandbox as any)?.id ||
-                sandbox.type ||
-                'unknown';
-
-            await this.jobRepository.update(jobId, {
-                metadata: { sandboxId, stage: 'CLONING' },
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.jobRepository.update(
+                    jobId,
+                    {
+                        metadata: { sandboxId, stage: 'CLONING' },
+                    },
+                    JobStatus.PROCESSING,
+                ),
+                signal,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH-JOB] Sandbox ready for ${repoLabel} (${Date.now() - cloneStart}ms)`,
@@ -202,9 +240,12 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             });
 
             // 3. Get HEAD sha
-            const shaResult = await sandbox.run(
-                `git -C ${sandbox.repoDir} rev-parse HEAD`,
-                { timeoutMs: 10_000 },
+            signal?.throwIfAborted();
+            const shaResult = await raceWithAbortSignal(
+                sandbox.run(`git -C ${sandbox.repoDir} rev-parse HEAD`, {
+                    timeoutMs: 10_000,
+                }),
+                signal,
             );
             const headSha = shaResult.stdout?.trim() || '';
 
@@ -219,22 +260,35 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             });
 
             // 4. Parse + persist
-            await this.updateJobStage(jobId, 'PARSING', { sandboxId, headSha });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.updateJobStage(jobId, 'PARSING', { sandboxId, headSha }),
+                signal,
+            );
 
-            await this.graphIndexer.fullBuild({
-                repositoryId: payload.repositoryId,
-                sandbox,
-                headSha,
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.graphIndexer.fullBuild({
+                    repositoryId: payload.repositoryId,
+                    sandbox,
+                    headSha,
+                    signal,
+                }),
+                signal,
+            );
+            signal?.throwIfAborted();
 
             const totalMs = Date.now() - jobStart;
 
-            await this.markCompleted(jobId, {
-                repositoryId: payload.repositoryId,
-                headSha,
-                sandboxId,
-                durationMs: totalMs,
-            });
+            await raceWithAbortSignal(
+                this.markCompleted(jobId, {
+                    repositoryId: payload.repositoryId,
+                    headSha,
+                    sandboxId,
+                    durationMs: totalMs,
+                }),
+                signal,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH-JOB] Build COMPLETED for ${repoLabel} in ${totalMs}ms`,
@@ -247,7 +301,6 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                     durationMs: totalMs,
                 },
             });
-            })(), signal);
         } catch (error) {
             const totalMs = Date.now() - jobStart;
             const classification = this.classifyError(error);
@@ -279,26 +332,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 throw error;
             }
         } finally {
-            if (leaseId) {
-                try {
-                    // A graph sandbox is single-use (its key carries the jobId):
-                    // nothing joins it again, so its final release stops compute
-                    // now instead of paying the 5-minute default idle window.
-                    await this.leaseManager.release(leaseId, { idleMs: 0 });
-                    this.logger.log({
-                        message: `[AST-GRAPH-JOB] Sandbox cleaned up for ${repoLabel}`,
-                        context: AstGraphBuildJobProcessor.name,
-                        metadata: { jobId, sandboxId },
-                    });
-                } catch (cleanupError) {
-                    this.logger.warn({
-                        message: `[AST-GRAPH-JOB] Sandbox cleanup failed for ${repoLabel}`,
-                        context: AstGraphBuildJobProcessor.name,
-                        error: cleanupError,
-                        metadata: { jobId, sandboxId },
-                    });
-                }
-            }
+            if (lease) await releaseSandbox(lease);
         }
     }
 
@@ -307,12 +341,16 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         stage: string,
         extra?: Record<string, unknown>,
     ): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.PROCESSING,
-            startedAt: new Date(),
-            currentStage: stage,
-            metadata: { stage, ...extra },
-        });
+        await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.PROCESSING,
+                startedAt: new Date(),
+                currentStage: stage,
+                metadata: { stage, ...extra },
+            },
+            stage === 'VALIDATING' ? undefined : JobStatus.PROCESSING,
+        );
     }
 
     private classifyError(error: any): ErrorClassification {
@@ -378,11 +416,15 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.COMPLETED,
-            completedAt: new Date(),
-            currentStage: 'DONE',
-            result,
-        });
+        await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                currentStage: 'DONE',
+                result,
+            },
+            JobStatus.PROCESSING,
+        );
     }
 }

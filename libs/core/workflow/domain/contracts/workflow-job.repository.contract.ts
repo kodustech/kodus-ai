@@ -1,4 +1,5 @@
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 
 export interface StaleWorkflowJobReapResult {
     uuid: string;
@@ -11,7 +12,7 @@ export interface StaleWorkflowJobReapResult {
 
 export interface IWorkflowJobRepository {
     create(job: any, transactionManager?: unknown): Promise<any>;
-    update(id: string, data: any): Promise<any>;
+    update(id: string, data: any, expectedStatus?: JobStatus): Promise<any>;
     findOne(id: string): Promise<any>;
     findMany(query: any): Promise<{ data: any[]; total?: number }>;
     prunePayloadForFinalizedJobs?(params: {

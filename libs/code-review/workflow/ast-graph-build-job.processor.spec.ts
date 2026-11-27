@@ -30,7 +30,9 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         sandboxId: 'sbx-1',
         type: 'e2b',
         cleanup: jest.fn().mockResolvedValue(undefined),
-        run: jest.fn().mockResolvedValue({ stdout: 'abc123\n', stderr: '', exitCode: 0 }),
+        run: jest
+            .fn()
+            .mockResolvedValue({ stdout: 'abc123\n', stderr: '', exitCode: 0 }),
     };
 
     const leaseManager = {
@@ -168,6 +170,68 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
     // can stall on a retry-after; without the race the worker slot stayed
     // held past the router timeout.
     describe('AbortSignal', () => {
+        it('keeps FAILED when indexing returns after cancellation', async () => {
+            let finishIndexing: () => void;
+            const indexing = new Promise<void>((started) => {
+                graphIndexer.fullBuild.mockImplementationOnce(
+                    () =>
+                        new Promise<void>((finish) => {
+                            finishIndexing = finish;
+                            started();
+                        }),
+                );
+            });
+            const controller = new AbortController();
+            const job = processor.process('job-1', controller.signal);
+            await indexing;
+            controller.abort();
+            await job;
+            finishIndexing();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+
+            const statuses = jobRepository.update.mock.calls.map(
+                ([, update]) => update.status,
+            );
+            expect(statuses.at(-1)).toBe(JobStatus.FAILED);
+            expect(statuses).not.toContain(JobStatus.COMPLETED);
+            expect(graphIndexer.fullBuild).toHaveBeenCalledWith(
+                expect.objectContaining({ signal: controller.signal }),
+            );
+            expect(leaseManager.release).toHaveBeenCalledTimes(1);
+        });
+
+        it('fails promptly if cancellation arrives during the completion write', async () => {
+            let finishCompletion: () => void;
+            const writing = new Promise<void>((started) => {
+                jobRepository.update.mockImplementation(async (_id, patch) => {
+                    if (patch.status === JobStatus.COMPLETED) {
+                        await new Promise<void>((finish) => {
+                            finishCompletion = finish;
+                            started();
+                        });
+                    }
+                });
+            });
+            const controller = new AbortController();
+            const job = processor.process('job-1', controller.signal);
+            await writing;
+            controller.abort();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            const terminal = jobRepository.update.mock.calls.at(-1)[1].status;
+            finishCompletion();
+            await job;
+            expect(terminal).toBe(JobStatus.FAILED);
+        });
+
+        it('only lets a processing job write its completion', async () => {
+            await processor.process('job-1');
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.COMPLETED }),
+                JobStatus.PROCESSING,
+            );
+        });
+
         it('unblocks when the signal fires mid-work', async () => {
             repositoryService.findById.mockImplementation(
                 () => new Promise(() => {}),

@@ -9,8 +9,8 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { PlatformType } from '@libs/core/domain/enums';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
+    AcquireResult,
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -23,6 +23,7 @@ import {
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { acquireGraphJobSandbox } from './graph-job-sandbox';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. An incremental AST update on a large changeset can legitimately
@@ -102,19 +103,49 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         // defaultBranch, not by sha. Keep it optional so incremental
         // updates run even when the caller can't produce a merge sha.
 
-        let sandbox: SandboxInstance | undefined;
+        const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
+        let lease: AcquireResult | undefined;
         let sandboxId: string | undefined;
-        let leaseId: string | undefined;
+        const releaseSandbox = async ({
+            leaseId,
+            sandboxId,
+        }: AcquireResult) => {
+            const metadata = {
+                jobId,
+                prKey,
+                sandboxId,
+                organizationId: payload.organizationAndTeamData?.organizationId,
+            };
+            try {
+                await this.leaseManager.release(leaseId, { idleMs: 0 });
+                this.logger.log({
+                    message: `[AST-GRAPH-INCR] Sandbox cleaned up for ${repoLabel}`,
+                    context: AstGraphIncrementalJobProcessor.name,
+                    metadata,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `[AST-GRAPH-INCR] Sandbox cleanup failed for ${repoLabel}`,
+                    context: AstGraphIncrementalJobProcessor.name,
+                    error,
+                    metadata,
+                });
+            }
+        };
 
         try {
-            // Race the incremental update against the parent's AbortSignal.
-            await raceWithAbortSignal((async () => {
+            signal?.throwIfAborted();
             // 1. Resolve auth
-            await this.updateJobStage(jobId, 'RESOLVING_AUTH');
+            await raceWithAbortSignal(
+                this.updateJobStage(jobId, 'RESOLVING_AUTH'),
+                signal,
+            );
             const authStart = Date.now();
 
-            const repoRecord = await this.repositoryService.findById(
-                payload.repositoryId,
+            signal?.throwIfAborted();
+            const repoRecord = await raceWithAbortSignal(
+                this.repositoryService.findById(payload.repositoryId),
+                signal,
             );
             if (!repoRecord) {
                 throw new Error(
@@ -122,19 +153,24 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                 );
             }
 
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: {
-                        id: repoRecord.externalId,
-                        defaultBranch: repoRecord.defaultBranch,
-                        fullName: repoRecord.fullName,
-                        name:
-                            repoRecord.fullName.split('/').pop() ||
-                            repoRecord.fullName,
+            signal?.throwIfAborted();
+            const cloneParams = await raceWithAbortSignal(
+                this.codeManagementService.getCloneParams(
+                    {
+                        repository: {
+                            id: repoRecord.externalId,
+                            defaultBranch: repoRecord.defaultBranch,
+                            fullName: repoRecord.fullName,
+                            name:
+                                repoRecord.fullName.split('/').pop() ||
+                                repoRecord.fullName,
+                        },
+                        organizationAndTeamData:
+                            payload.organizationAndTeamData,
                     },
-                    organizationAndTeamData: payload.organizationAndTeamData,
-                },
-                payload.platform as PlatformType,
+                    payload.platform as PlatformType,
+                ),
+                signal,
             );
 
             if (!cloneParams) {
@@ -150,48 +186,52 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
             });
 
             // 2. Create sandbox + clone
-            await this.updateJobStage(jobId, 'CLONING');
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.updateJobStage(jobId, 'CLONING'),
+                signal,
+            );
             const cloneStart = Date.now();
 
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            // Routed through the lease manager (not the raw provider) so a
-            // worker crash mid-update leaves a lease doc the GRAPH_INCREMENTAL_LEASE_TTL_MS
-            // + 5min reaper cron already cleans up. The prKey is unique
-            // per job (jobId), so this always takes the creator path — never
-            // joins another job's sandbox, same as the direct-create call it
-            // replaces. No PR is involved here (repo-level graph update), so
-            // the key uses "graph" in the prNumber slot instead.
-            const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
-            const acquired = await this.leaseManager.acquire(
-                prKey,
-                'graph-incremental',
-                GRAPH_INCREMENTAL_LEASE_TTL_MS,
-                {
-                    cloneUrl: cloneParams.url || payload.cloneUrl,
-                    authToken: cloneParams.auth?.token || '',
-                    authUsername: cloneParams.auth?.username,
-                    branch,
-                    platform: payload.platform as PlatformType,
-                    sandboxMetadata: { stage: 'graph-incremental' },
-                    organizationId:
-                        payload.organizationAndTeamData?.organizationId,
-                    teamId: payload.organizationAndTeamData?.teamId,
-                },
+            lease = await acquireGraphJobSandbox(
+                () =>
+                    this.leaseManager.acquire(
+                        prKey,
+                        'graph-incremental',
+                        GRAPH_INCREMENTAL_LEASE_TTL_MS,
+                        {
+                            cloneUrl: cloneParams.url || payload.cloneUrl,
+                            authToken: cloneParams.auth?.token || '',
+                            authUsername: cloneParams.auth?.username,
+                            branch,
+                            platform: payload.platform as PlatformType,
+                            sandboxMetadata: { stage: 'graph-incremental' },
+                            organizationId:
+                                payload.organizationAndTeamData?.organizationId,
+                            teamId: payload.organizationAndTeamData?.teamId,
+                        },
+                        { signal },
+                    ),
+                signal,
+                releaseSandbox,
             );
-            sandbox = acquired.sandbox;
-            leaseId = acquired.leaseId;
+            const { sandbox } = lease;
+            sandboxId = lease.sandboxId;
 
-            sandboxId =
-                (sandbox as any)?.sandboxId ||
-                (sandbox as any)?.id ||
-                sandbox.type ||
-                'unknown';
-
-            await this.jobRepository.update(jobId, {
-                metadata: { sandboxId, stage: 'CLONING' },
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.jobRepository.update(
+                    jobId,
+                    {
+                        metadata: { sandboxId, stage: 'CLONING' },
+                    },
+                    JobStatus.PROCESSING,
+                ),
+                signal,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH-INCR] Sandbox ready for ${repoLabel} (${Date.now() - cloneStart}ms)`,
@@ -200,28 +240,41 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
             });
 
             // 3. Run incremental AST graph update
-            await this.updateJobStage(jobId, 'PARSING', {
-                sandboxId,
-                newSha: payload.newSha,
-                changedFilesCount: payload.changedFiles.length,
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.updateJobStage(jobId, 'PARSING', {
+                    sandboxId,
+                    newSha: payload.newSha,
+                    changedFilesCount: payload.changedFiles.length,
+                }),
+                signal,
+            );
 
-            await this.graphIndexer.incrementalUpdate({
-                repositoryId: payload.repositoryId,
-                sandbox,
-                changedFiles: payload.changedFiles,
-                newSha: payload.newSha,
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.graphIndexer.incrementalUpdate({
+                    repositoryId: payload.repositoryId,
+                    sandbox,
+                    changedFiles: payload.changedFiles,
+                    newSha: payload.newSha,
+                    signal,
+                }),
+                signal,
+            );
+            signal?.throwIfAborted();
 
             const totalMs = Date.now() - jobStart;
 
-            await this.markCompleted(jobId, {
-                repositoryId: payload.repositoryId,
-                newSha: payload.newSha,
-                changedFilesCount: payload.changedFiles.length,
-                sandboxId,
-                durationMs: totalMs,
-            });
+            await raceWithAbortSignal(
+                this.markCompleted(jobId, {
+                    repositoryId: payload.repositoryId,
+                    newSha: payload.newSha,
+                    changedFilesCount: payload.changedFiles.length,
+                    sandboxId,
+                    durationMs: totalMs,
+                }),
+                signal,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH-INCR] Incremental update COMPLETED for ${repoLabel} in ${totalMs}ms (${payload.changedFiles.length} files)`,
@@ -235,7 +288,6 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                     durationMs: totalMs,
                 },
             });
-            })(), signal);
         } catch (error) {
             const totalMs = Date.now() - jobStart;
             const classification = this.classifyError(error);
@@ -255,32 +307,19 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                 },
             });
 
-            await this.handleFailure(jobId, error, classification, sandboxId, payload.repositoryId);
+            await this.handleFailure(
+                jobId,
+                error,
+                classification,
+                sandboxId,
+                payload.repositoryId,
+            );
 
             if (classification === ErrorClassification.RETRYABLE) {
                 throw error;
             }
         } finally {
-            if (leaseId) {
-                try {
-                    // A graph sandbox is single-use (its key carries the jobId):
-                    // nothing joins it again, so its final release stops compute
-                    // now instead of paying the 5-minute default idle window.
-                    await this.leaseManager.release(leaseId, { idleMs: 0 });
-                    this.logger.log({
-                        message: `[AST-GRAPH-INCR] Sandbox cleaned up for ${repoLabel}`,
-                        context: AstGraphIncrementalJobProcessor.name,
-                        metadata: { jobId, sandboxId },
-                    });
-                } catch (cleanupError) {
-                    this.logger.warn({
-                        message: `[AST-GRAPH-INCR] Sandbox cleanup failed for ${repoLabel}`,
-                        context: AstGraphIncrementalJobProcessor.name,
-                        error: cleanupError,
-                        metadata: { jobId, sandboxId },
-                    });
-                }
-            }
+            if (lease) await releaseSandbox(lease);
         }
     }
 
@@ -289,12 +328,16 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         stage: string,
         extra?: Record<string, unknown>,
     ): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.PROCESSING,
-            startedAt: new Date(),
-            currentStage: stage,
-            metadata: { stage, ...extra },
-        });
+        await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.PROCESSING,
+                startedAt: new Date(),
+                currentStage: stage,
+                metadata: { stage, ...extra },
+            },
+            stage === 'VALIDATING' ? undefined : JobStatus.PROCESSING,
+        );
     }
 
     private classifyError(error: any): ErrorClassification {
@@ -362,11 +405,15 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.COMPLETED,
-            completedAt: new Date(),
-            currentStage: 'DONE',
-            result,
-        });
+        await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                currentStage: 'DONE',
+                result,
+            },
+            JobStatus.PROCESSING,
+        );
     }
 }

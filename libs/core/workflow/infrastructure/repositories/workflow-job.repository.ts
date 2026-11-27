@@ -154,7 +154,11 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
-    async update(id: string, data: Partial<IWorkflowJob>): Promise<any> {
+    async update(
+        id: string,
+        data: Partial<IWorkflowJob>,
+        expectedStatus?: JobStatus,
+    ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
 
@@ -198,7 +202,11 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 updateData.pipelineState = patch.pipelineState;
             if (data.payload !== undefined) updateData.payload = patch.payload;
 
-            await this.repository.update({ uuid: id }, updateData);
+            // A graph job can time out while its final UPDATE is in flight.
+            await this.repository.update(
+                { uuid: id, ...(expectedStatus && { status: expectedStatus }) },
+                updateData,
+            );
 
             return await this.findOne(id);
         } catch (error) {
