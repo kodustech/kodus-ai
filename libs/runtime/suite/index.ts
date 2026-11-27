@@ -17,6 +17,8 @@ export { hostsToAsk, spreadOnto } from './hosts';
 export type { ShardSpecs } from './hosts';
 export { afterLostClaim, batchSize, leaseExpired, QUEUE_BATCH_MAX_SPECS, QUEUE_BATCH_TARGET_MS, QUEUE_IDLE_POLL_MS, QUEUE_LEASE_MS, QUEUE_MAX_ATTEMPTS, queueEntries } from './queue';
 export type { QueueEntry } from './queue';
+export { BASELINE_CADENCE_DEFAULT_MS, baselineDue, MAIN_HISTORY_RUNS, mainOutcomeAt, mainSpecHistory } from './main-history';
+export type { BaselineDueInput, BaselineDueReason, MainObservation, MainSpecHistory } from './main-history';
 export { suiteDigestOf } from './digest';
 export type { DigestedSuite } from './digest';
 export { MAIN_SPECS_MAX, mainSpecsOfTree, specListOf } from './spec-list';

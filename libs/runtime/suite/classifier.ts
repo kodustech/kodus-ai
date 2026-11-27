@@ -60,6 +60,11 @@ export interface ClassifyInput {
     baseline?: BaselineEvidence;
     /** Specs a shard never ran and that were still unfinished after one re-queue. */
     notRunSpecs: readonly string[];
+    /**
+     * What main's history says per spec (`mainSpecHistory`): a spec that gave different outcomes on one main commit is flaky there, so a PR
+     * failure with a signature main's failures also had is that flake, not a regression.
+     */
+    mainHistory?: Readonly<Record<string, { flaky: boolean; failureSignatures: readonly string[] }>>;
 }
 
 // ---- the plan before the re-runs -------------------------------------------
@@ -136,6 +141,8 @@ export interface ClassifiedTest {
     prSignature?: string;
     mainSignature?: string;
     baseDrift: number;
+    /** Class `flaky` because main itself is flaky on this failure (its history), not because the PR re-run passed. */
+    flakyOnMain?: true;
 }
 
 export interface Classification {
@@ -200,6 +207,8 @@ export function classifyFailures(i: ClassifyInput): Classification {
         if (main.result === 'not_run') return unclassified(f, 'timeout');
         if (main.result === 'infra') return fromBaseline(f, pr.errorSignature);
         if (main.result === 'passed') {
+            const hist = i.mainHistory?.[f.spec];
+            if (hist?.flaky && hist.failureSignatures.includes(pr.errorSignature)) return make(f, 'flaky', { prSignature: pr.errorSignature, flakyOnMain: true });
             if (i.baseDrift > 0 && !reached.has(f.spec)) return make(f, 'regression_unconfirmed', { prSignature: pr.errorSignature });
             return make(f, 'regression', { prSignature: pr.errorSignature });
         }

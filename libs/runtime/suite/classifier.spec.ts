@@ -209,3 +209,27 @@ describe('needsMainRerun (8.2): a red-everywhere spec skips the main run', () =>
         expect(needsMainRerun(fail('a.cy.ts', 't', { errorSignature: 'E: x' }), failed('E: x'), { ...baseline, specs: { 'a.cy.ts': { status: 'passed' } } })).toBe(true);
     });
 });
+
+describe('main history (7.2)', () => {
+    const withHistory = (mainHistory: ClassifyInput['mainHistory']) => {
+        const f = fail('a.cy.ts');
+        return classifyFailures({ failures: [f], plan: planReruns({ specsRun: 100, failures: [f] }), prRerun: rerunsOf(f, failed()), infraRerun: {}, main: mainRan(passed), baseDrift: 0, diffReachedSpecs: ['a.cy.ts'], notRunSpecs: [], mainHistory }).tests[0];
+    };
+
+    // The spec gave different outcomes on one main commit and main failed it with this very error: the PR met main's flake, not a regression.
+    it('is flaky, not a regression, when main is flaky on the very failure the PR hit', () => {
+        const c = withHistory({ 'a.cy.ts': { flaky: true, failureSignatures: ['AssertionError: boom'] } });
+        expect(c).toMatchObject({ class: 'flaky', blocks: false, finding: false, flakyOnMain: true });
+    });
+
+    // A flaky spec that fails on the PR with an error main never showed is still a regression: flakiness does not excuse another failure.
+    it('stays a regression when the PR failure is not one main has had', () => {
+        expect(withHistory({ 'a.cy.ts': { flaky: true, failureSignatures: ['other error'] } }).class).toBe('regression');
+    });
+
+    // Without a flake in main's history the rule changes nothing.
+    it('stays a regression when main is not flaky on the spec', () => {
+        expect(withHistory({ 'a.cy.ts': { flaky: false, failureSignatures: ['AssertionError: boom'] } }).class).toBe('regression');
+        expect(withHistory(undefined).class).toBe('regression');
+    });
+});
