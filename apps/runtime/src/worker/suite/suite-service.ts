@@ -11,6 +11,7 @@ import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { Canary } from '../canary/canary';
 import type { PgSuiteBaselines } from './pg-suite-baselines';
 import type { StoredCoverageMap } from './pg-suite-coverage-maps';
+import type { PgSuiteQueue } from './pg-suite-queue';
 import type { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
 import type { PgSuiteRuns, StoredSuiteRun, SuiteRunState } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
@@ -68,7 +69,9 @@ export interface SuiteServiceDeps {
     setups: Pick<EnvironmentSetupStore, 'get'>;
     environment(ctx: SuiteEnvironmentContext): SuiteEnvironment;
     demand(scope: { organizationId: string; suiteRunId: string }): SuiteHostDemand;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts' | 'latestForPr'>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts' | 'latestForPr'> & Partial<Pick<PgSuiteRuns, 'markShard' | 'results'>>;
+    /** The spec queue of a run (section 6): the shards pull their specs from it. Absent: the plan is fixed per shard. */
+    queue?: Pick<PgSuiteQueue, 'seed' | 'claimNext' | 'renew' | 'complete' | 'release' | 'requeueExpired' | 'counts' | 'leftovers'>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
     templates?: SuiteTemplates;
@@ -236,6 +239,7 @@ export class SuiteService {
             stats: this.d.stats,
             demand,
             clock,
+            ...(this.d.queue ? { queue: this.d.queue } : {}),
             ...(this.d.baselines ? { baselines: this.d.baselines } : {}),
             ...(this.d.maps ? { maps: this.d.maps } : {}),
             ...(this.d.evidence ? { artifacts: new SuiteArtifactKeeper({ source: new ExecArtifactSource(execInService(env, s.suite.config.service), `art-${cmd.suiteRunId}`), store: this.d.evidence }) } : {}),

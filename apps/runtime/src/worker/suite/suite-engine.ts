@@ -19,6 +19,8 @@ import {
     parseMochawesome,
     perSpecOverheadMs,
     planReruns,
+    QUEUE_IDLE_POLL_MS,
+    queueEntries,
     type Rerun,
     shardCount,
     shardTargetMs,
@@ -36,6 +38,7 @@ import {
 import { collectCoverage, type CoverageMapRecord, coverageDirOf } from './coverage-collector';
 import { type DetachedOutcome, runDetached, safeResultsGlob } from './detached-exec';
 import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
+import type { PgSuiteQueue } from './pg-suite-queue';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { SuiteArtifactKeeper } from './suite-artifacts';
@@ -129,7 +132,13 @@ export interface SuiteHostDemand {
 
 export interface SuiteEngineDeps {
     env: Pick<EnvironmentRuntime, 'acquire' | 'exec' | 'release'>;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'> & Partial<Pick<PgSuiteRuns, 'markShard'>>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'> & Partial<Pick<PgSuiteRuns, 'markShard' | 'results'>>;
+    /**
+     * The spec queue of the run (section 6, dynamic queue): the first pass seeds it with every spec and each shard pulls the next
+     * ones until it is empty, so a slow shard never becomes the tail and a lost shard's claims go back to the others after a lease.
+     * Absent: the plan is fixed per shard as before (the specs' own engine tests).
+     */
+    queue?: Pick<PgSuiteQueue, 'seed' | 'claimNext' | 'renew' | 'complete' | 'release' | 'requeueExpired' | 'counts' | 'leftovers'>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     demand: SuiteHostDemand;
     clock: { now(): number; sleep(ms: number): Promise<void> };
@@ -242,6 +251,8 @@ interface Collector {
     done: Map<string, SpecResult>;
     seen: Set<string>;
     reads: number;
+    /** Called at every poll of the command: a shard pulling from the queue renews its lease there. */
+    beat?: () => Promise<void>;
 }
 
 interface ShardRun {
@@ -401,7 +412,9 @@ export class SuiteEngine {
         ctx.demandShards = new Set(shards);
 
         const ready = await this.waitForHosts(ctx, shards);
-        const plan = ready.length === 0 ? [] : spreadOnto(inputs.specs, ctx.stats, ready);
+        const queue = this.d.queue;
+        // With the queue the shards that came pull what they can run; the plan below is only an estimate that the run's record rewrites to who ran what.
+        const plan = ready.length === 0 ? [] : queue ? ready.map((shard) => ({ shard, specs: [] as string[] })) : spreadOnto(inputs.specs, ctx.stats, ready);
         if (plan.length > 0 && ready.length !== asked) await this.d.runs.savePlan(req.organizationId, req.suiteRunId, [...plan, ...shards.filter((s) => !ready.includes(s)).map((shard) => ({ shard, specs: [] as string[] }))]);
         // No host came at all: every spec is infra, on shard 0, for the fresh-host retry.
         const runs: ShardRun[] = (plan.length === 0 ? [{ shard: 0, specs: inputs.specs.map((s) => s.path) }] : plan).map((p) => ({ shard: p.shard, planned: p.specs, done: new Map(), missing: new Map() }));
@@ -409,6 +422,8 @@ export class SuiteEngine {
         ctx.demandShards = new Set(plan.length === 0 ? [] : ready);
         if (plan.length === 0) {
             for (const p of runs[0].planned) runs[0].missing.set(p, 'infra');
+        } else if (queue) {
+            await this.runQueued(ctx, runs);
         } else {
             for (const r of runs) for (const spec of r.planned) ctx.pending.set(spec, r.shard);
             await Promise.all(runs.map(async (r) => {
@@ -523,13 +538,14 @@ export class SuiteEngine {
 
     private async driveShard(ctx: RunCtx, shard: ShardRun): Promise<void> {
         const { req } = ctx;
+        const queued = !!this.d.queue;
         for (const s of shard.planned) {
             if (!SPEC_SAFE.test(s)) {
                 shard.missing.set(s, 'not_run');
                 ctx.pending.delete(s);
             }
         }
-        if (shard.planned.every((s) => !SPEC_SAFE.test(s))) return;
+        if (!queued && shard.planned.every((s) => !SPEC_SAFE.test(s))) return;
         // Fail fast stopped the first pass before this shard got its host: no claim, nothing runs.
         if (ctx.stop.signal.aborted || this.cancelled(ctx)) {
             for (const s of shard.planned) if (SPEC_SAFE.test(s)) shard.missing.set(s, 'not_run');
@@ -568,9 +584,15 @@ export class SuiteEngine {
         // The claim is ready (the app is up on the host): from here to the end is the shard's own time, as the page shows it.
         await this.markShard(ctx, shard.shard, 'running');
         try {
-            if (runnable.length > 0) await this.runShard(ctx, shard, claim.claimId, runnable);
-            await this.stealPending(ctx, shard, claim.claimId);
+            if (queued) {
+                await this.pullLoop(ctx, shard, claim.claimId);
+            } else {
+                if (runnable.length > 0) await this.runShard(ctx, shard, claim.claimId, runnable);
+                await this.stealPending(ctx, shard, claim.claimId);
+            }
         } finally {
+            // A shard that ends with claims it did not finish (an error, a lost host) gives them back at once instead of after the lease.
+            if (queued) await this.d.queue!.release(req.organizationId, req.suiteRunId, shard.shard, new Date(this.d.clock.now())).catch(() => undefined);
             await this.markShard(ctx, shard.shard, 'finished');
         }
     }
@@ -580,6 +602,108 @@ export class SuiteEngine {
         if (isBlocked(claim)) return;
         if (wanted && !ctx.cleaned) ctx.claims.push(claim.claimId);
         else void this.d.env.release(claim.claimId).catch(() => undefined);
+    }
+
+    // ---- the dynamic queue (section 6)
+
+    /**
+     * The first pass with the queue: every spec goes in once, longest first (red before and covering the diff first), and each shard
+     * that has a host pulls the next ones until it is empty. What nobody finished is reported where it belongs: a spec nobody took is
+     * `not_run` (`infra` when no shard got its claim), one a lost shard held past its attempts is `infra` for the fresh host.
+     */
+    private async runQueued(ctx: RunCtx, runs: readonly ShardRun[]): Promise<void> {
+        const { req, inputs } = ctx;
+        const q = this.d.queue!;
+        const safe = inputs.specs.filter((s) => SPEC_SAFE.test(s.path));
+        for (const s of inputs.specs) {
+            if (SPEC_SAFE.test(s.path)) continue;
+            runs[0].planned.push(s.path);
+            runs[0].missing.set(s.path, 'not_run');
+        }
+        await q.seed(req.organizationId, req.suiteRunId, queueEntries({ specs: safe, stats: ctx.stats, failedBefore: inputs.order?.failedBefore ?? [], diffCoverage: inputs.order?.diffCoverage ?? {} }));
+        await Promise.all(
+            runs.map((r) =>
+                this.held(ctx, 'firstPass', async () => {
+                    await this.driveShard(ctx, r);
+                    await this.keepArtifacts(ctx, r);
+                }),
+            ),
+        );
+        const allBlocked = runs.every((r) => r.blocked);
+        for (const l of await q.leftovers(req.organizationId, req.suiteRunId)) {
+            const owner = (l.claimedBy !== undefined ? ctx.shards.get(l.claimedBy) : undefined) ?? runs[0];
+            if (!owner.planned.includes(l.spec)) owner.planned.push(l.spec);
+            owner.missing.set(l.spec, l.state === 'queued' ? (allBlocked ? 'infra' : 'not_run') : 'infra');
+        }
+        await this.adoptStored(ctx, runs);
+        await this.d.runs.savePlan(req.organizationId, req.suiteRunId, [...ctx.shards.values()].map((s) => ({ shard: s.shard, specs: s.planned })));
+    }
+
+    /**
+     * A workflow step that ran again after a crash finds its queue part done: the specs an earlier attempt finished are not pulled
+     * again, so their stored results are read back into the shard that ran them, and the run judges the whole suite, not the rest.
+     */
+    private async adoptStored(ctx: RunCtx, runs: readonly ShardRun[]): Promise<void> {
+        const seen = new Set([...ctx.shards.values()].flatMap((s) => s.planned));
+        if (ctx.inputs.specs.every((s) => seen.has(s.path)) || !this.d.runs.results) return;
+        const stored = (await this.d.runs.results(ctx.req.organizationId, ctx.req.suiteRunId)).filter((r) => r.phase === 'shard');
+        for (const r of stored) {
+            if (seen.has(r.spec)) continue;
+            const shard = ctx.shards.get(r.shard) ?? runs[0];
+            shard.planned.push(r.spec);
+            if (r.status === 'passed' || r.status === 'failed' || r.status === 'skipped') shard.done.set(r.spec, { spec: r.spec, status: r.status, durationMs: r.durationMs, tests: r.tests as TestResult[], ...(r.errorSignature ? { errorSignature: r.errorSignature } : {}) });
+            else shard.missing.set(r.spec, r.status);
+        }
+    }
+
+    /**
+     * One shard's pulls: take the next specs, run them in the shard's claim (the PR build is already there), store what they report,
+     * and go again, until the queue is empty. A pull that finds nothing while siblings still hold claims waits and looks again, so a
+     * sibling that dies has its specs picked up here once its lease lapses. A shard that lost its host or its runner gives its unfinished
+     * specs back (another shard takes them) and stops: a host that failed once is not trusted with the rest of the queue.
+     */
+    private async pullLoop(ctx: RunCtx, shard: ShardRun, claimId: string): Promise<void> {
+        const { req, inputs } = ctx;
+        const q = this.d.queue!;
+        const org = req.organizationId;
+        const clock = this.d.clock;
+        const durations = estimateDurations(inputs.specs, ctx.stats);
+        const beat = () => q.renew(org, req.suiteRunId, shard.shard, new Date(clock.now())).catch(() => undefined);
+        for (let batchNo = 0; ; ) {
+            if (ctx.stop.signal.aborted || this.cancelled(ctx) || ctx.leaked) return;
+            const left = Math.min(inputs.config.shardTimeoutMs - (clock.now() - (shard.startedAt ?? clock.now())), (inputs.deadlineAt ?? Infinity) - clock.now());
+            if (left <= 0) return;
+            await q.requeueExpired(org, req.suiteRunId, new Date(clock.now()));
+            const batch = await q.claimNext({ organizationId: org, suiteRunId: req.suiteRunId, shard: shard.shard, now: new Date(clock.now()), ...(this.collectsCoverage(ctx) ? { maxSpecs: 1 } : {}) });
+            if (batch.length === 0) {
+                const c = await q.counts(org, req.suiteRunId);
+                // Nothing is queued any more: a shard whose claim is still booting is not waited for.
+                if (c.queued === 0) for (const resolve of ctx.drained.values()) resolve();
+                if (c.queued === 0 && c.claimed === 0) return;
+                await clock.sleep(QUEUE_IDLE_POLL_MS);
+                await this.keepDemand(ctx);
+                continue;
+            }
+            shard.planned.push(...batch);
+            const n = batchNo++;
+            const ordered = orderBin(batch, { failedBefore: inputs.order?.failedBefore ?? [], diffCoverage: inputs.order?.diffCoverage ?? {}, durations: Object.fromEntries(durations ?? []) });
+            const ran = this.collectsCoverage(ctx)
+                ? await this.runWithCoverage(ctx, claimId, shard.shard, ordered[0], `${req.suiteRunId}-${shard.shard}-c${n}`, left, beat)
+                : await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', ordered, `${req.suiteRunId}-${shard.shard}-q${n}`, { timeoutMs: left, crashRetries: 1, clear: false, beat });
+            for (const [spec, r] of ran.done) shard.done.set(spec, r);
+            for (const [spec, why] of ran.missing) shard.missing.set(spec, why);
+            if (ran.cause) shard.cause = ran.cause;
+            const lost = [...ran.missing].filter(([, why]) => why === 'infra').map(([spec]) => spec);
+            await q.complete(org, req.suiteRunId, batch.filter((s) => !lost.includes(s)), new Date(clock.now()));
+            if (lost.length === 0) continue;
+            // The host or the runner failed: the specs go back to the others; what has no attempt left stays infra here, for the fresh host.
+            const gone = await q.release(org, req.suiteRunId, shard.shard, new Date(clock.now()), lost);
+            for (const spec of gone.requeued) {
+                shard.missing.delete(spec);
+                shard.planned = shard.planned.filter((s) => s !== spec);
+            }
+            return;
+        }
     }
 
     /**
@@ -653,21 +777,27 @@ export class SuiteEngine {
         const { req, inputs } = ctx;
         const startedAt = this.d.clock.now();
         for (const [i, spec] of ordered.entries()) {
-            const key = `${req.suiteRunId}-${shard.shard}-c${i}`;
             const left = inputs.config.shardTimeoutMs - (this.d.clock.now() - startedAt);
             if (left <= 0) {
                 shard.missing.set(spec, 'not_run');
                 continue;
             }
-            const dir = coverageDirOf(key);
-            const ran = await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', [spec], key, { timeoutMs: left, crashRetries: 1, clear: false, env: { NODE_V8_COVERAGE: dir } });
+            const ran = await this.runWithCoverage(ctx, claimId, shard.shard, spec, `${req.suiteRunId}-${shard.shard}-c${i}`, left);
             for (const [s, r] of ran.done) shard.done.set(s, r);
             for (const [s, why] of ran.missing) shard.missing.set(s, why);
             if (ran.cause) shard.cause = ran.cause;
-            if (!ran.done.has(spec)) continue;
-            const files = await collectCoverage(this.execIn(inputs.config), claimId, key, dir);
+        }
+    }
+
+    /** One spec as a command of its own with `NODE_V8_COVERAGE` on a directory of that spec; its dumps are read (and removed) when the command ends. */
+    private async runWithCoverage(ctx: RunCtx, claimId: string, shard: number, spec: string, key: string, timeoutMs: number, beat?: () => Promise<void>): Promise<Ran> {
+        const dir = coverageDirOf(key);
+        const ran = await this.runSpecs(ctx, { claimId, shard }, 'shard', [spec], key, { timeoutMs, crashRetries: 1, clear: false, env: { NODE_V8_COVERAGE: dir }, ...(beat ? { beat } : {}) });
+        if (ran.done.has(spec)) {
+            const files = await collectCoverage(this.execIn(ctx.inputs.config), claimId, key, dir);
             if (files) ctx.coverage.set(spec, files);
         }
+        return ran;
     }
 
     /**
@@ -675,8 +805,8 @@ export class SuiteEngine {
      * reported (`crashRetries` times, in the same claim); a shard past its timeout, a finished command that left a
      * spec out and a runner or host that never reported are `not_run` and `infra`, never a failure.
      */
-    private async runSpecs(ctx: RunCtx, host: { claimId: string; shard: number }, phase: SuitePhase, specs: readonly string[], keyBase: string, o: { timeoutMs: number; crashRetries: number; clear: boolean; env?: Record<string, string> }): Promise<Ran> {
-        const col: Collector = { phase, shard: host.shard, claimId: host.claimId, ...(o.env ? { env: o.env } : {}), planned: new Set(specs), done: new Map(), seen: new Set(), reads: 0 };
+    private async runSpecs(ctx: RunCtx, host: { claimId: string; shard: number }, phase: SuitePhase, specs: readonly string[], keyBase: string, o: { timeoutMs: number; crashRetries: number; clear: boolean; env?: Record<string, string>; beat?: () => Promise<void> }): Promise<Ran> {
+        const col: Collector = { phase, shard: host.shard, claimId: host.claimId, ...(o.env ? { env: o.env } : {}), ...(o.beat ? { beat: o.beat } : {}), planned: new Set(specs), done: new Map(), seen: new Set(), reads: 0 };
         const missing = new Map<string, 'not_run' | 'infra'>();
         // A re-run starts from an empty results directory: the runner writes the same file names again.
         if (o.clear) await this.clearResults(ctx, host.claimId, keyBase);
@@ -737,6 +867,7 @@ export class SuiteEngine {
             onPoll: async (p) => {
                 await this.ingest(ctx, col, p.resultFiles, key);
                 await this.keepDemand(ctx);
+                await col.beat?.();
             },
         });
         // What the command wrote last, between the final poll and its end.

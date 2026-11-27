@@ -13,6 +13,7 @@ import { AmqpSuitePublishRequester } from '../publish/amqp-suite-publish-request
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { PgSuiteBaselines } from './pg-suite-baselines';
 import { PgSuiteCoverageMaps } from './pg-suite-coverage-maps';
+import { PgSuiteQueue } from './pg-suite-queue';
 import { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
 import type { PgSuiteRuns } from './pg-suite-runs';
 import { PgSuiteSpecStats } from './pg-suite-spec-stats';
@@ -48,6 +49,7 @@ export function buildSuiteService(d: {
         demand: (scope) => new PlacementSuiteDemand(demand, pools, scope),
         runs: d.runs,
         stats: new PgSuiteSpecStats(d.pool),
+        queue: new PgSuiteQueue(d.pool),
         baselines: new PgSuiteBaselines(d.pool),
         maps: new PgSuiteCoverageMaps(d.pool),
         ...(d.evidence ? { evidence: d.evidence } : {}),

@@ -217,11 +217,43 @@ The engine then splits them:
    build, while its cap and the Run's deadline leave time; the late shard then runs what is left, and when siblings took
    all of it its claim is not waited for (it is released when it comes up). A shard whose claim is refused leaves its
    specs pending the same way; what nobody takes is `infra` (fresh host) or `not_run`. The plan stored in the run is
-   rewritten to who ran what. There is no scheduler beyond this: a shard that has started keeps its list.
+   rewritten to who ran what. This was the whole scheduler: a shard that has started keeps its list. **Superseded by the
+   dynamic queue (6.2)** wherever the queue store is wired; the fixed plan with this rule remains only as the engine's
+   fallback when it is not (its own engine tests).
 4. **Playwright.** The engine passes explicit files, the same as Cypress. `--shard=i/n` is only the fallback when the
    spec list cannot be listed; without `fullyParallel` it shards per file, so uneven files give uneven shards
    ([Playwright sharding](https://playwright.dev/docs/test-sharding)).
 5. The plan is stored in the suite run (`shards[i].specs[]`), so a re-run of a shard uses the same list.
+
+### 6.2 The dynamic queue (decided 2026-11-27)
+
+A fixed plan is only as good as the stored durations: one spec that grew, or one host that boots slowly, makes its shard the
+tail of the run. sorry-cypress hands out the next spec by a conditional update (`claimedAt: null`) and re-queues the specs
+of a machine that died; Cypress Cloud orders by estimated duration, longest first; GitLab's parallel `knapsack` keeps a
+fixed split but re-balances from the last timings. The engine takes the first two.
+
+- **The queue.** `runtime_suite_queue` (migration 64), one row per spec of a suite run: `priority` (0 red on the previous
+  push, 1 covers the diff, 2 the rest: the risk-first order of 6.1 now orders the queue), `weight` (the stored
+  `p50Ms` from `runtime_suite_spec_stats`, longest first; the file size when nothing is stored), `est_ms`, `state`
+  (`queued | claimed | done | abandoned`), `claimed_by`, `attempts`, `lease_expires_at`. Pure rules in `libs/runtime/suite/queue.ts`.
+- **A pull.** The first pass seeds the queue with every spec and starts one command per pull in each shard's claim. A pull
+  is one statement: the head of the queue is locked `FOR UPDATE SKIP LOCKED` and updated to `claimed` only while it is still
+  `queued`, so **concurrent pulls never hand one spec to two shards** (integration spec, 10 shards pulling 60 specs at once).
+  It takes specs until their estimates add up to 60 s (a long spec goes alone, short ones ride together so the runner's
+  start is paid once), at most 5. Cypress and Playwright still get explicit spec files, so nothing changes in the command.
+- **Until empty.** A shard pulls again when its batch ends. With nothing queued and claims still held by siblings it waits
+  (5 s) and looks again: that is how a sibling's expired claim is picked up. A shard whose claim is still booting when the
+  queue empties is not waited for (the rule of 6.6, kept).
+- **Leases.** A claim is a lease of 3 min, renewed at every poll of the shard's command. A lapsed lease sends the spec back
+  to `queued` (any shard's pull checks first), at most twice per spec (`attempts`); past that it is `abandoned` and the
+  engine reports it `infra`, for the fresh host of 9.2 as before. A shard whose runner crashed twice or whose host was lost
+  gives its unfinished specs back at once (no wait for the lease) and stops pulling: a host that failed is not trusted with the rest.
+- **Unchanged.** Results are stored per spec and phase as before; the stored plan is rewritten to who ran what; the
+  re-run, classifier, fail fast (the rest of the queue is `not_run`), artifacts, stats and caps do not know the queue exists.
+  A baseline with coverage pulls one spec at a time (never two against a service). A workflow step that runs again reads
+  back the stored results of specs its earlier attempt finished (they are not pulled twice).
+- **What it costs.** One extra command start per pull instead of one per shard (about 50 s per Cypress spec under gVisor
+  is the browser start, not the command; measured on the fixture in the build plan's step 20, not yet).
 
 ### 6.1 Cost optimizations: run only the specs a change can reach
 
@@ -634,7 +666,7 @@ reason, like `MachineMinutesChanged`.
 | Protocol and hub | `libs/runtime/protocol/messages.ts` (consumer, claim policy for `suite`; optional `exec.start`/`poll`, D3), hub routing of the `suite:` bound key and claim ownership, admission checks |
 | Cell (Go) | `apps/runtime-cell`: claim of consumer `suite` (Run-like), upload grants for `suite-artifact`, the service-level exec of a detached command. No browser-runner change |
 | Fleet | `apps/runtime/src/fleet/per-run-host.ts` (bound key kind `suite`), `libs/runtime/placement/candidate-pools.ts` (`boundKeyOfSuite`), demand rows per shard, `template-rebuild.ts`/`template-trigger.ts` (enqueue the baseline when a template is `ready`), pool admission for customer orgs |
-| Persistence | Runtime Postgres migration: `runtime_suite_runs`, `_shards`, `_results`, `_baselines`, `_spec_stats`; stores in `apps/runtime/src/worker/suite/` (like `pg-kept-check-results.ts`) |
+| Persistence | Runtime Postgres migration: `runtime_suite_runs`, `_shards`, `_results`, `_baselines`, `_spec_stats`, `_queue`; stores in `apps/runtime/src/worker/suite/` (like `pg-kept-check-results.ts`) |
 | Publish | `libs/runtime-publish` (suite check slot and key, annotations in `ChecksPort`, `render-runtime-comment.ts` suite section, `runtime-publication.ts` model) |
 | API and web | `libs/runtime/api` (suite use cases: list, retry a shard, rerun failed, enable CI mode in settings, usage line), `apps/web/src/app/(app)/runtime/runs/[runId]` (E2E suite tab), new `runtime/suites/[suiteRunId]`, settings: suite on/off, mode, gate |
 | Cost | `libs/runtime/api/application/run-cost.service.ts`, `domain/usage-report.ts`, usage CSV, org ceiling |
@@ -756,6 +788,11 @@ Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_m
 20. **Live validation** (through the product, `verify-runtime`): the seeded fixture on the dev stack with a boat pool
     for Kodus's org; the seeded PR set selected vs full (recall 100%, saving reported); measure section 16; then the
     customer-shaped repository, reading its data only.
+
+21. **Dynamic queue** (6.2). Test first: a spec nobody else holds is handed to exactly one shard when ten pull at once (Postgres);
+    a lapsed lease re-queues, a renewed one does not, the third hand-out is `abandoned`; a slow spec the stats did not know
+    no longer makes its shard the tail; a lost host's specs are run by the other shard with no fresh host; the results model
+    and the re-run flow are the fixed plan's.
 
 ## 18. Open decisions (with a recommendation)
 

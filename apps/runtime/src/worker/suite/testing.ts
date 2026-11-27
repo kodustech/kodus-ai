@@ -1,9 +1,11 @@
 import type { AcquireRequest, Blocked, Claim, EnvError, ExecRequest, StepResult } from '@libs/runtime/environment';
+import { afterLostClaim, batchSize, QUEUE_BATCH_MAX_SPECS, QUEUE_BATCH_TARGET_MS, QUEUE_LEASE_MS, type QueueEntry } from '@libs/runtime/suite';
 
 import type { CoverageMapRecord } from './coverage-collector';
 import { POLL_STATES } from './detached-exec';
 import type { BaselineRecord, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, StoredSuiteResult, SuiteArtifactRef, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
+import type { LostClaims, PgSuiteQueue, QueueCounts, QueueLeftover } from './pg-suite-queue';
 import type { PgSuiteSelectionState, PgSuiteShadows, SelectionState, ShadowRequest, StoredShadow } from './pg-suite-shadows';
 import { STATS_WINDOW, type PgSuiteSpecStats, type SpecObservation } from './pg-suite-spec-stats';
 import type { SuiteHostDemand, SuiteShardHost } from './suite-engine';
@@ -268,6 +270,65 @@ export class InMemorySuiteSelectionState implements Pick<PgSuiteSelectionState, 
         if (!r || r.organizationId !== o) return undefined;
         Object.assign(r, { off: false, offBy: undefined, fullPrsLeft: 0, reenabledAt: at });
         return at;
+    }
+}
+
+/** The spec queue of a suite run, as the Postgres store keeps it (same methods, same rules: the integration spec holds the Postgres one to them). */
+export class InMemorySuiteQueue implements Pick<PgSuiteQueue, 'seed' | 'claimNext' | 'renew' | 'complete' | 'release' | 'requeueExpired' | 'counts' | 'leftovers'> {
+    private readonly rows = new Map<string, QueueEntry & { organizationId: string; suiteRunId: string; state: 'queued' | 'claimed' | 'done' | 'abandoned'; claimedBy?: number; attempts: number; leaseExpiresAt?: number }>();
+    /** Every pull, in order, for a spec to read what the shards were handed. */
+    readonly pulls: Array<{ shard: number; specs: string[] }> = [];
+    private key = (run: string, spec: string) => `${run}|${spec}`;
+    private of(o: string, run: string) {
+        return [...this.rows.values()].filter((r) => r.organizationId === o && r.suiteRunId === run);
+    }
+    async seed(organizationId: string, suiteRunId: string, entries: readonly QueueEntry[]) {
+        let n = 0;
+        for (const e of entries) {
+            if (this.rows.has(this.key(suiteRunId, e.spec))) continue;
+            this.rows.set(this.key(suiteRunId, e.spec), { ...e, organizationId, suiteRunId, state: 'queued', attempts: 0 });
+            n++;
+        }
+        return n;
+    }
+    async claimNext(c: { organizationId: string; suiteRunId: string; shard: number; now: Date; leaseMs?: number; targetMs?: number; maxSpecs?: number }) {
+        const queued = this.of(c.organizationId, c.suiteRunId).filter((r) => r.state === 'queued').sort((a, b) => a.priority - b.priority || b.weight - a.weight || (a.spec < b.spec ? -1 : 1));
+        const take = queued.slice(0, batchSize(queued, { targetMs: c.targetMs ?? QUEUE_BATCH_TARGET_MS, maxSpecs: c.maxSpecs ?? QUEUE_BATCH_MAX_SPECS }));
+        for (const r of take) Object.assign(r, { state: 'claimed', claimedBy: c.shard, attempts: r.attempts + 1, leaseExpiresAt: c.now.getTime() + (c.leaseMs ?? QUEUE_LEASE_MS) });
+        if (take.length > 0) this.pulls.push({ shard: c.shard, specs: take.map((r) => r.spec) });
+        return take.map((r) => r.spec);
+    }
+    async renew(organizationId: string, suiteRunId: string, shard: number, now: Date, leaseMs: number = QUEUE_LEASE_MS) {
+        for (const r of this.of(organizationId, suiteRunId)) if (r.state === 'claimed' && r.claimedBy === shard) r.leaseExpiresAt = now.getTime() + leaseMs;
+    }
+    async complete(organizationId: string, suiteRunId: string, specs: readonly string[], _now: Date) {
+        for (const r of this.of(organizationId, suiteRunId)) if (specs.includes(r.spec) && (r.state === 'claimed' || r.state === 'queued')) Object.assign(r, { state: 'done', leaseExpiresAt: undefined });
+    }
+    private lose(rows: Array<{ state: string; attempts: number; spec: string; claimedBy?: number; leaseExpiresAt?: number }>): LostClaims {
+        const out: LostClaims = { requeued: [], abandoned: [] };
+        for (const r of rows) {
+            const next = afterLostClaim(r.attempts);
+            Object.assign(r, { state: next, leaseExpiresAt: undefined, ...(next === 'queued' ? { claimedBy: undefined } : {}) });
+            (next === 'queued' ? out.requeued : out.abandoned).push(r.spec);
+        }
+        return out;
+    }
+    async release(organizationId: string, suiteRunId: string, shard: number, _now: Date, specs?: readonly string[]) {
+        return this.lose(this.of(organizationId, suiteRunId).filter((r) => r.state === 'claimed' && r.claimedBy === shard && (!specs || specs.includes(r.spec))));
+    }
+    async requeueExpired(organizationId: string, suiteRunId: string, now: Date) {
+        return this.lose(this.of(organizationId, suiteRunId).filter((r) => r.state === 'claimed' && r.leaseExpiresAt !== undefined && r.leaseExpiresAt <= now.getTime()));
+    }
+    async counts(organizationId: string, suiteRunId: string): Promise<QueueCounts> {
+        const out: QueueCounts = { queued: 0, claimed: 0, done: 0, abandoned: 0 };
+        for (const r of this.of(organizationId, suiteRunId)) out[r.state]++;
+        return out;
+    }
+    async leftovers(organizationId: string, suiteRunId: string): Promise<QueueLeftover[]> {
+        return this.of(organizationId, suiteRunId)
+            .filter((r) => r.state !== 'done')
+            .sort((a, b) => a.priority - b.priority || b.weight - a.weight || (a.spec < b.spec ? -1 : 1))
+            .map((r) => ({ spec: r.spec, state: r.state as QueueLeftover['state'], ...(r.claimedBy !== undefined ? { claimedBy: r.claimedBy } : {}) }));
     }
 }
 
