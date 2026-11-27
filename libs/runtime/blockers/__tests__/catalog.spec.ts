@@ -481,6 +481,24 @@ describe('an entry the cell refuses to unpack', () => {
         expect(classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message: 'services.db.container_name refused' })).toMatchObject({ kind: 'toolchain', title: 'The host refused the compose project before building it' });
     });
 
+    it('a compose file whose declared memory does not fit the machine size is a resources card naming the way out; any other refusal stays the recipe\'s', () => {
+        const message =
+            "compose refused: services: the services declare 6144m of memory together (web 4096m, db 2048m), over the environment's machine size of 4g: declare less or choose a larger machine size";
+        const c = classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message });
+        expect(c).toMatchObject({ kind: 'resources', title: 'The memory the services declare does not fit the environment' });
+        expect(c.fixes.map((f) => f.action)).toEqual(['bump_machine', 'fix_recipe']);
+        expect(c.fixes[1].detail).toContain('mem_limit');
+    });
+
+    it('a service the kernel killed for memory is named, and the card offers a larger machine size or a declared mem_limit', () => {
+        const c = classifyBlocker(
+            composeUp(logs('api', "api exited with code 137: the kernel killed it for memory (OOM): raise the environment's machine size or declare mem_limit for api")),
+        );
+        expect(c).toMatchObject({ kind: 'resources', signature: 'resources:memory:api', title: 'The api service ran out of memory' });
+        expect(c.fixes.map((f) => f.action)).toEqual(['bump_machine', 'fix_recipe', 'retry_setup']);
+        expect(c.fixes[1].detail).toContain('Declare mem_limit for the api service');
+    });
+
     it('a boot no cell took is a platform card: nothing booted, check the cell, run it again', () => {
         const none = classifyBlocker({ kind: 'cell_unavailable', signature: 'cell_unavailable', message: 'no cell is connected for this organization' });
         expect(none).toMatchObject({ kind: 'platform', title: 'No host was connected to boot this environment' });

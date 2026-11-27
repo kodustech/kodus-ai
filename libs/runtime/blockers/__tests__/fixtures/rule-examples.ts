@@ -345,8 +345,8 @@ export const RULE_EXAMPLES: RuleExample[] = [
     },
     {
         rule: 'log:oom',
-        behavior: 'reads a heap out of memory as a machine to enlarge',
-        card: { kind: 'resources', signature: 'resources:memory:web', fixes: ['bump_machine', 'retry_setup'] },
+        behavior: 'reads a heap out of memory as a machine to enlarge or a mem_limit to declare',
+        card: { kind: 'resources', signature: 'resources:memory:web', fixes: ['bump_machine', 'fix_recipe', 'retry_setup'] },
         input: {
             kind: 'unknown',
             signature: 'compose_up',

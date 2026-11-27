@@ -68,17 +68,36 @@ export const imageTooLargeRule = bySignature('image_too_large', ({ input }) => (
 }));
 
 /** The cell's sandbox refused the compose project before building anything. */
-export const composeRefusedRule = bySignature('compose_refused', ({ input }) => ({
-    kind: 'toolchain',
-    signature: 'compose_refused',
-    title: 'The host refused the compose project before building it',
-    evidence: evidenceOf({ text: input.message }),
-    fixes: [
-        fixRecipe(
-            'The message names the key the sandbox refuses (privileges, host paths, container names, variables the host would fill in). Remove it from the compose file the recipe names, or name an overlay without it, and run the setup again.',
-        ),
-    ],
-}));
+export const composeRefusedRule = bySignature('compose_refused', ({ input }) => {
+    // The memory the services declare (mem_limit, deploy.resources.limits.memory) does not fit the machine size.
+    if (/machine size of|share the .* of the environment/.test(input.message)) {
+        return {
+            kind: 'resources',
+            signature: 'compose_refused:memory',
+            title: 'The memory the services declare does not fit the environment',
+            evidence: evidenceOf({ text: input.message }),
+            fixes: [
+                largerMachine(
+                    `The message names the services and the machine size. In the environment's Machine size, choose a larger size (Medium 8 GB, Large 16 GB) and run the setup again. ${SELF_HOSTED_MEMORY}`,
+                ),
+                fixRecipe(
+                    'Or declare less: lower mem_limit (or deploy.resources.limits.memory) of the services the message names in the compose file the recipe names. Together they must fit the machine size, with room kept for the sandbox.',
+                ),
+            ],
+        };
+    }
+    return {
+        kind: 'toolchain',
+        signature: 'compose_refused',
+        title: 'The host refused the compose project before building it',
+        evidence: evidenceOf({ text: input.message }),
+        fixes: [
+            fixRecipe(
+                'The message names the key the sandbox refuses (privileges, host paths, container names, variables the host would fill in). Remove it from the compose file the recipe names, or name an overlay without it, and run the setup again.',
+            ),
+        ],
+    };
+});
 
 /**
  * The cell would not write a build file Kody wrote: the checkout (a pull request's, for a Run)

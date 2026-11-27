@@ -118,6 +118,9 @@ const oom: LineRule = ({ text, service }) =>
                   largerMachine(
                       "In the environment's Machine size, choose Medium (8 GB) or Large (16 GB) and run the setup again. Or lower what it needs: NODE_OPTIONS=--max-old-space-size or a smaller worker count in the compose.",
                   ),
+                  fixRecipe(
+                      `The cell gives each service the memory it declares (mem_limit, or deploy.resources.limits.memory) and shares the rest of the machine by role: a database or cache gets a small default, the app the rest. Declare mem_limit for ${service ? `the ${service} service` : 'the service'} in the compose file the recipe names, sized to what it needs, or lower what it uses.`,
+                  ),
                   retry,
               ],
           }
