@@ -27,6 +27,14 @@ jest.mock("next/link", () => ({
         </a>
     ),
 }));
+const mockEnvironments = {
+    query: {
+        isPending: false,
+        data: [
+            { environmentId: "e1", repositoryId: "r1", state: "active" },
+        ] as unknown[],
+    },
+};
 jest.mock("nuqs", () => ({
     useQueryState: () => ["r1", jest.fn()],
 }));
@@ -36,7 +44,7 @@ jest.mock("@services/parameters/use-code-review-scopes", () => ({
 jest.mock("@services/runtime/api", () => ({ MAX_RUNS_PAGE: 100 }));
 jest.mock("@services/runtime/queries", () => ({
     RUNS_PAGE_SIZE: 20,
-    useRuntimeEnvironments: () => ({ isPending: false, data: [] }),
+    useRuntimeEnvironments: () => mockEnvironments.query,
     useRuntimeRuns: () => ({
         isLoading: false,
         isError: false,
@@ -144,5 +152,20 @@ describe("Runs list", () => {
         expect(
             within(row).getByText("aaaaaaa").parentElement,
         ).toHaveTextContent(/^aaaaaaa$/);
+    });
+
+    it("offers no repository and says where to set one up when no repository has an environment", () => {
+        mockEnvironments.query = { isPending: false, data: [] };
+        render(<RunsPage />);
+        expect(screen.getByText("No environment yet")).toBeInTheDocument();
+        expect(
+            screen.getByRole("link", { name: "Environments" }),
+        ).toHaveAttribute("href", "/runtime/environments");
+        mockEnvironments.query = {
+            isPending: false,
+            data: [
+                { environmentId: "e1", repositoryId: "r1", state: "active" },
+            ],
+        };
     });
 });

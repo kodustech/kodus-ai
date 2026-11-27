@@ -21,6 +21,21 @@ export const openDisclosure = (id: string) => {
     if (el instanceof HTMLDetailsElement) el.open = true;
 };
 
+/** Classes that mark the section a link landed on, for a moment: it may sit right below where the reader was. */
+const FLASH = [
+    "ring-2",
+    "ring-primary-light",
+    "ring-offset-2",
+    "ring-offset-background",
+];
+
+/** Marks the element a link landed on for two seconds. */
+export const flash = (el: Element | null | undefined) => {
+    if (!el) return;
+    el.classList.add(...FLASH);
+    window.setTimeout(() => el.classList.remove(...FLASH), 2000);
+};
+
 /** The id of what is happening now inside a section (`<section>-live`: the setup step that runs), when there is one. */
 export const liveId = (section: string) => `${section}-live`;
 

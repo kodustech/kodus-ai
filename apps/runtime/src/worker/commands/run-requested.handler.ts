@@ -109,7 +109,17 @@ export class RunRequestedHandler implements CommandHandler {
         const forClaim = recipeForClaimOf(setup.recipe);
         const environment: RuntimeRunRequested['environment'] = { ...req.environment, ...(setup.expose?.length ? { expose: setup.expose } : {}), ...(forClaim ? { recipe: forClaim } : {}) };
         const prChangesRecipe = recipeChangedInPr({ ...req, environment }).length > 0;
-        const recipe = setup.recipe ? { sha: setup.recipe.sha, state: setup.recipe.state, ...(setup.recipe.digest ? { digest: setup.recipe.digest } : {}), prChangesRecipe } : undefined;
+        const recipe = setup.recipe
+            ? {
+                  sha: setup.recipe.sha,
+                  state: setup.recipe.state,
+                  ...(setup.recipe.digest ? { digest: setup.recipe.digest } : {}),
+                  prChangesRecipe,
+                  // Where it came from, so the Run page says it (a recipe sent from an agent is not read from main).
+                  ...(setup.recipe.origin ? { origin: setup.recipe.origin } : {}),
+                  ...(setup.recipe.path ? { path: setup.recipe.path } : {}),
+              }
+            : undefined;
         // The Run boots at the size its setup booted with, never at one the request names.
         if (setup.machineSize) environment.size = setup.machineSize;
         // The ready check the setup passed, so a Run waits for the app after each reset as the setup did after its boot.

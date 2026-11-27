@@ -43,3 +43,31 @@ describe('a PR head requested in several environments', () => {
         expect(engine.start).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('the recipe a Run records', () => {
+    it("says where the environment's recipe came from, so the Run page never calls a sent recipe one read from main", async () => {
+        const projection = new InMemoryRunProjectionStore();
+        const engine = { start: jest.fn(async () => undefined), stop: jest.fn(async () => undefined) };
+        const req = shopRunRequest();
+        const setups = {
+            get: async () =>
+                ({
+                    environmentId: req.environment.environmentId,
+                    organizationId: req.organizationId,
+                    repositoryId: req.repository.id,
+                    key: 'k',
+                    state: 'active',
+                    steps: [],
+                    blockers: [],
+                    requestedAt: '2026-11-27T00:00:00.000Z',
+                    updatedAt: '2026-11-27T00:00:00.000Z',
+                    recipe: { path: '.kodus/workspace.yaml', sha: 'a'.repeat(40), state: 'found', content: 'version: 1\n', origin: 'submitted' },
+                }) as any,
+        };
+        const h = new RunRequestedHandler(engine as any, projection, { isStopped: async () => false } as any, new InMemoryDistributedLocks(), new InMemoryPrAdmissionStore(), setups);
+
+        await h.requested(req);
+
+        expect((await projection.get(req.runId))?.recipe).toMatchObject({ origin: 'submitted', path: '.kodus/workspace.yaml', sha: 'a'.repeat(40) });
+    });
+});

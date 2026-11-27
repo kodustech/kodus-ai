@@ -3,7 +3,8 @@
 import { useEffect, useMemo } from "react";
 import NextLink from "next/link";
 import { BlockerCard } from "@components/runtime/blocker-card";
-import { RuntimeDisclosure } from "@components/runtime/disclosure";
+import { flash, RuntimeDisclosure } from "@components/runtime/disclosure";
+import { EgressApprovalsList } from "@components/runtime/egress-access";
 import {
     RuntimeEmptyState,
     RuntimeErrorState,
@@ -24,10 +25,12 @@ import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
-import { usePermission, usePermissionOnEvery } from "@services/permissions/hooks";
+import {
+    usePermission,
+    usePermissionOnEvery,
+} from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { shortRepositoryName } from "@services/runtime/format";
-import { decodeRouteParam } from "@services/runtime/route-params";
 import {
     blockerAnchorId,
     groupBlockersBySignature,
@@ -42,8 +45,8 @@ import {
 } from "@services/runtime/model/environment";
 import {
     environmentRepositoriesOf,
-    repositoryIdsOfEnvironment,
     namesInWords,
+    repositoryIdsOfEnvironment,
     repositoryLabel,
 } from "@services/runtime/model/environment-repositories";
 import {
@@ -57,15 +60,15 @@ import {
     useRuntimeEnvironments,
     useRuntimeSettings,
 } from "@services/runtime/queries";
+import { decodeRouteParam } from "@services/runtime/route-params";
 import { ActivityIcon, ArrowLeftIcon } from "lucide-react";
 
-import { ApproveHostForm } from "./_components/egress-approval";
-import { EgressApprovalsList } from "@components/runtime/egress-access";
 import { EnvironmentSuiteSection } from "./_components/e2e-suite";
-import { EnvironmentLessons } from "./_components/lessons";
-import { MachineSizeSetting } from "./_components/machine-size";
+import { ApproveHostForm } from "./_components/egress-approval";
 import { EnvironmentPreviewSection } from "./_components/environment-preview";
 import { ForkPullRequestsSetting } from "./_components/fork-pull-requests";
+import { EnvironmentLessons } from "./_components/lessons";
+import { MachineSizeSetting } from "./_components/machine-size";
 import { EnvironmentNextStep } from "./_components/next-step";
 import { EnvironmentRepositories } from "./_components/repositories";
 import { WarmPool } from "./_components/warm-pool";
@@ -213,7 +216,10 @@ export const EnvironmentDetailPage = ({
     useEffect(() => {
         const id = decodeRouteParam(window.location.hash.slice(1));
         if (!loaded || !id || SETTINGS_INNER.includes(id)) return;
-        document.getElementById(id)?.scrollIntoView?.({ behavior: "smooth" });
+        const target = document.getElementById(id);
+        target?.scrollIntoView?.({ behavior: "smooth" });
+        // A section that sits near the top barely scrolls: mark it, so the link visibly landed somewhere.
+        flash(target);
     }, [loaded]);
 
     if (environment.isLoading) {
@@ -261,8 +267,7 @@ export const EnvironmentDetailPage = ({
     const multi = repositories.length > 1;
     // A Run boots from the last setup that finished ready: before one, there
     // is nothing to simulate and nothing to keep warm.
-    const hasBake =
-        env.setup?.state === "active" || !!env.setup?.lastActive;
+    const hasBake = env.setup?.state === "active" || !!env.setup?.lastActive;
 
     return (
         <Page.Root>

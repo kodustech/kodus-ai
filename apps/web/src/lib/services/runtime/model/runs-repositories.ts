@@ -13,13 +13,14 @@ export interface RunsRepositories {
     withEnvironment: RunsRepositoryOption[];
     /** Connected repositories with no environment yet, by name. */
     others: RunsRepositoryOption[];
-    /** Where the screen opens when it names no repository: the first with an environment, else the first at all. */
+    /** Where the screen opens when it names no repository: the first with an environment (none: nothing to show). */
     preferred?: string;
 }
 
 /**
- * The Runs screen's repositories, split by whether they have an environment. Before, the list opened on the first
- * repository by name, usually one with no environment and so no Run, and the one with Runs sat somewhere below.
+ * The Runs screen's repositories: only those with an environment can have Runs, so only they are offered. Before, the
+ * list opened on the first connected repository by name, usually one with no environment and so no Run, and the one
+ * with Runs sat somewhere below. `others` stays for the screens that say what could be set up.
  */
 export const runsRepositories = (
     repositories: ReadonlyArray<{ id: string; name: string }>,
@@ -56,6 +57,6 @@ export const runsRepositories = (
     return {
         withEnvironment: options,
         others,
-        preferred: options[0]?.id ?? others[0]?.id,
+        preferred: options[0]?.id,
     };
 };

@@ -7,8 +7,10 @@ const repos = [
     { id: "r-api", name: "acme/api" },
 ];
 
+const at = "2026-11-27T08:00:00.000Z";
+
 describe("runsRepositories", () => {
-    it("puts the repositories with an environment first, changed last first, with their state, and opens on the first of them", () => {
+    it("offers the repositories with an environment, changed last first, with their state, and opens on the first of them", () => {
         const out = runsRepositories(repos, [
             // As the list answers it: an active environment carries the setup that made it active.
             {
@@ -20,8 +22,8 @@ describe("runsRepositories", () => {
                     state: "active",
                     steps: [],
                     blockers: [],
-                    requestedAt: "2026-11-27T08:00:00.000Z",
-                    updatedAt: "2026-11-27T09:00:00.000Z",
+                    requestedAt: at,
+                    updatedAt: at,
                 },
             } as never,
             {
@@ -35,35 +37,26 @@ describe("runsRepositories", () => {
             "r-api",
             "r-shop",
         ]);
-        expect(out.withEnvironment.map((r) => r.status?.label)).toEqual([
-            expect.any(String),
-            "Ready",
-        ]);
-        // The rest by name, after them.
+        expect(out.withEnvironment[1].status?.label).toBe("Ready");
+        expect(out.preferred).toBe("r-api");
+        // The rest are not offered for Runs; they stay apart for the screens that say what could be set up.
         expect(out.others.map((r) => r.name)).toEqual([
             "acme/app",
             "acme/mono",
         ]);
-        expect(out.preferred).toBe("r-api");
     });
 
-    it("with no environment at all, lists every repository by name and opens on the first", () => {
+    it("with no environment at all, offers nothing to open: there are no Runs to show", () => {
         const out = runsRepositories(repos, []);
         expect(out.withEnvironment).toEqual([]);
-        expect(out.others.map((r) => r.name)).toEqual([
-            "acme/api",
-            "acme/app",
-            "acme/mono",
-            "acme/shop",
-        ]);
-        expect(out.preferred).toBe("r-api");
+        expect(out.preferred).toBeUndefined();
     });
 
-    it("an environment of a repository the team no longer reviews is not listed", () => {
+    it("an environment of a repository the team no longer reviews is not offered", () => {
         const out = runsRepositories(repos.slice(0, 1), [
             { environmentId: "e1", repositoryId: "r-gone", state: "active" },
         ]);
         expect(out.withEnvironment).toEqual([]);
-        expect(out.preferred).toBe("r-mono");
+        expect(out.preferred).toBeUndefined();
     });
 });

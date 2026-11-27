@@ -71,3 +71,25 @@ export const runFacts = (
           }
         : {}),
 });
+
+/**
+ * Where the setup file a Run booted with came from, in words: a recipe the developer's agent sent or Kody wrote is not
+ * read from the base branch, and the Run page used to say it was. `base`: the base branch's name.
+ */
+export const runRecipeSource = (
+    recipe: RuntimeRun["recipe"],
+    base: string,
+): string => {
+    if (!recipe) return "The environment's setup file";
+    if (recipe.state === "absent") return "No setup file";
+    switch (recipe.origin) {
+        case "submitted":
+            return "Sent from a coding agent";
+        case "authored":
+            return "Written by Kody";
+        case "inferred":
+            return "Inferred by Kodus";
+        default:
+            return `Committed in ${base} at ${recipe.sha.slice(0, 7)}`;
+    }
+};

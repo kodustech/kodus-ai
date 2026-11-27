@@ -276,12 +276,15 @@ export type RuntimeRun = {
      * Kody measured.
      */
     intendedBy?: Record<string, FindingIntentMark>;
-    /** The recipe the Run booted with, from the base branch (§6). */
+    /** The recipe the Run booted with: the environment's setup's (§6), never the PR's copy. */
     recipe?: {
         sha: string;
         state: "found" | "absent";
         digest?: string;
         prChangesRecipe: boolean;
+        /** Absent: committed in the repository (Runs before origins were recorded say nothing more). */
+        origin?: "repository" | "inferred" | "authored" | "submitted";
+        path?: string;
     };
     /** Recipe files the PR changes (S-19): the Run used the base's recipe instead. */
     recipeChangedInPr?: string[];

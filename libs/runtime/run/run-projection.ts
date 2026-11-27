@@ -1,4 +1,5 @@
 import type { KeptCheckOutcome } from '@libs/runtime/contracts/kept-check';
+import type { SetupRecipeOrigin } from '@libs/runtime/contracts/runtime-commands';
 import type {
     RecipeChangedPath,
     RunTrigger,
@@ -79,6 +80,9 @@ export interface RuntimeRunProjection {
         state: 'found' | 'absent';
         digest?: string;
         prChangesRecipe: boolean;
+        /** Where the recipe came from (absent: committed in the repository, at `path`). The Run page says so. */
+        origin?: SetupRecipeOrigin;
+        path?: string;
     };
     /**
      * Recipe files the PR changes whose PR copy the Run never boots (S-19,

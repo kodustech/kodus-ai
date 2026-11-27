@@ -65,24 +65,35 @@ export const RunsPage = () => {
             <RuntimeHeader />
             <Page.Content>
                 <div className="flex flex-wrap items-center gap-3">
-                    <RepositorySelect
-                        repositories={repositories}
-                        value={repositoryId ?? undefined}
-                        onChange={(id) => {
-                            setLimit(RUNS_PAGE_SIZE);
-                            setRepositoryId(id);
-                        }}
-                    />
+                    {repositories.withEnvironment.length > 0 && (
+                        <RepositorySelect
+                            repositories={repositories}
+                            value={repositoryId ?? undefined}
+                            onChange={(id) => {
+                                setLimit(RUNS_PAGE_SIZE);
+                                setRepositoryId(id);
+                            }}
+                        />
+                    )}
                     <p className="text-text-tertiary text-xs">
                         Each Run boots the base branch and the pull request the
                         same way and compares what they answer.
                     </p>
                 </div>
 
-                {!repositoryId ? (
-                    <RuntimeEmptyState title="No repository yet">
-                        Connect a repository to see its Runtime runs.
+                {environmentsKnown &&
+                repositories.withEnvironment.length === 0 ? (
+                    <RuntimeEmptyState title="No environment yet">
+                        Runs happen in a repository Kody can boot. Set one up in{" "}
+                        <NextLink
+                            href="/runtime/environments"
+                            className="text-primary-light underline-offset-2 hover:underline">
+                            Environments
+                        </NextLink>
+                        , then its pull requests get Runs.
                     </RuntimeEmptyState>
+                ) : !repositoryId ? (
+                    <Skeleton className="h-48 w-full" />
                 ) : runs.isLoading ? (
                     <Skeleton className="h-48 w-full" />
                 ) : runs.isError ? (

@@ -49,6 +49,7 @@ import {
     workspaceSideRows,
 } from "@services/runtime/model/environment-repositories";
 import { buildFindings } from "@services/runtime/model/findings";
+import { runRecipeSource } from "@services/runtime/model/run-facts";
 import { buildRunLog } from "@services/runtime/model/run-log";
 import { buildRunPaths } from "@services/runtime/model/run-paths";
 import {
@@ -123,11 +124,7 @@ const whatWasRunningLine = (
 ) =>
     [
         `On ${cellOwnerLabel(run.cellOwner)}`,
-        run.recipe?.state === "absent"
-            ? "no setup file"
-            : run.recipe?.sha
-              ? `setup file from ${baseLabel} at ${shortSha(run.recipe.sha)}`
-              : "the environment's setup file",
+        `setup file: ${runRecipeSource(run.recipe, baseLabel).toLowerCase()}`,
         repositories > 0 ? `${repositories} repositories` : undefined,
     ]
         .filter(Boolean)
@@ -433,22 +430,25 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
                                             run.environmentId,
                                         )}
                                         className="text-primary-light underline-offset-2 hover:underline">
-                                        Open the environment
+                                        {run.repositoryName ||
+                                            "Open the environment"}
                                     </NextLink>
                                 </Fact>
                                 <Fact label="Setup file">
-                                    <NextLink
-                                        href={environmentHref(
-                                            run.environmentId,
-                                            ENVIRONMENT_SECTION.recipe,
-                                        )}
-                                        className="text-primary-light underline-offset-2 hover:underline">
-                                        {run.recipe?.state === "absent"
-                                            ? "No setup file"
-                                            : run.recipe?.sha
-                                              ? `Read from ${baseLabel} at ${shortSha(run.recipe.sha)}`
-                                              : "Open the setup file"}
-                                    </NextLink>
+                                    {runRecipeSource(run.recipe, baseLabel)}
+                                    {run.recipe?.state !== "absent" && (
+                                        <>
+                                            {" · "}
+                                            <NextLink
+                                                href={environmentHref(
+                                                    run.environmentId,
+                                                    ENVIRONMENT_SECTION.recipe,
+                                                )}
+                                                className="text-primary-light underline-offset-2 hover:underline">
+                                                See the file
+                                            </NextLink>
+                                        </>
+                                    )}
                                 </Fact>
                                 <Fact label="Host">
                                     {cellOwnerLabel(run.cellOwner)}

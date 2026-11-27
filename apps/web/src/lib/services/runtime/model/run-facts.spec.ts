@@ -2,6 +2,7 @@ import {
     neutralReasonsOfTitle,
     parseNeutralReasons,
     runFacts,
+    runRecipeSource,
 } from "./run-facts";
 
 describe("runFacts", () => {
@@ -75,5 +76,40 @@ describe("runFacts", () => {
                 { verdict: { at: "t", forcedNeutral: [] } },
             ).blockedOutbound,
         ).toBeUndefined();
+    });
+});
+
+describe("runRecipeSource", () => {
+    const recipe = {
+        sha: "239a4415903c",
+        state: "found" as const,
+        prChangesRecipe: false,
+    };
+    it("says where the setup file came from: a sent or written one is not read from the base branch", () => {
+        expect(
+            runRecipeSource({ ...recipe, origin: "submitted" }, "main"),
+        ).toBe("Sent from a coding agent");
+        expect(runRecipeSource({ ...recipe, origin: "authored" }, "main")).toBe(
+            "Written by Kody",
+        );
+        expect(runRecipeSource({ ...recipe, origin: "inferred" }, "main")).toBe(
+            "Inferred by Kodus",
+        );
+        expect(
+            runRecipeSource({ ...recipe, origin: "repository" }, "main"),
+        ).toBe("Committed in main at 239a441");
+        // A Run recorded before origins were: the base branch's, as before.
+        expect(runRecipeSource(recipe, "main")).toBe(
+            "Committed in main at 239a441",
+        );
+    });
+
+    it("says when there was none, or when the Run did not record it", () => {
+        expect(runRecipeSource({ ...recipe, state: "absent" }, "main")).toBe(
+            "No setup file",
+        );
+        expect(runRecipeSource(undefined, "main")).toBe(
+            "The environment's setup file",
+        );
     });
 });
