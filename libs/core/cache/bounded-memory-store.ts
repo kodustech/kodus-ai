@@ -11,9 +11,9 @@
  * heap limit (Nov 2026).
  *
  * Keyv serializes every value to a string before `set`, so the size of an
- * entry is the length of that string. Eviction drops the oldest insertions
+ * entry is the heap that string takes (`sizeOf`). Eviction drops the oldest insertions
  * first (a read or a re-set moves the key to the end). An entry larger than
- * `maxEntryChars` is not stored at all: it would evict many useful entries to
+ * `maxEntryBytes` is not stored at all: it would evict many useful entries to
  * cache one value that is unlikely to repeat.
  *
  * The character budget evicts only large values. The same cache holds small
@@ -21,23 +21,25 @@
  * license)" notice dedupe: evicted with the file contents, the author got the
  * notice again every few hours. Small entries leave by the entry cap, and by
  * size only once no large value is left; with the global bounds that never
- * happens on a production worker (200k × 1,024 is 205M of 1G characters),
- * but `maxChars` holds either way. Large keys keep their own order, so the size budget never walks
+ * happens on a production worker (200k × 1 KB is 205 MB of 2 GB),
+ * but `maxBytes` holds either way. Large keys keep their own order, so the size budget never walks
  * past the small ones.
  */
 
 /** Values below this size are evicted only by the entry cap, not by size. */
-export const SMALL_ENTRY_CHARS = 1_024;
+export const SMALL_ENTRY_BYTES = 1_024;
 export interface BoundedMemoryStoreOptions {
     maxEntries: number;
-    /** Total characters held across all values (UTF-16: ~2 bytes each). */
-    maxChars: number;
-    maxEntryChars: number;
+    /** Total bytes V8 holds for all values (see `sizeOf`). */
+    maxBytes: number;
+    maxEntryBytes: number;
 }
 
 export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
-    private chars = 0;
-    /** Keys of values of at least SMALL_ENTRY_CHARS, least recently used first. */
+    private bytes = 0;
+    /** Size of each held value, so a delete does not rescan it. */
+    private readonly sizes = new Map<string, number>();
+    /** Keys of values of at least SMALL_ENTRY_BYTES, least recently used first. */
     private readonly large = new Set<string>();
 
     constructor(private readonly opts: BoundedMemoryStoreOptions) {
@@ -49,21 +51,22 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         return this.opts;
     }
 
-    /** Characters currently held, for metrics and tests. */
-    get heldChars(): number {
-        return this.chars;
+    /** Bytes currently held, for metrics and tests. */
+    get heldBytes(): number {
+        return this.bytes;
     }
 
     override set(key: string, value: V): this {
         const size = sizeOf(value);
         this.delete(key);
-        if (size > this.opts.maxEntryChars) return this;
+        if (size > this.opts.maxEntryBytes) return this;
         super.set(key, value);
-        this.chars += size;
-        if (size >= SMALL_ENTRY_CHARS) this.large.add(key);
+        this.sizes.set(key, size);
+        this.bytes += size;
+        if (size >= SMALL_ENTRY_BYTES) this.large.add(key);
         // The size budget takes large values first.
         for (const oldest of this.large) {
-            if (this.chars <= this.opts.maxChars) break;
+            if (this.bytes <= this.opts.maxBytes) break;
             if (oldest === key) continue;
             this.delete(oldest);
         }
@@ -71,7 +74,7 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         for (const oldest of this.keys()) {
             if (
                 this.size <= this.opts.maxEntries &&
-                this.chars <= this.opts.maxChars
+                this.bytes <= this.opts.maxBytes
             )
                 break;
             if (oldest === key) continue;
@@ -98,7 +101,8 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
 
     override delete(key: string): boolean {
         if (!super.has(key)) return false;
-        this.chars -= sizeOf(super.get(key) as V);
+        this.bytes -= this.sizes.get(key) ?? 0;
+        this.sizes.delete(key);
         this.large.delete(key);
         return super.delete(key);
     }
@@ -106,12 +110,26 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
     override clear(): void {
         super.clear();
         this.large.clear();
-        this.chars = 0;
+        this.sizes.clear();
+        this.bytes = 0;
     }
 }
 
-function sizeOf(value: unknown): number {
-    if (typeof value === 'string') return value.length;
+/** A character outside Latin-1: its string is stored two bytes per char. */
+const TWO_BYTE_CHAR = /[\u0100-\uffff]/;
+
+/**
+ * The heap V8 spends on a value. A string whose characters all fit in Latin-1
+ * is stored one byte per character, and one character outside it makes the
+ * whole string two bytes per character (measured on Node 22: 1.00 and 2.00
+ * bytes per char of `JSON.stringify` output). Keyv hands JSON, so file
+ * contents are almost always one byte per character; counting characters
+ * would leave the real heap between one and two times the budget.
+ */
+export function sizeOf(value: unknown): number {
+    if (typeof value === 'string') {
+        return value.length * (TWO_BYTE_CHAR.test(value) ? 2 : 1);
+    }
     // Keyv hands strings; anything else is counted small but never free.
     return 64;
 }

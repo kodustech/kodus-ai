@@ -6,7 +6,7 @@ import { BoundedMemoryStore } from './bounded-memory-store';
 import {
     GLOBAL_CACHE_BOUNDS,
     GlobalCacheModule,
-    globalCacheMaxChars,
+    globalCacheMaxBytes,
 } from './cache.module';
 
 /**
@@ -24,29 +24,29 @@ describe('GlobalCacheModule', () => {
         cache = moduleRef.get<Cache>(CACHE_MANAGER);
     });
 
-    it('is bounded at 200,000 entries and 8M characters per entry', () => {
+    it('is bounded at 200,000 entries and 8 MB per entry', () => {
         expect(GLOBAL_CACHE_BOUNDS.maxEntries).toBe(200_000);
-        expect(GLOBAL_CACHE_BOUNDS.maxEntryChars).toBe(8_388_608);
-        expect(GLOBAL_CACHE_BOUNDS.maxChars).toBe(globalCacheMaxChars());
+        expect(GLOBAL_CACHE_BOUNDS.maxEntryBytes).toBe(8_388_608);
+        expect(GLOBAL_CACHE_BOUNDS.maxBytes).toBe(globalCacheMaxBytes());
     });
 
-    describe('character budget', () => {
+    describe('byte budget', () => {
         const GB = 1024 ** 3;
 
         // Production review workers run with an 8 GB heap.
-        it('holds 2 GB of values (1G characters) on an 8 GB heap', () => {
-            expect(globalCacheMaxChars(8 * GB)).toBe(1_073_741_824);
+        it('holds 2 GB of values on an 8 GB heap', () => {
+            expect(globalCacheMaxBytes(8 * GB)).toBe(2 * GB);
         });
 
         // A self-hosted worker on Node's default heap: 2 GB of cache would
         // take all of it.
         it('holds a quarter of a smaller heap', () => {
-            expect(globalCacheMaxChars(2 * GB)).toBe(268_435_456);
-            expect(globalCacheMaxChars(1 * GB)).toBe(134_217_728);
+            expect(globalCacheMaxBytes(2 * GB)).toBe(GB / 2);
+            expect(globalCacheMaxBytes(1 * GB)).toBe(GB / 4);
         });
 
         it('never holds more than 2 GB however large the heap', () => {
-            expect(globalCacheMaxChars(64 * GB)).toBe(1_073_741_824);
+            expect(globalCacheMaxBytes(64 * GB)).toBe(2 * GB);
         });
     });
 

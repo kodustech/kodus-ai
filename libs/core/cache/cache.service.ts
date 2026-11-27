@@ -22,10 +22,15 @@ export function cacheFootprint(cache: Cache): Record<string, number> {
         if (typeof value === 'string') chars += value.length;
         if (typeof v?.expires === 'number' && v.expires < now) expired++;
     }
+    // The bounded store knows the bytes V8 holds; a plain Map only has lengths.
+    const size =
+        typeof (map as { heldBytes?: unknown }).heldBytes === 'number'
+            ? (map as unknown as { heldBytes: number }).heldBytes
+            : chars;
     return {
         entries: map.size,
         expired,
-        valueMb: Math.round((chars / 1024 / 1024) * 10) / 10,
+        valueMb: Math.round((size / 1024 / 1024) * 10) / 10,
     };
 }
 
