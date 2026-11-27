@@ -99,6 +99,9 @@ type Agent struct {
 	guests      guests
 	sandboxPool *sandboxPool
 
+	// stores are the claims' shared image store credentials and push state (image_store.go), by claim id.
+	stores sync.Map
+
 	// pending are the released claims whose teardown is not confirmed yet,
 	// with their memory held (pending_cleanup.go).
 	pending pendingCleanups

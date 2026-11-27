@@ -276,6 +276,8 @@ type Config struct {
 	// ReleaseWait bounds how long a release waits for a claim still being
 	// prepared to stop (default 2 min); then it tears down what exists.
 	ReleaseWait time.Duration
+	// StorePushWait bounds how long a release waits for the claim's PR image push to report (image_store.go); zero: storePushWait.
+	StorePushWait time.Duration
 
 	// DevAllowInsecureIsolation lets a developer cell run a driver with
 	// isolation "none" (plain containers: local-docker, the fake driver).

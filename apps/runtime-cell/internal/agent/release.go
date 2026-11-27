@@ -61,6 +61,7 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 	defer cancel()
+	a.endStore(ctx, c)            // a PR image push in flight reads the machines' images
 	held, _ := a.leases.Get(c.ID) // what to destroy again if this release cannot confirm it
 	if err := a.leases.Release(ctx, c.ID); err != nil && !errors.Is(err, lease.ErrUnknownClaim) {
 		a.m.cleanupsFailed.Inc()

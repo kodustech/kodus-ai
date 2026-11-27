@@ -58,6 +58,8 @@ type Driver struct {
 	// ShareBakes is what Capabilities says of shared bakes; Shared, what a
 	// bake then reports it pushed (BakeSpec.Shared), before it returns.
 	ShareBakes bool
+	// ImageStore is what Capabilities says of the shared image store (the PR image).
+	ImageStore bool
 	Shared     []driver.SharedImage
 	// ExecService is what Capabilities says of exec on a compose service.
 	ExecService bool
@@ -102,7 +104,7 @@ func (d *Driver) Capabilities() driver.Capabilities {
 	if iso == "" {
 		iso = driver.IsolationNone
 	}
-	return driver.Capabilities{Isolation: iso, NestedContainers: true, Arch: []string{"x86_64", "arm64"}, MaxClaimSize: d.MaxClaimSize, DefaultClaimSize: d.DefaultClaimSize, Backends: d.Backends, KVM: d.KVM, HostArch: d.HostArch, SandboxCellTrust: !d.NoSandboxCellTrust, ShareBakes: d.ShareBakes, ExecService: d.ExecService}
+	return driver.Capabilities{Isolation: iso, NestedContainers: true, Arch: []string{"x86_64", "arm64"}, MaxClaimSize: d.MaxClaimSize, DefaultClaimSize: d.DefaultClaimSize, Backends: d.Backends, KVM: d.KVM, HostArch: d.HostArch, SandboxCellTrust: !d.NoSandboxCellTrust, ShareBakes: d.ShareBakes, ImageStore: d.ImageStore, ExecService: d.ExecService}
 }
 
 // Parts is what the fake cell (-driver fake) runs: bakes, resets and the

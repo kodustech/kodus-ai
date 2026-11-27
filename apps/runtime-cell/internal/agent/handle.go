@@ -157,6 +157,8 @@ func (a *Agent) renew(claimID string, b *protocol.ClaimRenewBody) error {
 	if !ok || c.State() == claims.Released {
 		return nack("unknown_claim", "%s", claimID)
 	}
+	// The claim's store credential is short: the hub renews it with the lease.
+	a.renewStore(claimID, b.ImageStoreGrant)
 	return hubclient.Later(func(ctx context.Context) error {
 		got, err := a.leases.Renew(ctx, claimID, until)
 		switch {

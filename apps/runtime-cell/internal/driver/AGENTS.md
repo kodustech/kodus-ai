@@ -35,7 +35,7 @@ The `MachineDriver` port: everything a cell knows about the cloud, cluster or ho
 
 ## Module map
 
-Files (11, tests apart): `canary.go`, `driver.go`, `iolimits.go`, `observed.go`, `observer_sql.go`, `ownership.go`, `parts.go`, `request.go`, `resource_errors.go`, `sandbox.go`, `toollayer.go`
+Files (12, tests apart): `canary.go`, `driver.go`, `iolimits.go`, `observed.go`, `observer_sql.go`, `ownership.go`, `parts.go`, `request.go`, `resource_errors.go`, `sandbox.go`, `storegrant.go`, `toollayer.go`
 
 Imports these Runtime modules:
 

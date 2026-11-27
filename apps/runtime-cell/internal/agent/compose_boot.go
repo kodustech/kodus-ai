@@ -101,6 +101,10 @@ func (a *Agent) bootCompose(ctx context.Context, c *claims.Claim, workload drive
 	c.SetCompose(file, repo)
 	sources, err := a.cfg.Parts.Composer.Up(ctx, a.upRequest(c, workload, file, repo, canaries, output))
 	if err != nil {
+		// A boot that failed pushes nothing: a release has no push to wait for.
+		if st := a.storeOf(c); st != nil {
+			st.finish()
+		}
 		return upBlocker(err)
 	}
 	c.SetSources(sources)
@@ -116,11 +120,11 @@ func (a *Agent) bootCompose(ctx context.Context, c *claims.Claim, workload drive
 // get them in their environment (bootCompose), a build those it asked for as
 // BuildKit secrets.
 func (a *Agent) upRequest(c *claims.Claim, workload driver.MachineRef, file []byte, dir string, canaries []driver.Canary, output func(line string)) driver.UpRequest {
-	return driver.UpRequest{
+	return a.storeFields(c, driver.UpRequest{
 		Ref: workload, Compose: file, ProjectDir: dir, WorkspaceRoot: a.workspaceRoot(c),
 		CellTrust: a.cellTrustFor(c, a.cfg.CellTrust), Canaries: canaries, BuildSecrets: secretEnv(c), Coverage: a.coverageOf(c), Output: output,
 		SharedImages: sharedImagesOf(c.Acquire),
-	}
+	})
 }
 
 // sharedImagesOf is a claim's sharedImages for its builds: none for a setup,
