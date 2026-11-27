@@ -188,8 +188,52 @@ describe('extractDiffHunks', () => {
             '+new',
         ].join('\n');
 
-        expect(extractDiffHunks(rename, ['moved.ts'])).toHaveLength(1);
+        expect(extractDiffHunks(rename, ['moved.ts'])).toEqual([
+            {
+                path: 'moved.ts',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
         expect(extractDiffHunks(rename, ['caf\u00e9.ts'])).toEqual([]);
+    });
+
+    it('keeps a file name that ends with a space', () => {
+        // Git writes an unquoted header for such a name; trimming the line
+        // would land the hunks on a different file.
+        const spaced = [
+            'diff --git a/notes  b/notes ',
+            '--- a/notes ',
+            '+++ b/notes ',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(extractDiffHunks(spaced, ['notes '])).toEqual([
+            {
+                path: 'notes ',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+        expect(extractDiffHunks(spaced, ['notes'])).toEqual([]);
+    });
+
+    it('drops the timestamp after the tab, not the name', () => {
+        const stamped = [
+            'diff --git a/notes.txt b/notes.txt',
+            '--- a/notes.txt\t2026-11-27 10:00:00',
+            '+++ b/notes.txt\t2026-11-27 10:00:00',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(extractDiffHunks(stamped, ['notes.txt'])).toEqual([
+            {
+                path: 'notes.txt',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
     });
 
     it('returns nothing rather than throwing on empty input', () => {

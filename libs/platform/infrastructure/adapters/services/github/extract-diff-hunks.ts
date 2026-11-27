@@ -124,7 +124,9 @@ function headerPaths(header: string, section: string): string[] {
  * One side of a `---`/`+++` line: `a/foo`, `"a/foo"` or `/dev/null`.
  */
 function sidePathOf(raw: string, prefix: string): string | undefined {
-    let value = raw.trim();
+    // A `---`/`+++` line can carry a timestamp after a tab, and a file name
+    // can end with a space: only the tab and what follows it are removed.
+    let value = raw.replace(/\t.*$/, '').replace(/\r$/, '');
     if (value === '/dev/null') {
         return undefined;
     }
