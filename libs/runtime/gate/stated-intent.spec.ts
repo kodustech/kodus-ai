@@ -602,3 +602,35 @@ describe('described and undescribed leaves of one array field (an association fi
         expect(leavesOfFinding(decision as never, steps)).toBeUndefined();
     });
 });
+
+describe("a sentence of Kody's own summary (used when the PR body held nothing else)", () => {
+    const p = probe('intent-1', 'GET', '/orders?item=keyboard');
+    const summary = (assertions: unknown[]): StatedIntentCheck => ({ probeId: 'intent-1', intent: { quote: '`GET /orders?item=keyboard` returns only keyboard orders.', source: 'kody-summary' }, assertions: assertions.map(assertion) });
+    const base = { status: 200, body: [{ id: 1, item: 'keyboard', quantity: 2 }, { id: 2, item: 'monitor', quantity: 1 }] };
+    const narrowed = { status: 200, body: [{ id: 1, item: 'keyboard', quantity: 2 }] };
+
+    // Behavior: the summary is written from the diff, so a difference it spells out is still a finding, never "described by the PR".
+    it('never explains a difference from main: the finding stands even though its assertion held', () => {
+        const said = summary([{ kind: 'equals', path: '$', value: narrowed.body }]);
+        const { decision, steps } = replay(p, base, narrowed, { intent: [said] });
+        const out = decideStatedIntent(decision, steps, [said], { mismatch: true, pinnedImageId: IMAGE });
+        expect(out.decision).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        expect(out.statedIntents[0]).toMatchObject({ source: 'kody-summary', held: 1, failures: [] });
+    });
+
+    // Behavior: the same sentence from the author's description does explain it (the existing rule is unchanged).
+    it('the same sentence from the description still explains it', () => {
+        const said = check('intent-1', '`GET /orders?item=keyboard` returns only keyboard orders.', { kind: 'equals', path: '$', value: narrowed.body });
+        const { decision, steps } = replay(p, base, narrowed, { intent: [said] });
+        expect(decideStatedIntent(decision, steps, [said], { mismatch: true, pinnedImageId: IMAGE }).decision.verdict).toBe('described_change');
+    });
+
+    // Behavior: a summary sentence the PR does not keep is still reported as a mismatch, labelled with its source.
+    it('can still report a mismatch, labelled as the summary', () => {
+        const said = summary([{ kind: 'equals', path: '$', value: narrowed.body }]);
+        const { decision, steps } = replay(p, base, base, { intent: [said] });
+        const out = decideStatedIntent(decision, steps, [said], { mismatch: true, pinnedImageId: IMAGE });
+        expect(out.decision.verdict).toBe('intent_mismatch');
+        expect(out.statedIntents[0].source).toBe('kody-summary');
+    });
+});

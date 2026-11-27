@@ -165,7 +165,7 @@ function quoteSpan(value: string): string {
 }
 
 /** Where a quoted sentence comes from, as the reader knows it. */
-const sourceWords = (source: string) => (source.startsWith('task:') ? `task ${code(source.slice('task:'.length))}` : 'the description');
+const sourceWords = (source: string) => (source.startsWith('task:') ? `task ${code(source.slice('task:'.length))}` : source === 'kody-summary' ? "Kody's summary of this pull request" : 'the description');
 
 /**
  * A code span inside a table row: a pipe would end the cell. The splitter reads

@@ -44,8 +44,32 @@ describe('hasStatedIntent', () => {
     // The summary is written from the diff, so on a bug PR it describes the bug.
     const SUMMARY = ['<!-- kody-pr-summary:start -->', '## Summary', '', 'Omitted quantities are treated as `1`.', '<!-- kody-pr-summary:end -->'].join('\n');
 
-    it("a description that is only Kody's PR summary states nothing", () => {
-        expect(hasStatedIntent(input({ description: SUMMARY }))).toBe(false);
+    // Behavior: a body that is only Kody's summary (the review replaced the author's text) states an intent from the summary, marked as such.
+    it("a description that is only Kody's PR summary states the summary's text, marked as Kody's", () => {
+        expect(hasStatedIntent(input({ description: SUMMARY }))).toBe(true);
+        const [, user] = intentAuthorMessages(input({ description: SUMMARY }));
+        const sources = JSON.parse(user.content).sources;
+        expect(sources).toEqual([{ source: 'kody-summary', text: expect.stringContaining('Omitted quantities are treated as `1`.') }]);
+        expect(sources[0].text).not.toContain('kody-pr-summary');
+    });
+
+    it('a body with no text and no summary states nothing', () => {
+        expect(hasStatedIntent(input({ description: '<!-- kody-pr-summary:start -->\n \n<!-- kody-pr-summary:end -->' }))).toBe(false);
+    });
+
+    it("a linked task keeps the summary out: the summary is only the last resort", () => {
+        const [, user] = intentAuthorMessages(input({ description: SUMMARY, linkedTasks: [{ source: 'jira', id: 'KR-12', body: 'Refuse 11 units with 400.' }] }));
+        expect(JSON.parse(user.content).sources.map((s: { source: string }) => s.source)).toEqual(['task:KR-12']);
+    });
+
+    // Behavior: an assertion quoted from the summary is kept with the summary as its source; a quote that is not in it is dropped as for any source.
+    it('keeps a probe quoted from the summary, citing it, and drops a quote that is not in it', () => {
+        const withSummary = input({ description: SUMMARY });
+        const kept = checkIntentProbes(answer([quoteProbe({ quote: 'Omitted quantities are treated as `1`.', source: 'kody-summary', request: { method: 'POST', path: '/orders' }, assertions: [{ kind: 'status', status: 201 }] })]), withSummary);
+        expect(kept.probes[0].intent).toEqual({ quote: 'Omitted quantities are treated as `1`.', source: 'kody-summary' });
+        const dropped = checkIntentProbes(answer([quoteProbe({ quote: 'Quantities are always required here.', source: 'kody-summary' })]), withSummary);
+        expect(dropped.probes).toEqual([]);
+        expect(dropped.dropped[0].reason).toContain('not in the summary');
     });
 
     it("the author reads the author's text around Kody's PR summary, never the summary", () => {

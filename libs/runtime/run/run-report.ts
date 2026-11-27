@@ -79,7 +79,7 @@ export const INTENT_CHECK_STATES = ['checked', 'no_stated_intent', 'off', 'unava
 export type IntentCheckState = (typeof INTENT_CHECK_STATES)[number];
 
 const intentText = (max: number) => z.string().min(1).max(max);
-const intentSource = z.string().regex(/^(description|task:\S{1,256})$/);
+const intentSource = z.string().regex(/^(description|kody-summary|task:\S{1,256})$/);
 
 /**
  * The intent oracle on the PR: each answer that breaks an assertion quoted

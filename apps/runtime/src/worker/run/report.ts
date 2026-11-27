@@ -206,7 +206,7 @@ export function buildReport(args: {
     };
 }
 
-const INTENT_SOURCE = /^(description|task:\S{1,256})$/;
+const INTENT_SOURCE = /^(description|kody-summary|task:\S{1,256})$/;
 const nonEmpty = (s: string | undefined, max: number, fallback: string) => clip(s?.trim() ? s : fallback, max);
 
 /**

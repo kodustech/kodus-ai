@@ -5,6 +5,7 @@ import {
     intentAssertionReads,
     intentAssertionText,
     isRouteInvariant,
+    KODY_SUMMARY_SOURCE,
     type StatedIntent,
 } from '@libs/runtime/contracts/probe-assertions';
 import { requestMatchesEntryPoint, routeShapeOf } from '@libs/runtime/entry-points/coverage';
@@ -362,12 +363,16 @@ export function decideStatedIntent<D extends VerdictLike>(
         if (!opts.mismatch || !overridable) return { decision, statedIntents };
         return { decision: { ...rest, verdict: 'intent_mismatch', reason: "an assertion quoted from the pull request's own text fails on this PR" } as D, statedIntents };
     }
+    // Kody's own summary says what the code does, so what it says never explains a difference from main:
+    // its assertions may flag a mismatch (above) and nothing more.
+    const explaining = kept.filter((c) => c.intent.source !== KODY_SUMMARY_SOURCE);
+    if (!explaining.length) return { decision, statedIntents };
     const differing = decision.differingFields ?? [];
     // An assertion no round could evaluate explains nothing.
     const allHeld = statedIntents.every((r) => r.inconclusive === 0);
-    const reordered = reorderedAsStated(differing, steps, rounds, kept);
+    const reordered = reorderedAsStated(differing, steps, rounds, explaining);
     const notReordered = differing.filter((f) => !reordered.includes(f));
-    const fieldRead = fieldReader(notReordered, kept);
+    const fieldRead = fieldReader(notReordered, explaining);
     const explains = differing.length > 0 && (notReordered.length === 0 || notReordered.every(fieldRead));
     const isFinding = decision.verdict === 'finding' && decision.findingKind === 'behavior_change' && !pr5xx && allHeld;
     if (isFinding && explains) {
@@ -375,7 +380,7 @@ export function decideStatedIntent<D extends VerdictLike>(
     }
     if (!isFinding || differing.length === 0 || reordered.length > 0) return { decision, statedIntents };
     // The fields are compared whole: a path through an array index reads one leaf of one, so the leaves decide.
-    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(kept), decision.maskedFields ?? [], opts.clean, opts.spelled);
+    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(explaining), decision.maskedFields ?? [], opts.clean, opts.spelled);
     if (!leaves) return { decision, statedIntents };
     if (!leaves.undescribed.length && !leaves.truncated) {
         return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };

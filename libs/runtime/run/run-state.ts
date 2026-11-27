@@ -110,7 +110,7 @@ export interface ProbeStatedIntent {
     /** The intent probe that carries the assertions. */
     probeId: string;
     quote: string;
-    /** `description` or `task:<id>`. */
+    /** `description`, `task:<id>` or `kody-summary` (Kody's own PR summary, when the body held nothing else). */
     source: string;
     /** The intent probe's request as sent (`POST /orders/quote {"item":…}`), redacted and cut. */
     request?: string;

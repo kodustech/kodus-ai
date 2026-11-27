@@ -232,10 +232,18 @@ export const IntentAssertionSchema = z.discriminatedUnion('kind', [
 ]);
 export type IntentAssertion = z.infer<typeof IntentAssertionSchema>;
 
-/** The sentence an intent probe comes from: quoted exactly from the PR description or one linked task. */
+/**
+ * The source of a sentence quoted from Kody's own PR summary, used when the PR's body holds nothing else (the
+ * code review replaced the author's text). The summary is written from the diff, so a sentence of it is never
+ * taken as what the author required: its assertions can flag a mismatch but never explain a difference
+ * (gate/stated-intent.ts).
+ */
+export const KODY_SUMMARY_SOURCE = 'kody-summary';
+
+/** The sentence an intent probe comes from: quoted exactly from the PR description, one linked task or, with nothing else, Kody's summary. */
 export const StatedIntentSchema = z.strictObject({
     quote: z.string().trim().min(1).max(INTENT_ASSERTION_LIMITS.quoteChars),
-    source: z.union([z.literal('description'), z.string().regex(/^task:\S{1,256}$/)]),
+    source: z.union([z.literal('description'), z.literal(KODY_SUMMARY_SOURCE), z.string().regex(/^task:\S{1,256}$/)]),
 });
 export type StatedIntent = z.infer<typeof StatedIntentSchema>;
 
