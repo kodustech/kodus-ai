@@ -458,6 +458,9 @@ export function createGatewayDispatcher(
         if (!connector) {
             if (connectors.size >= 256) connectors.clear();
             connector = buildConnector({
+                // undici offers h2 by default, and Node's built-in fetch drops
+                // every header of an h2 response through Dispatcher1Wrapper.
+                allowH2: false,
                 lookup: gatewayLookup(opts.resolve, refuses, opts.label),
             });
             connectors.set(key, connector);
