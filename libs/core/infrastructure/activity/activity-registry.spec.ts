@@ -169,6 +169,7 @@ describe('activity registry', () => {
             byWorkflowType: { CODE_REVIEW: 4, WEBHOOK_PROCESSING: 1 },
             reviews: {
                 withSize: 3,
+                withLines: 1,
                 changedFilesSum: 13,
                 changedFilesMax: 10,
                 changedLinesSum: 400,

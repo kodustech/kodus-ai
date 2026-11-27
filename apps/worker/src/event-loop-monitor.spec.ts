@@ -123,6 +123,7 @@ describe('startEventLoopMonitor', () => {
             byWorkflowType: { CODE_REVIEW: 1 },
             reviews: {
                 withSize: 1,
+                withLines: 1,
                 changedFilesSum: 12,
                 changedFilesMax: 12,
                 changedLinesSum: 340,

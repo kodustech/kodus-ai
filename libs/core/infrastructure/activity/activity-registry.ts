@@ -159,6 +159,8 @@ export interface ActivityCounts {
      */
     reviews: {
         withSize: number;
+        /** Reviews whose line count is known; `changedLinesSum` covers these. */
+        withLines: number;
         changedFilesSum: number;
         changedFilesMax: number;
         changedLinesSum: number;
@@ -172,6 +174,7 @@ export function activityCounts(): ActivityCounts {
         byWorkflowType: {},
         reviews: {
             withSize: 0,
+            withLines: 0,
             changedFilesSum: 0,
             changedFilesMax: 0,
             changedLinesSum: 0,
@@ -189,7 +192,10 @@ export function activityCounts(): ActivityCounts {
             r.withSize++;
             r.changedFilesSum += e.changedFiles;
             r.changedFilesMax = Math.max(r.changedFilesMax, e.changedFiles);
-            r.changedLinesSum += e.changedLines ?? 0;
+            if (e.changedLines !== undefined) {
+                r.withLines++;
+                r.changedLinesSum += e.changedLines;
+            }
         }
     }
     return counts;
