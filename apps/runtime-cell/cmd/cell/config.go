@@ -325,6 +325,13 @@ type settings struct {
 	// docker-gvisor cell stops its claims (agent.DiskWatch).
 	DockerDataRoot string
 	DiskMinFreeGB  int
+	// DiskPerRunFreeGB is the room one more Run needs above the floor (0:
+	// one floor); DiskOuterPath a path on the filesystem under the
+	// build-state volume's sparse file; DiskReadyGrace how long a claim that
+	// turned ready is spared as a disk victim.
+	DiskPerRunFreeGB int
+	DiskOuterPath    string
+	DiskReadyGrace   time.Duration
 	// GVisorBrowserImage is the browser runner (browser-runner/, ADR-071),
 	// by digest; empty: no browser runner, and browser probes are refused
 	// with browser_unavailable as before.
@@ -408,6 +415,9 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.IntVar(&s.GVisorServiceLogMaxFile, "gvisor-service-log-max-file", 3, "docker-gvisor: how many log files a compose service keeps (the local log driver's max-file)")
 	fs.StringVar(&s.DockerDataRoot, "docker-data-root", "/var/lib/docker", "docker-gvisor: Docker's data root (daemon.json data-root), whose free space the disk watchdog reads")
 	fs.IntVar(&s.DiskMinFreeGB, "disk-min-free-gb", 5, "docker-gvisor: under this much free space in -docker-data-root the cell stops its claims (a booting one fails as resources/cell_disk_full) before the disk fills for every tenant; under twice it on that disk or the work directory's, no workload is created and a running build stops (resources/disk_capacity), and the one claim whose disk grew the most is stopped (resources/disk_top_writer); 0: no watchdog")
+	fs.IntVar(&s.DiskPerRunFreeGB, "disk-per-run-free-gb", 0, "docker-gvisor: the room one more Run needs above -disk-min-free-gb: under floor plus this, no workload is created, the watchdog's relief ladder runs (fstrim, build cache, reclaim) and a victim may be picked; 0: one floor, so twice the floor in all")
+	fs.StringVar(&s.DiskOuterPath, "disk-outer-path", "", "docker-gvisor: a path on the OUTER filesystem, the one that holds the sparse file of the build-state volume; the watchdog works with the smaller free space of it and -docker-data-root, because the sparse file can be full while the inner filesystem shows room; empty: only the inner disk")
+	fs.DurationVar(&s.DiskReadyGrace, "disk-ready-grace", agent.DefaultReadyGrace, "docker-gvisor: a claim that turned ready this recently is never the watchdog's victim, unless nothing else is left (logged as an alarm with the reason)")
 	fs.StringVar(&s.GVisorBuildStateKeep, "gvisor-build-state-keep", "20GB", "docker-gvisor: what BuildKit's GC keeps in one environment's state")
 	fs.StringVar(&s.GVisorBuildStateViewsDir, "gvisor-build-state-views-dir", "", "docker-gvisor: where each build's throwaway view of an environment's state goes (its overlay's upper, work and merged directories), on a disk that takes an overlay's upper layer; the states stay under the work directory. For a host whose work directory is on a FUSE disk (a boat host restored from a snapshot). Empty: next to the states")
 	fs.IntVar(&s.GVisorBuildStateMinFreeGB, "gvisor-build-state-min-free-gb", 20, "docker-gvisor: below this much free disk, the environment states cheapest to keep (rebuild time, last use) are removed, then exported build caches")

@@ -74,6 +74,10 @@ type Parts struct {
 	// BuildCache drops build cache no live build holds, so the disk watchdog
 	// gives the room back before it stops a claim; nil: it drops none.
 	BuildCache BuildCachePruner
+	// DiskReclaim removes the exported caches and build states the disk
+	// floor orders (D7), so the watchdog gives room back before it stops a
+	// claim; nil: it reclaims none.
+	DiskReclaim DiskReclaimer
 	// ExitedServices names the services that exited, for a probe that got no
 	// answer; nil: the cell announces no serviceStates feature.
 	ExitedServices ExitedServiceReader

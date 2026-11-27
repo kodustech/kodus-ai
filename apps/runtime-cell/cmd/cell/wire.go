@@ -93,7 +93,7 @@ func wireDockerGVisor(ctx context.Context, w wiring, cfg *agent.Config) (opened,
 		PersistBuildState: st.GVisorBuildState, BuildStateKeep: st.GVisorBuildStateKeep, BuildStateViewsDir: st.GVisorBuildStateViewsDir, BuildStateMinFreeBytes: int64(st.GVisorBuildStateMinFreeGB) << 30,
 		BuildCacheRemote: st.GVisorBuildCacheRemote, BuildCacheRemoteAuth: remoteAuth,
 		BakeShare: st.GVisorBakeShare, BakeSharePull: st.GVisorBakeSharePull, BakeShareAuth: shareAuth,
-		MaxImageBytes: int64(st.GVisorMaxImageGB) << 30, ContainerDiskSize: st.GVisorContainerDisk, DiskMinFreeBytes: int64(st.DiskMinFreeGB) << 30,
+		MaxImageBytes: int64(st.GVisorMaxImageGB) << 30, ContainerDiskSize: st.GVisorContainerDisk, DiskMinFreeBytes: int64(st.DiskMinFreeGB) << 30, DiskPerRunBytes: int64(st.DiskPerRunFreeGB) << 30,
 		ServiceLogMaxSize: st.GVisorServiceLogMaxSize, ServiceLogMaxFile: st.GVisorServiceLogMaxFile,
 		ImageTransfer: st.GVisorImageTransfer, RegistryImage: st.GVisorRegistryImage, RegistryKeepBytes: int64(st.GVisorRegistryKeepGB) << 30,
 		ObserverImage: st.GVisorObserverImage, ObserverTLSDir: st.GVisorObserverTLS, CellImages: []string{st.GVisorBrowserImage}, Log: log.With("driver", dockergvisor.Kind),
@@ -104,7 +104,7 @@ func wireDockerGVisor(ctx context.Context, w wiring, cfg *agent.Config) (opened,
 		return opened{}, err
 	}
 	closers = append(closers, d.Shutdown)
-	cfg.DiskWatch = diskWatch(st.DockerDataRoot, st.DiskMinFreeGB)
+	cfg.DiskWatch = diskWatch(st.DockerDataRoot, st.DiskMinFreeGB, diskOptions{perRunGB: st.DiskPerRunFreeGB, outerPath: st.DiskOuterPath, grace: st.DiskReadyGrace, trimPaths: []string{st.WorkDir, st.DockerDataRoot}})
 	cfg.RecoveryContext = ctx
 	// The project boots from the checkout through the driver (Up), so
 	// the transport carries no upload; exec runs in the project's public

@@ -2,6 +2,7 @@ package dockergvisor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -37,17 +38,28 @@ func (d *Driver) diskShort(ctx context.Context) error {
 	if d.hooks != nil && d.hooks.freeBytes != nil {
 		free = d.hooks.freeBytes
 	}
+	margin := d.diskMargin()
 	disks := []struct{ what, path string }{{"the cell's work disk", d.workDir()}}
 	if root := d.dataRootOf(ctx); root != "" {
 		disks = append(disks, struct{ what, path string }{"Docker's disk", root})
 	}
 	for _, disk := range disks {
 		n, err := free(disk.path)
-		if err == nil && n < 2*floor {
-			return fmt.Errorf("%w: %s has %d MiB free, under the %d MiB margin above the cell's floor", driver.ErrDiskCapacity, disk.what, n>>20, (2*floor)>>20)
+		if err == nil && n < margin {
+			return fmt.Errorf("%w: %s has %d MiB free, under the %d MiB margin above the cell's floor", driver.ErrDiskCapacity, disk.what, n>>20, margin>>20)
 		}
 	}
 	return nil
+}
+
+// diskMargin is the free space under which no new workload is created: the
+// floor plus what one more Run needs (Config.DiskPerRunBytes, one floor when
+// unset: twice the floor).
+func (d *Driver) diskMargin() int64 {
+	if d.cfg.DiskPerRunBytes > 0 {
+		return d.cfg.DiskMinFreeBytes + d.cfg.DiskPerRunBytes
+	}
+	return 2 * d.cfg.DiskMinFreeBytes
 }
 
 // ClaimDiskUsage is driver.DiskUsageReader's: the bytes each claim of this
@@ -87,10 +99,19 @@ func (d *Driver) ClaimDiskUsage(ctx context.Context) (map[string]int64, error) {
 	return out, nil
 }
 
-// PruneBuildCache is driver.BuildCachePruner's: the host Docker's build cache
-// no running build holds, not used for olderThan or longer.
+// PruneBuildCache is driver.BuildCachePruner's: the cell's own BuildKit state
+// (workDir/buildkit/env/*, where the build cache lives; a state a live build
+// holds stays) of the environments not used for olderThan or longer, oldest
+// first, and the host Docker's build cache no running build holds. It returns
+// the bytes freed by both.
 func (d *Driver) PruneBuildCache(ctx context.Context, olderThan time.Duration) (int64, error) {
-	return d.d.BuilderPrune(ctx, olderThan)
+	var freed int64
+	var errs []error
+	n, err := d.states.EvictOlderThan(olderThan)
+	freed += n
+	errs = append(errs, err)
+	n, err = d.d.BuilderPrune(ctx, olderThan)
+	return freed + n, errors.Join(append(errs, err)...)
 }
 
 var _ driver.BuildCachePruner = (*Driver)(nil)

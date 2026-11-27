@@ -515,6 +515,58 @@ func (s *Store) Evict() error {
 	return errors.Join(errs...)
 }
 
+// EvictOlderThan removes, least recently used first, the environment states
+// nobody holds that were last used olderThan ago or longer (zero: all that
+// nobody holds), and returns the bytes it removed. It is the disk watchdog's
+// build cache rung: a state a build holds, as a seed or a view, stays, and so
+// does what a claim that just ran touched. Each is reported as an eviction,
+// so the environment's next Run being cold is not a mystery.
+func (s *Store) EvictOlderThan(olderThan time.Duration) (int64, error) {
+	root := filepath.Join(s.root, "env")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return 0, nil //nolint:nilerr // no env tree to list means nothing to evict
+	}
+	now := s.clock.Now()
+	all := s.evictionCandidates(root, entries)
+	sort.SliceStable(all, func(i, j int) bool { return all[i].used.Before(all[j].used) })
+	var freed int64
+	var errs []error
+	for _, st := range all {
+		if olderThan > 0 && !st.used.IsZero() && now.Sub(st.used) < olderThan {
+			break // sorted oldest first: the rest are newer
+		}
+		size := treeBytes(st.dir)
+		trash, err := s.takeOut(st.dir)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
+		if trash == "" {
+			continue // held
+		}
+		owner, named := ownerOf(trash)
+		var rebuild time.Duration
+		if st.measured {
+			rebuild = st.rebuild
+		}
+		var free int64
+		if s.freeBytes != nil {
+			free, _ = s.freeBytes(root)
+		}
+		s.log.Warn("build.state.evicted", "state", filepath.Base(st.dir), "lastUsed", st.used, "rebuildSeconds", int64(rebuild.Seconds()), "reported", named, "reason", "disk_watchdog", "freeBytes", free, "floorBytes", s.minFree)
+		if named {
+			s.recordEvicted(owner, now, rebuild, free, s.minFree)
+		}
+		if err := os.RemoveAll(trash); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		freed += size
+	}
+	return freed, errors.Join(errs...)
+}
+
 func (s *Store) evictCheapest() error {
 	if s.minFree <= 0 || s.freeBytes == nil {
 		return nil

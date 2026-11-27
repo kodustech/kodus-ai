@@ -21,6 +21,11 @@ type stateStore interface {
 	// disk is below its floor. It may remove gigabytes, so the cell's
 	// periodic sweep runs it, never a build.
 	Evict() error
+	// EvictOlderThan removes the states nobody holds that were not used for
+	// olderThan or longer (zero: every state nobody holds), the least recently
+	// used first, and returns the bytes it removed: the watchdog's build cache
+	// rung, which keeps what a live build holds.
+	EvictOlderThan(olderThan time.Duration) (int64, error)
 	// Evicted lists the environments whose state eviction removed and no
 	// seed made again, newest first; EvictedAt says it of one.
 	Evicted() []buildstate.Evicted
@@ -37,10 +42,11 @@ type noStates struct{}
 func (noStates) Acquire(context.Context, buildstate.Request) (buildstate.State, bool) {
 	return buildstate.State{}, false
 }
-func (noStates) Release(buildstate.State)      {}
-func (noStates) Settle()                       {}
-func (noStates) Evict() error                  { return nil }
-func (noStates) Evicted() []buildstate.Evicted { return nil }
+func (noStates) Release(buildstate.State)                    {}
+func (noStates) Settle()                                     {}
+func (noStates) Evict() error                                { return nil }
+func (noStates) EvictOlderThan(time.Duration) (int64, error) { return 0, nil }
+func (noStates) Evicted() []buildstate.Evicted               { return nil }
 func (noStates) EvictedAt(string, string) (time.Time, bool) {
 	return time.Time{}, false
 }

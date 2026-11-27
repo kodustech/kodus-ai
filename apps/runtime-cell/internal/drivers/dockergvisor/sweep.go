@@ -168,11 +168,12 @@ func (r *diskReclaim) start(bg *lifecycle.Group, reclaim func() error, log *slog
 // wait returns once the reclaim started last has ended.
 func (r *diskReclaim) wait() { r.running.Wait() }
 
-// ReclaimDisk removes what may take gigabytes and no build holds: the
-// BuildKit states cheapest to keep while the disk is below its floor, then,
-// still below it, the exported caches (evictCaches), and the build cache
-// generations no build reads any more. It runs on the sweep, off every
-// build's path.
+// ReclaimDisk removes what may take gigabytes and no build holds, in the
+// order docs/runtime/persistent-state.md D7 sets: the build cache generations
+// no build reads any more and, while the disk is below its floor, the exported
+// caches (evictCaches), then the BuildKit states cheapest to keep. (Preview
+// states, between the two in D7, do not exist yet.) It runs on the sweep, off
+// every build's path, and as a rung of the disk watchdog's ladder.
 func (d *Driver) ReclaimDisk() error {
-	return errors.Join(d.states.Evict(), d.evictCaches(), d.caches.Sweep())
+	return errors.Join(d.caches.Sweep(), d.evictCaches(), d.states.Evict())
 }

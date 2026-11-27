@@ -111,6 +111,7 @@ type everyPart struct {
 	driver.SpareKeeper
 	driver.DiskUsageReader
 	driver.BuildCachePruner
+	driver.DiskReclaimer
 	driver.ExitedServiceReader
 }
 

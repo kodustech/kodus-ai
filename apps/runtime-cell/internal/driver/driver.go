@@ -759,6 +759,13 @@ type BuildCachePruner interface {
 	PruneBuildCache(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
+// DiskReclaimer removes what may take gigabytes and no build holds, in the
+// order docs/runtime/persistent-state.md D7 sets: exported caches, then
+// preview states, then build states.
+type DiskReclaimer interface {
+	ReclaimDisk() error
+}
+
 // Diagnoser is a driver that can tell why a setup failed when its blocker
 // does not explain it: service states, the last log
 // lines of each service, the exposed ports and the disk. The agent redacts

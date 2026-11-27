@@ -100,6 +100,10 @@ type Config struct {
 	// claim that is filling the disk ends before the watchdog ends them all.
 	// Zero: no margin.
 	DiskMinFreeBytes int64
+	// DiskPerRunBytes is the room one more Run needs above the floor
+	// (-disk-per-run-free-gb): under DiskMinFreeBytes+DiskPerRunBytes no
+	// workload is created. Zero: one floor, twice the floor in all.
+	DiskPerRunBytes int64
 	// BuildStateMinFreeBytes: below this free space on the cell's disk, the
 	// environment states nobody holds that are cheapest to keep are removed
 	// (buildstate/cost.go), then exported caches no build reads.
@@ -670,7 +674,7 @@ func (d *Driver) Parts() driver.Parts {
 		Baker: d, BakePinner: d, BakeCatalog: d, Resetter: d,
 		Composer: d, Recipes: d, Pooler: d, Memory: d,
 		Diagnoser: d, ServiceLogs: d, BootTimes: d, BootPhases: d, BuildStates: d,
-		SQLObservers: d, Sweeper: d, Coverage: d, DiskUsers: d, BuildCache: d, ExitedServices: d,
+		SQLObservers: d, Sweeper: d, Coverage: d, DiskUsers: d, BuildCache: d, DiskReclaim: d, ExitedServices: d,
 	}
 	if d.SandboxesEnabled() {
 		p.Sandboxes = d

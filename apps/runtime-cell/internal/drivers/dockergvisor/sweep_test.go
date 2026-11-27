@@ -33,6 +33,8 @@ type blockingStates struct {
 	calls    atomic.Int32
 }
 
+func (b *blockingStates) EvictOlderThan(time.Duration) (int64, error) { return 0, nil }
+
 func (b *blockingStates) Evict() error {
 	b.calls.Add(1)
 	b.evicting <- struct{}{}

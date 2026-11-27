@@ -34,6 +34,15 @@ func (a *Agent) cellSeal() error {
 		return nack("bake_running", "a bake is in progress on this cell; seal after it has recorded its images")
 	}
 	a.goTracked(func(ctx context.Context) {
+		// The template's disk is saved as it is: discard what the setup's
+		// builds freed first, or the sparse file keeps every block ever written.
+		if w := a.cfg.DiskWatch; w != nil && w.Trim != nil {
+			n, err := w.Trim(context.WithoutCancel(ctx))
+			a.log.Info("cell.seal.trim", "freedBytes", n, "err", err)
+			if err == nil && n > 0 {
+				a.m.diskFreed.Add(float64(n), "seal_fstrim")
+			}
+		}
 		if err := a.cfg.HostSeal.Seal(context.WithoutCancel(ctx)); err != nil {
 			a.log.Error("cell.seal.failed", "alarm", true, "err", err)
 			return
