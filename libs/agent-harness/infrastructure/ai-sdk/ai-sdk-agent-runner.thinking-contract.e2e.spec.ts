@@ -84,7 +84,18 @@ describe('AiSdkAgentRunner + compression — Anthropic thinking contract', () =>
 
         // Not vacuous: compression ran, and thinking was still replayed.
         expect(state.trace.some((e) => e.kind === 'context.compress')).toBe(true);
-        expect(replayedSignatures(calls).flat()).toContain('sig-1');
+        // Exactly which blocks each request replays: sig-1 and sig-2 came
+        // before the first result compression shortened, so they stay; sig-3
+        // to sig-6 came after it and are dropped; later blocks were made on
+        // the compressed history and stay. (The mock never stops calling
+        // tools, so the run goes to maxSteps.)
+        const sigs = (from: number, to: number) =>
+            Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => `sig-${from + i}`);
+        expect(replayedSignatures(calls)).toEqual(
+            calls.map((_, k) =>
+                k < 2 ? sigs(1, k) : k < 7 ? sigs(1, 2) : [...sigs(1, 2), ...sigs(7, k)],
+            ),
+        );
 
         expect(thinkingContractViolations(calls)).toEqual([]);
     });

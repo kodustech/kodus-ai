@@ -1136,13 +1136,18 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
                     kodyRules: [rule],
                 }) as any,
             ),
-        ).rejects.toThrow('Kody Rules could not be evaluated');
+        ).rejects.toHaveProperty(
+            'message',
+            'Kody Rules could not be evaluated: all 12 rule check(s) failed to run. Your Kody Rules were not applied to this PR.',
+        );
 
         // The four shards already in flight (concurrency 4) fail; the other
         // eight are skipped instead of called.
         expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(4);
-        const refusals = warnSpy.mock.calls.filter((c) =>
-            /the model provider refused PR#4242/.test((c[0] as any)?.message ?? ''),
+        const refusals = warnSpy.mock.calls.filter(
+            (c) =>
+                (c[0] as any)?.message ===
+                '[kody-rules] the model provider refused PR#4242 (AUTH_INVALID); the remaining shards were skipped instead of called',
         );
         expect(refusals).toHaveLength(1);
         expect((refusals[0][0] as any).metadata).toEqual({

@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { MockLanguageModelV3 } from 'ai/test';
 
 import type { ScriptedToolCall } from './scripted-tool-model';
@@ -65,10 +67,19 @@ export function signedThinkingModel(
 }
 
 /** Cache markers may move freely (Anthropic ignores them for the check). */
-function withoutCacheMarkers(messages: any[]): string {
-    return JSON.stringify(messages, (key, value) =>
-        key === 'cacheControl' || key === 'cache_control' ? undefined : value,
+function withoutCacheMarkers(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(withoutCacheMarkers);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter(([key]) => key !== 'cacheControl' && key !== 'cache_control')
+            .map(([key, v]) => [key, withoutCacheMarkers(v)]),
     );
+}
+
+/** The same messages, whatever order their properties were written in. */
+export function samePrefix(a: unknown[], b: unknown[]): boolean {
+    return isDeepStrictEqual(withoutCacheMarkers(a), withoutCacheMarkers(b));
 }
 
 /** The signed thinking blocks each request replays, as `sig-N` per call. */
@@ -102,13 +113,10 @@ export function thinkingContractViolations(calls: RecordedCall[]): string[] {
                     violations.push(`call ${k + 1}: unknown block ${sig}`);
                     continue;
                 }
-                if (
-                    withoutCacheMarkers(call.prompt.slice(0, m)) !==
-                    withoutCacheMarkers(origin.prompt)
-                ) {
+                if (!samePrefix(call.prompt.slice(0, m), origin.prompt)) {
                     violations.push(`call ${k + 1}: ${sig} replayed after its prefix changed`);
                 }
-                if (JSON.stringify(call.tools) !== JSON.stringify(origin.tools)) {
+                if (!isDeepStrictEqual(call.tools, origin.tools)) {
                     violations.push(`call ${k + 1}: ${sig} replayed with a different tool list`);
                 }
             }

@@ -114,12 +114,12 @@ describe('agent tools — grep fallback, cut answers', () => {
 
     it('marks the hidden-line count of a cut answer as a floor', async () => {
         const out = (await fallback(long)) as string;
-        expect(out.split('\n').slice(0, 50).join('\n')).toBe(long.split('\n').slice(0, 50).join('\n'));
         // The tool reads the first 1,000,000 characters, cut at a line end.
         const head = long.slice(0, 1_000_000);
         const read = head.slice(0, head.lastIndexOf('\n')).split('\n').length;
-        expect(out.split('\n')[50]).toBe(
-            `... (${read - 50}+ more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`,
+        expect(out).toBe(
+            `${long.split('\n').slice(0, 50).join('\n')}\n` +
+                `... (${read - 50}+ more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`,
         );
     });
 });
