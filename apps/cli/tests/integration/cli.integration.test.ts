@@ -586,14 +586,22 @@ describe('review integration', () => {
             );
 
             expect(byPath.get('rename-dst.ts')?.status).toBe('renamed');
-            expect(byPath.get('rename-dst.ts')?.diff).toContain(
-                'rename from rename-src.ts',
-            );
-            expect(byPath.get('rename-dst.ts')?.diff).toContain(
-                'rename to rename-dst.ts',
-            );
-            expect(byPath.get('rename-dst.ts')?.diff).not.toContain(
-                'new file mode',
+            expect(byPath.get('rename-dst.ts')?.diff).toBe(
+                [
+                    'diff --git a/rename-src.ts b/rename-dst.ts',
+                    'similarity index 76%',
+                    'rename from rename-src.ts',
+                    'rename to rename-dst.ts',
+                    'index 8e274ec..cbaba89 100644',
+                    '--- a/rename-src.ts',
+                    '+++ b/rename-dst.ts',
+                    '@@ -3,3 +3,4 @@ export const beta = 2;',
+                    ' export const gamma = 3;',
+                    ' export const delta = 4;',
+                    ' export const epsilon = 5;',
+                    '+export const STAGED_RENAME_EDIT = 6;',
+                    '',
+                ].join('\n'),
             );
             expect(byPath.get('1:sample.txt')?.content).toBe(
                 'stage-0-prefixed-file\n',

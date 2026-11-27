@@ -237,25 +237,35 @@ describe('gitService staged-only scope', () => {
         const gitService = await freshGitService(dir);
         process.chdir(dir);
 
+        const expectedRenameDiff = [
+            'diff --git a/to-rename.ts b/renamed-with-edit.ts',
+            'similarity index 73%',
+            'rename from to-rename.ts',
+            'rename to renamed-with-edit.ts',
+            'index c87a85d..2468ad5 100644',
+            '--- a/to-rename.ts',
+            '+++ b/renamed-with-edit.ts',
+            '@@ -3,3 +3,4 @@ const line2 = 2;',
+            ' const line3 = 3;',
+            ' const line4 = 4;',
+            ' const line5 = 5;',
+            '+const STAGED_RENAME_EDIT = 6;',
+            '',
+        ].join('\n');
+
         const contents = await gitService.getFullFileContents(undefined, {
             staged: true,
         });
         expect(contents).toHaveLength(1);
         expect(contents[0].path).toBe('renamed-with-edit.ts');
         expect(contents[0].status).toBe('renamed');
-        expect(contents[0].diff).toContain('rename from to-rename.ts');
-        expect(contents[0].diff).toContain('rename to renamed-with-edit.ts');
-        expect(contents[0].diff).toContain('+const STAGED_RENAME_EDIT = 6;');
-        expect(contents[0].diff).not.toContain('new file mode');
+        expect(contents[0].diff).toBe(expectedRenameDiff);
 
         const multiFileDiff = await gitService.getDiffForFiles(
             ['to-rename.ts', 'renamed-with-edit.ts'],
             { staged: true },
         );
-        expect(multiFileDiff).toContain('rename from to-rename.ts');
-        expect(multiFileDiff).toContain('rename to renamed-with-edit.ts');
-        expect(multiFileDiff).not.toContain('new file mode');
-        expect(multiFileDiff).not.toContain('deleted file mode');
+        expect(multiFileDiff).toBe(expectedRenameDiff.trim());
 
         const overlappingDiff = await gitService.getDiffForFiles(
             ['renamed-with-edit.ts', './renamed-with-edit.ts'],
@@ -298,13 +308,34 @@ describe('gitService staged-only scope', () => {
         expect(byPath.get('1:sample.txt')?.content).toBe(
             'const STAGE_PREFIX_NAME = true;\n',
         );
-        expect(byPath.get('1:sample.txt')?.diff).toContain('STAGE_PREFIX_NAME');
+        expect(byPath.get('1:sample.txt')?.diff).toBe(
+            [
+                'diff --git a/1:sample.txt b/1:sample.txt',
+                'new file mode 100644',
+                'index 0000000..21e3e3c',
+                '--- /dev/null',
+                '+++ b/1:sample.txt',
+                '@@ -0,0 +1 @@',
+                '+const STAGE_PREFIX_NAME = true;',
+                '',
+            ].join('\n'),
+        );
 
         expect(byPath.get('a[1].txt')?.content).toBe(
             'const LITERAL_BRACKETS = true;\n',
         );
-        expect(byPath.get('a[1].txt')?.diff).toContain('LITERAL_BRACKETS');
-        expect(byPath.get('a[1].txt')?.diff).not.toContain('GLOB_NEIGHBOR');
+        expect(byPath.get('a[1].txt')?.diff).toBe(
+            [
+                'diff --git a/a[1].txt b/a[1].txt',
+                'new file mode 100644',
+                'index 0000000..cfd117e',
+                '--- /dev/null',
+                '+++ b/a[1].txt',
+                '@@ -0,0 +1 @@',
+                '+const LITERAL_BRACKETS = true;',
+                '',
+            ].join('\n'),
+        );
     });
 
     it('reads staged diffs and contents from a nested cwd and respects diff.relative=true', async () => {
@@ -337,8 +368,17 @@ describe('gitService staged-only scope', () => {
         expect(defaultByPath.get('src/sibling.ts')?.content).toBe(
             'const SUB_SIBLING = "sub";\n',
         );
-        expect(defaultByPath.get('src/sibling.ts')?.diff).toContain(
-            'SUB_SIBLING',
+        expect(defaultByPath.get('src/sibling.ts')?.diff).toBe(
+            [
+                'diff --git a/src/sibling.ts b/src/sibling.ts',
+                'new file mode 100644',
+                'index 0000000..23c0018',
+                '--- /dev/null',
+                '+++ b/src/sibling.ts',
+                '@@ -0,0 +1 @@',
+                '+const SUB_SIBLING = "sub";',
+                '',
+            ].join('\n'),
         );
         expect(defaultByPath.get('sibling.ts')?.content).toBe(
             'const ROOT_SIBLING = "root";\n',
@@ -359,8 +399,17 @@ describe('gitService staged-only scope', () => {
         expect(relativeContents[0].content).toBe(
             'const SUB_SIBLING = "sub";\n',
         );
-        expect(relativeContents[0].content).not.toContain('ROOT_SIBLING');
-        expect(relativeContents[0].diff).toContain('SUB_SIBLING');
-        expect(relativeContents[0].diff).not.toContain('ROOT_SIBLING');
+        expect(relativeContents[0].diff).toBe(
+            [
+                'diff --git a/sibling.ts b/sibling.ts',
+                'new file mode 100644',
+                'index 0000000..23c0018',
+                '--- /dev/null',
+                '+++ b/sibling.ts',
+                '@@ -0,0 +1 @@',
+                '+const SUB_SIBLING = "sub";',
+                '',
+            ].join('\n'),
+        );
     });
 });

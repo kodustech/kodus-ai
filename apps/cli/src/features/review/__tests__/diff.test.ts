@@ -128,7 +128,10 @@ describe('resolveReviewDiff', () => {
             verbose: false,
             git,
         });
+        expect(git.getDiffForFiles).toHaveBeenCalledTimes(1);
         expect(git.getDiffForFiles).toHaveBeenLastCalledWith(['src/a.ts']);
+
+        git.getDiffForFiles.mockClear();
 
         await resolveReviewDiff({
             files: ['src/a.ts'],
@@ -136,6 +139,7 @@ describe('resolveReviewDiff', () => {
             verbose: false,
             git,
         });
+        expect(git.getDiffForFiles).toHaveBeenCalledTimes(1);
         expect(git.getDiffForFiles).toHaveBeenLastCalledWith(['src/a.ts']);
     });
 });
