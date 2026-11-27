@@ -1,0 +1,42 @@
+name: CodeQL
+
+# Replaces the default setup, which cannot ignore paths. Eval fixtures are
+# frozen copies of production code read as data and never run.
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    schedule:
+        - cron: '27 4 * * 1'
+
+permissions:
+    contents: read
+
+jobs:
+    analyze:
+        name: Analyze (${{ matrix.language }})
+        runs-on: ubuntu-latest
+        permissions:
+            security-events: write
+            contents: read
+            actions: read
+        strategy:
+            fail-fast: false
+            matrix:
+                language: [actions, javascript-typescript, python]
+        steps:
+            - uses: actions/checkout@v6.0.2
+
+            - uses: github/codeql-action/init@v4
+              with:
+                  languages: ${{ matrix.language }}
+                  build-mode: none
+                  config: |
+                      paths-ignore:
+                          - evals/**/fixtures/**
+
+            - uses: github/codeql-action/analyze@v4
+              with:
+                  category: '/language:${{ matrix.language }}'
