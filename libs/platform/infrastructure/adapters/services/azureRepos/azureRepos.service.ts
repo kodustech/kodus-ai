@@ -136,7 +136,10 @@ import {
     runWebhookSetup,
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
-import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -3219,7 +3222,7 @@ export class AzureReposService implements Omit<
                 integrationId?: string;
             } = { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
             if (params && params?.authMode === AuthMode.OAUTH) {
-                throw new Error(
+                throw new BadRequestException(
                     'Authenticating on Azure Devops Repos via OAuth not implemented',
                 );
             } else if (
@@ -3246,18 +3249,9 @@ export class AzureReposService implements Omit<
 
             return res;
         } catch (err) {
-            this.logger.error({
-                message: 'Error to create auth integration',
-                context: this.createAuthIntegration.name,
-                error: err,
-                // Named fields only: params carries the PAT.
-                metadata: {
-                    organizationAndTeamData: params?.organizationAndTeamData,
-                    authMode: params?.authMode,
-                    host: params?.host ?? params?.orgUrl,
-                },
-            });
-            throw new BadRequestException(err);
+            // authenticateWithToken logged its own failure; the exception
+            // filter logs this answer.
+            throw toIntegrationLinkError(err, 'Azure Repos');
         }
     }
 
@@ -3307,21 +3301,19 @@ export class AzureReposService implements Omit<
                 integrationId,
             };
         } catch (err) {
-            // Not a bad token: which connection to rewrite is the user's to say.
-            if (err instanceof AmbiguousConnectionException) throw err;
-            this.logger.error({
-                message: 'Error to authenticate with token',
-                context: this.authenticateWithToken.name,
-                error: err,
+            const linkError = toIntegrationLinkError(err, 'Azure Repos');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Azure Repos',
+                context: AzureReposService.name,
+                err,
+                linkError,
                 // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData: params?.organizationAndTeamData,
                     orgUrl: params?.orgUrl,
                 },
             });
-            throw new BadRequestException(
-                'Error authenticating with Azure Devops PAT.',
-            );
+            throw linkError;
         }
     }
 

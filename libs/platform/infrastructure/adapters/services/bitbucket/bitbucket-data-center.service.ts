@@ -1,9 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
-import {
-    assertGitServerUrlAllowed,
-    gitServerRefusal,
-} from '../git-server-url.guard';
+import { assertGitServerUrlAllowed } from '../git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import {
     isFileMatchingGlob,
@@ -90,7 +87,10 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
-import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 const FILES_PAGE_SIZE = 1000;
 const MAX_FILE_PAGES = 200;
@@ -278,7 +278,7 @@ export class BitbucketDataCenterService implements Omit<
                 testResponse.status !== 200 ||
                 !Array.isArray(testResponse.data?.values)
             ) {
-                throw new Error(
+                throw new BadRequestException(
                     'Bitbucket Data Center failed to validate the provided token.',
                 );
             }
@@ -312,25 +312,22 @@ export class BitbucketDataCenterService implements Omit<
                 integrationId,
             };
         } catch (err) {
-            // Not a bad token: which connection to rewrite is the user's to say.
-            if (err instanceof AmbiguousConnectionException) throw err;
-            this.logger.error({
-                message: 'Error authenticating with Data Center token',
+            const linkError = toIntegrationLinkError(
+                err,
+                'Bitbucket Data Center',
+            );
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Bitbucket Data Center',
                 context: BitbucketDataCenterService.name,
-                error: err,
+                err,
+                linkError,
                 // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData: params?.organizationAndTeamData,
                     host: params?.host,
                 },
             });
-            // A refused address is not a bad token: say which it was.
-            throw (
-                gitServerRefusal(err) ??
-                new BadRequestException(
-                    'Error authenticating with Bitbucket Data Center.',
-                )
-            );
+            throw linkError;
         }
     }
 
