@@ -649,6 +649,13 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "filesMode": {
+              "type": "string",
+              "enum": [
+                "create",
+                "fill_missing"
+              ]
             }
           },
           "required": [

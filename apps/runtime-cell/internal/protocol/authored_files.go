@@ -59,7 +59,13 @@ func CheckAuthoredFiles(files []AuthoredFile) error {
 
 // refineRecipe mirrors ClaimRecipeSchema's refinements.
 func refineRecipe(r *ClaimAcquireBodyRecipe) error {
-	if r == nil || r.Files == nil {
+	if r == nil {
+		return nil
+	}
+	if r.FilesMode != nil && len(r.Files) == 0 {
+		return errors.New("recipe.filesMode: filesMode comes only with files")
+	}
+	if r.Files == nil {
 		return nil
 	}
 	if len(r.Content) == 0 || string(r.Content) == "null" {

@@ -220,3 +220,100 @@ func TestAuthoredFilesRecheckTheProtocolRules(t *testing.T) {
 		}
 	}
 }
+
+func fillMissing(r *protocol.ClaimAcquireBodyRecipe) *protocol.ClaimAcquireBodyRecipe {
+	mode := protocol.ClaimAcquireBodyRecipeFilesModeFillMissing
+	r.FilesMode = &mode
+	return r
+}
+
+// A committed recipe's build files fill a checkout cut before the recipe:
+// with no .kodus at all, the files are created with the exact bytes.
+func TestFillMissingCreatesTheBuildFilesOfACheckoutWithoutKodus(t *testing.T) {
+	dir := t.TempDir()
+	compose := "services:\n  app:\n    build: { context: ., dockerfile: .kodus/Dockerfile.app }\n"
+	r := fillMissing(authoredRecipe(kody(".kodus/compose.yaml", compose), kody(".kodus/Dockerfile.app", dockerfile)))
+	if err := WriteAuthoredFiles(dir, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "compose.yaml")); got != compose {
+		t.Fatalf("compose %q", got)
+	}
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "Dockerfile.app")); got != dockerfile {
+		t.Fatalf("Dockerfile %q", got)
+	}
+}
+
+// A PR that changes a build file keeps its own bytes: a file the checkout
+// has is never touched in fill mode, and the missing ones still arrive.
+func TestFillMissingNeverTouchesAFileTheCheckoutHas(t *testing.T) {
+	dir := checkout(t, "")
+	_ = os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755)
+	own := "services:\n  app:\n    image: pr-edited\n"
+	if err := os.WriteFile(filepath.Join(dir, ".kodus", "compose.yaml"), []byte(own), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := fillMissing(authoredRecipe(kody(".kodus/compose.yaml", "services: {}\n"), kody(".kodus/Dockerfile.app", dockerfile)))
+	if err := WriteAuthoredFiles(dir, r); err != nil {
+		t.Fatalf("a file of the checkout failed the claim: %v", err)
+	}
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "compose.yaml")); got != own {
+		t.Fatalf("the PR's file changed: %q", got)
+	}
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "Dockerfile.app")); got != dockerfile {
+		t.Fatalf("the missing file was not filled: %q", got)
+	}
+}
+
+// What stands at a file's path is the checkout's, a link or a directory
+// included: fill mode neither follows nor replaces it, and writes nothing
+// through it.
+func TestFillMissingLeavesALinkOrADirectoryAtAFilePath(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	kodus := filepath.Join(dir, ".kodus")
+	if err := os.MkdirAll(filepath.Join(kodus, "Dockerfile.app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "target"), filepath.Join(kodus, "compose.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	r := fillMissing(authoredRecipe(kody(".kodus/compose.yaml", "services: {}\n"), kody(".kodus/Dockerfile.app", dockerfile)))
+	if err := WriteAuthoredFiles(dir, r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "target")); !os.IsNotExist(err) {
+		t.Fatalf("written through the link: %v", err)
+	}
+	if st, err := os.Lstat(filepath.Join(kodus, "Dockerfile.app")); err != nil || !st.IsDir() {
+		t.Fatalf("the directory was replaced: %v %v", st, err)
+	}
+}
+
+// Fill mode keeps the cell's rule on .kodus itself: a link there is never
+// written through, even to fill.
+func TestFillMissingRefusesAKodusLink(t *testing.T) {
+	dir := t.TempDir()
+	target := t.TempDir()
+	if err := os.Symlink(target, filepath.Join(dir, ".kodus")); err != nil {
+		t.Fatal(err)
+	}
+	wantRefused(t, WriteAuthoredFiles(dir, fillMissing(authoredRecipe(kody(".kodus/compose.yaml", "services: {}\n")))), ".kodus: is a symbolic link")
+	if entries, _ := os.ReadDir(target); len(entries) != 0 {
+		t.Fatalf("written through the link: %v", entries)
+	}
+}
+
+// Without the mode a file with other bytes still fails the claim: the
+// authored files of a submitted recipe keep their exclusive rule.
+func TestCreateModeStillRefusesAFileWithOtherBytes(t *testing.T) {
+	dir := checkout(t, "")
+	_ = os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755)
+	if err := os.WriteFile(filepath.Join(dir, ".kodus", "compose.yaml"), []byte("other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mode := protocol.ClaimAcquireBodyRecipeFilesModeCreate
+	r := authoredRecipe(kody(".kodus/compose.yaml", "services: {}\n"))
+	r.FilesMode = &mode
+	wantRefused(t, WriteAuthoredFiles(dir, r), "is already in the checkout with other content")
+}

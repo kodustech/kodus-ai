@@ -46,6 +46,7 @@ const (
 	FeatureExecService           = "execService"
 	FeatureSkipBake              = "skipBake"
 	FeatureServiceStates         = "serviceStates"
+	FeatureAuthoredFilesFill     = "authoredFilesFill"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -91,6 +92,7 @@ var CellFeatures = []string{
 	FeatureExecService,
 	FeatureSkipBake,
 	FeatureServiceStates,
+	FeatureAuthoredFilesFill,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):

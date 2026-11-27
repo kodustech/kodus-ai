@@ -26,6 +26,16 @@ export const AUTHORED_FILES_LIMITS = {
  */
 export const AUTHORED_FILE_PATH_PATTERN = '^\\.kodus/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$';
 
+/**
+ * How the cell lays a recipe's files into the checkout. `create` (the default,
+ * Kody's authored files): a file the checkout already has fails the claim
+ * unless its bytes are the same. `fill_missing` (a committed recipe's build
+ * files, read at the recipe's commit): a file the checkout already has is
+ * never touched, whatever it says, so a PR that edits it keeps its own.
+ */
+export const AUTHORED_FILES_MODES = ['create', 'fill_missing'] as const;
+export type AuthoredFilesMode = (typeof AUTHORED_FILES_MODES)[number];
+
 export const AuthoredFileSchema = z.strictObject({
     path: z.string().regex(new RegExp(AUTHORED_FILE_PATH_PATTERN)),
     content: z.string().max(AUTHORED_FILES_LIMITS.fileBytes),

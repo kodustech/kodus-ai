@@ -40,6 +40,11 @@ func (e *authoredFileError) Error() string { return "authored file " + e.path + 
 // A file already there fails the claim, unless it is a regular file with
 // exactly the same bytes (the recipe PR Kodus opens adds those very files):
 // nothing would change, so nothing is written.
+//
+// With r.FilesMode "fill_missing" (a committed recipe's build files, read at
+// its commit) the files only fill what the checkout lacks: an entry already
+// at a file's path, whatever it is and says, is left exactly as it is and
+// never followed, so a PR that edits .kodus/compose.yaml boots its own.
 func WriteAuthoredFiles(repo string, r *protocol.ClaimAcquireBodyRecipe) error {
 	if r == nil || len(r.Files) == 0 {
 		return nil
@@ -57,8 +62,9 @@ func WriteAuthoredFiles(repo string, r *protocol.ClaimAcquireBodyRecipe) error {
 		return err
 	}
 	defer func() { _ = unix.Close(dir) }()
+	fill := r.FilesMode != nil && *r.FilesMode == protocol.ClaimAcquireBodyRecipeFilesModeFillMissing
 	for _, f := range r.Files {
-		if err := writeAuthoredFile(dir, f); err != nil {
+		if err := writeAuthoredFile(dir, f, fill); err != nil {
 			return err
 		}
 	}
@@ -113,11 +119,16 @@ func notADirectory(root int, openErr error) string {
 	return "cannot be opened (" + openErr.Error() + ")"
 }
 
-// writeAuthoredFile creates one file in .kodus, exclusively.
-func writeAuthoredFile(dir int, f protocol.AuthoredFile) error {
+// writeAuthoredFile creates one file in .kodus, exclusively. With fill, an
+// entry already there (EEXIST, a dangling link included: O_EXCL never follows
+// one) is the checkout's own and stays.
+func writeAuthoredFile(dir int, f protocol.AuthoredFile, fill bool) error {
 	name := strings.TrimPrefix(f.Path, authoredFilesDir+"/")
 	fd, err := unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o644)
 	if errors.Is(err, unix.EEXIST) {
+		if fill {
+			return nil
+		}
 		return sameFile(dir, name, f)
 	}
 	if err != nil {

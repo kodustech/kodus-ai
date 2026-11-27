@@ -56,7 +56,8 @@
         "suite",
         "execService",
         "skipBake",
-        "serviceStates"
+        "serviceStates",
+        "authoredFilesFill"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

@@ -235,11 +235,19 @@ type AuthoredFile struct {
 	Content string `json:"content"`
 }
 
+type ClaimAcquireBodyRecipeFilesMode string
+
+const (
+	ClaimAcquireBodyRecipeFilesModeCreate      ClaimAcquireBodyRecipeFilesMode = "create"
+	ClaimAcquireBodyRecipeFilesModeFillMissing ClaimAcquireBodyRecipeFilesMode = "fill_missing"
+)
+
 type ClaimAcquireBodyRecipe struct {
-	Path    string          `json:"path"`
-	Content json.RawMessage `json:"content"`
-	Digest  *string         `json:"digest,omitempty"`
-	Files   []AuthoredFile  `json:"files,omitempty"`
+	Path      string                           `json:"path"`
+	Content   json.RawMessage                  `json:"content"`
+	Digest    *string                          `json:"digest,omitempty"`
+	Files     []AuthoredFile                   `json:"files,omitempty"`
+	FilesMode *ClaimAcquireBodyRecipeFilesMode `json:"filesMode,omitempty"`
 }
 
 type ClaimAcquireBodyEgressInspectItem struct {

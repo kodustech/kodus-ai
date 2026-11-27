@@ -10,7 +10,7 @@ import {
     ExposeSchema,
     VM_HEALTH,
 } from '@libs/runtime/contracts/enums';
-import { AUTHORED_FILES_LIMITS, AuthoredFilesSchema } from '@libs/runtime/contracts/authored-files';
+import { AUTHORED_FILES_LIMITS, AUTHORED_FILES_MODES, AuthoredFilesSchema } from '@libs/runtime/contracts/authored-files';
 import { MACHINE_SIZE_LIMITS, type MachineSize, MachineSizeSchema } from '@libs/runtime/contracts/machine-size';
 import { ExactHostnameSchema } from '@libs/runtime/contracts/boundary-values';
 import { CELL_ISOLATIONS, ISOLATION_BACKEND_NAME, MACHINE_ARCHES } from '@libs/runtime/contracts/isolation';
@@ -96,8 +96,11 @@ export const ClaimRecipeSchema = z
         content: z.string().max(65_536).nullable(),
         digest: z.string().max(128).optional(),
         files: AuthoredFilesSchema.optional(),
+        /** Feature authoredFilesFill: how the cell lays `files` into the checkout (AUTHORED_FILES_MODES); absent: create. */
+        filesMode: z.enum(AUTHORED_FILES_MODES).optional(),
     })
-    .refine((r) => !r.files || r.content !== null, { message: 'authored files come only with a recipe', path: ['files'] });
+    .refine((r) => !r.files || r.content !== null, { message: 'authored files come only with a recipe', path: ['files'] })
+    .refine((r) => !r.filesMode || !!r.files, { message: 'filesMode comes only with files', path: ['filesMode'] });
 export type ClaimRecipe = z.infer<typeof ClaimRecipeSchema>;
 
 /**
@@ -400,6 +403,11 @@ export const CELL_FEATURES = [
     // died instead of polling to its timeout. Cell to hub: sent only to a hub whose hello ack accepts it. At the end,
     // like the features before it.
     'serviceStates',
+    // claim.acquire recipe.filesMode 'fill_missing': the build files of a committed recipe, read at its commit, that the
+    // cell lays into the checkout only where it has none (a PR cut before the recipe lacks them). A cell's strict decoder
+    // refuses a field it does not know, so the hub sends the mode only to a cell that names this and sends no files to
+    // the others, as before. At the end, like the features before it.
+    'authoredFilesFill',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
