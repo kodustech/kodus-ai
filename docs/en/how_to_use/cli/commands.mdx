@@ -40,7 +40,7 @@ kodus review --fix                    # Apply all fixable issues
 kodus review --prompt-only            # Output optimized for AI agents
 ```
 
-With no scope flag, `kodus review` reviews tracked changes in your working tree, staged and unstaged. If you pass more than one scope, files win over `--branch`, `--branch` over `--commit`, and `--commit` over `--staged`. See [Diff Modes](/en/how_to_use/cli/concepts#diff-modes).
+With no scope flag, `kodus review` reviews tracked changes in your working tree, staged and unstaged. Passing files limits a working-tree or `--staged` review to those files. If you pass more than one scope, files win over `--branch`, `--branch` over `--commit`, and `--commit` over `--staged`. See [Diff Modes](/en/how_to_use/cli/concepts#diff-modes).
 
 ### Flags
 

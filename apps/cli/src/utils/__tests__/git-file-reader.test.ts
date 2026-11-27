@@ -23,10 +23,27 @@ describe('buildFileDiffReadPlan', () => {
         });
     });
 
-    it('builds a staged diff plan', () => {
+    it('builds a staged diff plan with top,literal pathspec', () => {
         expect(buildFileDiffReadPlan('src/app.ts', { staged: true })).toEqual({
             mode: 'single-diff',
-            args: ['--cached', '--', 'src/app.ts'],
+            args: ['--cached', '--', ':(top,literal)src/app.ts'],
+        });
+    });
+
+    it('includes both old and new top,literal pathspecs for a staged rename', () => {
+        expect(
+            buildFileDiffReadPlan('src/new.ts', {
+                staged: true,
+                oldFilePath: 'src/old.ts',
+            }),
+        ).toEqual({
+            mode: 'single-diff',
+            args: [
+                '--cached',
+                '--',
+                ':(top,literal)src/old.ts',
+                ':(top,literal)src/new.ts',
+            ],
         });
     });
 
@@ -58,12 +75,18 @@ describe('buildFileContentReadPlan', () => {
         });
     });
 
-    it('reads staged content from the git index', () => {
+    it('reads staged content from stage 0 of the git index', () => {
         expect(
             buildFileContentReadPlan('src/app.ts', { staged: true }),
         ).toEqual({
             mode: 'git-show',
-            args: [':src/app.ts'],
+            args: [':0:src/app.ts'],
+        });
+        expect(
+            buildFileContentReadPlan('1:sample.txt', { staged: true }),
+        ).toEqual({
+            mode: 'git-show',
+            args: [':0:1:sample.txt'],
         });
     });
 

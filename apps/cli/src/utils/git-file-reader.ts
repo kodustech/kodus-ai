@@ -2,7 +2,12 @@ export type GitFileReadOptions = {
     staged?: boolean;
     commit?: string;
     branch?: string;
+    oldFilePath?: string;
 };
+
+function toTopLiteralPathspec(filePath: string): string {
+    return `:(top,literal)${filePath}`;
+}
 
 export function buildFileDiffReadPlan(
     filePath: string,
@@ -29,9 +34,19 @@ export function buildFileDiffReadPlan(
     }
 
     if (options?.staged) {
+        const targetPaths =
+            options.oldFilePath && options.oldFilePath !== filePath
+                ? [options.oldFilePath, filePath]
+                : [filePath];
         return {
             mode: 'single-diff',
-            args: ['--cached', '--', filePath],
+            args: [
+                '--cached',
+                '--',
+                ...targetPaths.map((targetPath) =>
+                    toTopLiteralPathspec(targetPath),
+                ),
+            ],
         };
     }
 
@@ -65,7 +80,7 @@ export function buildFileContentReadPlan(
     if (options?.staged) {
         return {
             mode: 'git-show',
-            args: [`:${filePath}`],
+            args: [`:0:${filePath}`],
         };
     }
 

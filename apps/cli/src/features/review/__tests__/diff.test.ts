@@ -109,4 +109,33 @@ describe('resolveReviewDiff', () => {
             '[verbose] Diff preview:\nstaged file diff',
         ]);
     });
+
+    it('keeps files precedence over --branch and --commit when --staged is also passed', async () => {
+        const git = {
+            setVerbose: vi.fn(),
+            getDiffForFiles: vi
+                .fn()
+                .mockResolvedValue('working tree file diff'),
+            getDiffForBranch: vi.fn(),
+            getDiffForCommit: vi.fn(),
+            getStagedDiff: vi.fn(),
+            getWorkingTreeDiff: vi.fn(),
+        };
+
+        await resolveReviewDiff({
+            files: ['src/a.ts'],
+            options: { staged: true, branch: 'main' },
+            verbose: false,
+            git,
+        });
+        expect(git.getDiffForFiles).toHaveBeenLastCalledWith(['src/a.ts']);
+
+        await resolveReviewDiff({
+            files: ['src/a.ts'],
+            options: { staged: true, commit: 'abc123' },
+            verbose: false,
+            git,
+        });
+        expect(git.getDiffForFiles).toHaveBeenLastCalledWith(['src/a.ts']);
+    });
 });

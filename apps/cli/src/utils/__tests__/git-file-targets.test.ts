@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildFileRenameSourceMap,
     buildFileStatusMap,
     listFilesFromNameStatus,
 } from '../git-file-targets.js';
@@ -35,5 +36,19 @@ describe('buildFileStatusMap', () => {
             ['src/old.ts', 'deleted'],
             ['src/b.ts', 'renamed'],
         ]);
+    });
+});
+
+describe('buildFileRenameSourceMap', () => {
+    it('maps renamed files to their original paths', () => {
+        const nameStatus = [
+            'M\tsrc/app.ts',
+            'R090\tsrc/before.ts\tsrc/after.ts',
+            'C100\tsrc/a.ts\tsrc/b.ts',
+        ].join('\n');
+
+        expect(
+            Array.from(buildFileRenameSourceMap(nameStatus).entries()),
+        ).toEqual([['src/after.ts', 'src/before.ts']]);
     });
 });

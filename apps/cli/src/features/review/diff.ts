@@ -31,14 +31,17 @@ export async function resolveReviewDiff({
     let diff: string;
 
     if (files.length > 0) {
+        const stagedOnly = Boolean(
+            options.staged && !options.branch && !options.commit,
+        );
         if (verbose) {
             verboseMessages.push(
-                options.staged
+                stagedOnly
                     ? `[verbose] Getting staged diff for specific files: ${files.join(', ')}`
                     : `[verbose] Getting diff for specific files: ${files.join(', ')}`,
             );
         }
-        diff = options.staged
+        diff = stagedOnly
             ? await git.getDiffForFiles(files, { staged: true })
             : await git.getDiffForFiles(files);
     } else if (options.branch) {

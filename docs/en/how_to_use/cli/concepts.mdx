@@ -16,7 +16,7 @@ Every review needs to answer one question: *what changed?* The CLI supports four
 | **Branch** (`--branch <base>`) | `git diff <base>...HEAD`: your commits since the branch left `<base>` | No | Pre-merge review of the whole branch.   |
 | **Commit** (`--commit <sha>`)  | The diff introduced by a single commit              | No                   | Audit one commit, cherry-pick review.         |
 
-Files named on the command line (`kodus review src/auth.ts`) limit a working-tree review to those files. If you pass more than one scope, files win over `--branch`, `--branch` over `--commit`, and `--commit` over `--staged`.
+Files named on the command line (`kodus review src/auth.ts`) limit a working-tree or `--staged` review to those files. If you pass more than one scope, files win over `--branch`, `--branch` over `--commit`, and `--commit` over `--staged`.
 
 Untracked files are not part of any diff until you `git add` them.
 

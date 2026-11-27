@@ -210,4 +210,157 @@ describe('gitService staged-only scope', () => {
         expect(explicit[0].content).toContain('STAGED_UNICODE');
         expect(explicit[0].content).not.toContain('UNSTAGED_UNICODE');
     });
+
+    it('preserves rename-with-edit hunk diff in getFullFileContents and multi-path getDiffForFiles', async () => {
+        const dir = createRepo();
+        tempDirs.push(dir);
+
+        const initialLines = [
+            'const line1 = 1;',
+            'const line2 = 2;',
+            'const line3 = 3;',
+            'const line4 = 4;',
+            'const line5 = 5;',
+            '',
+        ].join('\n');
+        fs.writeFileSync(path.join(dir, 'to-rename.ts'), initialLines);
+        git(dir, ['add', 'to-rename.ts']);
+        git(dir, ['commit', '-qm', 'seed multi-line rename source']);
+
+        git(dir, ['mv', 'to-rename.ts', 'renamed-with-edit.ts']);
+        fs.writeFileSync(
+            path.join(dir, 'renamed-with-edit.ts'),
+            `${initialLines}const STAGED_RENAME_EDIT = 6;\n`,
+        );
+        git(dir, ['add', 'renamed-with-edit.ts']);
+
+        const gitService = await freshGitService(dir);
+        process.chdir(dir);
+
+        const contents = await gitService.getFullFileContents(undefined, {
+            staged: true,
+        });
+        expect(contents).toHaveLength(1);
+        expect(contents[0].path).toBe('renamed-with-edit.ts');
+        expect(contents[0].status).toBe('renamed');
+        expect(contents[0].diff).toContain('rename from to-rename.ts');
+        expect(contents[0].diff).toContain('rename to renamed-with-edit.ts');
+        expect(contents[0].diff).toContain('+const STAGED_RENAME_EDIT = 6;');
+        expect(contents[0].diff).not.toContain('new file mode');
+
+        const multiFileDiff = await gitService.getDiffForFiles(
+            ['to-rename.ts', 'renamed-with-edit.ts'],
+            { staged: true },
+        );
+        expect(multiFileDiff).toContain('rename from to-rename.ts');
+        expect(multiFileDiff).toContain('rename to renamed-with-edit.ts');
+        expect(multiFileDiff).not.toContain('new file mode');
+        expect(multiFileDiff).not.toContain('deleted file mode');
+
+        const overlappingDiff = await gitService.getDiffForFiles(
+            ['renamed-with-edit.ts', './renamed-with-edit.ts'],
+            { staged: true },
+        );
+        expect(overlappingDiff.match(/diff --git /g)?.length ?? 0).toBe(1);
+    });
+
+    it('handles stage-prefix filenames (1:sample.txt) and glob characters (a[1].txt)', async () => {
+        const dir = createRepo();
+        tempDirs.push(dir);
+
+        fs.writeFileSync(
+            path.join(dir, '1:sample.txt'),
+            'const STAGE_PREFIX_NAME = true;\n',
+        );
+        fs.writeFileSync(
+            path.join(dir, 'a[1].txt'),
+            'const LITERAL_BRACKETS = true;\n',
+        );
+        fs.writeFileSync(
+            path.join(dir, 'a1.txt'),
+            'const GLOB_NEIGHBOR = true;\n',
+        );
+        git(dir, [
+            'add',
+            ':(literal)1:sample.txt',
+            ':(literal)a[1].txt',
+            'a1.txt',
+        ]);
+
+        const gitService = await freshGitService(dir);
+        process.chdir(dir);
+
+        const contents = await gitService.getFullFileContents(undefined, {
+            staged: true,
+        });
+        const byPath = new Map(contents.map((file) => [file.path, file]));
+
+        expect(byPath.get('1:sample.txt')?.content).toBe(
+            'const STAGE_PREFIX_NAME = true;\n',
+        );
+        expect(byPath.get('1:sample.txt')?.diff).toContain('STAGE_PREFIX_NAME');
+
+        expect(byPath.get('a[1].txt')?.content).toBe(
+            'const LITERAL_BRACKETS = true;\n',
+        );
+        expect(byPath.get('a[1].txt')?.diff).toContain('LITERAL_BRACKETS');
+        expect(byPath.get('a[1].txt')?.diff).not.toContain('GLOB_NEIGHBOR');
+    });
+
+    it('reads staged diffs and contents from a nested cwd and respects diff.relative=true', async () => {
+        const dir = createRepo();
+        tempDirs.push(dir);
+
+        const subDir = path.join(dir, 'src');
+        fs.mkdirSync(subDir);
+        fs.writeFileSync(
+            path.join(dir, 'sibling.ts'),
+            'const ROOT_SIBLING = "root";\n',
+        );
+        fs.writeFileSync(
+            path.join(subDir, 'sibling.ts'),
+            'const SUB_SIBLING = "sub";\n',
+        );
+        git(dir, ['add', 'sibling.ts', 'src/sibling.ts']);
+
+        // 1. Default diff.relative (false) from nested subdirectory:
+        const gitServiceDefault = await freshGitService(subDir);
+        process.chdir(subDir);
+
+        const defaultContents = await gitServiceDefault.getFullFileContents(
+            undefined,
+            { staged: true },
+        );
+        const defaultByPath = new Map(
+            defaultContents.map((file) => [file.path, file]),
+        );
+        expect(defaultByPath.get('src/sibling.ts')?.content).toBe(
+            'const SUB_SIBLING = "sub";\n',
+        );
+        expect(defaultByPath.get('src/sibling.ts')?.diff).toContain(
+            'SUB_SIBLING',
+        );
+        expect(defaultByPath.get('sibling.ts')?.content).toBe(
+            'const ROOT_SIBLING = "root";\n',
+        );
+
+        // 2. diff.relative=true from nested subdirectory:
+        git(dir, ['config', 'diff.relative', 'true']);
+        const gitServiceRelative = await freshGitService(subDir);
+        process.chdir(subDir);
+
+        const relativeContents = await gitServiceRelative.getFullFileContents(
+            undefined,
+            { staged: true },
+        );
+        expect(relativeContents.map((file) => file.path)).toEqual([
+            'src/sibling.ts',
+        ]);
+        expect(relativeContents[0].content).toBe(
+            'const SUB_SIBLING = "sub";\n',
+        );
+        expect(relativeContents[0].content).not.toContain('ROOT_SIBLING');
+        expect(relativeContents[0].diff).toContain('SUB_SIBLING');
+        expect(relativeContents[0].diff).not.toContain('ROOT_SIBLING');
+    });
 });

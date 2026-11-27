@@ -32,7 +32,7 @@ describe('parseGitNameStatusOutput', () => {
         ]);
     });
 
-    it('uses the new path for renames and copies', () => {
+    it('uses the new path for renames and copies while preserving oldFile on renames', () => {
         expect(
             parseGitNameStatusOutput(
                 ['R100\tsrc/old.ts\tsrc/new.ts', 'C100\tfoo.ts\tbar.ts'].join(
@@ -40,8 +40,35 @@ describe('parseGitNameStatusOutput', () => {
                 ),
             ),
         ).toEqual([
-            { file: 'src/new.ts', status: 'renamed' },
+            {
+                file: 'src/new.ts',
+                oldFile: 'src/old.ts',
+                status: 'renamed',
+            },
             { file: 'bar.ts', status: 'modified' },
+        ]);
+    });
+
+    it('preserves oldFile on NUL-separated -z rename entries', () => {
+        expect(
+            parseGitNameStatusOutput(
+                [
+                    'R085',
+                    'src/old.ts',
+                    'src/new.ts',
+                    'C100',
+                    'a.ts',
+                    'b.ts',
+                    '',
+                ].join('\0'),
+            ),
+        ).toEqual([
+            {
+                file: 'src/new.ts',
+                oldFile: 'src/old.ts',
+                status: 'renamed',
+            },
+            { file: 'b.ts', status: 'modified' },
         ]);
     });
 
