@@ -52,7 +52,7 @@ describe('conversation decision loop — Anthropic thinking contract', () => {
                 resultToolName: CONVERSATION_DECISION_TOOL,
                 policies: [
                     new WriteGatePolicy(prompt, createWriteAuthorization()),
-                    new WriteTruthPolicy(() => false),
+                    new WriteTruthPolicy(() => []),
                     new DecisionLoopPolicy(),
                 ],
                 maxSteps: 12,

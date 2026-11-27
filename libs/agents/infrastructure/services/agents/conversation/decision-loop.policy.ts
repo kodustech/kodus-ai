@@ -5,8 +5,10 @@
  * it on every step and never write the answer: 262 of 2,924 conversations on
  * 26 Nov 2026 ran to the 12-step limit doing only that, then fell back to a
  * second, minimal run. Past MAX_DECISIONS the tool itself tells the agent to
- * answer (see buildDecisionTool); a run that still records STOP_AFTER_DECISIONS
- * decisions stops here, and the minimal run answers without the wasted steps.
+ * answer (see buildDecisionTool); a run that records STOP_AFTER_DECISIONS
+ * decisions with no other tool call in between stops here, and the minimal
+ * run answers without the wasted steps. Decisions separated by reads or
+ * writes are a run at work, not this loop.
  *
  * The policy never removes the tool from the step: a changed tool list makes
  * Anthropic reject every earlier thinking block of the run (#2731). Stopping
@@ -17,7 +19,10 @@ import type {
     StepView,
 } from '@libs/agent-harness/domain/contracts/policy.contract';
 
-import { countDecisions, MAX_DECISIONS } from './conversation-decision';
+import {
+    decisionsSinceOtherWork,
+    MAX_DECISIONS,
+} from './conversation-decision';
 
 /** Two told-to-answer calls past MAX_DECISIONS, then the run ends. */
 export const STOP_AFTER_DECISIONS = MAX_DECISIONS + 2;
@@ -26,8 +31,6 @@ export class DecisionLoopPolicy implements AgentPolicy {
     readonly name = 'decision-loop';
 
     shouldStop(view: StepView): boolean {
-        // Only decisions that ran and parsed: a failed or malformed call did
-        // not record anything, and must not use up the agent's chances.
-        return countDecisions(view.steps) >= STOP_AFTER_DECISIONS;
+        return decisionsSinceOtherWork(view.steps) >= STOP_AFTER_DECISIONS;
     }
 }

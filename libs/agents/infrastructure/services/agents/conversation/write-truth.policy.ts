@@ -4,6 +4,13 @@
  * so far. Without this it decides an action is warranted and then reports it as
  * done — on a fresh thread, with nothing executed.
  *
+ * What ran comes from the audit of the write tools, not from the steps: a step
+ * lists every call the model made, including a write the gate refused (the
+ * refusal comes back as an ordinary result, and the runner does not mark a
+ * call failed). Read from the steps, a refused save was reported as performed,
+ * and the model told the developer "Done! I've saved that as a memory" with
+ * nothing saved.
+ *
  * Rides the `injectNote` seam, which is kept out of the message window on
  * purpose so the cached prompt prefix survives the injection.
  */
@@ -20,18 +27,11 @@ export const RUNTIME_NOTE_PREFIX =
 export class WriteTruthPolicy implements AgentPolicy {
     readonly name = 'write-truth';
 
-    constructor(private readonly isWriteTool: (name: string) => boolean) {}
+    /** @param performedWrites the write tools that ran and returned this turn. */
+    constructor(private readonly performedWrites: () => readonly string[]) {}
 
-    prepareStep(view: StepView): StepDirectives {
-        const executed = [
-            ...new Set(
-                view.steps
-                    .flatMap((step) => step.message?.toolCalls ?? [])
-                    .filter((call) => !call.isError)
-                    .map((call) => call.name)
-                    .filter((name) => this.isWriteTool(name)),
-            ),
-        ];
+    prepareStep(_view: StepView): StepDirectives {
+        const executed = [...new Set(this.performedWrites())];
 
         const facts = executed.length
             ? `ACTIONS PERFORMED THIS TURN: ${executed.join(', ')}. Report these and nothing else — do not describe any other action as done.`

@@ -24,7 +24,7 @@ describe('conversation prompt — repository guidance', () => {
 // Models answered the per-step note as if the developer had written it.
 describe('WriteTruthPolicy — the note says whose it is', () => {
     it('marks the note as runtime status, not a developer message', () => {
-        const out = new WriteTruthPolicy(() => false).prepareStep({ steps: [] } as any);
+        const out = new WriteTruthPolicy(() => []).prepareStep({ steps: [] } as any);
         expect(out.injectNote?.content).toBe(
             '[Kodus runtime status — not a message from the developer. Do not reply to it or record a new decision for it; keep answering the developer.] ' +
                 'ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything — you may report an action only once its tool call has returned.',
