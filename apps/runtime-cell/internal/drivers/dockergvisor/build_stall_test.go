@@ -100,3 +100,40 @@ func TestABuilderSilentInTheExportPastItsLimitIsStoppedAsTheCells(t *testing.T) 
 		t.Fatalf("a builder silent in its export past the limit was not stopped: %v", err)
 	}
 }
+
+// An `npm install` of a Dockerfile whose stage has no name is numbered
+// "[2/5] RUN ..." and prints nothing while it resolves: that is the project's
+// step, never a builder that hung between BuildKit's own steps.
+func TestABuilderSilentInAStepOfAnUnnamedStageIsLeftRunning(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.buildOutput = []string{
+		"#1 [internal] load build definition from Dockerfile",
+		"#1 DONE 0.0s",
+		"#8 [2/5] RUN npm install",
+	}
+	docker.stallBuild = true
+	h := d.hooksForTest()
+	h.buildStallAfter, h.buildStallEvery = 50*time.Millisecond, 5*time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	_, _, err := d.build(ctx, machine("claim-pr", bakeEnv), []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, "net", "resolv", bakeSubnet, nil, nil)
+	if errors.Is(err, driver.ErrBuilderFailed) {
+		t.Fatalf("a quiet step of an unnamed stage was stopped as the cell's failure: %v", err)
+	}
+}
+
+// No phase is silent forever: a project's step that prints nothing past the
+// hard ceiling is stopped as the cell's failure all the same.
+func TestABuilderSilentInAProjectStepPastTheHardCeilingIsStopped(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.buildOutput = []string{"#8 [api 2/5] RUN npm run build"}
+	docker.stallBuild = true
+	h := d.hooksForTest()
+	h.buildStallAfter, h.buildStallEvery, h.buildHardStallAfter = 50*time.Millisecond, 5*time.Millisecond, 150*time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _, err := d.build(ctx, machine("claim-pr", bakeEnv), []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, "net", "resolv", bakeSubnet, nil, nil)
+	if !errors.Is(err, driver.ErrBuilderFailed) || !strings.Contains(err.Error(), "ceiling") {
+		t.Fatalf("a project step silent past the ceiling was not stopped: %v", err)
+	}
+}

@@ -217,7 +217,12 @@ func (t *Tracker) Line(line string) {
 // projectStep is the name BuildKit gives a step of the Dockerfile itself
 // ("[deps 2/15] RUN ...", "[api 1/1] COPY ..."); its own steps are named
 // otherwise ("[internal] load metadata ...", "docker-image://...").
-var projectStep = regexp.MustCompile(`^\[[^\]\s]+ \d+/\d+\] `)
+//
+// The stage is optional: a Dockerfile with no `AS` name numbers its steps
+// "[2/5] RUN npm install", and a platform may come first
+// ("[linux/amd64 build 2/5] RUN ..."). Reading only the named form left an
+// `npm install` of an unnamed stage looking like a builder that hung.
+var projectStep = regexp.MustCompile(`^\[(?:[^\]\s]+ ){0,2}\d+/\d+\] `)
 
 // LastLine is when the builder printed its last line; zero before the first.
 func (t *Tracker) LastLine() time.Time {
@@ -232,20 +237,35 @@ func (t *Tracker) ProjectStepRunning() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, s := range t.steps {
-		if !s.done && !s.Cached && !s.Errored && !s.Canceled && projectStep.MatchString(s.Name) {
+		if s.done || s.Cached || s.Errored || s.Canceled {
+			continue
+		}
+		if projectStep.MatchString(s.Name) {
+			return true
+		}
+	}
+	// A running step that mounts a build cache is a RUN of the project whatever its name reads like.
+	for id, o := range t.out {
+		if s := t.steps[id]; o.cacheMount && s != nil && !s.done && !s.Cached && !s.Errored && !s.Canceled {
 			return true
 		}
 	}
 	return false
 }
 
-// ExportRunning says whether BuildKit is exporting: the image or the cache, named
-// "exporting ...", and not yet done. The exporter prints nothing while it writes the layers.
+// longPhases are the names of BuildKit's own steps that write for minutes
+// without a line: the image or cache export, loading the tarball it made, and
+// what is done to the cache around it.
+var longPhases = []string{"exporting ", "sending tarball", "unpacking to ", "preparing build cache for export", "importing cache manifest"}
+
+// ExportRunning says whether BuildKit is in a known long silent phase of the
+// export (longPhases: "exporting ...", "sending tarball", ...) that is not yet
+// done. The exporter prints nothing while it writes the layers.
 func (t *Tracker) ExportRunning() bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, s := range t.steps {
-		if !s.done && !s.Cached && !s.Errored && !s.Canceled && strings.HasPrefix(s.Name, "exporting ") {
+		if !s.done && !s.Cached && !s.Errored && !s.Canceled && isLongPhase(s.Name) {
 			return true
 		}
 	}
@@ -399,4 +419,13 @@ func cleanLine(line string) string {
 	line = secretAssign.ReplaceAllString(line, "$1=[redacted]")
 	clipped, _ := redact.Clip(line, MaxLine)
 	return clipped
+}
+
+func isLongPhase(name string) bool {
+	for _, p := range longPhases {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }

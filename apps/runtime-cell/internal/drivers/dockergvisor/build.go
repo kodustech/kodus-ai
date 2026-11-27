@@ -952,6 +952,11 @@ const (
 	// design partner's monorepo image took 17 minutes at it. A progress limit,
 	// not a total one: a builder that prints again starts the count over.
 	defaultBuildExportStallAfter = 30 * time.Minute
+	// defaultBuildHardStallAfter is the ceiling on silence in any phase, a
+	// project's step included: past it the builder is stopped as hung, so a
+	// build that prints nothing for an hour cannot hold the claim until the
+	// worker's boot limit. A builder that prints again starts the count over.
+	defaultBuildHardStallAfter = 60 * time.Minute
 )
 
 // watchBuildStall stops a build whose builder printed nothing for the stall
@@ -960,7 +965,7 @@ const (
 // under it for over ten minutes) is the cell's, and without this it waited
 // out the worker's boot limit, which reads as the pull request's boot_timeout.
 // Silence inside a project step (a RUN, a COPY) is the project's and never
-// stops it; silence inside the image's export waits the longer export limit. The returned func ends the watch and says why it stopped the
+// stops it; silence inside a known long phase (the image's export, a tarball load) waits the longer export limit, and silence in any phase stops at the hard ceiling. The returned func ends the watch and says why it stopped the
 // build: driver.ErrBuilderFailed, the platform's (builder_failed); nil when
 // it did not.
 func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Tracker) (context.Context, func() error) {
@@ -975,6 +980,10 @@ func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Track
 	exportAfter := defaultBuildExportStallAfter
 	if d.hooks != nil && d.hooks.buildExportStallAfter > 0 {
 		exportAfter = d.hooks.buildExportStallAfter
+	}
+	hardAfter := defaultBuildHardStallAfter
+	if d.hooks != nil && d.hooks.buildHardStallAfter > 0 {
+		hardAfter = d.hooks.buildHardStallAfter
 	}
 	// The wall clock, as the tracker's lines are stamped (buildprogress.New).
 	started := time.Now()
@@ -1000,7 +1009,13 @@ func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Track
 			if steps.ExportRunning() {
 				limit = exportAfter
 			}
-			if quiet := time.Since(last); quiet >= limit && !steps.ProjectStepRunning() {
+			quiet := time.Since(last)
+			if quiet >= hardAfter {
+				stalled = fmt.Errorf("%w: the builder printed nothing for %s, past the ceiling for any phase", driver.ErrBuilderFailed, quiet.Round(time.Second))
+				cancel(stalled)
+				return
+			}
+			if quiet >= limit && !steps.ProjectStepRunning() {
 				stalled = fmt.Errorf("%w: the builder printed nothing for %s outside the project's steps", driver.ErrBuilderFailed, quiet.Round(time.Second))
 				cancel(stalled)
 				return

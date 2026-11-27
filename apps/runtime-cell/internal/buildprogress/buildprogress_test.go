@@ -352,3 +352,47 @@ func TestATrackerSaysWhenTheExportIsRunning(t *testing.T) {
 		t.Fatal("a finished export is still running")
 	}
 }
+
+// A step of a Dockerfile whose stage has no name ("[2/5] RUN ...") or that
+// names a platform, and a RUN that mounts a build cache, are the project's
+// steps: their silence is the project's.
+func TestATrackerReadsUnnamedStageAndCacheMountStepsAsTheProjects(t *testing.T) {
+	for _, name := range []string{"[2/5] RUN npm install", "[linux/amd64 build 2/5] RUN npm ci", "[build 2/5] RUN npm ci"} {
+		tr := New()
+		tr.Line("#8 " + name)
+		if !tr.ProjectStepRunning() {
+			t.Errorf("a running step named %q is not read as the project's", name)
+		}
+		tr.Line("#8 DONE 1.0s")
+		if tr.ProjectStepRunning() {
+			t.Errorf("a finished step named %q still reads as running", name)
+		}
+	}
+	tr := New()
+	tr.Line("#9 RUN --mount=type=cache,target=/root/.npm npm ci")
+	if !tr.ProjectStepRunning() {
+		t.Error("a running step that mounts a build cache is not read as the project's")
+	}
+	tr = New()
+	tr.Line("#1 [internal] load metadata for docker.io/library/node:22")
+	if tr.ProjectStepRunning() {
+		t.Error("BuildKit's own step read as the project's")
+	}
+}
+
+// The tarball the export made is loaded without a line as well, and the cache
+// is prepared for export the same way: known long phases, like the export.
+func TestATrackerReadsTheTarballAndCacheExportStepsAsLongPhases(t *testing.T) {
+	for _, name := range []string{"sending tarball", "unpacking to docker.io/library/app:latest", "preparing build cache for export", "exporting to oci image format"} {
+		tr := New()
+		tr.Line("#12 " + name)
+		if !tr.ExportRunning() {
+			t.Errorf("a running %q is not read as a long phase", name)
+		}
+	}
+	tr := New()
+	tr.Line("#2 [internal] load .dockerignore")
+	if tr.ExportRunning() {
+		t.Error("a short step of BuildKit read as a long phase")
+	}
+}

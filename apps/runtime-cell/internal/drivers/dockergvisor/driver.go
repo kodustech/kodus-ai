@@ -379,6 +379,9 @@ type testHooks struct {
 	// buildExportStallAfter replaces how long a builder may print nothing
 	// while it exports its image; zero: the default.
 	buildExportStallAfter time.Duration
+	// buildHardStallAfter replaces the ceiling on silence in any phase, a
+	// project's step included; zero: the default.
+	buildHardStallAfter time.Duration
 	// adoptPollEvery and adoptWait replace how often and how long a restored
 	// disk's images are waited for (awaitDiskImages); zero: the defaults.
 	adoptPollEvery time.Duration
