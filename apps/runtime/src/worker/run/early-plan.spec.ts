@@ -4,6 +4,8 @@ import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
 import { inMemoryRunDeps } from './testing';
 import { runRuntimeRun } from './run-orchestrator';
+import { withSpentTokens } from '../agent/runtime-agent';
+import { planWhileThePrBoots } from './early-plan';
 
 /** Waits until cond holds, failing after a while instead of hanging. */
 async function until(cond: () => boolean, what: string) {
@@ -85,5 +87,41 @@ describe('the agent plans while the PR side boots', () => {
         expect(run.unusedPlan).toBeDefined();
         expect(run.unusedPlan!.inputTokens + run.unusedPlan!.outputTokens).toBeGreaterThan(0);
         expect(h.logged.some((l: any) => l.msg === 'run.plan.unused')).toBe(true);
+    });
+});
+
+describe('a plan stopped while the PR boots', () => {
+    // Behavior: the rounds that answered before the stop were paid for, so the stop reports them instead of reading as free.
+    it('reports the tokens of the rounds that had answered when it was stopped', async () => {
+        const abort = new AbortController();
+        const claim = { claimId: 'c1' } as never;
+        const result = await planWhileThePrBoots({
+            base: Promise.resolve({ ready: claim }),
+            pr: new Promise(() => undefined),
+            prBuildStarted: async () => true,
+            leasesHeld: async () => true,
+            plan: async () => {
+                abort.abort();
+                throw withSpentTokens(new Error('aborted'), { inputTokens: 40_000, outputTokens: 5_000 });
+            },
+            signal: abort.signal,
+        });
+        expect(result).toEqual({ kind: 'aborted', spent: { inputTokens: 40_000, outputTokens: 5_000 } });
+    });
+
+    it('stays a plain stop when no round had answered', async () => {
+        const abort = new AbortController();
+        const result = await planWhileThePrBoots({
+            base: Promise.resolve({ ready: { claimId: 'c1' } as never }),
+            pr: new Promise(() => undefined),
+            prBuildStarted: async () => true,
+            leasesHeld: async () => true,
+            plan: async () => {
+                abort.abort();
+                throw new Error('aborted');
+            },
+            signal: abort.signal,
+        });
+        expect(result).toEqual({ kind: 'aborted' });
     });
 });

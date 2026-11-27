@@ -1218,6 +1218,8 @@ async function planProbes(
     const early = run.early;
     run.early = undefined;
     const made = early ? await early.result : undefined;
+    // A plan stopped after some rounds answered still spent their tokens.
+    if (made?.kind === 'aborted') addTokens(tally, made.spent);
     if (made?.kind === 'planned' && made.firstBaseRounds) run.firstBaseRounds = made.firstBaseRounds;
     const planned =
         made?.kind === 'planned'
@@ -1464,6 +1466,7 @@ async function dropEarlyPlan(run: RunScope): Promise<void> {
     early.abort.abort();
     // The PR side is not tested: a plan that failed has nothing to record, as one that was stopped.
     const made = await early.result.catch(() => undefined);
+    if (made?.kind === 'aborted') addTokens(run.tally, made.spent);
     if (made?.kind !== 'planned') return;
     const { deps, req, tally } = run;
     const usage = made.plan.usage ?? { inputTokens: 0, outputTokens: 0 };

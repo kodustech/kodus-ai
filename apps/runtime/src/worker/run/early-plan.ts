@@ -1,6 +1,6 @@
 import type { Claim } from '@libs/runtime/environment';
 
-import type { AgentPlan } from '../agent/runtime-agent';
+import { type AgentPlan, spentTokensOf } from '../agent/runtime-agent';
 import type { RoundOut } from './replay';
 
 // The agent plans from the diff and the base machine only (it explores the
@@ -42,7 +42,8 @@ export interface FirstBaseRounds {
 export type EarlyPlan =
     | { kind: 'planned'; plan: AgentPlan; firstBaseRounds?: FirstBaseRounds }
     | { kind: 'skipped'; why: 'base_not_ready' | 'pr_not_booted' | 'claim_lease' }
-    | { kind: 'aborted' };
+    /** Stopped before it ended; `spent` is what the rounds that had answered used (an unanswered round is not known here). */
+    | { kind: 'aborted'; spent?: { inputTokens: number; outputTokens: number } };
 
 /** A side as its first acquire answered: its claim when it is ready, else nothing to plan on. */
 export type FirstSide = { ready: Claim } | { ready?: undefined };
@@ -90,7 +91,10 @@ export async function planWhileThePrBoots(args: {
     try {
         plan = await args.plan(base.ready, args.signal);
     } catch (e) {
-        if (args.signal.aborted) return { kind: 'aborted' };
+        if (args.signal.aborted) {
+            const spent = spentTokensOf(e);
+            return { kind: 'aborted', ...(spent ? { spent } : {}) };
+        }
         throw e;
     }
     // A round that fails here is never the plan's loss: the replay plays it as before.

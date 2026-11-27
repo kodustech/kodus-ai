@@ -4,7 +4,7 @@ import { CanaryLeakError, HmacCanaryVault } from '../canary/canary';
 import { stableStepId } from '../run/step-id';
 import { CanaryGuardedRunPlanClient, HttpRunPlanClient, type RunPlanCall, type RunPlanClient } from './http-run-plan';
 import { LlmBudgetExceededError, type LlmGateway } from './llm-gateway';
-import { changedPathsOf, noPlanReason, RuntimeAgent } from './runtime-agent';
+import { changedPathsOf, noPlanReason, RuntimeAgent, spentTokensOf } from './runtime-agent';
 
 // The worker's side of the test planner on the harness (ADR-069): it drives
 // the product's rounds inside the one agent:plan step, runs the commands the
@@ -97,6 +97,24 @@ describe('RuntimeAgent on the product planner', () => {
         expect(p.calls[0].body).not.toHaveProperty('browserExploration');
         expect(e.exploreBrowser).not.toHaveBeenCalled();
         expect(plan.rejected.length).toBeGreaterThan(0);
+    });
+
+    // Behavior: a plan that fails after a round answered still reports what that round spent, so the Run's tokens are not under-counted.
+    it('carries the tokens of the rounds that answered on the error of a later round that fails', async () => {
+        const answers: RunPlanResponse[] = [{ status: 'explore', commands: ['ls /'], usage: { inputTokens: 40_000, outputTokens: 5_000 }, steps: 3 } as any];
+        const client: RunPlanClient = {
+            plan: async () => {
+                const a = answers.shift();
+                if (!a) throw new Error('the second round failed');
+                return a;
+            },
+        };
+        const failure = await new RuntimeAgent(noLlm, env(), client).plan(input).then(
+            () => undefined,
+            (e: unknown) => e,
+        );
+        expect(failure).toBeInstanceOf(Error);
+        expect(spentTokensOf(failure)).toEqual({ inputTokens: 40_000, outputTokens: 5_000 });
     });
 
     it('checks canaries before retaining browser results even without an evidence store', async () => {

@@ -101,6 +101,16 @@ export function observationOf(command: string, r: StepResult | EnvError): Observ
     return { command, exitCode: r.exitCode, stdout: r.stdout.slice(0, OBSERVED_STDOUT), ...failed };
 }
 
+/** The tokens the rounds of a plan that ended in an error had used, carried on the error. */
+const SPENT = Symbol.for('kodus.runtime.plan.spent');
+export function withSpentTokens<E>(error: E, usage: LlmResponse['usage']): E {
+    if (error && typeof error === 'object') (error as Record<symbol, unknown>)[SPENT] = usage;
+    return error;
+}
+export function spentTokensOf(error: unknown): LlmResponse['usage'] | undefined {
+    return error && typeof error === 'object' ? ((error as Record<symbol, unknown>)[SPENT] as LlmResponse['usage'] | undefined) : undefined;
+}
+
 const addUsage = (a: LlmResponse['usage'], b: LlmResponse['usage']): LlmResponse['usage'] => {
     const inputTokens = a.inputTokens + b.inputTokens, outputTokens = a.outputTokens + b.outputTokens;
     return { inputTokens, outputTokens, ...(a.measurement || b.measurement ? { measurement: inputTokens + outputTokens > 0 ? 'partial' as const : 'unknown' as const } : {}) };
@@ -205,6 +215,7 @@ export class RuntimeAgent {
         let first: AgentPlan | undefined;
         let recon: RunPlanRequest['recon'];
         let reconCount: AgentPlan['recon'];
+        try {
         for (let round = 0; round <= RUN_PLAN_LIMITS.maxExecRounds; round++) {
             const body: RunPlanRequest = {
                 ...fixed,
@@ -314,6 +325,10 @@ export class RuntimeAgent {
             notes = res.notes;
         }
         return empty('it kept asking for commands past the exploration budget');
+        } catch (e) {
+            // The rounds that answered were paid for: whoever stops this plan (an abort, a canary, a failed round) reads them.
+            throw withSpentTokens(e, usage);
+        }
     }
 
     private async planInTwoTurns(input: AgentInput): Promise<AgentPlan> {
