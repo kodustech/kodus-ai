@@ -3,19 +3,24 @@
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from "@components/ui/select";
-import type { CodeReviewScope } from "@services/parameters/use-code-review-scopes";
+import type { RunsRepositories } from "@services/runtime/model/runs-repositories";
 
-/** Picks one of the team's repositories; the Runs list is per repository. */
+/**
+ * Picks one of the team's repositories; the Runs list is per repository. The ones with an environment come first,
+ * with its state: only they can have Runs. The others follow under their own label.
+ */
 export const RepositorySelect = ({
     repositories,
     value,
     onChange,
 }: {
-    repositories: CodeReviewScope[];
+    repositories: Pick<RunsRepositories, "withEnvironment" | "others">;
     value: string | undefined;
     onChange: (repositoryId: string) => void;
 }) => (
@@ -24,11 +29,33 @@ export const RepositorySelect = ({
             <SelectValue placeholder="Choose a repository" />
         </SelectTrigger>
         <SelectContent>
-            {repositories.map((repository) => (
-                <SelectItem key={repository.id} value={repository.id}>
-                    {repository.name}
-                </SelectItem>
-            ))}
+            {repositories.withEnvironment.length > 0 && (
+                <SelectGroup>
+                    <SelectLabel>With an environment</SelectLabel>
+                    {repositories.withEnvironment.map((repository) => (
+                        <SelectItem key={repository.id} value={repository.id}>
+                            {repository.name}
+                            {repository.status && (
+                                <span className="text-text-tertiary ml-2 text-xs">
+                                    {repository.status.label}
+                                </span>
+                            )}
+                        </SelectItem>
+                    ))}
+                </SelectGroup>
+            )}
+            {repositories.others.length > 0 && (
+                <SelectGroup>
+                    {repositories.withEnvironment.length > 0 && (
+                        <SelectLabel>No environment</SelectLabel>
+                    )}
+                    {repositories.others.map((repository) => (
+                        <SelectItem key={repository.id} value={repository.id}>
+                            {repository.name}
+                        </SelectItem>
+                    ))}
+                </SelectGroup>
+            )}
         </SelectContent>
     </Select>
 );

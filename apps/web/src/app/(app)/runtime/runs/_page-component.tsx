@@ -27,20 +27,30 @@ import { useCodeReviewScopes } from "@services/parameters/use-code-review-scopes
 import { MAX_RUNS_PAGE } from "@services/runtime/api";
 import { shortSha } from "@services/runtime/format";
 import { runListRow } from "@services/runtime/model/run-list";
-import { RUNS_PAGE_SIZE, useRuntimeRuns } from "@services/runtime/queries";
+import { runsRepositories } from "@services/runtime/model/runs-repositories";
+import {
+    RUNS_PAGE_SIZE,
+    useRuntimeEnvironments,
+    useRuntimeRuns,
+} from "@services/runtime/queries";
 import { useQueryState } from "nuqs";
 
 export const RunsPage = () => {
-    const repositories = useCodeReviewScopes();
+    const scopes = useCodeReviewScopes();
+    const environments = useRuntimeEnvironments();
+    const repositories = runsRepositories(scopes, environments.data ?? []);
     const [repositoryId, setRepositoryId] = useQueryState("repositoryId");
     const [limit, setLimit] = useState(RUNS_PAGE_SIZE);
 
     // The list is per repository (GET /runtime/runs?repositoryId=): open on
-    // the first one instead of an empty screen.
+    // the repository with an environment changed last, else the first one,
+    // once the environments are known (they decide which comes first).
+    const environmentsKnown = !environments.isPending;
+    const preferred = repositories.preferred;
     useEffect(() => {
-        if (!repositoryId && repositories.length > 0)
-            setRepositoryId(repositories[0].id);
-    }, [repositoryId, repositories, setRepositoryId]);
+        if (!repositoryId && environmentsKnown && preferred)
+            setRepositoryId(preferred);
+    }, [repositoryId, environmentsKnown, preferred, setRepositoryId]);
 
     const runs = useRuntimeRuns({
         repositoryId: repositoryId ?? undefined,

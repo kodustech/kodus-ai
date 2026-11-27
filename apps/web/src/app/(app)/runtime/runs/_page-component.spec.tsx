@@ -36,6 +36,7 @@ jest.mock("@services/parameters/use-code-review-scopes", () => ({
 jest.mock("@services/runtime/api", () => ({ MAX_RUNS_PAGE: 100 }));
 jest.mock("@services/runtime/queries", () => ({
     RUNS_PAGE_SIZE: 20,
+    useRuntimeEnvironments: () => ({ isPending: false, data: [] }),
     useRuntimeRuns: () => ({
         isLoading: false,
         isError: false,
