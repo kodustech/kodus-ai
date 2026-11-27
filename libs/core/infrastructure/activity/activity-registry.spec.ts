@@ -146,6 +146,14 @@ describe('activity registry', () => {
                 updateActivity({ workflowType: 'CODE_REVIEW' });
                 await hold();
             }),
+            // Lines without a file count still count toward the line total.
+            runActivity('r5', {}, async () => {
+                updateActivity({
+                    workflowType: 'CODE_REVIEW',
+                    changedLines: 50,
+                });
+                await hold();
+            }),
             // A PR with no changed files has a known size of 0.
             runActivity('r4', {}, async () => {
                 updateActivity({
@@ -165,14 +173,14 @@ describe('activity registry', () => {
         await Promise.all(jobs);
 
         expect(counts).toEqual({
-            total: 5,
-            byWorkflowType: { CODE_REVIEW: 4, WEBHOOK_PROCESSING: 1 },
+            total: 6,
+            byWorkflowType: { CODE_REVIEW: 5, WEBHOOK_PROCESSING: 1 },
             reviews: {
                 withSize: 3,
-                withLines: 1,
+                withLines: 2,
                 changedFilesSum: 13,
                 changedFilesMax: 10,
-                changedLinesSum: 400,
+                changedLinesSum: 450,
             },
         });
         expect(activityCounts().total).toBe(0);

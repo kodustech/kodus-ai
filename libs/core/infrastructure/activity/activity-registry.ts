@@ -187,15 +187,17 @@ export function activityCounts(): ActivityCounts {
             (Object.hasOwn(counts.byWorkflowType, type)
                 ? counts.byWorkflowType[type]
                 : 0) + 1;
-        if (type === 'CODE_REVIEW' && e.changedFiles !== undefined) {
-            const r = counts.reviews;
+        if (type !== 'CODE_REVIEW') continue;
+        // Files and lines are counted apart: a provider may send one alone.
+        const r = counts.reviews;
+        if (e.changedFiles !== undefined) {
             r.withSize++;
             r.changedFilesSum += e.changedFiles;
             r.changedFilesMax = Math.max(r.changedFilesMax, e.changedFiles);
-            if (e.changedLines !== undefined) {
-                r.withLines++;
-                r.changedLinesSum += e.changedLines;
-            }
+        }
+        if (e.changedLines !== undefined) {
+            r.withLines++;
+            r.changedLinesSum += e.changedLines;
         }
     }
     return counts;
