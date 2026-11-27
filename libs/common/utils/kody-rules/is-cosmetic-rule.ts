@@ -18,6 +18,7 @@ const FORMATTING_DIRECTIVE =
 
 const FORMATTING_SUBJECTS = [
     /^(?:unnecessary |trailing )?semi-?colons?(?: at the end of (?:each |every )?(?:lines?|statements?))?$/i,
+    /^ruby (?:does not|doesn't) require semi-?colons?(?: to terminate statements?)?$/i,
     /^(?:(?:single|double)[- ](?:quotes?|quoted strings?)|quote (?:style|marks))(?: for (?:strings?|attribute values))?$/i,
     /^(?:(?:one|two|\d+) )?(?:extra |consecutive )?(?:blank|empty) lines?(?: between (?:functions|methods|classes|statements))?$/i,
     /^trailing (?:whitespace|spaces?|commas?)(?: at the end of (?:each )?lines?)?$/i,
@@ -31,7 +32,9 @@ const FORMATTING_SUBJECTS = [
 function hasFormattingSubject(text?: string): boolean {
     // A later example or a formatting term inside a security instruction
     // doesn't establish the rule's subject. Defer ambiguous prose to the model.
-    const instruction = (text ?? '').trim().split(/[!?\n]|\.(?:\s|$)/, 1)[0];
+    const instruction = (text ?? '')
+        .trim()
+        .split(/(?:[;!?]|(?<!\bvs)\.)(?=\s|$)|\r?\n/i, 1)[0];
     const subject = instruction
         .trim()
         .replace(FORMATTING_DIRECTIVE, '')

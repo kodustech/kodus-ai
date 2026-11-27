@@ -167,27 +167,29 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
             // 92,5% of the fleet with no detector had no scope at all and were
             // judged against every file in the PR regardless of the language
             // the rule names.
-            const [contextNeed, fileScope] = rawOutput
-                ? await Promise.all([
-                      this.saveContextNeed(
-                          orgId,
-                          ruleUuid,
-                          rule,
-                          normalizeContextNeed(rawOutput.contextNeed),
-                          model,
-                      ),
-                      this.saveFileScope(
-                          orgId,
-                          ruleUuid,
-                          rule,
-                          normalizeDetectorExtensions(rawOutput.extensions),
-                          model,
-                      ),
-                  ])
-                : ([
-                      rule.contextNeed?.need,
-                      rule.fileScope?.extensions,
-                  ] as const);
+            let context = {
+                need: rule.contextNeed?.need,
+                persisted: hasCurrentContext,
+            };
+            let fileScope = rule.fileScope?.extensions;
+            if (rawOutput) {
+                [context, fileScope] = await Promise.all([
+                    this.saveContextNeed(
+                        orgId,
+                        ruleUuid,
+                        rule,
+                        normalizeContextNeed(rawOutput.contextNeed),
+                        model,
+                    ),
+                    this.saveFileScope(
+                        orgId,
+                        ruleUuid,
+                        rule,
+                        normalizeDetectorExtensions(rawOutput.extensions),
+                        model,
+                    ),
+                ]);
+            }
 
             if (detector) {
                 await this.kodyRulesService.updateRuleDetector(
@@ -205,14 +207,16 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                         extensions: detector.extensions,
                     },
                 });
-                await this.saveCompileAttempt(orgId, ruleUuid, rule, {
-                    outcome: 'compiled',
-                    model,
-                });
+                if (context.persisted) {
+                    await this.saveCompileAttempt(orgId, ruleUuid, rule, {
+                        outcome: 'compiled',
+                        model,
+                    });
+                }
                 return {
                     compiled: true,
                     scoped: !!detector.extensions?.length,
-                    contextNeed,
+                    contextNeed: context.need,
                     fileScope,
                 };
             }
@@ -230,7 +234,9 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                 context: KodyRuleDetectorCompilerService.name,
                 metadata: { ruleUuid, declineReason },
             });
-            if (rawOutput || hasCurrentContext) {
+            // Replacing a legacy attempt also removes the signal that its
+            // diff-only need was never inferred. Keep it until the write lands.
+            if (context.persisted) {
                 await this.saveCompileAttempt(orgId, ruleUuid, rule, {
                     outcome: 'declined',
                     declineReason,
@@ -238,7 +244,12 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                     model,
                 });
             }
-            return { compiled: false, declineReason, contextNeed, fileScope };
+            return {
+                compiled: false,
+                declineReason,
+                contextNeed: context.need,
+                fileScope,
+            };
         } catch (error) {
             this.logger.warn({
                 message: `Detector compile failed for rule ${ruleUuid}; rule stays semantic`,
@@ -265,7 +276,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
         rule: Partial<IKodyRule>,
         need: KodyRuleContextNeed,
         model: string,
-    ): Promise<KodyRuleContextNeed> {
+    ): Promise<{ need: KodyRuleContextNeed; persisted: boolean }> {
         // Keyed on the rule text AND the classifier's version, so rewriting
         // the context-need prompt re-asks the fleet once instead of leaving
         // every existing rule frozen on the old prompt's verdict.
@@ -277,11 +288,11 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
         // between reviews and take the customer's rule in and out of scope with
         // no author action.
         if (contextNeedIsCurrent(rule)) {
-            return rule.contextNeed.need;
+            return { need: rule.contextNeed.need, persisted: true };
         }
 
         try {
-            await this.kodyRulesService.updateRuleContextNeed(
+            const saved = await this.kodyRulesService.updateRuleContextNeed(
                 organizationId,
                 ruleUuid,
                 {
@@ -292,6 +303,10 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                     model,
                 },
             );
+            return {
+                need: saved?.contextNeed?.need ?? need,
+                persisted: !!saved,
+            };
         } catch (error) {
             this.logger.warn({
                 message: `Could not store the context need for rule ${ruleUuid}; it stays diff-only`,
@@ -300,7 +315,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                 metadata: { ruleUuid, need },
             });
         }
-        return need;
+        return { need, persisted: false };
     }
 
     /**

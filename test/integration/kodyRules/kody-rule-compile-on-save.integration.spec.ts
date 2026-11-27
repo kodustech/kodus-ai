@@ -440,6 +440,107 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             expect(reloaded.compileAttempt).toBeUndefined();
         });
 
+        it.each([
+            {
+                title: 'Semicolons',
+                output: { mechanical: false },
+                outcome: 'declined',
+                source: 'gate',
+            },
+            {
+                title: 'Translation catalog',
+                output: { mechanical: false, cosmetic: true },
+                outcome: 'declined',
+                source: 'model',
+            },
+            {
+                title: 'Bind translation parameters',
+                output: { mechanical: true, pattern: 'rawValue' },
+                outcome: 'compiled',
+                source: undefined,
+            },
+        ])(
+            'retries the legacy context write for $title before marking it current',
+            async ({ title, output, outcome, source }) => {
+                const uuid = randomUUID();
+                const rule =
+                    'Use double quotes in all translation catalog entries.';
+                const examples = [
+                    { snippet: 'rawValue()', isCorrect: false },
+                    { snippet: 'boundValue()', isCorrect: true },
+                ];
+                const legacyAttempt = {
+                    outcome: 'declined',
+                    declineReason: 'cosmetic',
+                    sourceHash: ruleCompileHash({ rule, examples }),
+                } as const;
+                await model.create({
+                    organizationId,
+                    rules: [
+                        {
+                            uuid,
+                            repositoryId,
+                            rule,
+                            title,
+                            examples,
+                            compileAttempt: legacyAttempt,
+                            contextNeed: {
+                                need: 'diff-only',
+                                source: 'compiler',
+                                sourceHash: ruleContextNeedHash({ rule }),
+                            },
+                        },
+                    ],
+                });
+                runModel.mockResolvedValue({
+                    ...output,
+                    contextNeed: 'full-file',
+                });
+                const contextWrite = jest.spyOn(rules, 'updateRuleContextNeed');
+                if (source === 'model') {
+                    contextWrite.mockResolvedValueOnce(null);
+                } else {
+                    contextWrite.mockRejectedValueOnce(
+                        new Error('write failed'),
+                    );
+                }
+                try {
+                    await patch(uuid, { rule });
+                    expect(contextWrite).toHaveBeenCalledTimes(1);
+                    const failed = await repository.findById(
+                        uuid,
+                        organizationId,
+                    );
+                    expect(failed.compileAttempt).toStrictEqual(legacyAttempt);
+                    expect(failed.contextNeed.need).toBe('diff-only');
+
+                    await patch(uuid, { rule });
+                    const retried = await repository.findById(
+                        uuid,
+                        organizationId,
+                    );
+                    expect(retried.contextNeed.need).toBe('full-file');
+                    expect(retried.compileAttempt.outcome).toBe(outcome);
+                    expect(retried.compileAttempt.cosmeticSource).toBe(source);
+                    await patch(uuid, { rule });
+                    const repeated = await repository.findById(
+                        uuid,
+                        organizationId,
+                    );
+                    expect(repeated.contextNeed).toStrictEqual(
+                        retried.contextNeed,
+                    );
+                    expect(repeated.compileAttempt).toStrictEqual(
+                        retried.compileAttempt,
+                    );
+                    expect(contextWrite).toHaveBeenCalledTimes(2);
+                    expect(runModel).toHaveBeenCalledTimes(2);
+                } finally {
+                    contextWrite.mockRestore();
+                }
+            },
+        );
+
         it('preserves the detector and attempt when a CLI patch omits examples and recompiles an explicit clear', async () => {
             const uuid = randomUUID();
             const rule = 'Use the logger instead of console.log.';

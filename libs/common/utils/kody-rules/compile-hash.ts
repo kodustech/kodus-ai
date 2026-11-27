@@ -132,7 +132,12 @@ export function contextNeedIsCurrent(
     if (!stored) return false;
     if (stored.source === 'author') return true;
     // A local decline used to store diff-only without consulting the model.
-    if (stored.need === 'diff-only' && needsCosmeticRecheck(rule)) return false;
+    if (
+        stored.need === 'diff-only' &&
+        rule.compileAttempt?.declineReason === 'cosmetic' &&
+        !rule.compileAttempt.cosmeticSource
+    )
+        return false;
     return (
         !!stored.sourceHash && stored.sourceHash === ruleContextNeedHash(rule)
     );
