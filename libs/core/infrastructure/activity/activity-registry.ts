@@ -29,6 +29,8 @@ export interface ActivityInfo {
     repository?: string;
     prNumber?: number;
     platform?: string;
+    changedFiles?: number;
+    changedLines?: number;
     /** Agent tool calls in flight (agents of one job run in parallel). */
     tools?: ActivityTool[];
 }
@@ -145,6 +147,60 @@ export function activitySnapshot(): ActivityInfo[] {
         out.push(tools.length ? { ...info, tools } : info);
     }
     return out;
+}
+
+export interface ActivityCounts {
+    /** Every job in flight on this process, not capped like a snapshot. */
+    total: number;
+    byWorkflowType: Record<string, number>;
+    /**
+     * Size of the code reviews in flight, from the PR sizes their jobs
+     * carry (GitHub only). `withSize` says how many reviews it covers.
+     */
+    reviews: {
+        withSize: number;
+        /** Reviews whose line count is known; `changedLinesSum` covers these. */
+        withLines: number;
+        changedFilesSum: number;
+        changedFilesMax: number;
+        changedLinesSum: number;
+    };
+}
+
+/** How many jobs run now and how big the reviews among them are. */
+export function activityCounts(): ActivityCounts {
+    const counts: ActivityCounts = {
+        total: 0,
+        byWorkflowType: {},
+        reviews: {
+            withSize: 0,
+            withLines: 0,
+            changedFilesSum: 0,
+            changedFilesMax: 0,
+            changedLinesSum: 0,
+        },
+    };
+    for (const e of active.values()) {
+        counts.total++;
+        const type = e.workflowType ?? 'unknown';
+        counts.byWorkflowType[type] =
+            (Object.hasOwn(counts.byWorkflowType, type)
+                ? counts.byWorkflowType[type]
+                : 0) + 1;
+        if (type !== 'CODE_REVIEW') continue;
+        // Files and lines are counted apart: a provider may send one alone.
+        const r = counts.reviews;
+        if (e.changedFiles !== undefined) {
+            r.withSize++;
+            r.changedFilesSum += e.changedFiles;
+            r.changedFilesMax = Math.max(r.changedFilesMax, e.changedFiles);
+        }
+        if (e.changedLines !== undefined) {
+            r.withLines++;
+            r.changedLinesSum += e.changedLines;
+        }
+    }
+    return counts;
 }
 
 /** One listener (the stall watchdog); null removes it. */
