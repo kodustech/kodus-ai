@@ -21,6 +21,22 @@ export const openDisclosure = (id: string) => {
     if (el instanceof HTMLDetailsElement) el.open = true;
 };
 
+/** The id of what is happening now inside a section (`<section>-live`: the setup step that runs), when there is one. */
+export const liveId = (section: string) => `${section}-live`;
+
+/**
+ * Follows an in-page link to a section: opens it, then brings into view what runs in it now (`liveId`), else the
+ * section itself. Without it a link to a section that is already open and on screen looks like it does nothing.
+ */
+export const followSection = (id: string) => {
+    openDisclosure(id);
+    requestAnimationFrame(() => {
+        const target =
+            document.getElementById(liveId(id)) ?? document.getElementById(id);
+        target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    });
+};
+
 /**
  * Opens the disclosure when the URL's fragment names it, or a section inside
  * it (`inner`), on load and on every change. An inner section is scrolled to

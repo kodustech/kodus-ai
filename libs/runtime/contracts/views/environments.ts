@@ -114,6 +114,8 @@ export interface RuntimeEnvironmentView {
         recipe?: { path: string; sha: string; state: 'found' | 'absent'; digest?: string } & Pick<EnvironmentRecipeRecord, 'origin' | 'cleanBoots' | 'inference' | 'notes' | 'authorVersion'> & {
                 /** Only for a recipe Kodus inferred or Kody wrote: it is not repository text, and not on the default branch yet. */
                 content?: string;
+                /** The build files under .kodus/ that boot with such a recipe (Kody's, or the developer's agent's). */
+                files?: Array<{ path: string; content: string }>;
             };
         /** Kody's learn loop: what it tried and how each attempt ended, in Kodus's words (S-23). */
         learn?: RuntimeLearnView;

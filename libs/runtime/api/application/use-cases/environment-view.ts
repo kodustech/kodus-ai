@@ -417,6 +417,8 @@ export class EnvironmentViewBuilder {
                                                   origin: ours.recipe.origin,
                                                   cleanBoots: ours.recipe.cleanBoots ?? 0,
                                                   ...(ours.recipe.content ? { content: ours.recipe.content } : {}),
+                                                  // The build files under .kodus/ that boot with it (Kody's, or the developer's agent's): what the screen shows beside the recipe.
+                                                  ...(ours.recipe.files?.length ? { files: ours.recipe.files.map((f) => ({ path: f.path, content: f.content })) } : {}),
                                                   ...(ours.recipe.origin === 'authored' && ours.recipe.notes ? { notes: ours.recipe.notes } : {}),
                                                   ...(ours.recipe.origin === 'authored' && ours.recipe.authorVersion ? { authorVersion: ours.recipe.authorVersion } : {}),
                                               }

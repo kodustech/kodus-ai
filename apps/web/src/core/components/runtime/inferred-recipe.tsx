@@ -8,6 +8,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { toast } from "@components/ui/toaster/use-toast";
 import type { RuntimeEnvironment } from "@services/runtime/contracts";
 import { shortSha } from "@services/runtime/format";
@@ -268,8 +269,8 @@ export const InferredRecipe = ({
                 submitted
                     ? "The default branch has no setup file, so this one, which a coding agent wrote and sent with kodus env recipe submit, is what every setup and Run boots. Commit it in a pull request: a committed setup file always wins."
                     : authored
-                    ? "The default branch has no setup file and Kodus could not infer one from the compose file, Dockerfile or package.json, so Kody read the repository and wrote this one. It passed the same checks as a setup file you write."
-                    : "The default branch has no setup file, so Kodus wrote this one from the repository files (compose, Dockerfile, package.json), without an LLM."
+                      ? "The default branch has no setup file and Kodus could not infer one from the compose file, Dockerfile or package.json, so Kody read the repository and wrote this one. It passed the same checks as a setup file you write."
+                      : "The default branch has no setup file, so Kodus wrote this one from the repository files (compose, Dockerfile, package.json), without an LLM."
             }>
             <div className="flex flex-wrap items-center gap-2">
                 {learned ? (
@@ -317,17 +318,18 @@ export const InferredRecipe = ({
                     before you merge the setup file.
                 </p>
             )}
-            <pre
-                aria-label={
+            <RecipeFiles
+                label={
                     submitted
                         ? "Setup file sent from a coding agent"
                         : authored
                           ? "Setup file Kody wrote"
                           : "Inferred setup file"
                 }
-                className="bg-card-lv2 overflow-x-auto rounded-md p-3 font-mono text-xs leading-5">
-                {learned?.content ?? recipe.content}
-            </pre>
+                path={recipe.path}
+                content={learned?.content ?? recipe.content}
+                files={learned ? [] : (recipe.files ?? [])}
+            />
             {learned && (
                 <p className="text-text-secondary text-sm">
                     It did not boot as Kodus wrote it. With one change (
@@ -340,10 +342,10 @@ export const InferredRecipe = ({
                     {submitted
                         ? "It did not boot: the blockers say why. Your coding agent reads them with kodus env status, fixes the setup file and sends it again."
                         : !authored
-                        ? "It did not boot: the blockers say why. Fix the repository or write .kodus/workspace.yaml yourself, then set up again."
-                        : isRecipeFailureBlocker(setup.blockers[0])
-                          ? "It did not boot: the last setup says where. Set up again and Kody rewrites it from that failure, or write .kodus/workspace.yaml yourself."
-                          : "The setup stopped before this setup file could boot: the last setup says why. Nothing in the setup file failed; set up again and it boots the same setup file."}
+                          ? "It did not boot: the blockers say why. Fix the repository or write .kodus/workspace.yaml yourself, then set up again."
+                          : isRecipeFailureBlocker(setup.blockers[0])
+                            ? "It did not boot: the last setup says where. Set up again and Kody rewrites it from that failure, or write .kodus/workspace.yaml yourself."
+                            : "The setup stopped before this setup file could boot: the last setup says why. Nothing in the setup file failed; set up again and it boots the same setup file."}
                 </p>
             )}
             {setup.state === "active" && !proven && (
@@ -386,5 +388,52 @@ export const InferredRecipe = ({
                     </div>
                 ))}
         </RuntimeSection>
+    );
+};
+
+/**
+ * The recipe and the build files under .kodus/ that boot with it (the compose files and Dockerfiles Kody or the
+ * developer's agent wrote), one tab each: what the machine boots is the whole set, never the recipe alone.
+ */
+const RecipeFiles = ({
+    label,
+    path,
+    content,
+    files,
+}: {
+    label: string;
+    path?: string;
+    content: string;
+    files: ReadonlyArray<{ path: string; content: string }>;
+}) => {
+    const pre = (text: string, aria: string) => (
+        <pre
+            aria-label={aria}
+            className="bg-card-lv2 overflow-x-auto rounded-md p-3 font-mono text-xs leading-5">
+            {text}
+        </pre>
+    );
+    if (!files.length) return pre(content, label);
+    const recipePath = path ?? ".kodus/workspace.yaml";
+    const name = (p: string) => p.replace(/^\.kodus\//, "");
+    return (
+        <Tabs defaultValue={recipePath} aria-label={`${label} and its files`}>
+            <TabsList>
+                <TabsTrigger value={recipePath} type="button">
+                    {name(recipePath)}
+                </TabsTrigger>
+                {files.map((f) => (
+                    <TabsTrigger key={f.path} value={f.path} type="button">
+                        {name(f.path)}
+                    </TabsTrigger>
+                ))}
+            </TabsList>
+            <TabsContent value={recipePath}>{pre(content, label)}</TabsContent>
+            {files.map((f) => (
+                <TabsContent key={f.path} value={f.path}>
+                    {pre(f.content, f.path)}
+                </TabsContent>
+            ))}
+        </Tabs>
     );
 };

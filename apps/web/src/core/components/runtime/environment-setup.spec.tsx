@@ -117,6 +117,35 @@ describe("EnvironmentSetupCard, repairs of Kody's setup file", () => {
     });
 });
 
+describe("EnvironmentSetupCard, the step that runs now", () => {
+    it("marks the running step of a setup in progress as the section's live point (Watch the steps lands there), and none once it ended", () => {
+        const { rerender } = render(
+            <EnvironmentSetupCard
+                env={env({
+                    state: "setting_up",
+                    finishedAt: undefined,
+                    steps: [
+                        { name: "recipe", state: "done", startedAt: at },
+                        { name: "boot", state: "running", startedAt: at },
+                    ],
+                })}
+            />,
+        );
+        const live = document.getElementById("setup-live");
+        expect(live).not.toBeNull();
+        expect(within(live!).getByText("Running")).toBeInTheDocument();
+
+        rerender(
+            <EnvironmentSetupCard
+                env={env({
+                    steps: [{ name: "boot", state: "done", startedAt: at }],
+                })}
+            />,
+        );
+        expect(document.getElementById("setup-live")).toBeNull();
+    });
+});
+
 describe("SetupEnvironmentButton in a list row", () => {
     it("is an icon named after its environment, its label in the tooltip", () => {
         render(

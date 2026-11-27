@@ -140,4 +140,52 @@ describe("EnvironmentNextStep", () => {
         fireEvent.click(screen.getByRole("link", { name: /Watch the steps/ }));
         expect(details.open).toBe(true);
     });
+
+    it("Watch the steps brings the step that runs into view, or the section when none runs yet", () => {
+        const frames: Array<(time: number) => void> = [];
+        jest.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            frames.push(cb);
+            return 0;
+        });
+        const scrolled: string[] = [];
+        const scrollIntoView = jest.fn(function (this: HTMLElement) {
+            scrolled.push(this.id);
+        });
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+            value: scrollIntoView,
+            configurable: true,
+        });
+        const { rerender } = render(
+            <>
+                <EnvironmentNextStep
+                    env={env({ state: "setting_up", setup: setup() })}
+                    canSetUp
+                />
+                <details id="setup" open>
+                    <summary>Last setup</summary>
+                    <ol>
+                        <li id="setup-live">Build and start</li>
+                    </ol>
+                </details>
+            </>,
+        );
+        fireEvent.click(screen.getByRole("link", { name: /Watch the steps/ }));
+        frames.splice(0).forEach((f) => f(0));
+        expect(scrolled).toEqual(["setup-live"]);
+
+        rerender(
+            <>
+                <EnvironmentNextStep
+                    env={env({ state: "setting_up", setup: setup() })}
+                    canSetUp
+                />
+                <details id="setup" open>
+                    <summary>Last setup</summary>
+                </details>
+            </>,
+        );
+        fireEvent.click(screen.getByRole("link", { name: /Watch the steps/ }));
+        frames.splice(0).forEach((f) => f(0));
+        expect(scrolled).toEqual(["setup-live", "setup"]);
+    });
 });

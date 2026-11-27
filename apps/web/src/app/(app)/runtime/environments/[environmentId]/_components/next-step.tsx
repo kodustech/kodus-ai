@@ -1,6 +1,6 @@
 "use client";
 
-import { openDisclosure } from "@components/runtime/disclosure";
+import { followSection } from "@components/runtime/disclosure";
 import { SetupEnvironmentButton } from "@components/runtime/environment-setup";
 import { RelativeTime } from "@components/runtime/relative-time";
 import { StatusChip } from "@components/runtime/status-chip";
@@ -34,7 +34,8 @@ const CurrentSetupLine = ({ env }: { env: RuntimeEnvironment }) => {
                         </>
                     )}
                     , set up <RelativeTime at={current.finishedAt} />
-                    {took !== undefined && ` in ${formatDurationMs(took)}`} ·{" "}
+                    {took !== undefined && ` in ${formatDurationMs(took)}`}{" "}
+                    ·{" "}
                 </>
             ) : null}
             Machines on {cellOwnerLabel(env.cellOwner)}
@@ -87,10 +88,10 @@ export const EnvironmentNextStep = ({
                 <Link
                     href={action.href}
                     noHoverUnderline
-                    // A section of this page may be folded: open it on the way.
+                    // A section of this page may be folded or already on screen: open it and show what runs in it now.
                     onClick={
                         action.href.startsWith("#")
-                            ? () => openDisclosure(action.href.slice(1))
+                            ? () => followSection(action.href.slice(1))
                             : undefined
                     }>
                     <Button

@@ -22,8 +22,9 @@ import {
 } from "@services/runtime/labels";
 import { setupBootPhases } from "@services/runtime/model/boot-phases";
 import {
-    environmentSetupMs,
     buildCacheEvictedWords,
+    ENVIRONMENT_SECTION,
+    environmentSetupMs,
     environmentStatus,
     isEnvironmentBusy,
     isRunOnlyEnvironment,
@@ -41,6 +42,7 @@ import { RotateCcwIcon } from "lucide-react";
 
 import { BootPhases } from "./boot-phases";
 import { BootProgress, useElapsed } from "./boot-progress";
+import { liveId } from "./disclosure";
 import { RelativeTime } from "./relative-time";
 import { StatusChip } from "./status-chip";
 
@@ -264,7 +266,13 @@ export const EnvironmentSetupCard = ({
                     {setup.steps.map((step, i) => (
                         <li
                             key={`${step.name}-${i}`}
-                            className="flex flex-wrap items-center gap-3 text-xs">
+                            // "Watch the steps" brings the step that runs into view (followSection).
+                            id={
+                                busy && step.state === "running"
+                                    ? liveId(ENVIRONMENT_SECTION.setup)
+                                    : undefined
+                            }
+                            className="flex scroll-mt-24 flex-wrap items-center gap-3 text-xs">
                             <StatusChip tone={setupStepStateTone(step.state)}>
                                 {setupStepStateLabel(step.state)}
                             </StatusChip>

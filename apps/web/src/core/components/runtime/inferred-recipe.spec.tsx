@@ -267,6 +267,55 @@ describe("InferredRecipe", () => {
         ).toBeInTheDocument();
     });
 
+    it("shows the build files sent with the setup file, one tab each, so the whole set the machine boots can be read", () => {
+        render(
+            <InferredRecipe
+                env={env(
+                    setup(
+                        { state: "setting_up" },
+                        {
+                            origin: "submitted",
+                            cleanBoots: 0,
+                            files: [
+                                {
+                                    path: ".kodus/compose.yaml",
+                                    content: "services:\n  app: {}\n",
+                                },
+                                {
+                                    path: ".kodus/Dockerfile.backend",
+                                    content: "FROM node:22-trixie\n",
+                                },
+                            ],
+                        },
+                    ),
+                )}
+                canPropose
+            />,
+        );
+        expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
+            "workspace.yaml",
+            "compose.yaml",
+            "Dockerfile.backend",
+        ]);
+        expect(
+            screen.getByLabelText("Setup file sent from a coding agent"),
+        ).toHaveTextContent("version: 1");
+        fireEvent.mouseDown(
+            screen.getByRole("tab", { name: "Dockerfile.backend" }),
+        );
+        expect(
+            screen.getByLabelText(".kodus/Dockerfile.backend"),
+        ).toHaveTextContent("FROM node:22-trixie");
+    });
+
+    it("a setup file with no build files shows it alone, with no tabs", () => {
+        render(<InferredRecipe env={env(setup())} canPropose />);
+        expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+        expect(screen.getByLabelText("Inferred setup file")).toHaveTextContent(
+            "version: 1",
+        );
+    });
+
     it("shows nothing for a recipe read from the repository", () => {
         const { container } = render(
             <InferredRecipe
