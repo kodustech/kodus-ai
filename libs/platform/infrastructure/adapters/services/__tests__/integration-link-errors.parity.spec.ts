@@ -1,4 +1,5 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
+import { GatewayAddressRefusedError } from '@libs/llm/gateway-address-guard';
 import axios from 'axios';
 
 import { AzureReposService } from '../azureRepos/azureRepos.service';
@@ -27,6 +28,22 @@ const unreachable = () =>
     Object.assign(new Error('getaddrinfo ENOTFOUND git.example.test'), {
         code: 'ENOTFOUND',
     });
+
+const ADDRESS_REFUSAL =
+    'Git server host "git.example.test" resolves to a private or reserved address; the call was not sent.';
+/** axios's shape when the address guard refuses the socket: request, no response. */
+const addressRefused = () => {
+    const refused = new GatewayAddressRefusedError(
+        'git.example.test',
+        '10.0.0.7',
+        'Git server',
+    );
+    return Object.assign(new Error(refused.message), {
+        code: refused.code,
+        request: {},
+        cause: refused,
+    });
+};
 
 const service = (Service: any) => {
     const svc: any = Object.create(Service.prototype);
@@ -228,6 +245,47 @@ describe.each(harnesses)('$provider createAuthIntegration', (h) => {
         expect((thrown as HttpException).message).toBe(
             `Kodus could not reach the ${h.provider} host (ENOTFOUND). Check the URL and that the host is reachable from Kodus.`,
         );
+    });
+
+    it('refuses in words when Kodus refuses the host address as it connects', async () => {
+        const svc = h.make();
+        h.hostFails(svc, addressRefused());
+
+        const thrown = await h.link(svc).catch((e) => e);
+
+        expect(thrown).toBeInstanceOf(BadRequestException);
+        expect((thrown as HttpException).message).toBe(ADDRESS_REFUSAL);
+        expect(svc.logger.error).not.toHaveBeenCalled();
+        expect(svc.logger.warn).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('GitLab OAuth link', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('treats a 401 to the token exchange as a fault in Kodus credentials, logged once as an error', async () => {
+        // The exchange authenticates with Kodus's OAuth client secret: GitLab
+        // answers a wrong or rotated one with 401 invalid_client.
+        const svc = service(GitlabService);
+        const rejected = Object.assign(hostStatus(401), { request: {} });
+        jest.spyOn(axios, 'post').mockRejectedValueOnce(rejected);
+
+        const thrown = await svc
+            .createAuthIntegration({
+                authMode: 'oauth',
+                code: 'gl-oauth-code',
+                organizationAndTeamData: ORG,
+            })
+            .catch((e: unknown) => e);
+
+        expect(thrown).toBe(rejected);
+        expect(svc.logger.warn).not.toHaveBeenCalled();
+        expect(svc.logger.error).toHaveBeenCalledTimes(1);
+        expect(svc.logger.error.mock.calls[0][0]).toMatchObject({
+            message: 'Failed to create GitLab integration',
+            error: rejected,
+        });
+        expect(JSON.stringify(logs(svc))).not.toContain('gl-oauth-code');
     });
 });
 

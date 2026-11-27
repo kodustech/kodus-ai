@@ -3,6 +3,8 @@ import {
     InternalServerErrorException,
 } from '@nestjs/common';
 
+import { GatewayAddressRefusedError } from '@libs/llm/gateway-address-guard';
+
 import { GithubService } from './github.service';
 import {
     githubUserAuthorizationUrl,
@@ -542,6 +544,42 @@ describe('GitHub installation linking', () => {
             expect(JSON.stringify(svc.logger.error.mock.calls)).not.toContain(
                 PAT,
             );
+        });
+
+        it('refuses in words a host Kodus refuses to connect to', async () => {
+            const svc = service();
+            // octokit's shape: RequestError(500) -> fetch's TypeError -> the guard.
+            const refused = new GatewayAddressRefusedError(
+                'ghes.example.test',
+                '10.0.0.7',
+                'Git server',
+            );
+            const err = Object.assign(new Error('fetch failed'), {
+                status: 500,
+                request: { url: '/user' },
+                cause: Object.assign(new TypeError('fetch failed'), {
+                    cause: refused,
+                }),
+            });
+            svc.createUserOctokitClient = jest.fn().mockReturnValue({
+                rest: {
+                    users: {
+                        getAuthenticated: jest.fn().mockRejectedValue(err),
+                    },
+                },
+            });
+
+            const thrown = await svc
+                .createAuthIntegration({
+                    ...base,
+                    authMode: 'token',
+                    token: PAT,
+                })
+                .catch((e: unknown) => e);
+
+            expect(thrown).toBeInstanceOf(BadRequestException);
+            expect(thrown.message).toBe(refused.message);
+            expect(svc.logger.error).not.toHaveBeenCalled();
         });
 
         it('refuses a PAT GitHub does not accept in words, logged as a warning', async () => {

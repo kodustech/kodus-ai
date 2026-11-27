@@ -7,6 +7,9 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 
+import { GatewayAddressRefusedError } from '@libs/llm/gateway-address-guard';
+
+import { GitServerUrlRefusedException } from '../git-server-url.guard';
 import {
     causeChain,
     isIntegrationLinkRefusal,
@@ -206,6 +209,28 @@ describe('toIntegrationLinkError', () => {
             expect(mapped.cause).toBe(err);
         },
     );
+
+    it("answers an address Kodus refuses as it connects in the guard's words", () => {
+        // axios's shape: the request was set up, the guard refused the socket.
+        const refused = new GatewayAddressRefusedError(
+            'git.example.test',
+            '10.0.0.7',
+            'Git server',
+        );
+        const err = Object.assign(new Error(refused.message), {
+            code: refused.code,
+            request: {},
+            cause: refused,
+        });
+
+        const mapped = toIntegrationLinkError(err, 'GitLab') as HttpException;
+
+        expect(mapped).toBeInstanceOf(GitServerUrlRefusedException);
+        expect(mapped.message).toBe(
+            'Git server host "git.example.test" resolves to a private or reserved address; the call was not sent.',
+        );
+        expect(isIntegrationLinkRefusal(mapped)).toBe(true);
+    });
 
     it('finds the network code down the cause chain, even under a 500 status', () => {
         // octokit's shape for a failed fetch: RequestError(500) → TypeError → system error

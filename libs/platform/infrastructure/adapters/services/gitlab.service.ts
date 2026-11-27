@@ -1376,7 +1376,11 @@ export class GitlabService implements Omit<
 
             return res;
         } catch (err) {
-            const linkError = toIntegrationLinkError(err, 'GitLab');
+            // Same rule as the OAuth link's own catch, so its faults are not
+            // mapped into refusals here.
+            const linkError = toIntegrationLinkError(err, 'GitLab', {
+                kodusCredentials: params?.authMode === AuthMode.OAUTH,
+            });
             logIntegrationLinkFailure(this.logger, {
                 provider: 'GitLab',
                 context: GitlabService.name,
@@ -1454,7 +1458,11 @@ export class GitlabService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            throw toIntegrationLinkError(err, 'GitLab');
+            // The exchange authenticates with Kodus's OAuth client: a 401 is
+            // GitLab refusing our client secret, not anything the user gave.
+            throw toIntegrationLinkError(err, 'GitLab', {
+                kodusCredentials: true,
+            });
         }
     }
 

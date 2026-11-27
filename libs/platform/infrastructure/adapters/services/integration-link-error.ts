@@ -5,6 +5,8 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 
+import { gitServerRefusal } from './git-server-url.guard';
+
 /**
  * Network failures a user fixes by correcting the host URL. octokit reports
  * them as a RequestError with status 500 and the system error further down
@@ -150,7 +152,8 @@ function refusalMessage(provider: string, status: number): string | undefined {
 /**
  * What a failed integration link throws to the client. A refusal already
  * worded for the user passes through; a host refusing the credentials or
- * unreachable becomes a worded 400; a rate limit or a transient network
+ * unreachable, or an address Kodus refuses to connect to, becomes a worded
+ * 400; a rate limit or a transient network
  * failure a worded 503; anything else is returned as is, for the exception
  * filter to answer 500, report and log with its stack, instead of a 400
  * carrying its raw message.
@@ -165,6 +168,12 @@ export function toIntegrationLinkError(
 ): unknown {
     if (err instanceof HttpException) {
         return err;
+    }
+
+    // Kodus refusing the host's address as it connects: the org's URL, worded.
+    const addressRefusal = gitServerRefusal(err);
+    if (addressRefusal) {
+        return addressRefusal;
     }
 
     const chain = causeChain(err);
