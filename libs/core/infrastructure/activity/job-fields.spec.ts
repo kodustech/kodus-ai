@@ -151,6 +151,21 @@ describe('jobFields', () => {
             },
             { prNumber: 4, changedFiles: 0, changedLines: 0 },
         ],
+        [
+            'no line count when the payload carries only one of the two',
+            {
+                payload: {
+                    codeManagementPayload: {
+                        pull_request: {
+                            number: 5,
+                            changed_files: 2,
+                            additions: 9,
+                        },
+                    },
+                },
+            },
+            { prNumber: 5, changedFiles: 2 },
+        ],
         ['an empty job', {}, {}],
     ])('reads %s', (_l, job, expected) => {
         const out = jobFields(job as any);

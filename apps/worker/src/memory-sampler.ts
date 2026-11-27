@@ -30,8 +30,8 @@ export interface GcRecord {
     major: boolean;
     /** Time the collection took, in ms. */
     costMs: number;
-    /** Heap in use when the collection ended, in bytes. */
-    heapAfterBytes: number;
+    /** Heap in use when the collection ended, in bytes; null if unreported. */
+    heapAfterBytes: number | null;
 }
 
 export interface MemoryWindowSources {
@@ -57,6 +57,9 @@ export function createMemoryWindow(sources: MemoryWindowSources) {
                 maxPauseMs = Math.max(maxPauseMs, gc.costMs);
                 if (!gc.major) continue;
                 majorGcs++;
+                // A collection V8 did not size says nothing about the live
+                // set; it must not read as an empty heap.
+                if (gc.heapAfterBytes === null) continue;
                 lastAfterMajor = gc.heapAfterBytes;
                 minAfterMajor =
                     minAfterMajor === null
@@ -95,7 +98,7 @@ export function gcRecordsOf(profile: {
         major: s.gcType === 'MarkSweepCompact',
         // V8 reports the cost in microseconds.
         costMs: (s.cost ?? 0) / 1000,
-        heapAfterBytes: s.afterGC?.heapStatistics?.usedHeapSize ?? 0,
+        heapAfterBytes: s.afterGC?.heapStatistics?.usedHeapSize ?? null,
     }));
 }
 

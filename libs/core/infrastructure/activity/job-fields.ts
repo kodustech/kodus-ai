@@ -70,9 +70,10 @@ export function jobFields(job: {
             num(w.resource?.pullRequestId),
         platform: str(p.platformType) ?? str(p.platform),
         changedFiles: count(w.pull_request?.changed_files),
+        // Both or nothing: one count alone would under-report the PR.
         changedLines:
-            additions === undefined && deletions === undefined
+            additions === undefined || deletions === undefined
                 ? undefined
-                : (additions ?? 0) + (deletions ?? 0),
+                : additions + deletions,
     };
 }

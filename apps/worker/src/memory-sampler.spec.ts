@@ -64,6 +64,18 @@ describe('memory window', () => {
         });
     });
 
+    it('counts a full collection V8 did not size without reading it as an empty heap', () => {
+        const w = createMemoryWindow(sources);
+        w.take([{ major: true, costMs: 5, heapAfterBytes: 800 * MB }]);
+
+        const out = w.take([{ major: true, costMs: 7, heapAfterBytes: null }]);
+
+        expect(out.heapAfterMajorGcMb).toBe(800);
+        expect(out.heapAfterMajorGcMinMb).toBeNull();
+        expect(out.majorGcs).toBe(1);
+        expect(out.gcPauseMs).toBe(7);
+    });
+
     it('says when no full collection has run yet', () => {
         const w = createMemoryWindow(sources);
         expect(w.take([]).heapAfterMajorGcMb).toBeNull();
@@ -91,6 +103,14 @@ describe('gcRecordsOf', () => {
             { major: false, costMs: 1.5, heapAfterBytes: 10 },
             { major: true, costMs: 42, heapAfterBytes: 7 },
         ]);
+    });
+
+    it('keeps a collection without a heap reading as unsized', () => {
+        expect(
+            gcRecordsOf({
+                statistics: [{ gcType: 'MarkSweepCompact', cost: 1000 }],
+            }),
+        ).toEqual([{ major: true, costMs: 1, heapAfterBytes: null }]);
     });
 
     it('reads an empty profile as no collections', () => {
