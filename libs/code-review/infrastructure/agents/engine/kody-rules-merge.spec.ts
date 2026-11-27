@@ -205,4 +205,28 @@ describe('mergeKodyRuleFindings', () => {
         ]);
         expect(out[0].kodyRuleOtherLocations).toBeUndefined();
     });
+
+    it('keeps the lines of file-anchored findings collapsed on one file', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.cs',
+                relevantLinesStart: 90,
+                fileAnchored: true,
+                suggestionContent: 'outside the diff, the longest',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.cs',
+                relevantLinesStart: 120,
+                relevantLinesEnd: 122,
+                fileAnchored: true,
+                suggestionContent: 'also outside',
+            },
+        ]);
+
+        expect(out).toHaveLength(1);
+        expect(out[0].relevantLinesStart).toBe(90);
+        expect(out[0].kodyRuleOtherLocations).toEqual(['b.cs:120-122']);
+    });
 });

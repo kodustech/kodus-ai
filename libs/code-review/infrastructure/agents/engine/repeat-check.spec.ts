@@ -607,14 +607,16 @@ describe('checkRepeats', () => {
             relevantLinesEnd: undefined,
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-d'],
+            // Stored as posted: the PR-level comment cites the file first.
             suggestionContent:
-                'CheckinReport.cs does not start with the qa2420_ prefix.',
+                '`qa2420/CheckinReport.cs` — CheckinReport.cs does not start with the qa2420_ prefix.',
         });
         const again = {
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-d'],
             relevantFile: 'qa2420/CheckinReport.cs',
-            suggestionContent: old.suggestionContent,
+            suggestionContent:
+                'CheckinReport.cs does not start with the qa2420_ prefix.',
         };
         // Same rule and file, a different violation: no verdict, so posted.
         const suffix = {

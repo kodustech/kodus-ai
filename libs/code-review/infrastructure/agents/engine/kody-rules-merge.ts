@@ -56,48 +56,48 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
         // file, without a line (#2420), or file-anchored outside the diff is
         // posted PR-level, so it is never folded into an inline one's "Also
         // found in" nor absorbs one.
-        const lined = group.filter(
-            (s) =>
-                !!s.relevantFile && !!s.relevantLinesStart && !s.fileAnchored,
+        const lined = new Set(
+            group.filter(
+                (s) =>
+                    !!s.relevantFile &&
+                    !!s.relevantLinesStart &&
+                    !s.fileAnchored,
+            ),
         );
         // PR-level findings collapse per file: a file-name rule broken by
         // two files is two violations, each kept on its own record.
         const prLevelByFile = new Map<string, T[]>();
         for (const s of group) {
-            if (lined.includes(s)) continue;
+            if (lined.has(s)) continue;
             const key = s.relevantFile ?? '';
             prLevelByFile.set(key, [...(prLevelByFile.get(key) ?? []), s]);
         }
         const prLevel = [...prLevelByFile.values()].map((same) => {
+            const [kept, ...rest] = [...same].sort(byDetail);
+            // File-anchored findings on the same file keep their lines in
+            // "Also found in", as inline ones do.
+            const otherLocations = collectOtherLocations(kept, rest);
             if (same.length > 1) {
                 onMerge?.({
                     ruleUuid,
                     scope: 'pr',
                     collapsed: same.length,
-                    otherLocations: 0,
+                    otherLocations: otherLocations.length,
                 });
             }
-            return [...same].sort(byDetail)[0];
+            return otherLocations.length
+                ? { ...kept, kodyRuleOtherLocations: otherLocations }
+                : kept;
         });
 
-        if (lined.length <= 1) {
+        if (lined.size <= 1) {
             result.push(...lined, ...prLevel);
             continue;
         }
 
         const sorted = [...lined].sort(byDetail);
         const keep = { ...sorted[0] };
-        const otherLocations: string[] = [];
-        const locationOf = (s: T) =>
-            `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd ?? s.relevantLinesStart}`;
-        const keptLocation = locationOf(keep);
-
-        for (let i = 1; i < sorted.length; i++) {
-            const loc = locationOf(sorted[i]);
-            if (loc !== keptLocation && !otherLocations.includes(loc)) {
-                otherLocations.push(loc);
-            }
-        }
+        const otherLocations = collectOtherLocations(keep, sorted.slice(1));
 
         if (otherLocations.length > 0) {
             // Carried on the suggestion instead of written into
@@ -110,7 +110,7 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
         onMerge?.({
             ruleUuid,
             scope: 'file',
-            collapsed: lined.length,
+            collapsed: lined.size,
             otherLocations: otherLocations.length,
         });
         result.push(keep, ...prLevel);
@@ -159,4 +159,22 @@ export function otherLocationsToRender(
             // location to name: `file:?-?` is noise, not a place to look.
             !location.endsWith(':?-?') && !own.has(location),
     );
+}
+
+/** The distinct lined locations of `others`, other than `kept`'s own. */
+function collectOtherLocations<T extends Partial<CodeSuggestion>>(
+    kept: T,
+    others: T[],
+): string[] {
+    const locationOf = (s: T) =>
+        s.relevantFile && s.relevantLinesStart
+            ? `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd ?? s.relevantLinesStart}`
+            : null;
+    const keptLocation = locationOf(kept);
+    const locations = new Set<string>();
+    for (const s of others) {
+        const loc = locationOf(s);
+        if (loc && loc !== keptLocation) locations.add(loc);
+    }
+    return [...locations];
 }
