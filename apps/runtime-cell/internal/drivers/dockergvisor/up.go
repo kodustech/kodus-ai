@@ -605,6 +605,7 @@ func (b *projectBoot) record() error {
 	// Every data volume came from the bake: its seed is in them already.
 	m.restoredData = len(b.keys) > 0 && b.restored == len(b.keys)
 	m.seedAtInit = b.seedAtInit
+	m.dataPlan, m.dataWhy = planDataReset(b.canonical, b.rec, b.opts.Built)
 	if b.seedInData != nil {
 		m.seedInData = *b.seedInData
 	}

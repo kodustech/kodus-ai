@@ -63,6 +63,14 @@ type machineState struct {
 	// goldenOff says the machine has none and will not try again (golden.go).
 	golden    *golden
 	goldenOff bool
+	// dataPlan is what its last Up says a data-only reset acts on (nil, with
+	// dataWhy, when it cannot); dataCopy the copy of its first boot's data
+	// services' volumes; dataOff says it has none and will not try again
+	// (datareset.go).
+	dataPlan *dataResetPlan
+	dataWhy  string
+	dataCopy *dataCopy
+	dataOff  bool
 	// boot is its last boot, per phase, under the claim it booted for
 	// (BootTiming).
 	boot *claimBoot

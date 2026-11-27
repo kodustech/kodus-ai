@@ -156,6 +156,8 @@ type canonicalService struct {
 		Source string `json:"source"`
 		Target string `json:"target"`
 	} `json:"volumes"`
+	// Build is raw: only its presence matters (planDataReset).
+	Build json.RawMessage `json:"build"`
 }
 
 // planGolden says what the machine's first boot can copy for its resets,

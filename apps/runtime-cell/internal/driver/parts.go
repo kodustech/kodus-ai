@@ -21,6 +21,9 @@ type Parts struct {
 	// Resetter brings a machine back to a disk or compose-volumes snapshot
 	// (machine.reset); nil: the cell refuses it with ErrUnsupported.
 	Resetter MachineResetter
+	// DataResetter resets only the data services of a data.reset: data-only
+	// recipe and keeps the app running; nil: every reset recreates.
+	DataResetter DataResetter
 	// Composer boots the claim's compose project itself, and Recipes runs
 	// the recipe's own boot steps in it.
 	Composer ComposeBooter

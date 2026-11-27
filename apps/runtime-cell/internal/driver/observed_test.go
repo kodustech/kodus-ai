@@ -109,6 +109,7 @@ type everyPart struct {
 	driver.CoverageFlusher
 	driver.Sweeper
 	driver.SpareKeeper
+	driver.DataResetter
 	driver.DiskUsageReader
 	driver.BuildCachePruner
 	driver.DiskReclaimer

@@ -299,6 +299,9 @@ type Driver struct {
 	// machines is what the driver knows of each machine, from Create to
 	// Destroy (machineState).
 	machines map[string]*machineState
+	// dataModes is the data-only reset mode that works, per environment, once
+	// a fallback demoted it (datareset.go).
+	dataModes map[string]dataModeFact
 	// observerSQL never participates in a machine snapshot or persisted state.
 	observerSQL map[string]*observerSQLAccount
 	limitGroups map[string]limitGroup
@@ -671,7 +674,7 @@ func (d *Driver) Capabilities() driver.Capabilities {
 // gVisor backend keeps none.
 func (d *Driver) Parts() driver.Parts {
 	p := driver.Parts{
-		Baker: d, BakePinner: d, BakeCatalog: d, Resetter: d,
+		Baker: d, BakePinner: d, BakeCatalog: d, Resetter: d, DataResetter: d,
 		Composer: d, Recipes: d, Pooler: d, Memory: d,
 		Diagnoser: d, ServiceLogs: d, BootTimes: d, BootPhases: d, BuildStates: d,
 		SQLObservers: d, Sweeper: d, Coverage: d, DiskUsers: d, BuildCache: d, DiskReclaim: d, ExitedServices: d,

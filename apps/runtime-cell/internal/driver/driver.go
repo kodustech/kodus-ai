@@ -499,6 +499,41 @@ type MachineResetter interface {
 	Reset(ctx context.Context, ref MachineRef, snap SnapshotRef) error
 }
 
+// DataResetMode is how a data-only reset ended (data.reset: data-only).
+type DataResetMode string
+
+const (
+	// ResetModeData: the data services were stopped, restored from the copy
+	// of the first boot and started; the app kept running, and was
+	// restarted only when its health check said it lost them.
+	ResetModeData DataResetMode = "data"
+	// ResetModeRestartApp: the same, and the app was restarted whatever its
+	// health check said.
+	ResetModeRestartApp DataResetMode = "restart-app"
+	// ResetModeRecreate: nothing worked or nothing applies; the caller resets
+	// the machine as it always did (Reset, then Up and the recipe's steps).
+	ResetModeRecreate DataResetMode = "recreate"
+)
+
+// DataReset is what a data-only reset did.
+type DataReset struct {
+	Mode DataResetMode
+	// Sources are the project's container addresses after the reset, for
+	// the claim's egress policy; empty in recreate mode.
+	Sources []string
+	// Why says, in recreate mode, what refused the cheaper modes.
+	Why string
+}
+
+// DataResetter resets a compose machine's data without recreating its app.
+type DataResetter interface {
+	// ResetData tries the cheaper modes in order and says which one worked.
+	// A failure of a mode is never an error: the next mode runs, and the last
+	// is ResetModeRecreate, which changes nothing. An error is a machine that
+	// is not the cell's or does not exist.
+	ResetData(ctx context.Context, ref MachineRef) (DataReset, error)
+}
+
 // Baker makes an environment image.
 type Baker interface {
 	Bake(ctx context.Context, spec BakeSpec) (ImageRef, error)

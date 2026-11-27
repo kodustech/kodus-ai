@@ -65,7 +65,14 @@ const seedScript = `n=0; until pg_isready -q -h 127.0.0.1 -U "$1" -d "$2"; do n=
 // boot's output (claim.progress) and its time to the boot's seed phase. A
 // failed step is a driver.RecipeStepError naming it.
 func (d *Driver) RunRecipe(ctx context.Context, ref driver.MachineRef, projectDir string, output func(line string)) error {
-	return d.runRecipe(ctx, ref.MachineID, d.peek(ref.MachineID), projectDir, output, true)
+	if err := d.runRecipe(ctx, ref.MachineID, d.peek(ref.MachineID), projectDir, output, true); err != nil {
+		return err
+	}
+	// The first boot's data, once its steps ran (data.reset: data-only).
+	if err := d.takeDataCopy(ctx, ref); err != nil {
+		return &driver.RecipeStepError{Step: "data-copy", Field: "data.reset", Err: err}
+	}
+	return nil
 }
 
 // runRecipe runs the steps in the containers m found: the machine's
