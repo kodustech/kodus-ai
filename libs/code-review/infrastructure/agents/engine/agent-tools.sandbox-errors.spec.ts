@@ -136,20 +136,39 @@ describe('findFile — a find walk the exec cap stopped', () => {
         );
     });
 
-    it('still falls back when a stopped walk printed nothing', async () => {
+    // A walk stopped before it printed a whole name has not shown there is
+    // no match, and the literal listDir fallback cannot match a glob.
+    it('says the search was cut when a stopped walk listed no whole name', async () => {
+        const listDir = jest.fn(async () => 'src/foo.ts');
         const remote = makeRemote({
             exec: async (cmd: string) =>
                 cmd.startsWith('fd ')
                     ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
-                    : { stdout: '', stderr: '', exitCode: -1, truncated: true },
-            listDir: async () => 'src/foo.ts\nsrc/bar.ts',
+                    : { stdout: 'pkg/a.te', stderr: 'find: Permission denied\n'.repeat(80_000), exitCode: -1, truncated: true },
+            listDir,
         });
 
-        const out = await buildAgentTools(remote).findFile.execute({
-            pattern: 'foo',
+        const out = await buildAgentTools(remote).findFile.execute({ pattern: '*.test.ts' });
+
+        expect(out).toBe(
+            'The search for "*.test.ts" was cut before it listed a whole file name — narrow it with a path or glob.',
+        );
+        expect(listDir).not.toHaveBeenCalled();
+    });
+
+    it('keeps a last name that ends with its newline', async () => {
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : { stdout: 'pkg/a.test.ts\n', stderr: 'x'.repeat(2_000_000), exitCode: -1, truncated: true },
         });
 
-        expect(out).toBe('src/foo.ts');
+        const out = await buildAgentTools(remote).findFile.execute({ pattern: '*.test.ts' });
+
+        expect(out).toBe(
+            'pkg/a.test.ts\n... (the search output was cut: more files may match — narrow with a path or glob)',
+        );
     });
 });
 

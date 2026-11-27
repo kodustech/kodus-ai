@@ -1124,21 +1124,28 @@ export function buildAgentTools(
                             // than 30 files already: the listDir fallback below
                             // filters literally and would answer "No files
                             // matching" for a glob such as *.test.ts.
-                            if ((exitCode === 0 || truncated) && stdout.trim()) {
-                                let lines = stdout.trim().split('\n');
-                                if (!truncated) {
-                                    return lines.slice(0, 30).join('\n');
-                                }
+                            if (exitCode === 0 && !truncated && stdout.trim()) {
+                                const lines = stdout.trim().split('\n');
+                                return lines.slice(0, 30).join('\n');
+                            }
+                            if (truncated) {
                                 // The cut can end mid-name, and stderr counts
-                                // toward the cap too: keep whole names, and
-                                // say the list may be short when it is.
-                                lines = lines.slice(0, -1);
-                                if (lines.length >= 30) {
-                                    return lines.slice(0, 30).join('\n');
+                                // toward the cap too: keep whole names (a last
+                                // one without its newline may be cut), and say
+                                // the list may be short when it is.
+                                const lines = stdout.split('\n');
+                                const whole = lines
+                                    .slice(0, -1)
+                                    .filter((line) => line.trim());
+                                if (whole.length >= 30) {
+                                    return whole.slice(0, 30).join('\n');
                                 }
-                                if (lines.length > 0) {
-                                    return `${lines.join('\n')}\n${PARTIAL_NAMES_NOTE}`;
-                                }
+                                // Not "no match": the walk was stopped before
+                                // it could say, and the literal listDir
+                                // fallback below cannot match a glob.
+                                return whole.length > 0
+                                    ? `${whole.join('\n')}\n${PARTIAL_NAMES_NOTE}`
+                                    : `The search for "${pattern}" was cut before it listed a whole file name — narrow it with a path or glob.`;
                             }
                         } catch {
                             // find also failed, fall through to listDir
