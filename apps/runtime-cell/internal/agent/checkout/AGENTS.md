@@ -4,7 +4,7 @@ What the cell reads from and writes into a claim's checkout before anything boot
 
 ## Owns
 - `recipe.go` `ApplyRecipe`: the default branch's recipe replaces the checkout's `.kodus/workspace.yaml` (a PR's edit never changes how its own code boots); content null removes the checkout's copy; no recipe in the claim (an older hub) leaves it.
-- `authored_files.go` `WriteAuthoredFiles`: Kody's authored build files under `.kodus/`, created exclusively; a file already there fails the claim unless it has the same bytes.
+- `authored_files.go` `WriteAuthoredFiles`: Kody's authored build files under `.kodus/`, created exclusively; a file already there fails the claim unless it has the same bytes. With `filesMode` `fill_missing` (a committed recipe's build files) it only fills what is missing: an entry already at a path, whatever it is, stays untouched and is never followed; `.kodus` itself must still be a real directory.
 - What the checkout pins for the mirror: `gopins.go` `GoSumPins` (`go.sum`, `go.work.sum`), `imagepins.go` `DockerfileImagePins` (Docker Hub images of every Dockerfile's `FROM`).
 - A claim of several repositories: `workspace.go` `PlanWorkspace`, `Workspace`, `Member` (`claim/ws/<alias>`, the primary first, at most `MaxWorkspaceRepositories`).
 

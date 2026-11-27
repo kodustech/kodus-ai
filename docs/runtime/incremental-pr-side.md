@@ -61,7 +61,7 @@ same environment image, `fork-from-checkpoint.md`).
    egress, recipe steps, observer SQL, running. A PR claim's machine is tainted at once (S-52: destroyed on release,
    never baked, snapshotted or pooled; `prepare.go:192-193`).
 3. **Code** (`prepare.go:194-270`): the cell downloads the head's tarball by API, extracts it with no network, revokes
-   the token, then lays Kody's authored files and the default branch's recipe over it.
+   the token, then lays Kody's authored files (or, for a committed recipe, its build files, only where the checkout has none) and the default branch's recipe over it.
 4. **Compose `Up`** (`internal/drivers/dockergvisor/up.go:25-46`): sandbox, build, coverage, render, pull, data, up,
    record. The step that matters is `build` (`up.go:257`, `build.go:68`).
 5. **Build, per compose build section** (`build.go:68-178`):

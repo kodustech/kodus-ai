@@ -117,6 +117,18 @@ to setup): never asked twice for one version. A rewrite that passes no check kee
 author v<N>: <reason>". A rewritten recipe whose boot fails goes through the repairs (section 7) like any other: the
 old one is not booted again in that setup.
 
+**A committed recipe's build files.** A PR branch cut before the recipe was committed has no `.kodus/compose.yaml` or
+Dockerfile, and the cell used to fail the claim with `compose_load: openat .kodus/compose.yaml: no such file or directory`.
+So for a committed recipe the product reads, at the recipe's commit, the compose files it names under `.kodus/` and the
+Dockerfile-named files beside them (`libs/runtime/api/application/recipe-build-files.reader.ts`) and sends them as the setup
+command's `recipe.buildFiles`. The record keeps them as `recipe.buildFiles` (never in the digest, never `files`), and every
+claim of a Run, a suite or a preview carries them as `recipe.files` with `filesMode: 'fill_missing'` (`recipe-for-claim.ts`).
+The cell lays a file only where its path is empty; anything the checkout has there is left as it is, so a PR that changes
+`.kodus/compose.yaml` boots its own, and a change to one is not a recipe change (`recipeChangedInPr` still reports only the
+workspace files and Kody's authored files). The bounds are the authored files' (4 files, 16 KiB each, 48 KiB together); over
+them, or when the Git API cannot give a file, none are sent and the Run boots as before, the cell's blocker naming the missing
+file. A cell that does not name `authoredFilesFill` is sent the recipe without them.
+
 Whoever wrote it, the worker runs the same checks before booting: parse, reserved resources, and that every
 `services.needs` is a repository of the environment (`environment-setup.service.ts:381-400`). The cell checks again.
 
