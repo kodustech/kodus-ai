@@ -22,6 +22,8 @@ Run `kodus env recipe guide` before writing anything. It prints the recipe forma
 - `.kodus/workspace.yaml`; if it already exists for another tool, `.kodus/workspace.runtime.yaml` (read first). Read the existing file before writing.
 - A Dockerfile or compose file the repository lacks, or that is broken, goes directly under `.kodus/`: flat, at most 4 files, 16 KiB each, 48 KiB together, named like `.kodus/Dockerfile.web`. The recipe names it by that path.
 
+- Also write `.kodus/runtime-notes.md`, short plain text for Kody's test planner, when the booted app is reached in a way its code does not show: the path prefix each service is served under (a Firebase function under `/<project>/<region>/<function>/`, a gateway under `/api`), the test user the seed creates and how to log in, and the seeded data a request can use. Commit it with the recipe; it is read from the repository at the pull request's base and is not sent with `kodus env recipe submit`. Test values only.
+
 ## Hard rules
 
 - Never copy `.env` or any secret into the recipe or the `.kodus/` files. Name the variables the app needs and give test values that say so (`kodus-test-...`) or fakes.

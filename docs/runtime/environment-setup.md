@@ -120,6 +120,18 @@ old one is not booted again in that setup.
 Whoever wrote it, the worker runs the same checks before booting: parse, reserved resources, and that every
 `services.needs` is a repository of the environment (`environment-setup.service.ts:381-400`). The cell checks again.
 
+**Notes for the planner.** The recipe says how the app boots, not how it is reached once it does. The planner's input
+carries only each service and port, so a repository whose services answer under a prefix (a Firebase function under
+`/<project>/<region>/<function>/...`) or behind a login the seed creates writes it in `.kodus/runtime-notes.md`: plain
+text, at most 3,000 characters in a prompt (`libs/runtime/planner/environment-notes.ts`). The planner reads it from
+the repository at the Run's base commit through the `RepoReader` it already has, so a PR cannot rewrite what it is
+tested with, and no recipe field, protocol message or Go change carries it. It reaches every planner round as data
+under the same redaction as any file the model reads (secret-named values masked). It is not a build file: `kodus env
+recipe submit` leaves it out of the files it sends (`apps/cli/src/features/env-recipe/recipe-files.ts`), and the
+developer's guide (`recipe-authoring-guide.ts`) and the `kodus-runtime-setup` skill tell a coding agent to write it. A
+recipe already carries free text in `notes` (at most 1,000 characters, the author's own account of what it did); that
+field is the author's output, never an input of the planner.
+
 ### Kody's author
 
 The worker calls the API (`apps/runtime/src/worker/agent/http-recipe-author.ts:55-62`); the agent runs in the

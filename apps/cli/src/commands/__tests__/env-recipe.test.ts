@@ -75,6 +75,15 @@ describe('kodus env recipe', () => {
         });
     });
 
+    // Behavior: the notes file for the planner is committed with the recipe but is not one of its build files, so it never counts against their limits.
+    it('leaves the planner notes file out of the build files', async () => {
+        await fs.writeFile(path.join(dir, '.kodus/workspace.yaml'), RECIPE);
+        await fs.writeFile(path.join(dir, '.kodus/runtime-notes.md'), 'x'.repeat(20 * 1024));
+        await fs.writeFile(path.join(dir, '.kodus/compose.yaml'), 'services: {}\n');
+        const got = await collectRecipe(dir);
+        expect(got.files).toEqual([{ path: '.kodus/compose.yaml', content: 'services: {}\n' }]);
+    });
+
     it('refuses locally what Kodus would refuse: more than 4 files, a file over 16 KiB, a name it does not take', async () => {
         await fs.writeFile(path.join(dir, '.kodus/workspace.yaml'), RECIPE);
         await fs.writeFile(

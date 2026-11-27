@@ -637,6 +637,10 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         expect(guide).toContain('ARG npm_config_registry'.replace('ARG ', ''));
         expect(guide).toContain('FIREBASE_EMULATORS_MIRROR');
         expect(guide).toContain('fetch it when the service starts instead');
+        // The notes the planner reads: where, what to write, and that it is committed rather than sent.
+        expect(guide).toContain('.kodus/runtime-notes.md');
+        expect(guide).toContain('path prefix each service is served under');
+        expect(guide).toContain('never a real credential');
         // Kody's own prompt mechanics stay out.
         expect(guide).not.toContain('submit_recipe');
         expect(guide).not.toContain('list_files');

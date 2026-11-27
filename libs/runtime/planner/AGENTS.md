@@ -7,6 +7,7 @@ The shared core of a Run's test planner (ADR-069): an agent that reads the repos
 - The intent author (docs/runtime/intent-oracle.md): `intent-author.ts` `intentAuthorMessages` (one turn, the PR's title, description and linked tasks and the diff's HTTP routes as untrusted data), `checkIntentProbes` (a quote must be a substring of its source, whitespace normalized; assertions outside the closed set are dropped; ids `intent-<n>`), `requestTemplatesOf` (the planner's requests to the diff's routes, shape only: never `expected`, `purpose`, assertions or claims, never a credential header), `isIntentAnswer` and `INTENT_AUTHOR_RETRY` (the worker's one retry), `hasStatedIntent`, `authorTextOf` (a description without Kody's summary: empty when the body is only that summary), `INTENT_AUTHOR_LIMITS`, `INTENT_AUTHOR_VERSION`. The worker makes the call (`apps/runtime/src/worker/intent/intent-author.ts`).
 - Plans without a model: `plan-without-model.ts` `planWithoutModel` (only dependency versions or only comments move; each file goes in `cannotProve`).
 - Bounded repository reads: `repo-reader.ts` `RepoReader` (with an optional `readMany`, at most `READ_MANY_MAX` paths a call), `repoPath`, `READ_LIMITS`, secret files and assignments masked (`isSecretFile`, `redactForModel`, `modelView`); `file-window.ts` windows of numbered lines (`windowedView`, `WINDOW_LIMITS`); `code-search.ts` `searchCode`, a literal grep (`SEARCH_LIMITS`).
+- The repository's notes for the planner: `environment-notes.ts` `readEnvironmentNotes` (`.kodus/runtime-notes.md` at the base commit, redacted through `modelView`, at most `ENVIRONMENT_NOTES_LIMITS.promptChars`), carried in every round's prompt as data. A read failure plans without them.
 - Routes reaching a changed file through imports: `import-graph/` ([its AGENTS.md](import-graph/AGENTS.md)).
 
 ## Does not own
@@ -33,7 +34,7 @@ The shared core of a Run's test planner (ADR-069): an agent that reads the repos
 
 ## Module map
 
-Files (7, tests apart): `code-search.ts`, `file-window.ts`, `index.ts`, `intent-author.ts`, `plan-without-model.ts`, `repo-reader.ts`, `test-planner.agent.ts`
+Files (8, tests apart): `code-search.ts`, `environment-notes.ts`, `file-window.ts`, `index.ts`, `intent-author.ts`, `plan-without-model.ts`, `repo-reader.ts`, `test-planner.agent.ts`
 
 Imports these Runtime modules:
 

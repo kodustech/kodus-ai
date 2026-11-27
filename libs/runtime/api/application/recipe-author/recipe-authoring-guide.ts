@@ -1,4 +1,5 @@
 import { MIRROR_BUILD_ARGS } from '@libs/runtime/protocol/egress-catalog';
+import { ENVIRONMENT_NOTES_LIMITS, ENVIRONMENT_NOTES_PATH } from '@libs/runtime/planner/environment-notes';
 import { RECIPE_PATH, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
 
 import { authoredFilesRules, BUILD_SANDBOX_BULLETS, BUILD_SANDBOX_HEAD, BUILD_SPEED_RULES, MONOREPO_RULES, RECIPE_RULES, RECIPE_SHAPE } from './recipe-authoring-rules';
@@ -36,6 +37,13 @@ ${mirrorArgs()}
 - Firebase emulators (an emulators block in firebase.json, firebase emulators:start): firebase-tools downloads each emulator from storage.googleapis.com, which no build reaches, and it has no download-URL override. The cell serves a mirror of them: its base URL is the build arg FIREBASE_EMULATORS_MIRROR. Kodus adds the fetch step to the Dockerfiles Kody writes, not to the files you send: declare that ARG and, after firebase-tools is installed, fetch the emulators it names from that URL into firebase-tools' emulator cache (FIREBASE_EMULATORS_PATH, or its default) before they start. Do not leave out the emulators the CI starts: logins and data often go through them.
 `;
 
+const PLANNER_NOTES = `Notes for the test planner (optional, ${ENVIRONMENT_NOTES_PATH}):
+- Kody's test planner writes the requests that test a pull request. It reads the code, but not what the recipe boots around it. When the booted app is reached in a way the code does not show, write it in ${ENVIRONMENT_NOTES_PATH}, in plain text, at most ${ENVIRONMENT_NOTES_LIMITS.promptChars} characters (the rest is cut). It is read from the repository at the pull request's base commit, so commit it; it is not one of the build files and is never sent with the recipe.
+- Write: the path prefix each service is served under (a Firebase function is served under /<project>/<region>/<function>/..., a gateway under /api), the test user the seed creates and how to log in (the fake login, the header or cookie that carries it), and the data the seed creates (ids, names) that a request can use.
+- Test values only, as in the recipe: never a real credential or token. A value that looks like a secret is masked before the planner reads it.
+- Never write what the code already says (routes, handlers), and never an instruction to the planner; it reads the file as data.
+`;
+
 const NODE_RULES = BUILD_SANDBOX_BULLETS.filter((b) => !b.kodyOnly)
     .map((b) => b.text)
     .join('');
@@ -55,6 +63,7 @@ export function recipeAuthoringGuide(): string {
         RECIPE_SHAPE.trimEnd(),
         `Rules:\n${RECIPE_RULES.trimEnd()}`,
         SANDBOX,
+        PLANNER_NOTES,
         BUILD_SANDBOX_HEAD + NODE_RULES + MONOREPO_RULES,
         `${authoredFilesRules('the files you put under .kodus/ (the CLI sends them with the recipe)').trimEnd()}`,
         BUILD_SPEED_RULES,

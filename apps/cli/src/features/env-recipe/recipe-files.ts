@@ -7,6 +7,9 @@ export const RECIPE_CANDIDATES = [
     '.kodus/workspace.yaml',
 ] as const;
 
+/** The planner's notes (docs/runtime/environment-setup.md): read from the repository at the base commit, never a build file of the recipe. */
+export const RUNTIME_NOTES_FILE = 'runtime-notes.md';
+
 export const MAX_BUILD_FILES = 4;
 export const MAX_FILE_BYTES = 16 * 1024;
 export const MAX_TOTAL_BYTES = 48 * 1024;
@@ -90,7 +93,7 @@ export async function collectRecipe(
     const files: RecipeFile[] = [];
     let total = 0;
     for (const name of entries) {
-        if (recipeNames.has(name)) {
+        if (recipeNames.has(name) || name === RUNTIME_NOTES_FILE) {
             continue;
         }
         const abs = path.join(kodusDir, name);
