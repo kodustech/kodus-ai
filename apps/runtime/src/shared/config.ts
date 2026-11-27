@@ -546,8 +546,23 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
     };
 }
 
+/**
+ * When a ready environment template is rebuilt although its build inputs did not change (docs/runtime/host-providers.md §8.2.2),
+ * so the drift between the template's main commit and main stays bounded. 0 turns a bound off.
+ */
+export interface TemplateFreshnessPolicy {
+    /** Rebuild a ready template older than this many days (RUNTIME_FLEET_TEMPLATE_MAX_AGE_DAYS). */
+    maxAgeDays: number;
+    /** Rebuild a ready template this many main commits behind (RUNTIME_FLEET_TEMPLATE_MAX_MAIN_COMMITS). */
+    maxMainCommits: number;
+}
+
+/** 14 days, and 100 main commits: past either, the side's build over the template's cache is mostly new code. */
+export const DEFAULT_TEMPLATE_FRESHNESS: TemplateFreshnessPolicy = { maxAgeDays: 14, maxMainCommits: 100 };
+
 /** runtime-fleet (docs/runtime/host-providers.md §4.1): the only process that holds a provider credential. */
 export interface FleetConfig extends RuntimeConfig {
+    templateFreshness: TemplateFreshnessPolicy;
     /** The DBOS application version of the host workflows (RUNTIME_RELEASE_VERSION, as the worker's). */
     releaseVersion: string;
     executorId?: string;
@@ -603,6 +618,10 @@ export function loadFleetConfig(env: Env = process.env): FleetConfig {
         hubPublicUrl,
         hubCa: base.tls?.ca ?? '',
         reconcileIntervalMs: boundedInt(env, 'RUNTIME_FLEET_RECONCILE_MS', 15_000, 1_000, 300_000),
+        templateFreshness: {
+            maxAgeDays: boundedInt(env, 'RUNTIME_FLEET_TEMPLATE_MAX_AGE_DAYS', DEFAULT_TEMPLATE_FRESHNESS.maxAgeDays, 0, 3_650),
+            maxMainCommits: boundedInt(env, 'RUNTIME_FLEET_TEMPLATE_MAX_MAIN_COMMITS', DEFAULT_TEMPLATE_FRESHNESS.maxMainCommits, 0, 100_000),
+        },
         secretSealKey,
         ...(boatKey ? { boat: { apiKey: boatKey, apiUrl: env.RUNTIME_BOAT_API_URL || 'https://boat.dev/api/v1' } } : {}),
         fakeProvider,

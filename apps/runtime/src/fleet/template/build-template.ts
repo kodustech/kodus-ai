@@ -27,7 +27,7 @@ export interface SetupHostPort {
     /** Starts a setup host from the cell base, enrolled with a token bound to the template. */
     boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; fingerprint: string; base: string; from?: string }): Promise<{ providerId: string; source: TemplateSource }>;
     /** Waits for the environment's setup on that host; what it baked, and on which ref. */
-    waitForBake(req: { hostId: string; organizationId: string; environmentId: string }): Promise<{ ok: true; fingerprint: string; ref: 'default_branch' } | { ok: false; reason: string }>;
+    waitForBake(req: { hostId: string; organizationId: string; environmentId: string }): Promise<{ ok: true; fingerprint: string; ref: 'default_branch'; sha?: string } | { ok: false; reason: string }>;
     /** Stops the cell and removes its identity, the token file and /tmp, so the saved disk holds none. */
     seal(hostId: string): Promise<void>;
     destroy(hostId: string): Promise<void>;
@@ -49,8 +49,10 @@ export interface BuildTemplateRequest {
     environmentId: string;
     poolId: string;
     pool: HostPool;
-    /** The environment's build fingerprint the template must hold. */
+    /** The template's row fingerprint: the key of the build inputs, or, for a freshness rebuild of an unchanged key, a value of its own. */
     fingerprint: string;
+    /** The key the template's bake must report (host-providers.md §8.2.2); the fingerprint when absent. */
+    inputKey?: string;
 }
 
 /** `source`: what the setup host was created from; absent when no host was made (reused, refused, or the boot itself threw). */
@@ -89,7 +91,7 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     // One host per attempt: the hub enrolls a host id once, so a retry of the same template needs its own.
     const hostId = `tpl-${randomBytes(12).toString('hex')}`;
     // The row names the setup host before it exists: the orphan pass spares it while the template builds.
-    if (!(await d.store.begin({ ...key, name, cellBase: d.cellBase, setupHostId: hostId }))) return { ok: false, reason: 'already_building' };
+    if (!(await d.store.begin({ ...key, name, cellBase: d.cellBase, setupHostId: hostId, inputKey: req.inputKey ?? req.fingerprint }))) return { ok: false, reason: 'already_building' };
     let source: TemplateSource | undefined;
     const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
         await d.store.fail(key, `${cause ? `${reason}:${cause}` : reason}${source === 'template' ? TEMPLATE_SOURCED_FAILURE : ''}`);
@@ -117,7 +119,7 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
         const bake = await d.setupHosts.waitForBake({ hostId, organizationId: req.organizationId, environmentId: req.environmentId });
         if (bake.ok === false) return await fail('bake_failed');
         if (bake.ref !== 'default_branch') return await fail('not_default_branch');
-        if (bake.fingerprint !== req.fingerprint) return await fail('fingerprint_mismatch');
+        if (bake.fingerprint !== (req.inputKey ?? req.fingerprint)) return await fail('fingerprint_mismatch');
         await d.setupHosts.seal(hostId);
         let image = await images.save({ providerId, name });
         for (let i = 0; image.state === 'saving' && i < d.poll.attempts; i++) {
@@ -125,7 +127,7 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
             image = (await images.get(name)) ?? { name, state: 'failed' };
         }
         if (image.state !== 'ready') return await fail('save_failed');
-        retired = (await d.store.promote(key)).filter((older) => older !== name);
+        retired = (await d.store.promote(key, bake.sha)).filter((older) => older !== name);
         return { ok: true, name, reused: false, ...(source ? { source } : {}) };
     }
 }

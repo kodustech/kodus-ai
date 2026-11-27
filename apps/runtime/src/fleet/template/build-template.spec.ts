@@ -25,7 +25,7 @@ class FakeSetupHosts implements SetupHostPort {
     readonly events: string[] = [];
     /** What each setup host was created from, in order. */
     readonly from: string[] = [];
-    bake: { ok: true; fingerprint: string; ref: 'default_branch' } | { ok: false; reason: string } = { ok: true, fingerprint: FP, ref: 'default_branch' };
+    bake: { ok: true; fingerprint: string; ref: 'default_branch'; sha?: string } | { ok: false; reason: string } = { ok: true, fingerprint: FP, ref: 'default_branch' };
     constructor(private readonly provider: FakeHostProvider) {}
     async boot(req: { hostId: string; base: string; from?: string }) {
         this.booted.push(req.hostId);
@@ -306,3 +306,42 @@ describe('a template build starts from the environment\'s previous ready templat
         expect(w.hosts.from).toEqual([oldName, BASE, templateNameOf('org-kodus', 'env-shop', FP, BASE)]);
     });
 });
+
+// docs/runtime/host-providers.md §8.2.2: a freshness rebuild of an unchanged key.
+describe('the environment template step, rebuilding an unchanged key for freshness', () => {
+    it('builds beside the ready template: it keeps serving while the rebuild runs, then the rebuild replaces it and the older snapshot is deleted', async () => {
+        const w = world();
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch', sha: '1'.repeat(40) };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        const first = templateNameOf('org-kodus', 'env-shop', FP, BASE);
+        const refreshFp = 'f'.repeat(64);
+        const second = templateNameOf('org-kodus', 'env-shop', refreshFp, BASE);
+        let servedDuring: string | null = null;
+        const waitForBake = w.hosts.waitForBake.bind(w.hosts);
+        w.hosts.waitForBake = async () => {
+            servedDuring = await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE);
+            return { ok: true, fingerprint: FP, ref: 'default_branch', sha: '2'.repeat(40) } as Awaited<ReturnType<typeof waitForBake>>;
+        };
+        const r = await buildEnvironmentTemplate({ ...w.req, fingerprint: refreshFp, inputKey: FP }, w.deps);
+        expect(r).toMatchObject({ ok: true, name: second, reused: false });
+        expect(servedDuring).toBe(first);
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(second);
+        expect(w.provider.savedImages.get(first)).toBeUndefined();
+        // The rebuild starts from the ready template, so its cache and images are on the disk.
+        expect(w.hosts.from.at(-1)).toBe(first);
+    });
+    it("checks the bake against the key, not the rebuild's own fingerprint", async () => {
+        const w = world();
+        w.hosts.bake = { ok: true, fingerprint: 'b'.repeat(64), ref: 'default_branch' };
+        const r = await buildEnvironmentTemplate({ ...w.req, fingerprint: 'f'.repeat(64), inputKey: FP }, w.deps);
+        expect(r).toMatchObject({ ok: false, reason: 'fingerprint_mismatch' });
+    });
+    it('records the main commit the template setup booted when the template turns ready', async () => {
+        const w = world();
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch', sha: '3'.repeat(40) };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.store.rows[0].mainSha).toBe('3'.repeat(40));
+        expect(w.store.rows[0].inputKey).toBe(FP);
+    });
+});
+

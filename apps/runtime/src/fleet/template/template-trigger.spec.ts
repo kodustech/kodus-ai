@@ -168,3 +168,26 @@ describe('when an environment template is built', () => {
         expect(calls).toEqual(['boot', 'template:org-1/env-1|template:org-1/env-1:tpl-1']);
     });
 });
+
+describe('a freshness rebuild (host-providers.md §8.2.2)', () => {
+    it('builds the unchanged key under a fingerprint of its own and tells the build which key its bake must report', async () => {
+        const w = world();
+        await w.store.begin({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n', cellBase: '' });
+        await w.store.promote({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP });
+        await w.trigger.onSetupFinished(record(), { refresh: 'max_age' });
+        expect(w.builds).toHaveLength(1);
+        expect(w.builds[0].inputKey).toBe(FP);
+        expect(w.builds[0].fingerprint).toMatch(/^[0-9a-f]{64}$/);
+        expect(w.builds[0].fingerprint).not.toBe(FP);
+        w.release();
+    });
+    it('builds a new key under the key itself, with no separate input key', async () => {
+        const w = world();
+        await w.trigger.onSetupFinished(record());
+        expect(w.builds).toHaveLength(1);
+        expect(w.builds[0].fingerprint).toBe(FP);
+        expect(w.builds[0].inputKey).toBeUndefined();
+        w.release();
+    });
+});
+

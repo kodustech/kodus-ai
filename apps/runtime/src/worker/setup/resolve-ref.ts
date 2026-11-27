@@ -52,6 +52,7 @@ export async function resolveRef(setup: SetupScope): Promise<string | undefined>
     }
     const sha = cmd.ref.sha;
     rec.refSource = 'default_branch';
+    if (cmd.buildInputsDigest) rec.buildInputsDigest = cmd.buildInputsDigest;
     if (cmd.ref.branch) rec.branch = cmd.ref.branch;
     // Every other repository of the environment at its own default-branch head (the product read each one).
     const others = (cmd.workspace ?? []).filter((r) => r.role !== 'primary').map((r) => `; ${r.alias} ${r.branch} ${r.sha.slice(0, 12)}`);

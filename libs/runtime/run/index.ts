@@ -15,3 +15,4 @@ export * from './setup-repo-tokens';
 export * from './pr-title';
 export * from './suite-publish';
 export * from './suite-verdict';
+export * from './build-inputs';

@@ -346,6 +346,13 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
         .refine((r) => !r.inference || r.content === null, { message: 'an inference gap goes with no recipe text' })
         .optional(),
     /**
+     * The digest of the files that change the build at `ref.sha` (lockfiles, package manifests, Dockerfiles, the recipe's
+     * compose files; libs/runtime/run/build-inputs.ts), read by the product. The template's key is built from it and the
+     * recipe's digest, so a main push that changes only source keeps the template. Absent: the product could not tell, and
+     * the template keys on the commit.
+     */
+    buildInputsDigest: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+    /**
      * `template:<org>/<env>`: this setup builds the environment's template (docs/runtime/host-providers.md §8.2) and
      * is placed only on the cell bound to that key. Absent: an ordinary setup.
      */

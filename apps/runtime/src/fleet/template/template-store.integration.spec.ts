@@ -198,4 +198,84 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         await store.fail(at, 'bake_failed');
         expect(await store.holds({ ...at, cellBase: 'v29' }, recent)).toBe(true);
     });
+
+    // docs/runtime/host-providers.md §8.2.2.
+    it('records the main commit a template holds when it turns ready, and reads its age and how far behind main it is', async () => {
+        const store = new PgTemplateStore(pool);
+        const k = { organizationId: 'org-f', environmentId: 'env-f', poolId: 'p', cellBase: '', inputKey: '1'.repeat(64) };
+        const row = { organizationId: 'org-f', environmentId: 'env-f', poolId: 'p', fingerprint: k.inputKey, name: templateNameOf('org-f', 'env-f', k.inputKey), cellBase: '' };
+        await store.begin(row);
+        expect(await store.readyOfKey(k)).toBeNull();
+        await store.promote(row, 'a'.repeat(40));
+        expect(await store.readyOfKey(k)).toMatchObject({ mainSha: 'a'.repeat(40), commitsBehind: 0 });
+        expect((await store.readyOfKey(k))!.ageMs).toBeGreaterThanOrEqual(0);
+        expect((await store.find('org-f', 'env-f', 'p', k.inputKey))?.inputKey).toBe(k.inputKey);
+    });
+
+    it('counts each distinct main commit once, and not the commit the template holds', async () => {
+        const store = new PgTemplateStore(pool);
+        const k = { organizationId: 'org-g', environmentId: 'env-g', poolId: 'p', cellBase: '', inputKey: '2'.repeat(64) };
+        const row = { organizationId: 'org-g', environmentId: 'env-g', poolId: 'p', fingerprint: k.inputKey, name: templateNameOf('org-g', 'env-g', k.inputKey), cellBase: '' };
+        await store.begin(row);
+        await store.promote(row, 'a'.repeat(40));
+        await store.noteMain(k, 'a'.repeat(40));
+        await store.noteMain(k, 'b'.repeat(40));
+        await store.noteMain(k, 'b'.repeat(40));
+        await store.noteMain(k, 'c'.repeat(40));
+        expect((await store.readyOfKey(k))?.commitsBehind).toBe(2);
+    });
+
+    it('a freshness rebuild of an unchanged key is its own row: the ready one serves until it is promoted, and the key is held throughout', async () => {
+        const store = new PgTemplateStore(pool);
+        const resolver = new StoreTemplateResolver(store);
+        const inputKey = '3'.repeat(64);
+        const k = { organizationId: 'org-h', environmentId: 'env-h', poolId: 'p', cellBase: '', inputKey };
+        const first = { organizationId: 'org-h', environmentId: 'env-h', poolId: 'p', fingerprint: inputKey, name: templateNameOf('org-h', 'env-h', inputKey), cellBase: '' };
+        const refreshFp = '4'.repeat(64);
+        const second = { ...first, fingerprint: refreshFp, name: templateNameOf('org-h', 'env-h', refreshFp), inputKey };
+        await store.begin(first);
+        await store.promote(first, 'a'.repeat(40));
+        await store.noteMain(k, 'b'.repeat(40));
+        expect(await store.begin(second)).toBe(true);
+        expect(await resolver.resolve({ organizationId: 'org-h', environmentId: 'env-h', poolId: 'p' })).toBe(first.name);
+        const long = new Date(Date.now() - 30 * 60_000);
+        expect(await store.holds({ ...first, fingerprint: inputKey }, long)).toBe(true);
+        // A rebuild under way is in flight; the ready template alone is not.
+        expect(await store.refreshInFlight(k, long)).toBe(true);
+        expect(await store.promote(second, 'b'.repeat(40))).toEqual([first.name]);
+        expect(await resolver.resolve({ organizationId: 'org-h', environmentId: 'env-h', poolId: 'p' })).toBe(second.name);
+        // Ready now, counted from the new commit; the key is still held and nothing is in flight.
+        expect(await store.readyOfKey(k)).toMatchObject({ mainSha: 'b'.repeat(40), commitsBehind: 0 });
+        expect(await store.holds({ ...first, fingerprint: inputKey }, long)).toBe(true);
+        expect(await store.refreshInFlight(k, long)).toBe(false);
+    });
+
+    it('a failed freshness rebuild backs off, a watchdog-ended one does not, and the ready template keeps serving', async () => {
+        const store = new PgTemplateStore(pool);
+        const inputKey = '5'.repeat(64);
+        const k = { organizationId: 'org-i', environmentId: 'env-i', poolId: 'p', cellBase: '', inputKey };
+        const first = { organizationId: 'org-i', environmentId: 'env-i', poolId: 'p', fingerprint: inputKey, name: templateNameOf('org-i', 'env-i', inputKey), cellBase: '' };
+        const refreshed = { ...first, fingerprint: '6'.repeat(64), name: templateNameOf('org-i', 'env-i', '6'.repeat(64)), inputKey };
+        await store.begin(first);
+        await store.promote(first, 'a'.repeat(40));
+        await store.begin({ ...refreshed, setupHostId: 'tpl-1' });
+        await store.fail(refreshed, 'save_failed');
+        expect(await store.refreshInFlight(k, new Date(Date.now() - 30 * 60_000))).toBe(true);
+        expect(await store.refreshInFlight(k, new Date(Date.now() + 60_000))).toBe(false);
+        await store.begin({ ...refreshed, setupHostId: 'tpl-2' });
+        await store.failStale(refreshed, 'tpl-2', 'setup_host_gone');
+        expect(await store.refreshInFlight(k, new Date(Date.now() - 30 * 60_000))).toBe(false);
+        expect(await store.readyName('org-i', 'env-i', 'p', '')).toBe(first.name);
+    });
+
+    it("a row from before migration 64 has no input key: it is its fingerprint's key, with no main commit", async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = '7'.repeat(64);
+        await pool.query(
+            `INSERT INTO runtime.runtime_env_templates (org_id, environment_id, pool_id, fingerprint, snapshot_name, state, ready_at, cell_base) VALUES ('org-j', 'env-j', 'p', $1, 'old-name', 'ready', now(), '')`,
+            [fp],
+        );
+        expect(await store.readyOfKey({ organizationId: 'org-j', environmentId: 'env-j', poolId: 'p', cellBase: '', inputKey: fp })).toMatchObject({ mainSha: null, commitsBehind: 0 });
+        expect(await store.holds({ organizationId: 'org-j', environmentId: 'env-j', poolId: 'p', fingerprint: fp, cellBase: '' }, new Date())).toBe(true);
+    });
 });

@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 import { cellBaseOf, type HostPool } from '@libs/runtime/fleet/pool';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
@@ -5,6 +7,7 @@ import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 import type { TemplateResolver } from '../per-run-host';
 import { bakeFingerprintOf, templateSetupCommandKey } from './bake-probe';
 import type { BuildTemplateRequest, BuildTemplateResult, SetupHostPort } from './build-template';
+import { refreshFingerprintOf } from './template-freshness';
 import type { TemplateStore } from './template-store';
 
 // When an environment's template gets built (docs/runtime/host-providers.md §8.2): (a) a perRun boat pool has
@@ -65,11 +68,14 @@ export class TemplateBuildTrigger {
         }
     }
 
-    /** An environment's setup finished: when it is active on the default branch with a fingerprint no template holds yet, build it on every boat pool. */
-    async onSetupFinished(rec: EnvironmentSetupRecord): Promise<void> {
+    /**
+     * An environment's setup finished: when it is active on the default branch with a key no template holds yet, build it on every
+     * boat pool. `refresh` (a freshness bound's reason): build the key again beside its ready template, which serves until then.
+     */
+    async onSetupFinished(rec: EnvironmentSetupRecord, opts?: { refresh?: string }): Promise<void> {
         try {
             if (rec.state !== 'active' || rec.refSource !== 'default_branch') return;
-            for (const p of await this.d.boatPoolsOf(rec.organizationId)) await this.start(rec.organizationId, rec.environmentId, p.poolId, p.pool);
+            for (const p of await this.d.boatPoolsOf(rec.organizationId)) await this.start(rec.organizationId, rec.environmentId, p.poolId, p.pool, opts?.refresh);
         } catch (e) {
             this.d.log?.('template.trigger_failed', { environmentId: rec.environmentId, error: (e as Error).message });
         }
@@ -85,28 +91,30 @@ export class TemplateBuildTrigger {
         }
     }
 
-    private async start(organizationId: string, environmentId: string, poolId: string, pool: HostPool): Promise<void> {
+    private async start(organizationId: string, environmentId: string, poolId: string, pool: HostPool, refresh?: string): Promise<void> {
         const key = `${organizationId}/${environmentId}`;
         if (this.inflight.has(key)) return;
         const rec = await this.d.environmentSetups.get(environmentId);
         // Only what the environment's active default-branch setup baked can be templated.
         if (!rec || rec.organizationId !== organizationId || rec.state !== 'active' || rec.refSource !== 'default_branch') return;
-        const fingerprint = bakeFingerprintOf(rec);
-        if (!fingerprint) {
+        const inputKey = bakeFingerprintOf(rec);
+        if (!inputKey) {
             // Said, not silent: an environment with no bake to template builds every Run host from the cell base.
             this.d.log?.('template.skipped', { environmentId, poolId, reason: 'no_bake_fingerprint' });
             return;
         }
+        // A freshness rebuild of an unchanged key is a row of its own, so the ready template keeps serving while it builds.
+        const fingerprint = refresh ? refreshFingerprintOf(inputKey, randomBytes(8).toString('hex')) : inputKey;
         const found = await this.d.store.find(organizationId, environmentId, poolId, fingerprint);
         // Ready on the pool's base now: nothing to build. Ready on another base holds the old cell, and is built again.
         if (found?.state === 'ready' && found.cellBase === (cellBaseOf(pool.hostClass) ?? '')) return;
         this.inflight.add(key);
         void this.d
-            .build({ organizationId, environmentId, poolId, pool, fingerprint })
+            .build({ organizationId, environmentId, poolId, pool, fingerprint, ...(refresh ? { inputKey } : {}) })
             .then(async (r) => {
-                this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.source ? { source: r.source } : {}), ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) });
+                this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(refresh ? { refresh } : {}), ...(r.source ? { source: r.source } : {}), ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) });
                 // A template that turned ready now (not one that was already there) holds a main commit nobody ran the suite on.
-                if (r.ok && !r.reused && rec.sha && wantsBaseline(rec)) await this.requestBaseline({ organizationId, environmentId, repositoryId: rec.repositoryId, mainSha: rec.sha, fingerprint });
+                if (r.ok && !r.reused && rec.sha && wantsBaseline(rec)) await this.requestBaseline({ organizationId, environmentId, repositoryId: rec.repositoryId, mainSha: rec.sha, fingerprint: inputKey });
             })
             .catch((e) => this.d.log?.('template.build_error', { environmentId, poolId, error: (e as Error).message }))
             .finally(() => this.inflight.delete(key));

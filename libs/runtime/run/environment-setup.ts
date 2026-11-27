@@ -144,6 +144,12 @@ export interface EnvironmentSetupRecord {
      * which commits the environment's bake holds.
      */
     bakeRefsDigest?: string;
+    /**
+     * The digest of the build inputs at `sha` (lockfiles, manifests, Dockerfiles, the recipe's compose files), as the
+     * product read it for a setup of one repository. With the recipe's digest it is the environment template's key
+     * (build-inputs.ts `templateKeyOf`); absent, the template keys on the commit.
+     */
+    buildInputsDigest?: string;
     /** Where the commit came from: the product's default-branch head, or the worker's explicit dev override. */
     refSource?: 'default_branch' | 'dev_override';
     /**

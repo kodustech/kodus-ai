@@ -44,3 +44,19 @@ describe('a setup of a committed recipe that carries build files', () => {
         expect(rec.recipe?.origin).toBeUndefined();
     });
 });
+
+// docs/runtime/host-providers.md §8.2.2: the template's key is made from the build inputs digest the product read, so the setup
+// record must keep it for the fleet, and only for a default-branch setup.
+describe('a setup request that carries the build inputs digest', () => {
+    const INPUTS = 'b'.repeat(64);
+    it("records it on the setup, next to the recipe's digest, for the fleet to key the template on", async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const rec = await testSetupService({ envForSetup: () => env }, store).run({ ...cmd(), buildInputsDigest: INPUTS });
+        expect(rec.buildInputsDigest).toBe(INPUTS);
+    });
+    it('records none when the product sent none', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const rec = await testSetupService({ envForSetup: () => env }, store).run(cmd());
+        expect(rec.buildInputsDigest).toBeUndefined();
+    });
+});

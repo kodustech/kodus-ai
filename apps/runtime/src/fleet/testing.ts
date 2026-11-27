@@ -198,7 +198,9 @@ export type FleetDepsOverrides = Partial<Omit<PerRunHostDeps, 'step' | 'sleep' |
 
 /** runtime_env_templates in memory, as PgTemplateStore. */
 export class InMemoryTemplateStore implements TemplateStore {
-    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string; seq?: number; touchedAt?: number }> = [];
+    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string; seq?: number; touchedAt?: number; mainSha?: string; mainSeen?: string; behind?: number }> = [];
+    /** Milliseconds added to every ready template's age (a test's clock). */
+    ageMs = 0;
     private at = 0;
     private readonly readyAt = new Map<TemplateRow, number>();
 
@@ -216,9 +218,9 @@ export class InMemoryTemplateStore implements TemplateStore {
     }
     async begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        if (!r) this.rows.push({ ...t, state: 'building', touchedAt: Date.now() });
+        if (!r) this.rows.push({ ...t, inputKey: t.inputKey ?? t.fingerprint, state: 'building', touchedAt: Date.now() });
         else if (r.state === 'failed' || r.state === 'replaced' || (r.state === 'ready' && r.cellBase !== t.cellBase))
-            Object.assign(r, { state: 'building', touchedAt: Date.now(), setupHostId: t.setupHostId, name: t.name, cellBase: t.cellBase, retired: r.state === 'ready' && r.name !== t.name ? r.name : r.retired });
+            Object.assign(r, { state: 'building', touchedAt: Date.now(), setupHostId: t.setupHostId, name: t.name, cellBase: t.cellBase, inputKey: t.inputKey ?? t.fingerprint, retired: r.state === 'ready' && r.name !== t.name ? r.name : r.retired });
         else return false;
         return true;
     }
@@ -243,13 +245,31 @@ export class InMemoryTemplateStore implements TemplateStore {
         rows.sort((a, b) => b.seq! - a.seq!);
         return rows[0]?.state === 'failed' ? (rows[0].failure ?? '') : null;
     }
-    async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint' | 'cellBase'>, failedAfter: Date) {
-        const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        return !!r && ((r.state === 'ready' && r.cellBase === t.cellBase) || (r.state === 'building' && r.cellBase === t.cellBase) || (r.state === 'failed' && !r.failure?.startsWith(WATCHDOG_FAILURE_PREFIX) && (r.failedAt ?? 0) > failedAfter.getTime()));
+    private ofKey(o: string, e: string, p: string, key: string) {
+        return this.rows.filter((t) => t.organizationId === o && t.environmentId === e && t.poolId === p && (t.inputKey ?? t.fingerprint) === key);
     }
-    async promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>) {
+    async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint' | 'cellBase'>, failedAfter: Date) {
+        return this.ofKey(t.organizationId, t.environmentId, t.poolId, t.fingerprint).some(
+            (r) => (r.state === 'ready' && r.cellBase === t.cellBase) || (r.state === 'building' && r.cellBase === t.cellBase) || (r.state === 'failed' && !r.failure?.startsWith(WATCHDOG_FAILURE_PREFIX) && (r.failedAt ?? 0) > failedAfter.getTime()),
+        );
+    }
+    async readyOfKey(t: { organizationId: string; environmentId: string; poolId: string; cellBase: string; inputKey: string }) {
+        const r = this.ofKey(t.organizationId, t.environmentId, t.poolId, t.inputKey).filter((x) => x.state === 'ready' && x.cellBase === t.cellBase).sort((a, b) => (this.readyAt.get(b) ?? 0) - (this.readyAt.get(a) ?? 0))[0];
+        return r ? { mainSha: r.mainSha ?? null, ageMs: this.ageMs, commitsBehind: r.behind ?? 0 } : null;
+    }
+    async noteMain(t: { organizationId: string; environmentId: string; poolId: string; cellBase: string; inputKey: string }, sha: string) {
+        for (const r of this.ofKey(t.organizationId, t.environmentId, t.poolId, t.inputKey))
+            if (r.state === 'ready' && r.cellBase === t.cellBase && r.mainSha !== sha && r.mainSeen !== sha) Object.assign(r, { mainSeen: sha, behind: (r.behind ?? 0) + 1 });
+    }
+    async refreshInFlight(t: { organizationId: string; environmentId: string; poolId: string; cellBase: string; inputKey: string }, failedAfter: Date) {
+        return this.ofKey(t.organizationId, t.environmentId, t.poolId, t.inputKey).some(
+            (r) => (r.state === 'building' && r.cellBase === t.cellBase) || (r.state === 'failed' && !r.failure?.startsWith(WATCHDOG_FAILURE_PREFIX) && (r.failedAt ?? 0) > failedAfter.getTime()),
+        );
+    }
+    async promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, mainSha?: string) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint)!;
         r.state = 'ready';
+        Object.assign(r, { mainSha, mainSeen: mainSha, behind: 0 });
         const retired = r.retired;
         delete r.retired;
         this.readyAt.set(r, ++this.at);

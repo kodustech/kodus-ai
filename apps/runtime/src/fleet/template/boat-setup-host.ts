@@ -13,7 +13,7 @@ import type { SetupHostPort } from './build-template';
 // on the host). No exec is used here; whatever implements HostSealer decides how the seal reaches the host.
 
 /** `cellId`: the cell the setup ran on (its record); a bake counts only on the template host's own cell. */
-export type BakeState = { state: 'running' } | { state: 'done'; fingerprint: string; ref: 'default_branch' | 'other'; cellId?: string } | { state: 'failed'; reason: string };
+export type BakeState = { state: 'running' } | { state: 'done'; fingerprint: string; ref: 'default_branch' | 'other'; sha?: string; cellId?: string } | { state: 'failed'; reason: string };
 
 /** How the environment's setup on its template host ended, read from the setup records (never from the host). */
 export interface BakeProbe {
@@ -85,7 +85,7 @@ export class BoatSetupHost implements SetupHostPort {
                 // A setup that ran on another cell baked nothing here: saving this host would keep an empty template.
                 const own = (await this.deps.hub.connection(req.hostId)).cellId;
                 if (!s.cellId || !own || s.cellId !== own) return { ok: false as const, reason: 'bake_elsewhere' };
-                return s.ref === 'default_branch' ? { ok: true as const, fingerprint: s.fingerprint, ref: 'default_branch' as const } : { ok: false as const, reason: 'not_default_branch' };
+                return s.ref === 'default_branch' ? { ok: true as const, fingerprint: s.fingerprint, ref: 'default_branch' as const, ...(s.sha ? { sha: s.sha } : {}) } : { ok: false as const, reason: 'not_default_branch' };
             }
             if (s.state === 'failed') return { ok: false as const, reason: s.reason };
             await this.deps.poll.sleep(this.deps.poll.intervalMs ?? 10_000);

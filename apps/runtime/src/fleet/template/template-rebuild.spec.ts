@@ -2,26 +2,30 @@ import { parseHostPool } from '@libs/runtime/fleet/pool';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
 import { InMemoryTemplateStore } from '../testing';
+import type { TemplateFreshnessPolicy } from '../../shared/config';
 import { TemplateRebuildPass } from './template-rebuild';
+import { templateKeyOf } from '@libs/runtime/run/build-inputs';
 
 const FP = 'c'.repeat(64);
 const pool = parseHostPool({ kind: 'HostPool', name: 'boat-perrun', scope: 'kodus', provider: 'boat', lifecycle: 'perRun', hostClass: { kind: 'HostClass', name: 'c', provider: 'boat', boat: { type: 'large' } } });
 const record = (over: Partial<EnvironmentSetupRecord> = {}) => ({ environmentId: 'env-1', organizationId: 'org-1', repositoryId: 'r', key: 'k', state: 'active', steps: [], blockers: [], refSource: 'default_branch', bakeRefsDigest: FP, ...over }) as EnvironmentSetupRecord;
 const tpl = { organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n', cellBase: '' };
 
-function world(recs: EnvironmentSetupRecord[], onPool = pool, liveSetupHosts?: () => Promise<Set<string> | null>) {
+function world(recs: EnvironmentSetupRecord[], onPool = pool, liveSetupHosts?: () => Promise<Set<string> | null>, freshness?: TemplateFreshnessPolicy) {
     const templates = new InMemoryTemplateStore();
     const finished: EnvironmentSetupRecord[] = [];
+    const opts: Array<{ refresh?: string } | undefined> = [];
     const locks = { withLock: async (_k: string, fn: () => Promise<any>) => fn(), tryWithLock: async (_k: string, fn: () => Promise<any>) => fn() };
     const pass = new TemplateRebuildPass(locks, {
         setups: { activeSince: async () => recs },
         templates,
         boatPools: async () => [{ poolId: 'p', pool: onPool }],
         liveSetupHosts,
-        trigger: { onSetupFinished: async (r) => void finished.push(r) },
+        freshness,
+        trigger: { onSetupFinished: async (r, o) => void (finished.push(r), opts.push(o)) },
         now: () => Date.now(),
     });
-    return { templates, finished, pass };
+    return { templates, finished, opts, pass };
 }
 
 describe('the template rebuild pass', () => {
@@ -136,5 +140,101 @@ describe('the template rebuild pass', () => {
             await w.pass.tick();
             expect(w.templates.rows[0].state).toBe('building');
         });
+    });
+});
+
+// docs/runtime/host-providers.md §8.2.2: the template's key is the recipe and the build inputs, so main moving is not a rebuild.
+describe('the template rebuild pass, keyed by build inputs', () => {
+    const INPUTS_A = 'a'.repeat(64);
+    const INPUTS_B = 'b'.repeat(64);
+    const RECIPE = `sha256:${'d'.repeat(64)}`;
+    const main = (sha: string, inputs = INPUTS_A, recipe = RECIPE) =>
+        record({ bakeRefsDigest: undefined, imageId: 'latest', sha, buildInputsDigest: inputs, recipe: { path: '.kodus/workspace.yaml', sha, state: 'found', digest: recipe } });
+    const keyA = templateKeyOf(RECIPE, INPUTS_A)!;
+    const row = { ...tpl, fingerprint: keyA };
+    const policy = { maxAgeDays: 14, maxMainCommits: 3 };
+    const withReadyTemplate = async (recs: EnvironmentSetupRecord[], freshness = policy) => {
+        const w = world(recs, pool, undefined, freshness);
+        await w.templates.begin(row);
+        await w.templates.promote(row, 'a'.repeat(40));
+        return w;
+    };
+
+    it('keeps the template when a main push changed only app source: same recipe, same build inputs, another commit', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40))]);
+        await w.pass.tick();
+        expect(w.finished).toEqual([]);
+    });
+    it('builds a template when a main push changed a build input (the inputs digest differs)', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40), INPUTS_B)]);
+        await w.pass.tick();
+        expect(w.finished).toHaveLength(1);
+        expect(w.opts).toEqual([undefined]);
+    });
+    it('builds a template when the recipe changed with the same build inputs', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40), INPUTS_A, `sha256:${'e'.repeat(64)}`)]);
+        await w.pass.tick();
+        expect(w.finished).toHaveLength(1);
+    });
+    it('rebuilds a ready template older than the age bound although its key is unchanged, saying why', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40))]);
+        w.templates.ageMs = 14 * 86_400_000;
+        await w.pass.tick();
+        expect(w.opts).toEqual([{ refresh: 'max_age' }]);
+    });
+    it('does not rebuild a template one millisecond short of the age bound', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40))]);
+        w.templates.ageMs = 14 * 86_400_000 - 1;
+        await w.pass.tick();
+        expect(w.finished).toEqual([]);
+    });
+    it('counts each distinct main commit once and rebuilds when the template is the bound behind main', async () => {
+        const w = await withReadyTemplate([main('1'.repeat(40))]);
+        await w.pass.tick();
+        await w.pass.tick();
+        expect(w.templates.rows[0].behind).toBe(1);
+        for (const sha of ['2', '3']) {
+            w.finished.length = 0;
+            (w.pass as any).d.setups = { activeSince: async () => [main(sha.repeat(40))] };
+            await w.pass.tick();
+        }
+        expect(w.templates.rows[0].behind).toBe(3);
+        (w.pass as any).d.setups = { activeSince: async () => [main('3'.repeat(40))] };
+        await w.pass.tick();
+        expect(w.opts.at(-1)).toEqual({ refresh: 'max_main_commits' });
+    });
+    it('does not count the commit the template was built at as behind', async () => {
+        const w = await withReadyTemplate([main('a'.repeat(40))]);
+        await w.pass.tick();
+        expect(w.templates.rows[0].behind).toBe(0);
+    });
+    it('does not start a second freshness rebuild while one is building, nor right after one failed', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40))]);
+        w.templates.ageMs = 15 * 86_400_000;
+        await w.templates.begin({ ...row, fingerprint: 'f'.repeat(64), inputKey: keyA, name: 'refresh-1' });
+        await w.pass.tick();
+        expect(w.finished).toEqual([]);
+        await w.templates.fail({ ...row, fingerprint: 'f'.repeat(64) }, 'save_failed');
+        await w.pass.tick();
+        expect(w.finished).toEqual([]);
+        w.templates.rows.find((r) => r.fingerprint === 'f'.repeat(64))!.failedAt = Date.now() - 31 * 60_000;
+        await w.pass.tick();
+        expect(w.opts).toEqual([{ refresh: 'max_age' }]);
+    });
+    it('never rebuilds for freshness when both bounds are 0', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40))], { maxAgeDays: 0, maxMainCommits: 0 });
+        w.templates.ageMs = 3650 * 86_400_000;
+        w.templates.rows[0].behind = 100_000;
+        await w.pass.tick();
+        expect(w.finished).toEqual([]);
+    });
+    it('holds the key while a freshness rebuild of it has replaced the original ready row', async () => {
+        const w = await withReadyTemplate([main('b'.repeat(40))]);
+        const refreshed = { ...row, fingerprint: 'f'.repeat(64), inputKey: keyA, name: 'refresh-1' };
+        await w.templates.begin(refreshed);
+        await w.templates.promote(refreshed, 'b'.repeat(40));
+        await w.pass.tick();
+        expect(w.finished).toEqual([]);
+        expect(await w.templates.readyName('org-1', 'env-1', 'p', '')).toBe('refresh-1');
     });
 });

@@ -53,3 +53,37 @@ describe('reading how the template host\'s setup ended (setup record)', () => {
         expect(await probe(rec({ organizationId: 'org-2' })).read(req)).toEqual({ state: 'running' });
     });
 });
+
+// docs/runtime/host-providers.md §8.2.2: the key of a setup of one repository is its recipe and its build inputs, not its commit.
+describe('the template key of a setup of one repository', () => {
+    const recipe = (digest: string) => ({ path: '.kodus/workspace.yaml', sha: 'a'.repeat(40), state: 'found', digest }) as const;
+    const R = `sha256:${'d'.repeat(64)}`;
+    const I = 'e'.repeat(64);
+    const one = { bakeRefsDigest: undefined, imageId: 'latest', sha: 'a'.repeat(40), buildInputsDigest: I, recipe: recipe(R) };
+
+    it('is unchanged by a new commit when the recipe and the build inputs are the same', () => {
+        expect(bakeFingerprintOf({ ...one, sha: 'b'.repeat(40) })).toBe(bakeFingerprintOf(one));
+    });
+    it('changes when the build inputs change, and when the recipe changes', () => {
+        const k = bakeFingerprintOf(one);
+        expect(bakeFingerprintOf({ ...one, buildInputsDigest: 'f'.repeat(64) })).not.toBe(k);
+        expect(bakeFingerprintOf({ ...one, recipe: recipe(`sha256:${'9'.repeat(64)}`) })).not.toBe(k);
+    });
+    it('falls back to the commit and the recipe when the product sent no build inputs: any new commit changes the key', () => {
+        const noInputs = { ...one, buildInputsDigest: undefined };
+        expect(bakeFingerprintOf(noInputs)).toMatch(/^[0-9a-f]{64}$/);
+        expect(bakeFingerprintOf({ ...noInputs, sha: 'b'.repeat(40) })).not.toBe(bakeFingerprintOf(noInputs));
+        expect(bakeFingerprintOf(noInputs)).not.toBe(bakeFingerprintOf(one));
+    });
+    it('is none when the setup baked nothing, even with build inputs', () => {
+        expect(bakeFingerprintOf({ ...one, imageId: undefined })).toBeNull();
+    });
+    it("keeps a multi-repository setup's key as its refs digest, whatever the build inputs say", () => {
+        expect(bakeFingerprintOf({ ...one, bakeRefsDigest: `sha256:${FP}` })).toBe(FP);
+    });
+    it("reports the commit the template setup booted, so the template records the main commit it holds", async () => {
+        const r = rec({ bakeRefsDigest: undefined, imageId: 'latest', sha: 'a'.repeat(40), buildInputsDigest: I, recipe: recipe(R), cellId: 'c' });
+        expect(await probe(r).read(req)).toMatchObject({ state: 'done', sha: 'a'.repeat(40), fingerprint: bakeFingerprintOf(one) });
+    });
+});
+

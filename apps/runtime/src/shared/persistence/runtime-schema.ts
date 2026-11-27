@@ -1366,6 +1366,19 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         );
         CREATE INDEX IF NOT EXISTS runtime_pr_images_expiry_idx ON runtime.runtime_pr_images (expires_at);`,
     },
+    {
+        version: 64,
+        name: 'an environment template is keyed by its build inputs and records the main commit it holds',
+        // docs/runtime/host-providers.md section 8.2.2. input_key: the key the build inputs name (recipe and lockfiles, manifests,
+        // Dockerfiles); a row's fingerprint is the same value, except for a freshness rebuild of an unchanged key, which gets a
+        // fingerprint of its own so the older ready template keeps serving while it builds (null: the fingerprint is the key).
+        // main_sha: the main commit the template's setup booted. main_seen_sha and main_commits_behind: the newest main commit a
+        // default-branch setup showed the rebuild pass for this key, and how many distinct ones since main_sha (the freshness bound).
+        sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS input_key text;
+        ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS main_sha text;
+        ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS main_seen_sha text;
+        ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS main_commits_behind integer NOT NULL DEFAULT 0;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

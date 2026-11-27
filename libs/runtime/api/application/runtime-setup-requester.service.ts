@@ -41,13 +41,14 @@ import {
 import { RUN_TOKEN_DEFAULT_TTL_SECONDS, signSetupToken } from '../domain/run-token';
 import { RepositoryFullNameSchema } from '@libs/runtime/contracts/workspace';
 import { RuntimeEnvironmentMembers } from './environment-members.service';
+import { readBuildInputsDigest } from './build-inputs.reader';
 import { readCommittedBuildFiles } from './recipe-build-files.reader';
 import { inferRecipeAtCommit } from './recipe-inference.reader';
 import { sealForRuntime } from './secret-sealer';
 
 type Resolved = Pick<RuntimeEnvironmentSetupRequested,
     | 'ref' | 'repoToken' | 'llmToken' | 'recipe' | 'blocker' | 'repositoryFullName'
-    | 'machineSize' | 'workspace'
+    | 'machineSize' | 'workspace' | 'buildInputsDigest'
 >;
 
 const blocked = (kind: SetupRequestBlockerKind, message: string, extra: Resolved = {}): Resolved => ({
@@ -255,11 +256,14 @@ export class RuntimeSetupRequester {
         const sealedRepoToken = sealForRuntime(this.config, repoToken, sealFor);
         const workspace = await this.workspaceOf(env, { sha: head.sha, branch: head.branch, sealedRepoToken }, sealFor);
         if ('blocker' in workspace) return { ...base, ref, recipe, blocker: workspace.blocker };
+        // Only a setup of one repository: a multi-repository bake keys on every repository's commit (setupRefsDigest).
+        const buildInputsDigest = workspace.entries ? undefined : await readBuildInputsDigest(this.git, { ...orgTeam, ...repo, sha: head.sha }, recipe.content);
         return {
             ...base,
             ref,
             recipe,
             ...sized,
+            ...(buildInputsDigest ? { buildInputsDigest } : {}),
             repoToken: sealedRepoToken,
             ...this.llmTokenFor(env, sealFor),
             // Only an environment of several repositories carries it: a single-repository setup stays as it was.
