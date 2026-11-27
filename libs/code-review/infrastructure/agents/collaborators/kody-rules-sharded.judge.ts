@@ -370,13 +370,20 @@ export type RunJudge = (args: {
     ruleUnits: Array<Partial<IKodyRule>>;
     verifyRepositoryFacts: boolean;
     /**
-     * The head of `user` this shard shares with at least one other shard of
-     * the review (same rules, references and intent), for the runner to mark
-     * for the provider's prompt cache. Set on the group's first shard and on
-     * shards started after it returned; a shard sent while the first is still
-     * running could read nothing and would only pay the cache write again.
+     * Texts `user` starts with, for the runner to mark for the provider's
+     * prompt cache, shortest first: the rules and references (the same on
+     * every review with these rules), then the whole head (plus this PR's
+     * intent, shared by the shards of this review). Set on the group's first
+     * shard and on shards started after it answered; empty on a shard with no
+     * sibling, on a shard sent while its leader is still running and on the
+     * PR shard, which could read nothing and would only pay a write.
      */
-    cachePrefix?: string;
+    cachePrefixes?: string[];
+    /**
+     * Call once the model has answered (or failed), before any follow-up work
+     * on its findings: the shard's siblings can read its cache from then on.
+     */
+    onAnswered?: () => void;
 }) => Promise<RawShardViolation[]>;
 
 /**
@@ -386,6 +393,12 @@ export type RunJudge = (args: {
  * keep it modest.
  */
 export const SHARD_CONCURRENCY_DEFAULT = 4;
+
+/** A sibling that waits for its leader's answer reads the leader's prompt-cache
+ *  write; one sent earlier pays for its whole prompt. Replaying production
+ *  reviews, 5 s kept almost all the saving of an unbounded wait and left stage
+ *  p95 unchanged; an unbounded wait added up to 85 s to one review. */
+export const SHARD_LEADER_WAIT_MS_DEFAULT = 5_000;
 
 /** Terminal provider failures in a row, of one kind (see isTerminalCategory), before the rest are skipped. */
 export const TERMINAL_FAILURES_TO_STOP = 2;
@@ -469,6 +482,10 @@ export interface ShardedJudgeInput {
     /** max concurrent shard calls (BYOK models rate-limit — keep modest).
      *  Defaults to SHARD_CONCURRENCY_DEFAULT. */
     concurrency?: number;
+    /** How long a free worker waits for a running leader to answer before it
+     *  sends that leader's sibling unmarked. Defaults to
+     *  SHARD_LEADER_WAIT_MS_DEFAULT; 0 never waits. */
+    leaderWaitMs?: number;
     /** Errored shards degrade to zero findings; log WHY so a systemic
      *  failure (e.g. a provider rejecting the response schema) is visible
      *  in the worker logs instead of only as an `N errored` counter. */
@@ -569,8 +586,16 @@ export interface ShardPromptCacheStats {
     siblings: number;
     /** Siblings started after their group's first shard had returned. */
     siblingsAfterLeader: number;
-    /** Siblings started earlier, so a worker would not sit idle. */
+    /** Siblings started before their leader answered: a worker waited the
+     *  whole bound for it. */
     siblingsEarly: number;
+    /** Times a free worker waited for a running leader. */
+    idleWaits: number;
+    /** Time workers spent in those waits. */
+    idleWaitMs: number;
+    /** Leaders whose siblings started at the model's answer, before the
+     *  leader's own follow-up work (evidence checks) ended. */
+    leadersReleasedAtAnswer: number;
 }
 
 export interface ShardedJudgeResult {
@@ -975,7 +1000,7 @@ function fileShardUser(
     previousDecisions?: PrDecisionRecord[],
     ruleTitleByUuid?: ReadonlyMap<string, string>,
     referenceSection?: ReferenceSection,
-): { user: string; head: string } {
+): { user: string; head: string; prefixes: string[] } {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     // The PR's whole history (capped upstream at MAX_PR_DECISIONS), not only
     // this file's: a rule violation repeated after the code moved to another
@@ -987,14 +1012,17 @@ function fileShardUser(
     );
     // Everything before the file is the same for every shard with the same
     // rules: the prefix those shards can share in the provider's prompt cache.
-    const head = [
+    // The rules and references come first because they repeat across PRs;
+    // the intent after them is this PR's.
+    const rulesPart = [
         `<Rules>`,
         ruleBlock(rules, referenceSection?.idsByRule),
         `</Rules>`,
         ``,
         ...(referenceSection?.lines ?? []),
-        ...intentLines(prTitle, prBody),
     ].join('\n');
+    const intent = intentLines(prTitle, prBody);
+    const head = [rulesPart, ...intent].join('\n');
     const tail = [
         // The whole file BEFORE the diff: the reader needs the world before
         // the change to it.
@@ -1043,7 +1071,13 @@ function fileShardUser(
             : []),
         `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"language":"<lang>","existingCode":"<offending code>","improvedCode":"<fixed code or null>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<${TITLE_PROMPT_SPEC}>","claimKind":"<unused|missing|duplicate|none>","claimSymbol":"<symbol or null>","claimPath":"<path or null>",${verifyRepositoryFacts ? '"needsRepositoryEvidence":<true|false>,' : ''}"revisesSuggestionId":"<Id or null>"}]}`,
     ].join('\n');
-    return { head: `${head}\n`, user: `${head}\n${tail}` };
+    return {
+        head: `${head}\n`,
+        prefixes: intent.length
+            ? [`${rulesPart}\n`, `${head}\n`]
+            : [`${head}\n`],
+        user: `${head}\n${tail}`,
+    };
 }
 
 /**
@@ -1236,21 +1270,26 @@ const isPrLevel = (r: Partial<IKodyRule>) =>
  * is readable only once its request has been answered, so siblings sent in
  * parallel with their leader all write and none reads.
  *
- * A free worker takes, in order: a sibling whose leader has returned, then a
- * group's leader (largest group first), then — rather than sit idle — a
- * sibling whose leader is still running. Never waiting is what keeps the
- * stage's latency where it was. `fn` learns whether the job can use the
- * cache: a leader writes it, a sibling after its leader reads it, an early
- * sibling can do neither.
+ * A free worker takes, in order: a sibling whose leader has answered, then a
+ * group's leader (largest group first). Failing both, it waits for a running
+ * leader to answer, at most `waitMs` from when it went idle, and only then
+ * sends a sibling whose leader is still running. A leader answers when `fn`
+ * calls `answered`, or when `fn` ends. `fn` learns whether the job can use
+ * the cache: a leader writes it, a sibling after its leader reads it, an
+ * early sibling can do neither.
  */
 async function runLeaderFirst<T, R>(
     groups: T[][],
     limit: number,
-    fn: (item: T, cacheable: boolean) => Promise<R>,
+    waitMs: number,
+    fn: (item: T, cacheable: boolean, answered: () => void) => Promise<R>,
 ): Promise<{
     results: Map<T, R>;
     siblingsAfterLeader: number;
     siblingsEarly: number;
+    idleWaits: number;
+    idleWaitMs: number;
+    leadersReleasedAtAnswer: number;
 }> {
     const ordered = groups
         .map((items, order) => ({ items, order }))
@@ -1261,17 +1300,36 @@ async function runLeaderFirst<T, R>(
             leaderStarted: false,
             leaderDone: false,
         }));
+    type Group = (typeof ordered)[number];
     const results = new Map<T, R>();
     let siblingsAfterLeader = 0;
     let siblingsEarly = 0;
+    let idleWaits = 0;
+    let idleWaitMs = 0;
+    let leadersReleasedAtAnswer = 0;
 
-    const pick = ():
+    // Wakes every waiting worker when any leader answers.
+    let wake: () => void = () => undefined;
+    let answeredSignal = new Promise<void>((r) => (wake = r));
+    const release = (group: Group) => {
+        if (group.leaderDone) return;
+        group.leaderDone = true;
+        const woken = wake;
+        answeredSignal = new Promise<void>((r) => (wake = r));
+        woken();
+    };
+
+    const WAIT = Symbol('wait');
+    const pick = (
+        mayGoEarly: boolean,
+    ):
         | {
               item: T;
-              group: (typeof ordered)[number];
+              group: Group;
               leader: boolean;
               cacheable: boolean;
           }
+        | typeof WAIT
         | undefined => {
         const ready = ordered.find(
             (g) => g.leaderDone && g.next < g.items.length,
@@ -1296,16 +1354,24 @@ async function runLeaderFirst<T, R>(
             };
         }
         const waiting = ordered.find((g) => g.next < g.items.length);
-        if (waiting) {
-            siblingsEarly++;
-            return {
-                item: waiting.items[waiting.next++],
-                group: waiting,
-                leader: false,
-                cacheable: false,
-            };
-        }
-        return undefined;
+        if (!waiting) return undefined;
+        if (!mayGoEarly) return WAIT;
+        siblingsEarly++;
+        return {
+            item: waiting.items[waiting.next++],
+            group: waiting,
+            leader: false,
+            cacheable: false,
+        };
+    };
+
+    const waitForAnswer = async (ms: number) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+            answeredSignal,
+            new Promise<void>((r) => (timer = setTimeout(r, ms))),
+        ]);
+        clearTimeout(timer);
     };
 
     const total = groups.reduce((n, g) => n + g.length, 0);
@@ -1313,20 +1379,54 @@ async function runLeaderFirst<T, R>(
         Array.from(
             { length: Math.min(Math.max(1, limit), total || 1) },
             async () => {
-                for (let job = pick(); job; job = pick()) {
+                let idleSince: number | undefined;
+                for (;;) {
+                    const now = Date.now();
+                    const job = pick(
+                        waitMs <= 0 ||
+                            (idleSince !== undefined &&
+                                now - idleSince >= waitMs),
+                    );
+                    if (job === WAIT) {
+                        if (idleSince === undefined) {
+                            idleSince = now;
+                            idleWaits++;
+                        }
+                        await waitForAnswer(waitMs - (now - idleSince));
+                        continue;
+                    }
+                    if (idleSince !== undefined) {
+                        idleWaitMs += Date.now() - idleSince;
+                        idleSince = undefined;
+                    }
+                    if (!job) break;
+                    let finished = false;
                     try {
                         results.set(
                             job.item,
-                            await fn(job.item, job.cacheable),
+                            await fn(job.item, job.cacheable, () => {
+                                if (!job.leader || finished) return;
+                                if (!job.group.leaderDone)
+                                    leadersReleasedAtAnswer++;
+                                release(job.group);
+                            }),
                         );
                     } finally {
-                        if (job.leader) job.group.leaderDone = true;
+                        finished = true;
+                        if (job.leader) release(job.group);
                     }
                 }
             },
         ),
     );
-    return { results, siblingsAfterLeader, siblingsEarly };
+    return {
+        results,
+        siblingsAfterLeader,
+        siblingsEarly,
+        idleWaits,
+        idleWaitMs,
+        leadersReleasedAtAnswer,
+    };
 }
 
 /**
@@ -1675,7 +1775,8 @@ export async function judgeKodyRulesSharded(
     const scheduled = await runLeaderFirst(
         groups,
         concurrency,
-        async (shard, cacheable) => {
+        input.leaderWaitMs ?? SHARD_LEADER_WAIT_MS_DEFAULT,
+        async (shard, cacheable, answered) => {
             const { file, applicable } = shard;
             shardsRun++;
             await awaitRefusalVerdict();
@@ -1696,9 +1797,9 @@ export async function judgeKodyRulesSharded(
                     ruleUuids,
                     ruleUnits: applicable,
                     verifyRepositoryFacts: shard.verifyRepositoryFacts,
-                    ...(cacheable && shared.has(shard)
-                        ? { cachePrefix: shard.head }
-                        : {}),
+                    cachePrefixes:
+                        cacheable && shared.has(shard) ? shard.prefixes : [],
+                    onAnswered: answered,
                 });
                 call = judged;
                 inFlight.add(judged);
@@ -1766,6 +1867,9 @@ export async function judgeKodyRulesSharded(
         siblings: groups.reduce((n, g) => n + Math.max(0, g.length - 1), 0),
         siblingsAfterLeader: scheduled.siblingsAfterLeader,
         siblingsEarly: scheduled.siblingsEarly,
+        idleWaits: scheduled.idleWaits,
+        idleWaitMs: scheduled.idleWaitMs,
+        leadersReleasedAtAnswer: scheduled.leadersReleasedAtAnswer,
     };
 
     // ── PR-scope shard: one call over the whole PR ──────────────────────────
@@ -1800,6 +1904,8 @@ export async function judgeKodyRulesSharded(
                 ruleUuids,
                 ruleUnits: prRules,
                 verifyRepositoryFacts: true,
+                // One call per review over the whole diff: nothing to share.
+                cachePrefixes: [],
             });
             // PR-level violations carry no relevantFile by design
             for (const v of resolveShardViolations(vs, ruleUuids))

@@ -23,12 +23,14 @@ function controlledJudge() {
         string,
         { resolve: () => void; reject: (e: Error) => void }
     >();
+    const answered = new Map<string, () => void>();
     let running = 0;
     let maxRunning = 0;
     const run: RunJudge = (args) => {
         calls.push(args);
         const name = args.filename ?? '__PR__';
         started.push(name);
+        if (args.onAnswered) answered.set(name, args.onAnswered);
         running++;
         maxRunning = Math.max(maxRunning, running);
         return new Promise((resolve, reject) => {
@@ -53,6 +55,12 @@ function controlledJudge() {
         async finish(name: string) {
             await flush();
             pending.get(name)!.resolve();
+            await flush();
+        },
+        /** The model answered; the shard's own follow-up work is still running. */
+        async answer(name: string) {
+            await flush();
+            answered.get(name)!();
             await flush();
         },
         async fail(name: string) {
@@ -87,7 +95,7 @@ const callFor = (calls: Call[], name: string | null) =>
     calls.find((c) => c.filename === name)!;
 
 describe('judgeKodyRulesSharded — shared prompt prefix', () => {
-    it('gives the shards of one rule set the same cachePrefix, a head of their user turn', async () => {
+    it('gives the shards of one rule set the same two nested prefixes: the rules, then the head', async () => {
         const { run, calls } = instantJudge();
         await judgeKodyRulesSharded({
             changedFiles: [file('a.ts'), file('b.ts'), file('c.ts')],
@@ -97,12 +105,17 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             prBody: 'Why we add things',
             concurrency: 1,
         } as any);
-        const prefixes = calls.map((c) => c.cachePrefix);
-        expect(new Set(prefixes).size).toBe(1);
-        const head = prefixes[0]!;
-        expect(head.startsWith('<Rules>')).toBe(true);
-        expect(head).toContain('</Rules>');
-        expect(head).toContain('<PR title="Add things">');
+        const sets = calls.map((c) => JSON.stringify(c.cachePrefixes));
+        expect(new Set(sets).size).toBe(1);
+        const [rules, head] = calls[0].cachePrefixes!;
+        expect(rules.startsWith('<Rules>')).toBe(true);
+        expect(rules).toContain('</Rules>');
+        // The rules part is shared across PRs: it stops before the PR intent.
+        expect(rules).not.toContain('<PR title=');
+        expect(head.startsWith(rules)).toBe(true);
+        expect(
+            head.slice(rules.length).startsWith('<PR title="Add things">'),
+        ).toBe(true);
         for (const c of calls) {
             expect(c.user.startsWith(head)).toBe(true);
             expect(c.user.slice(head.length)).toMatch(
@@ -111,18 +124,32 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
         }
     });
 
-    it('gives a shard alone with its rule set no cachePrefix', async () => {
+    it('gives one prefix when the PR has no title or description', async () => {
+        const { run, calls } = instantJudge();
+        await judgeKodyRulesSharded({
+            changedFiles: [file('a.ts'), file('b.ts')],
+            rules: RULES,
+            runJudge: run,
+            concurrency: 1,
+        } as any);
+        const [only, ...rest] = callFor(calls, 'b.ts').cachePrefixes!;
+        expect(rest).toEqual([]);
+        expect(only).toContain('</Rules>');
+        expect(callFor(calls, 'b.ts').user.startsWith(only)).toBe(true);
+    });
+
+    it('gives a shard alone with its rule set no prefix to mark', async () => {
         const { run, calls } = instantJudge();
         await judgeKodyRulesSharded({
             changedFiles: [file('a.ts'), file('b.ts'), file('z.py')],
             rules: RULES,
             runJudge: run,
         } as any);
-        expect(callFor(calls, 'z.py').cachePrefix).toBeUndefined();
-        expect(callFor(calls, 'a.ts').cachePrefix).toBeDefined();
+        expect(callFor(calls, 'z.py').cachePrefixes).toEqual([]);
+        expect(callFor(calls, 'a.ts').cachePrefixes).toHaveLength(1);
     });
 
-    it('gives the PR-scope shard no cachePrefix', async () => {
+    it('gives the PR-scope shard no prefix to mark', async () => {
         const { run, calls } = instantJudge();
         await judgeKodyRulesSharded({
             changedFiles: [file('a.ts'), file('b.ts')],
@@ -137,7 +164,7 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             ],
             runJudge: run,
         } as any);
-        expect(callFor(calls, null).cachePrefix).toBeUndefined();
+        expect(callFor(calls, null).cachePrefixes).toEqual([]);
     });
 
     it('splits different rule sets into different heads', async () => {
@@ -153,14 +180,14 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             runJudge: run,
             concurrency: 1,
         } as any);
-        expect(callFor(calls, 'a.ts').cachePrefix).toBe(
-            callFor(calls, 'b.ts').cachePrefix,
+        expect(callFor(calls, 'a.ts').cachePrefixes).toEqual(
+            callFor(calls, 'b.ts').cachePrefixes,
         );
-        expect(callFor(calls, 'x.md').cachePrefix).toBe(
-            callFor(calls, 'y.md').cachePrefix,
+        expect(callFor(calls, 'x.md').cachePrefixes).toEqual(
+            callFor(calls, 'y.md').cachePrefixes,
         );
-        expect(callFor(calls, 'a.ts').cachePrefix).not.toBe(
-            callFor(calls, 'x.md').cachePrefix,
+        expect(callFor(calls, 'a.ts').cachePrefixes).not.toEqual(
+            callFor(calls, 'x.md').cachePrefixes,
         );
     });
 
@@ -186,11 +213,14 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             siblings: 3,
             siblingsAfterLeader: 3,
             siblingsEarly: 0,
+            idleWaits: 0,
+            idleWaitMs: 0,
+            leadersReleasedAtAnswer: 0,
         });
     });
 });
 
-describe('judgeKodyRulesSharded — leader-first scheduling that never idles', () => {
+describe('judgeKodyRulesSharded — leader-first scheduling with a bounded wait', () => {
     const files = [
         file('a.ts'),
         file('x.md'),
@@ -237,41 +267,148 @@ describe('judgeKodyRulesSharded — leader-first scheduling that never idles', (
         await done;
     });
 
-    it('starts a waiting sibling rather than leave a worker idle', async () => {
+    it('has a free worker wait for the running leader instead of sending its sibling at once', async () => {
         const j = controlledJudge();
         const done = judgeKodyRulesSharded({
             changedFiles: [file('a.ts'), file('b.ts'), file('c.ts')],
             rules: RULES,
             runJudge: j.run,
             concurrency: 2,
+            leaderWaitMs: 60_000,
         } as any);
         await new Promise((r) => setImmediate(r));
-        // a.ts is the leader and still running; the second worker takes b.ts anyway
-        expect(j.started).toEqual(['a.ts', 'b.ts']);
+        expect(j.started).toEqual(['a.ts']);
+        await j.finish('a.ts');
+        // both siblings start once the leader answered, and both read its head
+        expect(j.started).toEqual(['a.ts', 'b.ts', 'c.ts']);
+        const head = callFor(j.calls, 'a.ts').cachePrefixes;
+        expect(head).toHaveLength(1);
+        expect(callFor(j.calls, 'b.ts').cachePrefixes).toEqual(head);
+        expect(callFor(j.calls, 'c.ts').cachePrefixes).toEqual(head);
         await j.finishAll();
         const res = await done;
-        expect(res.promptCacheStats.siblingsEarly).toBe(1);
-        expect(res.promptCacheStats.siblingsAfterLeader).toBe(1);
+        expect(res.promptCacheStats.siblingsAfterLeader).toBe(2);
+        expect(res.promptCacheStats.siblingsEarly).toBe(0);
+        expect(res.promptCacheStats.idleWaits).toBe(1);
     });
 
-    it('marks the head on a leader and on siblings after it, not on a sibling sent alongside it', async () => {
+    it('releases the siblings when the leader’s model answers, before its follow-up work ends', async () => {
+        const j = controlledJudge();
+        const done = judgeKodyRulesSharded({
+            changedFiles: [file('a.ts'), file('b.ts')],
+            rules: RULES,
+            runJudge: j.run,
+            concurrency: 2,
+            leaderWaitMs: 60_000,
+        } as any);
+        await j.answer('a.ts');
+        // a.ts is still checking evidence; b.ts reads the head it wrote anyway
+        expect(j.started).toEqual(['a.ts', 'b.ts']);
+        expect(callFor(j.calls, 'b.ts').cachePrefixes).toHaveLength(1);
+        await j.finishAll();
+        const res = await done;
+        expect(res.promptCacheStats.leadersReleasedAtAnswer).toBe(1);
+    });
+
+    describe('when the leader runs past the wait', () => {
+        beforeEach(() => jest.useFakeTimers({ doNotFake: ['setImmediate'] }));
+        afterEach(() => jest.useRealTimers());
+
+        it('sends a waiting sibling unmarked, so it pays no write nobody reads', async () => {
+            const j = controlledJudge();
+            const done = judgeKodyRulesSharded({
+                changedFiles: [file('a.ts'), file('b.ts'), file('c.ts')],
+                rules: RULES,
+                runJudge: j.run,
+                concurrency: 2,
+                leaderWaitMs: 5_000,
+            } as any);
+            await new Promise((r) => setImmediate(r));
+            expect(j.started).toEqual(['a.ts']);
+            await jest.advanceTimersByTimeAsync(4_999);
+            expect(j.started).toEqual(['a.ts']);
+            await jest.advanceTimersByTimeAsync(1);
+            expect(j.started).toEqual(['a.ts', 'b.ts']);
+            expect(callFor(j.calls, 'b.ts').cachePrefixes).toEqual([]);
+            await j.finish('a.ts');
+            await j.finishAll();
+            const res = await done;
+            expect(callFor(j.calls, 'c.ts').cachePrefixes).toEqual(
+                callFor(j.calls, 'a.ts').cachePrefixes,
+            );
+            expect(res.promptCacheStats.siblingsEarly).toBe(1);
+            expect(res.promptCacheStats.siblingsAfterLeader).toBe(1);
+        });
+
+        it('does not restart the wait when an answer frees no work', async () => {
+            const j = controlledJudge();
+            const done = judgeKodyRulesSharded({
+                changedFiles: [file('x.md'), file('y.md'), file('z.py')],
+                rules: RULES,
+                runJudge: j.run,
+                concurrency: 3,
+                leaderWaitMs: 5_000,
+            } as any);
+            await new Promise((r) => setImmediate(r));
+            expect(j.started).toEqual(['x.md', 'z.py']);
+            await jest.advanceTimersByTimeAsync(3_000);
+            // z.py is alone: its answer releases nobody
+            await j.answer('z.py');
+            await jest.advanceTimersByTimeAsync(1_999);
+            expect(j.started).toEqual(['x.md', 'z.py']);
+            await jest.advanceTimersByTimeAsync(1);
+            expect(j.started).toEqual(['x.md', 'z.py', 'y.md']);
+            await j.finishAll();
+            await done;
+        });
+
+        it('starts a fresh wait once the worker has run a shard', async () => {
+            const j = controlledJudge();
+            // Two groups, three workers: the third waits on two running leaders.
+            const done = judgeKodyRulesSharded({
+                changedFiles: [
+                    file('a.ts'),
+                    file('b.ts'),
+                    file('x.md'),
+                    file('y.md'),
+                    file('z.md'),
+                ],
+                rules: RULES,
+                runJudge: j.run,
+                concurrency: 3,
+                leaderWaitMs: 5_000,
+            } as any);
+            await new Promise((r) => setImmediate(r));
+            expect(j.started).toEqual(['x.md', 'a.ts']);
+            await jest.advanceTimersByTimeAsync(3_000);
+            await j.answer('a.ts');
+            // the idle worker takes a.ts's ready sibling at once
+            expect(j.started).toEqual(['x.md', 'a.ts', 'b.ts']);
+            await j.finish('b.ts');
+            // a new idle stretch starts now: x.md's siblings wait a full 5 s
+            await jest.advanceTimersByTimeAsync(4_999);
+            expect(j.started).toHaveLength(3);
+            await jest.advanceTimersByTimeAsync(1);
+            expect(j.started).toEqual(['x.md', 'a.ts', 'b.ts', 'y.md']);
+            await j.finishAll();
+            await done;
+        });
+    });
+
+    it('never waits when the wait is turned off', async () => {
         const j = controlledJudge();
         const done = judgeKodyRulesSharded({
             changedFiles: [file('a.ts'), file('b.ts'), file('c.ts')],
             rules: RULES,
             runJudge: j.run,
             concurrency: 2,
+            leaderWaitMs: 0,
         } as any);
-        await j.finish('a.ts');
+        await new Promise((r) => setImmediate(r));
+        expect(j.started).toEqual(['a.ts', 'b.ts']);
+        expect(callFor(j.calls, 'b.ts').cachePrefixes).toEqual([]);
         await j.finishAll();
         await done;
-        expect(j.started).toEqual(['a.ts', 'b.ts', 'c.ts']);
-        const head = callFor(j.calls, 'a.ts').cachePrefix;
-        expect(head).toBeDefined();
-        // b.ts left while a.ts was running: nothing to read yet, so no write premium
-        expect(callFor(j.calls, 'b.ts').cachePrefix).toBeUndefined();
-        // c.ts left after a.ts returned: it reads the head a.ts wrote
-        expect(callFor(j.calls, 'c.ts').cachePrefix).toBe(head);
     });
 
     it('marks the siblings of a leader that failed, so one of them writes the head', async () => {
@@ -285,7 +422,7 @@ describe('judgeKodyRulesSharded — leader-first scheduling that never idles', (
         await j.fail('a.ts');
         await j.finishAll();
         await done;
-        expect(callFor(j.calls, 'b.ts').cachePrefix).toBeDefined();
+        expect(callFor(j.calls, 'b.ts').cachePrefixes).toHaveLength(1);
     });
 
     it('never runs more shards at once than the concurrency limit', async () => {
