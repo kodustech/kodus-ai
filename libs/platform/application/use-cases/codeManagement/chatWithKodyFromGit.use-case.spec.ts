@@ -1145,6 +1145,61 @@ describe('ChatWithKodyFromGitUseCase', () => {
             });
         });
 
+        it('reports a failed top-level answer instead of completing the delivery', async () => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [],
+            );
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            codeManagementService.createIssueComment.mockResolvedValue(null);
+            const reported = jest
+                .spyOn((useCase as any).logger, 'error')
+                .mockImplementation(() => undefined);
+            const logged = jest
+                .spyOn((useCase as any).logger, 'log')
+                .mockImplementation(() => undefined);
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalled();
+            expect(reported).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message:
+                        'Failed to create/update response in conversation flow',
+                }),
+            );
+            expect(logged).not.toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'Successfully executed conversation flow',
+                }),
+            );
+        });
+
+        it('leaves an @kody mention on a plain issue alone', async () => {
+            // GitHub sends a comment on an issue through the same
+            // `issue_comment` event, but there is no pull request to read and
+            // no prNumber to answer with.
+            const payload = conversationPayload();
+            delete payload.payload.issue.pull_request;
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [],
+            );
+
+            await useCase.execute(payload);
+
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).not.toHaveBeenCalled();
+        });
+
         it('answers a top-level GitHub PR comment that is not among the review comments (#2683)', async () => {
             // GitHub keeps PR conversation comments in the issues API, so
             // their id never appears in pulls.listReviewComments: the flow

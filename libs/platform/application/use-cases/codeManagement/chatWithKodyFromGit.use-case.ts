@@ -2093,6 +2093,12 @@ export class ChatWithKodyFromGitUseCase {
         ) {
             return undefined;
         }
+        // GitHub reports a comment on a plain issue through the same
+        // `issue_comment` event. There is no pull request to read and no PR
+        // number to answer with, so it is not this flow's comment.
+        if (!params.payload?.issue?.pull_request) {
+            return undefined;
+        }
         const payloadComment = params.payload?.comment;
         if (!payloadComment?.id) {
             return undefined;
@@ -2119,12 +2125,27 @@ export class ChatWithKodyFromGitUseCase {
         body: string;
     }): Promise<void> {
         if (args.topLevelComment) {
-            await this.codeManagementService.createIssueComment({
+            const posted = await this.codeManagementService.createIssueComment({
                 organizationAndTeamData: args.organizationAndTeamData,
                 repository: args.repository,
                 prNumber: args.pullRequestNumber,
                 body: args.body,
             });
+            // A null answer means the comment was not written. Swallowing it
+            // would complete the delivery claim and leave the reporter with
+            // silence, so the caller's failure path has to see it.
+            if (!posted) {
+                this.logger.warn({
+                    message: 'Failed to answer a conversation comment',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    metadata: {
+                        repository: args.repository.name,
+                        pullRequestNumber: args.pullRequestNumber,
+                        commentId: args.comment.id,
+                    },
+                });
+                throw new Error('Failed to answer a conversation comment');
+            }
             return;
         }
         await this.codeManagementService.createResponseToComment({
