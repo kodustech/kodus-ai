@@ -38,7 +38,7 @@ The runtime-worker's engine: it registers the DBOS workflows and queues, starts,
 
 ## Module map
 
-Files (4, tests apart): `admission-coordinator.ts`, `queue-limits.ts`, `run-deps.factory.ts`, `run-engine.service.ts`
+Files (5, tests apart): `admission-coordinator.ts`, `queue-limits.ts`, `run-deps.factory.ts`, `run-engine.service.ts`, `setup-turn.ts`
 
 Imports these Runtime modules:
 
