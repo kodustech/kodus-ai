@@ -37,7 +37,7 @@ One handler per command the product sends through the outbox: they turn a parsed
 
 ## Module map
 
-Files (8, tests apart): `command-handlers.ts`, `organization-purge.handler.ts`, `run-engine.port.ts`, `run-requested.handler.ts`, `runtime-command-handlers.ts`, `suite-requested.handler.ts`, `suite-retried.handler.ts`, `suite-selection-changed.handler.ts`
+Files (9, tests apart): `command-handlers.ts`, `organization-purge.handler.ts`, `run-engine.port.ts`, `run-requested.handler.ts`, `runtime-command-handlers.ts`, `suite-baseline-skipped.handler.ts`, `suite-requested.handler.ts`, `suite-retried.handler.ts`, `suite-selection-changed.handler.ts`
 
 Imports these Runtime modules:
 
