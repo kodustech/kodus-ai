@@ -102,9 +102,22 @@ pnpm's shared global store: it is per org here (section 5).
   `data.reset: recreate` start empty or from golden data (`golden.go`, postgres only).
 - The compose file is rewritten and checked by `internal/compose/sandbox`: every key on an allowlist (new keys are
   closed), `external`, `driver_opts` and host binds outside the checkout refused, tmpfs allowed, no `annotations`.
-- Disk: `diskfloor.go` refuses a new workload under twice `-disk-min-free-gb` on the work dir or Docker's root, the
-  agent's watchdog stops claims under the floor, `ClaimDiskUsage` measures each claim's volumes and writable layers.
-  Build states and exported caches are evicted by cost under the floor ([build-cache.md](build-cache.md) 1).
+- Disk: `diskfloor.go` refuses a new workload under the floor plus one Run's room (`-disk-per-run-free-gb`, one floor
+  when 0: twice `-disk-min-free-gb`) on the work dir or Docker's root, the agent's watchdog stops claims under the floor,
+  `ClaimDiskUsage` measures each claim's volumes and writable layers. Build states and exported caches are evicted by cost
+  under the floor ([build-cache.md](build-cache.md) 1).
+- The watchdog frees before it stops (`agent/disk_watch.go`). Free space is the smaller of the inner filesystem
+  (Docker's root) and the outer one under the build-state volume's sparse file (`-disk-outer-path`): the file can be
+  full while the inner filesystem shows room. Under the margin or the floor, a ladder runs, each rung measuring free
+  space again and the ladder stopping at the first that clears the line: (1) `fstrim` of the work dir and Docker's
+  root (the sparse file only grows until its free blocks are discarded; a mount with `discard` is the host recipe's),
+  (2) the cell's own BuildKit states (`buildstate.EvictOlderThan`, 7 days, 1 day, 1 hour, then all, least recently
+  used first, a state a live build holds stays) and the host Docker's build cache, (3) `ReclaimDisk` in D7's order
+  (exported caches, then build states; preview states do not exist yet). Only then a victim: the claim whose disk grew
+  most, or every claim at the floor. A claim that turned ready within `-disk-ready-grace` (2 min) is passed over for
+  the next one, and stopped only when nothing else is left (`disk.victim_in_grace`, alarm, and the reason on the stop).
+  Each rung's freed bytes are in `disk.rung` and `cell_disk_relief_freed_bytes_total{rung}`. The template seal runs
+  `fstrim` first (`cell.seal.trim`, `seal_fstrim`).
 - The org purge: `apps/runtime/src/worker/commands/organization-purge.handler.ts` stops Runs, releases live claims,
   throws `OrganizationPurgeNotReadyError` until none is live, then deletes evidence by prefix and every row
   (`purge.deleteOrganization`). It never talks to a cell about data at rest.
@@ -244,7 +257,7 @@ sequenceDiagram
   `state_lost: too_large` with the size. Nothing is truncated: a half state is worse than none.
 - Free space: a capture is refused unless the work dir keeps twice the cell's floor free after it (`diskShort`'s
   margin). Refused is not an error: the preview sleeps cold with `state_lost: disk`.
-- Under the floor, eviction order: exported caches nobody reads, then **preview states, oldest sleep first**, then the
+- Under the floor, after fstrim and the build cache rungs (the ladder under Disk, above), eviction order: exported caches nobody reads, then **preview states, oldest sleep first**, then the
   build states by cost (`buildstate/cost.go`). Reason: a preview state is a reviewer's test data, bounded by the 7 day
   expiry and visible when lost; a build state protects every later pull request of the environment with minutes of
   build. Each eviction writes `preview.state.evicted` and, on the next hub contact, `state_lost: evicted`.

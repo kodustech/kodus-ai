@@ -138,6 +138,7 @@
     "cell_pool_machines_total": { "producer": "cell", "instrument": "counter", "unit": "{machine}", "labels": ["outcome"], "meaning": "Warm pool machines (outcome: created, failed, adopted, discarded)." },
     "cell_claims_reaped_total": { "producer": "cell", "instrument": "counter", "unit": "{claim}", "labels": ["reason"], "meaning": "Claims the cell tore down without a claim.release." },
     "cell_claim_cleanup_errors_total": { "producer": "cell", "instrument": "counter", "unit": "{error}", "labels": [], "meaning": "Errors tearing a claim down." },
+    "cell_disk_relief_freed_bytes_total": { "producer": "cell", "instrument": "counter", "unit": "By", "labels": ["rung"], "meaning": "Bytes the disk watchdog's relief ladder freed before it stopped a claim (rung: fstrim, build_cache, reclaim; seal_fstrim before a template seal)." },
     "cell_steps_total": { "producer": "cell", "instrument": "counter", "unit": "{step}", "labels": ["kind", "outcome"], "meaning": "Steps run, by kind and outcome." },
     "cell_sandbox_ops_total": { "producer": "cell", "instrument": "counter", "unit": "{op}", "labels": ["op", "outcome"], "meaning": "Sandbox operations the guest agent ran (op: the sandbox.op kind; outcome: ok, refused, failed)." },
     "cell_sandbox_op_milliseconds_total": { "producer": "cell", "instrument": "counter", "unit": "ms", "labels": ["op"], "meaning": "Time in sandbox operations; divide by cell_sandbox_ops_total for the mean." },

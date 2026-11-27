@@ -508,3 +508,61 @@ func TestAViewGoesUnderTheViewsRootWhenOneIsSet(t *testing.T) {
 		t.Fatalf("the leftover view was not unmounted: %v", m2.unmounts)
 	}
 }
+
+// The disk watchdog's build cache rung removes the states nobody holds that
+// were not used for the given age, oldest first, returns the bytes it removed,
+// and keeps a state a live build holds however old it is; age zero removes
+// every state nobody holds.
+func TestEvictOlderThanKeepsHeldAndRecentStates(t *testing.T) {
+	cases := []struct {
+		name      string
+		olderThan time.Duration
+		gone      []string
+		kept      []string
+	}{
+		{"a week drops only the week-old state", 7 * 24 * time.Hour, []string{"env-old"}, []string{"env-day", "env-fresh", "env-held"}},
+		{"an hour drops the week-old and the day-old", time.Hour, []string{"env-old", "env-day"}, []string{"env-fresh", "env-held"}},
+		{"zero drops everything nobody holds", 0, []string{"env-old", "env-day", "env-fresh"}, []string{"env-held"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st, _ := newStore(t)
+			now := fakeClock(st).Now()
+			for _, e := range []struct {
+				env string
+				age time.Duration
+			}{{"env-old", 8 * 24 * time.Hour}, {"env-day", 3 * time.Hour}, {"env-fresh", 0}, {"env-held", 30 * 24 * time.Hour}} {
+				useAt(t, st, e.env, now.Add(-e.age))
+				if err := os.WriteFile(filepath.Join(st.EnvDir(testOrg, e.env), "data"), make([]byte, 1000), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			fakeClock(st).Set(now)
+			req := seed("m-held")
+			req.Env = "env-held"
+			held, ok := st.Acquire(context.Background(), req)
+			if !ok {
+				t.Fatal("the held state was not acquired")
+			}
+			defer st.Release(held)
+			freed, err := st.EvictOlderThan(tc.olderThan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// 1000 bytes of data each, plus the small marks the store keeps in a state.
+			if want := int64(1000 * len(tc.gone)); freed < want || freed > want+int64(200*len(tc.gone)) {
+				t.Fatalf("freed %d bytes, want about %d", freed, want)
+			}
+			for _, env := range tc.gone {
+				if _, err := os.Stat(st.EnvDir(testOrg, env)); !os.IsNotExist(err) {
+					t.Fatalf("%s was kept", env)
+				}
+			}
+			for _, env := range tc.kept {
+				if _, err := os.Stat(st.EnvDir(testOrg, env)); err != nil {
+					t.Fatalf("%s was removed: %v", env, err)
+				}
+			}
+		})
+	}
+}

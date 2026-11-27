@@ -761,6 +761,9 @@ install and every hybrid org runs today, renamed; an air-gapped install needs no
   bare-metal provider's reinstall and power API; `provision: none` is `externallyProvisioned`: the controller cordons
   and alarms, a person acts.
 - Scale-in powers a machine off only when the provider bills by the hour; owned hardware stays on at `min`.
+- The cell's disk watchdog frees space before it stops a claim and spares one that just turned ready; on a host whose
+  state disk is a sparse file, set `-disk-outer-path` to the filesystem that holds it, and the template seal runs
+  `fstrim` first so the saved disk does not carry every block ever written ([persistent-state.md](persistent-state.md) 3.5).
 - Decommission wipes the state disk (`blkdiscard`) before the machine leaves the inventory.
 
 ### 9.5 Adding a provider

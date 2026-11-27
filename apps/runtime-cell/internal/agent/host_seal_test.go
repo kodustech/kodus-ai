@@ -81,3 +81,31 @@ func TestCellSealIsRefusedWhileABakeIsInProgress(t *testing.T) {
 		t.Fatalf("seal started %d times after the bake ended", s.count())
 	}
 }
+
+// The seal saves the template's disk as it is, so the cell discards the unused
+// blocks first (fstrim): the trim runs before the seal starts, and a trim that
+// fails does not stop the seal.
+func TestCellSealTrimsTheBuildStateDiskBeforeSealing(t *testing.T) {
+	for _, trimErr := range []error{nil, context.DeadlineExceeded} {
+		var order []string
+		s := &orderSealer{order: &order}
+		h := newHarness(t, func(c *Config) {
+			c.HostSeal = s
+			c.DiskWatch = &DiskWatch{
+				Free: func() (uint64, error) { return 1 << 40, nil }, MinFreeBytes: 1 << 30,
+				Trim: func(context.Context) (uint64, error) { order = append(order, "fstrim"); return 5 << 30, trimErr },
+			}
+		})
+		if err := h.handle("", protocol.MessageTypeCellSeal, &protocol.CellSealBody{}); err != nil {
+			t.Fatal(err)
+		}
+		h.a.Wait()
+		if len(order) != 2 || order[0] != "fstrim" || order[1] != "seal" {
+			t.Fatalf("trimErr=%v: order %v, want [fstrim seal]", trimErr, order)
+		}
+	}
+}
+
+type orderSealer struct{ order *[]string }
+
+func (o *orderSealer) Seal(context.Context) error { *o.order = append(*o.order, "seal"); return nil }

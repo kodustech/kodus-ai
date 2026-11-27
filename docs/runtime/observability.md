@@ -262,6 +262,7 @@ one attribute, the Prometheus names as the exporter writes them, every histogram
 | `cell_pool_machines_total` | `cell_pool_machines_total` | counter | {machine} | `outcome` | cell | Warm pool machines (outcome: created, failed, adopted, discarded). |
 | `cell_claims_reaped_total` | `cell_claims_reaped_total` | counter | {claim} | `reason` | cell | Claims the cell tore down without a claim.release. |
 | `cell_claim_cleanup_errors_total` | `cell_claim_cleanup_errors_total` | counter | {error} | — | cell | Errors tearing a claim down. |
+| `cell_disk_relief_freed_bytes_total` | `cell_disk_relief_freed_bytes_total` | counter | By | rung | cell | Bytes the disk watchdog's relief ladder freed before it stopped a claim (rung: fstrim, build_cache, reclaim; seal_fstrim before a template seal). |
 | `cell_steps_total` | `cell_steps_total` | counter | {step} | `kind`, `outcome` | cell | Steps run, by kind and outcome. |
 | `cell_sandbox_ops_total` | `cell_sandbox_ops_total` | counter | {op} | `op`, `outcome` | cell | Sandbox operations the guest agent ran (op: the sandbox.op kind; outcome: ok, refused, failed). |
 | `cell_sandbox_op_milliseconds_total` | `cell_sandbox_op_milliseconds_total` | counter | ms | `op` | cell | Time in sandbox operations; divide by cell_sandbox_ops_total for the mean. |

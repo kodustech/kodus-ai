@@ -44,6 +44,6 @@ func newAgentMetrics(reg *metrics.Registry) agentMetrics {
 		sandboxOpMillis:      reg.Counter("cell_sandbox_op_milliseconds_total", "Time in sandbox operations, by op; divide by cell_sandbox_ops_total for the mean.", "op"),
 		egressSeals:          reg.Counter("cell_egress_seals_total", "Sandbox egress seals (egress.policy sealed), by outcome (ok, failed): the policy pushed to the enforcers allows nothing.", "outcome"),
 		toolLayerBuilds:      reg.Counter("cell_tool_layer_builds_total", "Tool layer builds, by outcome (built, failed).", "outcome"),
-		diskFreed:            reg.Counter("cell_disk_relief_freed_bytes_total", "Bytes the disk watchdog's relief ladder freed before it stopped a claim, by rung (fstrim, build_cache, reclaim).", "rung"),
+		diskFreed:            reg.Counter("cell_disk_relief_freed_bytes_total", "Bytes the disk watchdog's relief ladder freed before it stopped a claim, by rung (fstrim, build_cache, reclaim; seal_fstrim before a template seal).", "rung"),
 	}
 }
