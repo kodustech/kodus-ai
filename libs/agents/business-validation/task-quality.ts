@@ -153,7 +153,8 @@ function detectCriteria(task: Task): Task {
     // items). A body that gives nothing by itself still keeps its AC-labelled
     // items when the artifacts state criteria. Artifact criteria come after
     // the body's, de-duplicated; links to the issue's own artifacts are left out.
-    const items = keepSubstantive(listItems(description), own);
+    const listed = listItems(description);
+    const items = keepSubstantive(listed, own);
     let section: string[] = [];
     for (const heading of CRITERIA_HEADINGS) {
         const text = sectionUnder(description, heading);
@@ -165,7 +166,7 @@ function detectCriteria(task: Task): Task {
     }
     const body = section.length
         ? section
-        : items.length >= 2
+        : listed.length >= 2
           ? items
           : withArtifactCriteria(task, []).length
             ? items.filter(isLabelledCriterion)

@@ -1087,9 +1087,15 @@ describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
                 [ac1, keep],
             ],
             ['a single labelled item', `- ${ac1}`, [ac1, art], undefined],
+            [
+                'a reference line and an item',
+                `- See the spec: [artifact #1](${own}/1)\n- ${keep}`,
+                [keep, art],
+                [keep],
+            ],
             ['a single unlabelled item', `- ${keep}`, [art], undefined],
         ])(
-            'keeps every body item of %s',
+            'never drops a body criterion of %s because of an artifact',
             async (_label, text, withIntact, withClipped) => {
                 const read1 = await criteria(
                     issue({ body: text, artifacts: [intact] }),
