@@ -116,7 +116,7 @@ interface CommentClaim {
     holder: string;
 }
 
-const KODY_CONVERSATION_MARKER =
+export const KODY_CONVERSATION_MARKER =
     '<!-- kody-codereview -->\n<!-- kody-conversation -->';
 
 enum CommandType {
@@ -1291,6 +1291,7 @@ export class ChatWithKodyFromGitUseCase {
                 repository,
                 pullRequestNumber,
                 comment,
+                discussionId: params.payload?.object_attributes?.discussion_id,
                 body: this.withKodyMarker(
                     licenseUnavailable
                         ? CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE
@@ -1455,6 +1456,8 @@ export class ChatWithKodyFromGitUseCase {
                     repository,
                     pullRequestNumber,
                     comment,
+                    discussionId:
+                        params.payload?.object_attributes?.discussion_id,
                     body: this.withKodyMarker(response, params.platformType),
                 });
 
@@ -2117,7 +2120,8 @@ export class ChatWithKodyFromGitUseCase {
      */
     private async replyInConversation(args: {
         topLevelComment?: Comment;
-        params: WebhookParams;
+        /** The provider's discussion/thread id, when the webhook carries one. */
+        discussionId?: string;
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Repository;
         pullRequestNumber: number;
@@ -2151,9 +2155,7 @@ export class ChatWithKodyFromGitUseCase {
         await this.codeManagementService.createResponseToComment({
             organizationAndTeamData: args.organizationAndTeamData,
             inReplyToId: args.comment.id,
-            discussionId:
-                args.params.payload?.object_attributes?.discussion_id ??
-                args.comment.discussionId,
+            discussionId: args.discussionId ?? args.comment.discussionId,
             threadId: args.comment.threadId,
             body: args.body,
             repository: args.repository,

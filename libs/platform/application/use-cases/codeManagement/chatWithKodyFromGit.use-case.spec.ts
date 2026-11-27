@@ -17,7 +17,10 @@ jest.mock('@libs/core/log/langfuse', () => ({
 import { withLangfuseObservation } from '@libs/core/log/langfuse';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
+import {
+    ChatWithKodyFromGitUseCase,
+    KODY_CONVERSATION_MARKER,
+} from './chatWithKodyFromGit.use-case';
 
 const skippedWith = (reason: string, message: string) => ({
     outcome: { kind: 'skipped', reason, message },
@@ -1220,7 +1223,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
             ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     prNumber: 132,
-                    body: expect.stringContaining('an answer'),
+                    body: `an answer\n\n${KODY_CONVERSATION_MARKER}`,
                 }),
             );
         });
