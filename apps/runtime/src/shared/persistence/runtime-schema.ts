@@ -1379,6 +1379,32 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS main_seen_sha text;
         ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS main_commits_behind integer NOT NULL DEFAULT 0;`,
     },
+    {
+        version: 65,
+        name: 'the spec queue of a suite run',
+        // docs/runtime/e2e-suites.md section 6 (dynamic queue). One row per spec of a suite run: the shards of the run pull the next
+        // spec (or a small batch) with one conditional UPDATE, so a spec is never handed to two shards. A claim is a lease
+        // (lease_expires_at, renewed while the shard's command is polled); a lapsed one goes back to `queued` while the spec has
+        // attempts left, else `abandoned`. `priority` and `weight` are the order the specs are handed out in (red before and
+        // covering the diff first, then longest first); `est_ms` is the estimate a batch is sized by (null when nothing is stored).
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_suite_queue (
+            suite_run_id     text NOT NULL,
+            spec             text NOT NULL,
+            organization_id  text NOT NULL,
+            priority         smallint NOT NULL,
+            weight           bigint NOT NULL,
+            est_ms           bigint,
+            state            text NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'claimed', 'done', 'abandoned')),
+            claimed_by       integer,
+            attempts         integer NOT NULL DEFAULT 0,
+            claimed_at       timestamptz,
+            lease_expires_at timestamptz,
+            finished_at      timestamptz,
+            created_at       timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (suite_run_id, spec)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_queue_next_idx ON runtime.runtime_suite_queue (suite_run_id, priority, weight DESC, spec) WHERE state = 'queued';`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
@@ -1512,6 +1538,7 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         // A suite run's shards and results follow the evidence TTL; the run row stays for the re-push rule while it is that young.
         ['runtime_suite_results', older('recorded_at'), days],
         ['runtime_suite_shards', older('updated_at'), days],
+        ['runtime_suite_queue', older('created_at'), days],
         ['runtime_suite_runs', `finished_at IS NOT NULL AND ${older('updated_at')}`, days],
         // A baseline request that ended (started, skipped or superseded) is history once its run's rows are gone.
         ['runtime_suite_baseline_requests', `state <> 'queued' AND ${older('updated_at')}`, days],
