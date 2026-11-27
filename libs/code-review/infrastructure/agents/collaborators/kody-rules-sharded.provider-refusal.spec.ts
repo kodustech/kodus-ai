@@ -202,13 +202,30 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
     });
 
     it('does not stop for requests refused on their content', async () => {
-        // OpenRouter answers a moderation flag with a 403.
+        // OpenRouter answers a moderation flag with a 403 whose error carries
+        // the flag in `metadata`.
+        const message = 'Your chosen model requires moderation and your input was flagged for "violence"';
         const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
             async () => {
-                throw refusal(
-                    403,
-                    'Your chosen model requires moderation and your input was flagged for "violence"',
-                );
+                throw new APICallError({
+                    message,
+                    url: 'https://openrouter.ai/api/v1/chat/completions',
+                    requestBodyValues: {},
+                    statusCode: 403,
+                    responseBody: JSON.stringify({
+                        error: {
+                            code: 403,
+                            message,
+                            metadata: {
+                                reasons: ['violence'],
+                                flagged_input: '...',
+                                provider_name: 'x',
+                                model_slug: 'y',
+                            },
+                        },
+                    }),
+                    isRetryable: false,
+                });
             },
         );
 
@@ -298,5 +315,59 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
         expect(res.shardsRun).toBe(4);
         expect(res.shardsErrored).toBe(3);
         expect(res.providerRefusal).toBe('AUTH_INVALID');
+    });
+
+    // The wording is not the signal: a revoked key whose message happens to
+    // mention moderation is still a refusal.
+    it('stops on a refusal whose text mentions moderation but carries no flag', async () => {
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                throw refusal(401, 'Invalid API key for the moderation-enabled endpoint');
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(2);
+        expect(res.providerRefusal).toBe('AUTH_INVALID');
+    });
+
+    it('drops the suspicion when the next refusal is of another kind', async () => {
+        // Three requests in flight; the order each one lands is set by hand.
+        const pending: Array<{ reject: (e: unknown) => void }> = [];
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            () =>
+                pending.length < 3
+                    ? new Promise((_, reject) => {
+                          pending.push({ reject });
+                      })
+                    : Promise.resolve([]),
+        );
+        const flush = () => new Promise((r) => setImmediate(r));
+
+        const run = judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 3,
+        });
+        await flush();
+        // Two auth refusals: the next shards wait for the first request.
+        pending[1].reject(refusal(401, 'Incorrect API key provided'));
+        pending[2].reject(refusal(401, 'Incorrect API key provided'));
+        await flush();
+        expect(runJudge).toHaveBeenCalledTimes(3);
+        // It lands with another kind: one failure of that kind is no streak.
+        pending[0].reject(refusal(404, 'model not found'));
+        const res = await run;
+
+        expect(runJudge).toHaveBeenCalledTimes(files.length);
+        expect(res.shardsErrored).toBe(3);
+        expect(res.providerRefusal).toBeUndefined();
     });
 });

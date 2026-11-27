@@ -27,7 +27,6 @@ import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import {
     classifyLLMError,
     type ClassifiedErrorInfo,
-    extractErrorText,
     isTerminalCategory,
     LlmErrorCategory,
 } from '@libs/llm/error-classifier';
@@ -400,14 +399,50 @@ export const TERMINAL_FAILURES_TO_STOP = 2;
  *   has no status, and its text is the model's own review: a finding about
  *   `legacyBilling` that "does not exist" read as QUOTA_EXCEEDED and
  *   MODEL_NOT_FOUND, and stopped a review against a healthy provider.
- * - A request refused on its content (OpenRouter moderation answers 403
- *   "your input was flagged") says nothing about the next file.
+ * - A request refused on its content says nothing about the next file.
+ *   OpenRouter answers a moderation flag with a 403 whose error carries
+ *   `metadata.reasons` / `metadata.flagged_input`; read from that structure,
+ *   not from the wording, which a quoted prompt could contain.
  */
 function isProviderRefusal(info: ClassifiedErrorInfo, err: unknown): boolean {
     if (info.category === LlmErrorCategory.CONFIG_INVALID) return true;
     if (info.httpStatus === undefined) return false;
-    const text = extractErrorText(err).toLowerCase();
-    return !text.includes('flagged') && !text.includes('moderation');
+    return !flaggedByModeration(err);
+}
+
+function flaggedByModeration(err: unknown, depth = 0): boolean {
+    if (!err || typeof err !== 'object' || depth > 3) return false;
+    const e = err as {
+        data?: unknown;
+        responseBody?: unknown;
+        cause?: unknown;
+        lastError?: unknown;
+    };
+    for (const body of [e.data, parseJson(e.responseBody)]) {
+        const metadata = (body as { error?: { metadata?: unknown } } | undefined)
+            ?.error?.metadata as
+            | { reasons?: unknown; flagged_input?: unknown }
+            | undefined;
+        if (
+            Array.isArray(metadata?.reasons) ||
+            typeof metadata?.flagged_input === 'string'
+        ) {
+            return true;
+        }
+    }
+    return (
+        flaggedByModeration(e.cause, depth + 1) ||
+        flaggedByModeration(e.lastError, depth + 1)
+    );
+}
+
+function parseJson(value: unknown): unknown {
+    if (typeof value !== 'string') return undefined;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return undefined;
+    }
 }
 
 export interface ShardedJudgeInput {
@@ -1540,8 +1575,13 @@ export async function judgeKodyRulesSharded(
             providerAnswered();
             return;
         }
-        terminalStreak =
-            info.category === streakCategory ? terminalStreak + 1 : 1;
+        if (info.category !== streakCategory) {
+            // A new kind of failure starts its own streak; the suspicion
+            // raised by the old one no longer holds.
+            terminalStreak = 0;
+            suspectedFor = undefined;
+        }
+        terminalStreak++;
         streakCategory = info.category;
         if (!stoppedFor && terminalStreak >= TERMINAL_FAILURES_TO_STOP) {
             suspectedFor = info.category;
