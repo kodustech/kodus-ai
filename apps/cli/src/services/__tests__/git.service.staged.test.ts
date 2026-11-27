@@ -12,6 +12,11 @@ function createRepo(): string {
     git(dir, ['init', '-q', '-b', 'main']);
     git(dir, ['config', 'user.email', 'test@kodus.io']);
     git(dir, ['config', 'user.name', 'test']);
+    git(dir, ['config', 'core.abbrev', '7']);
+    git(dir, ['config', 'diff.context', '3']);
+    git(dir, ['config', 'diff.noprefix', 'false']);
+    git(dir, ['config', 'diff.mnemonicPrefix', 'false']);
+    git(dir, ['config', 'diff.renames', 'true']);
     fs.writeFileSync(path.join(dir, 'tracked.ts'), 'const base = 1;\n');
     fs.writeFileSync(path.join(dir, 'other.ts'), 'const other = 1;\n');
     fs.writeFileSync(path.join(dir, 'to-delete.ts'), 'const doomed = 1;\n');

@@ -536,6 +536,21 @@ describe('review integration', () => {
             '',
         ].join('\n');
 
+        await execFileAsync('git', ['config', 'core.abbrev', '7'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.context', '3'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.noprefix', 'false'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.mnemonicPrefix', 'false'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.renames', 'true'], {
+            cwd: gitRepoDir,
+        });
         await fs.writeFile(renameSrc, seedLines);
         await execFileAsync('git', ['add', 'rename-src.ts'], {
             cwd: gitRepoDir,
