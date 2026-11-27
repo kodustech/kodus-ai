@@ -273,6 +273,7 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_SETUP_CONCURRENCY` | 4 | Worker only; 1 to 64, never above `RUNTIME_GLOBAL_CONCURRENCY`. Setups that run at once across the app (the setup queue's global limit; under durable admission, a setup past it waits as `setup_limit`). |
 | `RUNTIME_SUITE_PER_ORG` | 2 | Worker only; 1 to 8. E2E suite runs of one org that run at once on the suite queue (`runtime-suites`). |
 | `RUNTIME_SUITE_CONCURRENCY` | 4 | Worker only; 1 to 64, never above `RUNTIME_GLOBAL_CONCURRENCY`. Suite runs across the app. |
+| `RUNTIME_SUITE_BASELINE_CADENCE_HOURS` | 24 | Worker only; 1 to 720. The longest main goes without a full e2e suite run. Between them a baseline runs only when the suite digest or the coverage map needs refreshing; PRs get main's result for the specs they failed (docs/runtime/e2e-suites.md 7.2). |
 | `RUNTIME_SUITE_MAX_HOSTS` | 8 | Worker only; 1 to 16. The most hosts one suite run asks for, whatever the recipe `suite.shards` says. |
 | `RUNTIME_SUITE_CI` | unset | Product API only. `true`: a pull request's own events (opened, reopened, ready for review, a new head) also ask for the repository's e2e suite in CI mode, for an environment whose recipe declares a `suite:` block. Off by default: a suite holds several hosts for tens of minutes. |
 | `RUNTIME_WORKER_CONCURRENCY` | min(10, global) | Worker only; 1 to `RUNTIME_GLOBAL_CONCURRENCY`. Runs and setups one replica runs at once (DBOS `workerConcurrency`), so one replica never takes every global slot while its Postgres pool serves a share. |

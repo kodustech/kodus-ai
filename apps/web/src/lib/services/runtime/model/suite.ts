@@ -306,6 +306,8 @@ export const noBaselineText = (
     if (request.state === "started") return `Running on ${at}`;
     if (request.state === "superseded")
         return `${at} was replaced by a newer main commit before it ran`;
+    if (request.reason === "lazy")
+        return `No full run needed at ${at}: the suite and its coverage map are unchanged`;
     return `No suite declared at ${at}, so no baseline ran`;
 };
 

@@ -13,6 +13,7 @@ import { AmqpSuitePublishRequester } from '../publish/amqp-suite-publish-request
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { PgSuiteBaselines } from './pg-suite-baselines';
 import { PgSuiteCoverageMaps } from './pg-suite-coverage-maps';
+import { PgSuiteMainResults } from './pg-suite-main-results';
 import { PgSuiteQueue } from './pg-suite-queue';
 import { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
 import type { PgSuiteRuns } from './pg-suite-runs';
@@ -35,6 +36,8 @@ export function buildSuiteService(d: {
     amqp: Pick<AmqpConnection, 'publish'>;
     /** RUNTIME_SUITE_MAX_HOSTS: the hosts one suite run asks for at most. */
     maxHosts: number;
+    /** RUNTIME_SUITE_BASELINE_CADENCE_HOURS: the longest main goes without a full suite run. */
+    baselineCadenceHours: number;
     /** The evidence store the artifacts of failed specs are written to; absent: none are kept. */
     evidence?: Pick<EvidenceStore, 'put'>;
     /** Where a selection miss is raised (an alert a person sees); absent: it is only logged. */
@@ -50,6 +53,8 @@ export function buildSuiteService(d: {
         runs: d.runs,
         stats: new PgSuiteSpecStats(d.pool),
         queue: new PgSuiteQueue(d.pool),
+        mainResults: new PgSuiteMainResults(d.pool),
+        baselineCadenceMs: d.baselineCadenceHours * 3_600_000,
         baselines: new PgSuiteBaselines(d.pool),
         maps: new PgSuiteCoverageMaps(d.pool),
         ...(d.evidence ? { evidence: d.evidence } : {}),

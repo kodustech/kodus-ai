@@ -1404,6 +1404,30 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
             PRIMARY KEY (suite_run_id, spec)
         );
         CREATE INDEX IF NOT EXISTS runtime_suite_queue_next_idx ON runtime.runtime_suite_queue (suite_run_id, priority, weight DESC, spec) WHERE state = 'queued';`,
+    },    {
+        version: 66,
+        name: 'what main said of each spec, per run',
+        // docs/runtime/e2e-suites.md 7.2 (lazy baseline). One row per spec a run saw on main: a baseline sees every spec, a PR's main
+        // re-run only the specs that failed on the PR. Append-only, so the same commit can hold both a pass and a fail (flaky). A stored
+        // result is reused only for the same (environment, main sha, suite digest, spec); the history for the classifier ignores the
+        // digest (adding a spec must not reset every spec's flake record). `tests` is [{title, status, errorSignature?}].
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_suite_main_observations (
+            id              bigserial PRIMARY KEY,
+            suite_run_id    text NOT NULL,
+            organization_id text NOT NULL,
+            environment_id  text NOT NULL,
+            main_sha        text NOT NULL,
+            suite_digest    text NOT NULL,
+            spec            text NOT NULL,
+            status          text NOT NULL,
+            error_signature text,
+            tests           jsonb NOT NULL DEFAULT '[]'::jsonb,
+            source          text NOT NULL,
+            observed_at     timestamptz NOT NULL,
+            UNIQUE (suite_run_id, spec)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_main_obs_sha_idx ON runtime.runtime_suite_main_observations (environment_id, main_sha, suite_digest, spec);
+        CREATE INDEX IF NOT EXISTS runtime_suite_main_obs_spec_idx ON runtime.runtime_suite_main_observations (environment_id, spec, observed_at DESC);`,
     },
 ];
 
@@ -1539,6 +1563,7 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         ['runtime_suite_results', older('recorded_at'), days],
         ['runtime_suite_shards', older('updated_at'), days],
         ['runtime_suite_queue', older('created_at'), days],
+        ['runtime_suite_main_observations', older('observed_at'), days],
         ['runtime_suite_runs', `finished_at IS NOT NULL AND ${older('updated_at')}`, days],
         // A baseline request that ended (started, skipped or superseded) is history once its run's rows are gone.
         ['runtime_suite_baseline_requests', `state <> 'queued' AND ${older('updated_at')}`, days],

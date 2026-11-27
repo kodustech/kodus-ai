@@ -160,6 +160,8 @@ export interface WorkerConfig extends RuntimeConfig {
     suiteConcurrency: number;
     /** RUNTIME_SUITE_MAX_HOSTS (1..16, default 8): the hosts one suite run asks for at most, whatever its recipe's `suite.shards` says. */
     suiteMaxHosts: number;
+    /** RUNTIME_SUITE_BASELINE_CADENCE_HOURS (1..720, default 24): main goes no longer than this without a full suite run; between them a baseline runs only when the suite digest or the coverage map needs it (docs/runtime/e2e-suites.md 7.2). */
+    suiteBaselineCadenceHours: number;
     /**
      * RUNTIME_WORKER_CONCURRENCY (1..global, default min(10, RUNTIME_GLOBAL_CONCURRENCY)): Runs and
      * setups one replica runs at once, so one replica never takes every global slot while its
@@ -515,6 +517,7 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
         suitePerOrg: boundedInt(env, 'RUNTIME_SUITE_PER_ORG', 2, 1, 8),
         suiteConcurrency: Math.min(boundedInt(env, 'RUNTIME_SUITE_CONCURRENCY', 4, 1, 64), base.globalConcurrency),
         suiteMaxHosts: boundedInt(env, 'RUNTIME_SUITE_MAX_HOSTS', 8, 1, 16),
+        suiteBaselineCadenceHours: boundedInt(env, 'RUNTIME_SUITE_BASELINE_CADENCE_HOURS', 24, 1, 720),
         workerConcurrency: boundedInt(env, 'RUNTIME_WORKER_CONCURRENCY', Math.min(10, base.globalConcurrency), 1, base.globalConcurrency),
         roundSnapshots: flag01(env, 'RUNTIME_ROUND_SNAPSHOTS', '1'),
         capacityWaitMaxMs: boundedInt(env, 'RUNTIME_CAPACITY_WAIT_MAX_MS', 30 * 60_000, 0, 30 * 60_000),

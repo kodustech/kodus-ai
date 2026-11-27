@@ -37,7 +37,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
 
 const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
 
-function world(over: { recipe?: string | null; files?: Array<{ path: string; content: string }>; machineSize?: { memoryMb: number; cpus: number }; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; baselines?: InMemorySuiteBaselines; diffSince?: SuiteServiceDeps['diffSince']; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
+function world(over: { cadenceMs?: number; lazySkipped?: string[]; recipe?: string | null; files?: Array<{ path: string; content: string }>; machineSize?: { memoryMb: number; cpus: number }; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; baselines?: InMemorySuiteBaselines; diffSince?: SuiteServiceDeps['diffSince']; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
     const published: string[] = [];
     const finishedStates: string[] = [];
     const clock = new SuiteClock();
@@ -79,7 +79,8 @@ function world(over: { recipe?: string | null; files?: Array<{ path: string; con
         ...(over.evidence ? { evidence: over.evidence } : {}),
         ...(over.shadow ? { shadows: over.shadow.shadows, selection: over.shadow.selection, alerts: (e: unknown) => void over.shadow!.alerts?.push(e) } : {}),
         templates: { hasReady: async () => over.ready ?? true },
-        baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
+        baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha), markLazy: async (_o, _e, sha) => void over.lazySkipped?.push(sha) },
+        ...(over.cadenceMs !== undefined ? { baselineCadenceMs: over.cadenceMs } : {}),
         clock,
         ...(over.diffSince ? { diffSince: over.diffSince } : {}),
         ...(over.maps ? { maps: over.maps } : over.map ? { maps: { newest: async () => over.map, record: async () => ({ stored: true }) } } : {}),
@@ -203,6 +204,51 @@ describe('running a suite as a workflow', () => {
         expect(out).toEqual({ status: 'off', reason: 'baseline_disabled' });
         expect(w.cell.acquires).toEqual([]);
         expect(w.baselineStarted).toEqual([MAIN]);
+    });
+
+    // docs 7.2, lazy baseline: main runs the whole suite only when the suite, its coverage map or the cadence needs it.
+    describe('the lazy baseline', () => {
+        // The product sends main's spec files from the repository tree, so the worker decides without booting a listing host.
+        const main = ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts'].map((path) => ({ path, sizeBytes: 100 }));
+        const baseline = (over: Partial<RuntimeSuiteRequested> = {}) => request({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined, mainSpecs: main, ...over });
+        const second = { suiteRunId: 'sr-2', key: 'sr-2', mainSha: 'c'.repeat(40) };
+
+        // The suite did not change and the last full run is recent: the next main commit runs nothing, starts no host and its request ends lazily.
+        it('runs nothing for a main commit when the suite and the cadence are fresh, and ends the request as lazy', async () => {
+            const lazy: string[] = [];
+            const w = world({ lazySkipped: lazy });
+            await w.service.run(baseline(), passthrough);
+            const acquires = w.cell.acquires.length;
+            const out = await w.service.run(baseline(second), passthrough);
+            expect(out).toEqual({ status: 'off', reason: 'baseline_lazy' });
+            expect(w.cell.acquires).toHaveLength(acquires);
+            expect(lazy).toEqual([second.mainSha]);
+            expect(await w.runs.get(ORG, 'sr-2')).toBeNull();
+        });
+
+        // The suite changed under the stored baseline (a spec was added on main): selection and stored results are stale, so the commit runs in full.
+        it('runs a full baseline when the suite digest changed', async () => {
+            const w = world();
+            await w.service.run(baseline(), passthrough);
+            const out = await w.service.run(baseline({ ...second, mainSpecs: ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts', 'cypress/e2e/c.cy.ts'].map((path) => ({ path, sizeBytes: 100 })) }), passthrough);
+            expect(out).toMatchObject({ status: 'ran' });
+        });
+
+        // However fresh the suite, main goes no longer than the cadence without a full run.
+        it('runs a full baseline once the cadence is over', async () => {
+            const w = world({ cadenceMs: 0 });
+            await w.service.run(baseline(), passthrough);
+            expect(await w.service.run(baseline(second), passthrough)).toMatchObject({ status: 'ran' });
+        });
+
+        // Selection reads the coverage map: with none stored the next main commit refreshes it even inside the cadence.
+        it('runs a full baseline when selection is on and no coverage map exists yet', async () => {
+            const maps = new InMemorySuiteCoverageMaps();
+            const w = world({ maps });
+            await w.service.run(baseline(), passthrough);
+            await maps.rows.clear();
+            expect(await w.service.run(baseline(second), passthrough)).toMatchObject({ status: 'ran' });
+        });
     });
 
     it('does nothing for an environment whose recipe declares no suite, or has no recipe, or is unknown', async () => {

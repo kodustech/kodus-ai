@@ -81,6 +81,16 @@ const ask = (over: Partial<Parameters<PgSuiteBaselineRequests['request']>[0]> = 
         expect((await requests.pending(10)).map((r) => r.mainSha[0])).toEqual(['b']);
     });
 
+    // The worker found main needs no full run for this commit: the request it already started ends skipped as lazy, for its own organization only.
+    it('a started request the worker found lazy ends skipped with the reason lazy, for its own organization only', async () => {
+        await requests.request(ask());
+        await requests.markStarted('org-a', 'env-1', sha('a'));
+        await requests.markLazy('org-b', 'env-1', sha('a'));
+        expect((await pool.query(`SELECT state, reason FROM runtime.runtime_suite_baseline_requests`)).rows).toEqual([{ state: 'started', reason: null }]);
+        await requests.markLazy('org-a', 'env-1', sha('a'));
+        expect((await pool.query(`SELECT state, reason FROM runtime.runtime_suite_baseline_requests`)).rows).toEqual([{ state: 'skipped', reason: 'lazy' }]);
+    });
+
     it("another organization's mark does not start the request, and the oldest request is listed first", async () => {
         await requests.request(ask({ environmentId: 'env-1' }));
         await requests.request(ask({ environmentId: 'env-2', mainSha: sha('b') }));

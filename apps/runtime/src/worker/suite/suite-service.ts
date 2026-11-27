@@ -3,7 +3,7 @@ import { type Claim, type RecipeForClaim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
-import { BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, diffReach, type DiffReach, diffBaseFor, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
+import { BASELINE_CADENCE_DEFAULT_MS, baselineDue, BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, diffReach, type DiffReach, diffBaseFor, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import type { CoverageMapRecord } from './coverage-collector';
@@ -11,6 +11,7 @@ import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { Canary } from '../canary/canary';
 import type { PgSuiteBaselines } from './pg-suite-baselines';
 import type { StoredCoverageMap } from './pg-suite-coverage-maps';
+import type { PgSuiteMainResults } from './pg-suite-main-results';
 import type { PgSuiteQueue } from './pg-suite-queue';
 import type { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
 import type { PgSuiteRuns, StoredSuiteRun, SuiteRunState } from './pg-suite-runs';
@@ -73,7 +74,11 @@ export interface SuiteServiceDeps {
     /** The spec queue of a run (section 6): the shards pull their specs from it. Absent: the plan is fixed per shard. */
     queue?: Pick<PgSuiteQueue, 'seed' | 'claimNext' | 'renew' | 'complete' | 'release' | 'requeueExpired' | 'counts' | 'leftovers'>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
-    baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
+    baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'> & Partial<Pick<PgSuiteBaselines, 'newest'>>;
+    /** What main said of each spec: kept by baselines and main re-runs, reused by the main re-run, read for the classifier. */
+    mainResults?: Pick<PgSuiteMainResults, 'record' | 'at' | 'history'>;
+    /** The longest main goes without a full suite run (default 24 h); between them a baseline runs only when the suite digest or the coverage map needs it (docs 7.2). */
+    baselineCadenceMs?: number;
     templates?: SuiteTemplates;
     /** Where the artifacts of failed specs are written (the evidence store); absent: none are kept. */
     evidence?: Pick<EvidenceStore, 'put'>;
@@ -89,7 +94,7 @@ export interface SuiteServiceDeps {
     diffSince?(req: { organizationId: string; environmentId: string; repositoryId: string; base: string; head: string }): Promise<readonly string[] | undefined>;
     headroom?(): Promise<number>;
     /** The baseline request a baseline run answers: marked started once the workflow holds it, so the product does not issue it again. */
-    baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
+    baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'> & Partial<Pick<PgSuiteBaselineRequests, 'markLazy'>>;
     /**
      * The shadow check of selection (6.1 Proof b, D14): every 5th, then 10th, selected run of an environment also enqueues a full
      * background run (`shadows`), and what that run finds the selection skipped turns the environment to the whole suite or off
@@ -107,7 +112,7 @@ export type SuiteServiceResult =
     /** The engine ran (or had run: `replayed`); `state` is the run's. */
     | { status: 'ran'; suiteRunId: string; state: SuiteRunState; replayed: boolean; /** A canary was found in an artifact (the Run that holds the suite halts). */ leaked?: boolean }
     /** The environment has no suite to run: no run row. */
-    | { status: 'off'; reason: 'no_suite' | 'baseline_disabled' }
+    | { status: 'off'; reason: 'no_suite' | 'baseline_disabled' | 'baseline_lazy' }
     /** The run could not start; it ended neutral, with the reason. */
     | { status: 'unavailable'; suiteRunId: string; state: 'neutral'; reason: 'template_missing' | 'no_host' | 'list_failed' | 'no_repository' | 'no_specs'; blocker?: string };
 
@@ -218,6 +223,12 @@ export class SuiteService {
         // A baseline is main alone: the PR's files are not part of it.
         const whole = specListOf(cmd.mode === 'baseline' ? { glob: common.glob, listed: listing.specs, ...(common.cwd ? { cwd: common.cwd } : {}) } : common);
         const digest = suiteDigestOf(s.suite.config, whole.map((x) => x.path));
+        // Lazy baseline (docs 7.2): main runs the whole suite only when the suite, its coverage map or the cadence needs it.
+        if (cmd.mode === 'baseline' && !held && !(await this.baselineIsDue(cmd, digest))) {
+            await demand.end().catch(() => undefined);
+            await this.d.baselineRequests?.markLazy?.(cmd.organizationId, cmd.environmentId, cmd.mainSha).catch(() => undefined);
+            return { status: 'off', reason: 'baseline_lazy' };
+        }
         const plan = await this.plan(cmd, s, whole.map((x) => x.path), digest, !held);
         // A selected run is counted (and every 5th, then 10th, is shadowed) once: a step that runs again finds its run row and counts nothing.
         if (!held && !cmd.specs && cmd.mode !== 'baseline' && cmd.mode !== 'shadow' && (plan.selection.mode === 'selected' || plan.selection.mode === 'none')) await this.shadowIfDue(cmd, plan.specs);
@@ -240,6 +251,7 @@ export class SuiteService {
             demand,
             clock,
             ...(this.d.queue ? { queue: this.d.queue } : {}),
+            ...(this.d.mainResults ? { mainResults: this.d.mainResults } : {}),
             ...(this.d.baselines ? { baselines: this.d.baselines } : {}),
             ...(this.d.maps ? { maps: this.d.maps } : {}),
             ...(this.d.evidence ? { artifacts: new SuiteArtifactKeeper({ source: new ExecArtifactSource(execInService(env, s.suite.config.service), `art-${cmd.suiteRunId}`), store: this.d.evidence }) } : {}),
@@ -263,6 +275,20 @@ export class SuiteService {
             ...(cmd.mode === 'baseline' && this.d.maps ? { coverage: true } : {}),
         });
         return { status: 'ran', suiteRunId: cmd.suiteRunId, state: out.state, replayed: out.replayed, ...(out.leaked ? { leaked: true } : {}) };
+    }
+
+    /** Whether a baseline of this main commit is worth its hosts. Unknown (no store to ask) means yes. */
+    private async baselineIsDue(cmd: RuntimeSuiteRequested, digest: string): Promise<boolean> {
+        if (!this.d.baselines?.newest) return true;
+        const [baseline, map] = await Promise.all([this.d.baselines.newest(cmd.organizationId, cmd.environmentId), this.d.maps?.newest(cmd.organizationId, cmd.environmentId)]);
+        return baselineDue({
+            now: this.d.clock.now(),
+            suiteDigest: digest,
+            cadenceMs: this.d.baselineCadenceMs ?? BASELINE_CADENCE_DEFAULT_MS,
+            ...(baseline ? { baseline: { suiteDigest: baseline.suiteDigest, finishedAt: baseline.finishedAt.getTime() } } : {}),
+            keepsMap: !!this.d.maps,
+            ...(map ? { map: { suiteDigest: map.suiteDigest, finishedAt: map.finishedAt.getTime() } } : {}),
+        }).due;
     }
 
     /**

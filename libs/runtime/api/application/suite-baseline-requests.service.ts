@@ -7,6 +7,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
 import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
 import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
+import { mainSpecsOfTree } from '@libs/runtime/suite';
 import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 
 import {
@@ -49,7 +50,7 @@ export class RuntimeSuiteBaselineRequests {
     constructor(
         @Inject(RUNTIME_SUITE_BASELINE_READER) private readonly reader: RuntimeSuiteBaselineReader,
         @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE) private readonly environments: Pick<ProductEnvironmentStore, 'get'>,
-        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit'>,
+        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit'> & Partial<Pick<RuntimeGitPort, 'listFileSizesAtCommit'>>,
         @Inject(RUNTIME_REPO_TOKEN_ISSUER) private readonly repoTokens: RuntimeRepoTokenIssuer,
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN) private readonly outbox: Pick<IOutboxMessageRepository, 'create'>,
         @Inject(RUNTIME_CLOCK) private readonly now: Clock,
@@ -58,6 +59,18 @@ export class RuntimeSuiteBaselineRequests {
         /** The environment's setup: its booted recipe is the suite's source when the repository has none committed. */
         @Optional() @Inject(RUNTIME_ENVIRONMENT_SETUP_READER) private readonly setups?: Pick<RuntimeEnvironmentSetupReader, 'get'>,
     ) {}
+
+    private async mainSpecsOf(repo: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string }, sha: string, suite: { specs: string; cwd?: string }): Promise<{ mainSpecs?: Array<{ path: string; sizeBytes: number }> }> {
+        if (!this.git.listFileSizesAtCommit) return {};
+        try {
+            const tree = await this.git.listFileSizesAtCommit({ ...repo, sha });
+            if (tree === 'unsupported_platform') return {};
+            const specs = mainSpecsOfTree(tree, { glob: suite.specs, ...(suite.cwd !== undefined ? { cwd: suite.cwd } : {}) });
+            return specs ? { mainSpecs: specs } : {};
+        } catch {
+            return {};
+        }
+    }
 
     /** Never throws: a request that cannot be issued is logged and left for the next pass. */
     async run(): Promise<{ pending: number; requested: number; skipped: number; failed: number }> {
@@ -100,6 +113,9 @@ export class RuntimeSuiteBaselineRequests {
                     skipped++;
                     continue;
                 }
+                // Main's specs from the repository's tree (one Git API call): the worker then needs no listing host to decide whether this
+                // commit wants a full baseline (docs 7.2), and a lazy skip costs no host at all. Without them it lists on a template host.
+                const mainSpecs = await this.mainSpecsOf({ ...orgTeam, ...repo }, p.mainSha, suite!);
                 const tokens: string[] = [];
                 for (let i = 0; i <= shards; i++) tokens.push(sealForRuntime(this.config, await this.repoTokens.issue({ ...orgTeam, ...repo }), p.suiteRunId));
                 await this.outbox.create(
@@ -118,6 +134,7 @@ export class RuntimeSuiteBaselineRequests {
                             traceparent: traceparentFor(p.suiteRunId),
                             repoToken: tokens[0],
                             moreRepoTokens: tokens.slice(1),
+                            ...mainSpecs,
                         },
                         p.suiteRunId,
                     ),

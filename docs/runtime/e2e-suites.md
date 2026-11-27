@@ -32,6 +32,17 @@ a classifier that says whose fault each red spec is, so that the PR author sees 
 
 Everything below is inside these four.
 
+**Changed 2026-11-27 (the owner, after sorry-cypress, Cypress Cloud and GitLab).** Two items above no longer hold as written, and
+the sections they touch say so where they were found:
+
+- Decision 1 ("main baseline once per main commit") became the **lazy baseline** (7.2): main runs only the specs a PR failed,
+  and a full run only when the suite digest or the coverage map needs refreshing, or when the cadence is over. 2.1 steps 2 to 5,
+  the "baseline per main commit" cost lines in 12.2 and the metric "Baseline reuse" describe the old rule.
+- "There is no scheduler beyond this" (6, item 6) became the **dynamic queue** (6.2).
+
+Decision 3 (re-run failed specs on main and on the PR) and the classifier are unchanged; the lazy baseline only changes where
+main's side of a re-run comes from.
+
 ### 2.1 Step by step: a main commit
 
 1. A commit lands on the default branch. The push re-runs the environment's setup by itself
@@ -392,6 +403,35 @@ durationMs}}`, small (a 300-spec suite is about 40 KB).
 - **Lookup.** By `(environment, sha)`, then the nearest ancestor within 20 main commits that has a complete baseline
   (git ancestry from the Git API; unverified that the platform adapter lists ancestors, otherwise the engine uses the
   stored shas ordered by `finished_at`).
+
+### 7.2 The lazy baseline (decided 2026-11-27)
+
+A full run on every main commit costs about 31 host-minutes (12.2) to answer questions most commits never ask: a PR that
+fails nothing needs no main side at all. GitLab and Cypress Cloud decide a flake by comparing outcomes on the same commit,
+not by running main every time; sorry-cypress keeps per-spec results. So main is run for the specs a PR failed, and what it
+says is kept.
+
+- **When a baseline runs.** A template turning ready still records the request (2.1), the product still issues it, now with
+  main's spec files read from the repository tree (no listing host). The worker decides before any host starts
+  (`SuiteService.baselineIsDue`, pure rule `baselineDue`): **due** when there is no complete baseline yet (`first`), the suite
+  digest changed (`digest_changed`: a spec added, the command changed), selection is on and the coverage map is missing,
+  of another digest or past D12's 3 days (`map_missing`, `map_digest`, `map_stale`), or the last full run is older than
+  `RUNTIME_SUITE_BASELINE_CADENCE_HOURS` (default 24, `cadence`). Otherwise the request ends `skipped` with reason `lazy`
+  (shown on the environment page) and nothing runs. `suite.baseline: false` still turns it off.
+- **What main said, per spec.** `runtime_suite_main_observations` (migration 66), append-only, one row per spec per run:
+  (environment, main sha, suite digest, spec, status, error signature, tests, source `baseline | rerun`). A baseline writes every spec; the
+  main re-run of a PR writes the specs it ran. The newest 30 rows per spec and 30 days are kept.
+- **Reuse.** The main re-run first asks the store for each failed spec at the PR's merge base, then the template's commit
+  (the newest main with a template), for the same suite digest. Runs that agree (all passed, or all failed) are the result, with the
+  stored per-test errors, so the classifier sees what a re-run would have said; only the other specs start a main host, and none
+  failed-spec left means no host. A spec whose runs at that commit disagree is not reused. Reuse of a result from the merge base does
+  not change `baseDrift` (the classifier has one drift per run): D2 still applies as before, conservatively.
+- **History for the classifier.** `mainSpecHistory` over the newest 20 runs of a spec: different outcomes on the same commit mean
+  flaky (the industry rule). A PR failure that passed on main's re-run, on a spec that is flaky on main with that very failure
+  signature, is class `flaky` (`flakyOnMain`), never a finding; a different failure on a flaky spec is still a regression. The
+  history ignores the digest, so adding a spec does not reset anyone's record.
+- **Cost.** A commit that needs no full run costs one Git tree read; a PR that fails nothing costs no main host; the first PR to fail a
+  spec on a commit pays one, the rest reuse it. The cadence bounds how stale selection and the history can get.
 
 ## 8. The classifier input: the baseline and the merge base
 
@@ -793,6 +833,12 @@ Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_m
     a lapsed lease re-queues, a renewed one does not, the third hand-out is `abandoned`; a slow spec the stats did not know
     no longer makes its shard the tail; a lost host's specs are run by the other shard with no fresh host; the results model
     and the re-run flow are the fixed plan's.
+
+22. **Lazy baseline** (7.2). Test first: a stored (environment, sha, digest, spec) result is found and another digest's is not
+    (Postgres); the main re-run reuses it with no host and the same class, and not when the commit disagreed with itself; a
+    baseline records every spec; `baselineDue` per reason and at the cadence's edge; a PR failure main also flakes on is `flaky`
+    and another failure is still a regression; the worker ends a commit whose suite, map and cadence are fresh as lazy with no
+    host and runs one whose digest or map is not.
 
 ## 18. Open decisions (with a recommendation)
 

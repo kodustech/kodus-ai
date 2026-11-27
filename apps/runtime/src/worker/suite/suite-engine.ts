@@ -13,6 +13,8 @@ import {
     estimateTotalMs,
     failFast,
     hostsToAsk,
+    mainOutcomeAt,
+    mainSpecHistory,
     needsMainRerun,
     orderBin,
     parseJUnit,
@@ -38,6 +40,7 @@ import {
 import { collectCoverage, type CoverageMapRecord, coverageDirOf } from './coverage-collector';
 import { type DetachedOutcome, runDetached, safeResultsGlob } from './detached-exec';
 import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
+import type { PgSuiteMainResults } from './pg-suite-main-results';
 import type { PgSuiteQueue } from './pg-suite-queue';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
@@ -148,6 +151,11 @@ export interface SuiteEngineDeps {
     templates?: SuiteTemplates;
     /** The baselines of main commits: a baseline run records one, a PR run reads the one of its merge base. Absent: none is kept or used. */
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
+    /**
+     * What main said of each spec (7.2): a baseline and the main re-run of a PR record there; the main re-run reuses a stored result for the
+     * same (environment, main sha, spec, suite digest) instead of starting a host, and the classifier reads the spec's history. Absent: main is re-run every time.
+     */
+    mainResults?: Pick<PgSuiteMainResults, 'record' | 'at' | 'history'>;
     /** Where a baseline's coverage map is kept; absent: none is kept. */
     maps?: { record(m: CoverageMapRecord): Promise<{ stored: boolean }> };
     /** Keeps the artifacts of failed specs as evidence; absent: none are kept. */
@@ -1022,6 +1030,7 @@ export class SuiteEngine {
             main = mainSide.state === 'ran' ? { state: 'ran', results: this.rerunsOf(mainWanted, mainSide.ran, mainSide.ran.done.size === 0 && mainSide.ran.missing.size > 0) } : { state: mainSide.state };
         }
 
+        const mainHistory = await this.mainHistoryOf(ctx, [...new Set(testFailures.map((f) => f.spec))]);
         const classification = classifyFailures({
             failures,
             plan,
@@ -1030,6 +1039,7 @@ export class SuiteEngine {
             main,
             baseDrift,
             diffReachedSpecs: inputs.diffReachedSpecs ?? [],
+            ...(mainHistory ? { mainHistory } : {}),
             ...(baseline ? { baseline } : {}),
             notRunSpecs,
         });
@@ -1102,17 +1112,63 @@ export class SuiteEngine {
     /** The failed specs on main: a template host, no build. No template, or no host in two attempts, and main is not waited for (9.5). */
     private async mainRerun(ctx: RunCtx, specs: readonly string[]): Promise<{ state: 'ran'; ran: Ran } | { state: 'template_missing' } | { state: 'no_host' }> {
         const { req } = ctx;
+        // A spec main already answered for this suite (the merge base first, then the template's commit) needs no host.
+        const stored = await this.storedMain(ctx, specs);
+        const toRun = specs.filter((s) => !stored.has(s));
+        if (toRun.length === 0) return { state: 'ran', ran: { done: stored, missing: new Map() } };
         if (this.d.templates && !(await this.d.templates.hasReady(req.organizationId, req.environmentId))) return { state: 'template_missing' };
         for (let attempt = 0; attempt < MAIN_HOST_ATTEMPTS; attempt++) {
             const at = this.d.clock.now();
             const claimId = await this.extraHost(ctx, MAIN_HOST_SHARD, 'base', req.mainSha, attempt);
             if (!claimId) continue;
-            const ran = await this.runSpecs(ctx, { claimId, shard: MAIN_HOST_SHARD }, 'rerun_main', specs, `${req.suiteRunId}-${MAIN_HOST_SHARD}`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: false });
+            const ran = await this.runSpecs(ctx, { claimId, shard: MAIN_HOST_SHARD }, 'rerun_main', toRun, `${req.suiteRunId}-${MAIN_HOST_SHARD}`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: false });
             ctx.hostMs.rerun += Math.max(0, this.d.clock.now() - at);
             await this.recordMissing(ctx, 'rerun_main', [{ shard: MAIN_HOST_SHARD, missing: ran.missing, ...(ran.cause ? { cause: ran.cause } : {}) }]);
+            await this.recordMain(ctx, 'rerun', req.mainSha, [...ran.done.values()]);
+            for (const [spec, r] of stored) ran.done.set(spec, r);
             return { state: 'ran', ran };
         }
         return { state: 'no_host' };
+    }
+
+    /** The results main already holds for `specs` at the merge base or, failing that, the template's commit, as the spec results a re-run would have given. Only runs that agree are reused. */
+    private async storedMain(ctx: RunCtx, specs: readonly string[]): Promise<Map<string, SpecResult>> {
+        const out = new Map<string, SpecResult>();
+        const store = this.d.mainResults;
+        if (!store || specs.length === 0) return out;
+        const shas = [...new Set([ctx.req.mergeBase, ctx.req.mainSha].filter((x): x is string => !!x))];
+        const found = await store.at(ctx.req.organizationId, ctx.req.environmentId, this.digestOf(ctx), shas, specs).catch(() => undefined);
+        for (const [spec, f] of found ?? []) {
+            const outcome = mainOutcomeAt(f.observations);
+            if (outcome !== 'passed' && outcome !== 'failed') continue;
+            const last = f.observations[f.observations.length - 1];
+            out.set(spec, {
+                spec,
+                status: outcome,
+                durationMs: 0,
+                tests: last.tests.map((t) => ({ title: t.title, status: t.status, attempts: [{ status: t.status === 'failed' ? 'failed' : t.status === 'passed' ? 'passed' : 'skipped', ms: 0, ...(t.errorSignature ? { error: t.errorSignature } : {}) }] })),
+                ...(last.errorSignature ? { errorSignature: last.errorSignature } : {}),
+            });
+        }
+        return out;
+    }
+
+    /** What a run saw of each spec on main, kept for reuse and for the history (7.2). Passed and failed only; best effort, never fails the run. */
+    private async recordMain(ctx: RunCtx, source: 'baseline' | 'rerun', mainSha: string, results: readonly SpecResult[]): Promise<void> {
+        const store = this.d.mainResults;
+        const rows = results.filter((r) => r.status === 'passed' || r.status === 'failed').map((r) => ({ spec: r.spec, status: r.status as 'passed' | 'failed', ...(r.errorSignature ? { errorSignature: r.errorSignature } : {}), tests: r.tests.map((t) => ({ title: t.title, status: t.status, ...(t.status === 'failed' ? { errorSignature: signatureOf(t) } : {}) })) }));
+        if (!store || rows.length === 0) return;
+        await store.record({ organizationId: ctx.req.organizationId, environmentId: ctx.req.environmentId, suiteRunId: ctx.req.suiteRunId, mainSha, suiteDigest: this.digestOf(ctx), source, observedAt: new Date(this.d.clock.now()), rows }).catch(() => undefined);
+    }
+
+    /** Main's history of the failing specs, for the classifier (flaky = different outcomes on one commit). */
+    private async mainHistoryOf(ctx: RunCtx, specs: readonly string[]): Promise<Record<string, { flaky: boolean; failureSignatures: string[] }> | undefined> {
+        const found = await this.d.mainResults?.history(ctx.req.organizationId, ctx.req.environmentId, specs).catch(() => undefined);
+        if (!found) return undefined;
+        return Object.fromEntries([...found].map(([spec, obs]) => {
+            const h = mainSpecHistory(obs);
+            return [spec, { flaky: h.flaky, failureSignatures: h.failureSignatures }];
+        }));
     }
 
     /** What a re-run said of each failed test: its test in the re-run spec result, else why the spec has none. */
@@ -1181,6 +1237,7 @@ export class SuiteEngine {
 
     /** The whole suite on main, per spec as it ended. Complete only when every spec reported; an incomplete one is no baseline for a lookup. */
     private async recordBaseline(ctx: RunCtx, firstPass: readonly FirstPassSpec[]): Promise<void> {
+        await this.recordMain(ctx, 'baseline', ctx.req.mainSha, firstPass.flatMap((s) => (s.result ? [s.result] : [])));
         if (!this.d.baselines) return;
         const specs: Record<string, BaselineSpec> = {};
         for (const s of firstPass) {

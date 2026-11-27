@@ -73,6 +73,16 @@ export class PgSuiteBaselines {
         return r.rows[0] ? toRecord(r.rows[0]) : null;
     }
 
+    /** The environment's newest complete baseline (any digest): what the lazy rule asks whether a new main commit needs a full run after. */
+    async newest(organizationId: string, environmentId: string): Promise<{ mainSha: string; suiteDigest: string; finishedAt: Date } | null> {
+        const r = await this.pool.query(
+            `SELECT main_sha, suite_digest, finished_at FROM runtime.runtime_suite_baselines WHERE organization_id = $1 AND environment_id = $2 AND status = 'complete' ORDER BY finished_at DESC LIMIT 1`,
+            [organizationId, environmentId],
+        );
+        const x = r.rows[0];
+        return x ? { mainSha: x.main_sha, suiteDigest: x.suite_digest, finishedAt: x.finished_at } : null;
+    }
+
     private async prune(organizationId: string, environmentId: string): Promise<void> {
         await this.pool.query(
             `DELETE FROM runtime.runtime_suite_baselines b

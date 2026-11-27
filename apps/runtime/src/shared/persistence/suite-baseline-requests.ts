@@ -60,6 +60,15 @@ export class PgSuiteBaselineRequests {
         );
     }
 
+    /** The worker found the suite, its coverage map and the cadence fresh: main runs only what a PR fails, so the started request ends `skipped` with reason `lazy`. */
+    async markLazy(organizationId: string, environmentId: string, mainSha: string): Promise<void> {
+        await this.pool.query(
+            `UPDATE runtime.runtime_suite_baseline_requests SET state = 'skipped', reason = 'lazy', updated_at = now()
+              WHERE organization_id = $1 AND environment_id = $2 AND main_sha = $3 AND state IN ('queued', 'started')`,
+            [organizationId, environmentId, mainSha],
+        );
+    }
+
     /** The command was issued: the request is no longer queued. Only the organization's own request moves. */
     async markStarted(organizationId: string, environmentId: string, mainSha: string): Promise<void> {
         await this.pool.query(

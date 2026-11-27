@@ -1,10 +1,11 @@
 import type { AcquireRequest, Blocked, Claim, EnvError, ExecRequest, StepResult } from '@libs/runtime/environment';
-import { afterLostClaim, batchSize, QUEUE_BATCH_MAX_SPECS, QUEUE_BATCH_TARGET_MS, QUEUE_LEASE_MS, type QueueEntry } from '@libs/runtime/suite';
+import { afterLostClaim, batchSize, MAIN_HISTORY_RUNS, type MainObservation, QUEUE_BATCH_MAX_SPECS, QUEUE_BATCH_TARGET_MS, QUEUE_LEASE_MS, type QueueEntry } from '@libs/runtime/suite';
 
 import type { CoverageMapRecord } from './coverage-collector';
 import { POLL_STATES } from './detached-exec';
 import type { BaselineRecord, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, StoredSuiteResult, SuiteArtifactRef, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
+import type { MainRecord, PgSuiteMainResults, StoredMainResult } from './pg-suite-main-results';
 import type { LostClaims, PgSuiteQueue, QueueCounts, QueueLeftover } from './pg-suite-queue';
 import type { PgSuiteSelectionState, PgSuiteShadows, SelectionState, ShadowRequest, StoredShadow } from './pg-suite-shadows';
 import { STATS_WINDOW, type PgSuiteSpecStats, type SpecObservation } from './pg-suite-spec-stats';
@@ -166,7 +167,7 @@ export class InMemorySuiteSpecStats implements Pick<PgSuiteSpecStats, 'read' | '
     }
 }
 
-export class InMemorySuiteBaselines implements Pick<PgSuiteBaselines, 'record' | 'find' | 'findAmong'> {
+export class InMemorySuiteBaselines implements Pick<PgSuiteBaselines, 'record' | 'find' | 'findAmong' | 'newest'> {
     readonly rows = new Map<string, BaselineRecord>();
     private key = (e: string, sha: string, digest: string) => `${e}|${sha}|${digest}`;
     async record(b: BaselineRecord) {
@@ -175,6 +176,10 @@ export class InMemorySuiteBaselines implements Pick<PgSuiteBaselines, 'record' |
         if (held && !(held.status === 'incomplete' && b.status === 'complete' && held.organizationId === b.organizationId)) return { stored: false };
         this.rows.set(k, b);
         return { stored: true };
+    }
+    async newest(organizationId: string, environmentId: string) {
+        const b = [...this.rows.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.status === 'complete').sort((a, c) => c.finishedAt.getTime() - a.finishedAt.getTime())[0];
+        return b ? { mainSha: b.mainSha, suiteDigest: b.suiteDigest, finishedAt: b.finishedAt } : null;
     }
     async find(organizationId: string, environmentId: string, mainSha: string, suiteDigest: string) {
         return this.findAmong(organizationId, environmentId, suiteDigest, [mainSha]);
@@ -185,6 +190,39 @@ export class InMemorySuiteBaselines implements Pick<PgSuiteBaselines, 'record' |
             if (b && b.organizationId === organizationId && b.status === 'complete') return b;
         }
         return null;
+    }
+}
+
+/** What main said of each spec, as the Postgres store keeps it (append-only, idempotent per run and spec). */
+export class InMemorySuiteMainResults implements Pick<PgSuiteMainResults, 'record' | 'at' | 'history'> {
+    readonly records: MainRecord[] = [];
+    private rows: Array<MainObservation & { organizationId: string; environmentId: string; suiteRunId: string; suiteDigest: string; spec: string; tests: MainRecord['rows'][number]['tests'] }> = [];
+    async record(r: MainRecord) {
+        this.records.push(r);
+        for (const x of r.rows) {
+            if (this.rows.some((o) => o.suiteRunId === r.suiteRunId && o.spec === x.spec)) continue;
+            this.rows.push({ organizationId: r.organizationId, environmentId: r.environmentId, suiteRunId: r.suiteRunId, suiteDigest: r.suiteDigest, spec: x.spec, mainSha: r.mainSha, status: x.status, ...(x.errorSignature ? { errorSignature: x.errorSignature } : {}), observedAt: r.observedAt.getTime(), tests: x.tests });
+        }
+    }
+    async at(organizationId: string, environmentId: string, suiteDigest: string, shas: readonly string[], specs: readonly string[]) {
+        const out = new Map<string, StoredMainResult>();
+        for (const spec of specs) {
+            for (const sha of shas) {
+                const hit = this.rows.filter((o) => o.organizationId === organizationId && o.environmentId === environmentId && o.suiteDigest === suiteDigest && o.spec === spec && o.mainSha === sha);
+                if (hit.length === 0) continue;
+                out.set(spec, { mainSha: sha, observations: hit.map(({ organizationId: _o, environmentId: _e, suiteRunId: _r, suiteDigest: _d, spec: _s, ...o }) => o) });
+                break;
+            }
+        }
+        return out;
+    }
+    async history(organizationId: string, environmentId: string, specs: readonly string[]) {
+        const out = new Map<string, MainObservation[]>();
+        for (const spec of specs) {
+            const list = this.rows.filter((o) => o.organizationId === organizationId && o.environmentId === environmentId && o.spec === spec).sort((a, b) => b.observedAt - a.observedAt).slice(0, MAIN_HISTORY_RUNS).map((o) => ({ mainSha: o.mainSha, status: o.status, ...(o.errorSignature ? { errorSignature: o.errorSignature } : {}), observedAt: o.observedAt }));
+            if (list.length > 0) out.set(spec, list);
+        }
+        return out;
     }
 }
 

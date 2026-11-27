@@ -561,7 +561,7 @@ export const RuntimeSuiteSelectionChangedSchema = z.strictObject({
 export type RuntimeSuiteSelectionChanged = z.infer<typeof RuntimeSuiteSelectionChangedSchema>;
 
 /** Why a queued baseline request will never run (it ends in the state `skipped`, with this as its reason). */
-export const BASELINE_SKIP_REASONS = ['no_suite'] as const;
+export const BASELINE_SKIP_REASONS = ['no_suite', 'lazy'] as const;
 export type BaselineSkipReason = (typeof BASELINE_SKIP_REASONS)[number];
 
 /**

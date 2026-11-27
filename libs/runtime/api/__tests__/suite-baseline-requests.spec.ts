@@ -14,12 +14,12 @@ const recipe = (extra = '') => `version: 1\nservices:\n  compose:\n    public: a
 const env = (patch: Partial<ProductEnvironment> = {}): ProductEnvironment => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop', state: 'active', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(), ...patch });
 const pendingRow = (over: Record<string, unknown> = {}) => ({ organizationId: ORG, environmentId: 'env-1', repositoryId: REPO, mainSha: SHA, suiteRunId: SUITE_ID, ...over });
 
-function world(opts: { pending?: any[]; recipe?: string | null; released?: boolean; envs?: ProductEnvironment[]; tokenFails?: boolean } = {}) {
+function world(opts: { pending?: any[]; recipe?: string | null; released?: boolean; envs?: ProductEnvironment[]; tokenFails?: boolean; tree?: Array<{ path: string; size: number }> } = {}) {
     const envs = opts.envs ?? [env()];
     const store = { get: async (o: string, e: string) => envs.find((x) => x.organizationId === o && x.environmentId === e) ?? null };
     const outbox = new FakeOutbox();
     const issued: string[] = [];
-    const git = { readFileAtCommit: async () => (opts.recipe === undefined ? recipe() : opts.recipe) } as unknown as RuntimeGitPort;
+    const git = { readFileAtCommit: async () => (opts.recipe === undefined ? recipe() : opts.recipe), ...(opts.tree ? { listFileSizesAtCommit: async () => opts.tree } : {}) } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (opts.tokenFails ? Promise.reject(new Error('no token')) : (issued.push('t'), `ghs_download_${issued.length}`)) };
     const reader = { pending: jest.fn(async () => opts.pending ?? [pendingRow()]) };
     const step = new RuntimeSuiteBaselineRequests(reader, store as any, git, tokens, outbox as any, clock, config(), opts.released === undefined ? undefined : runtimeReleaseGate(opts.released));
@@ -39,6 +39,13 @@ describe('when the fleet is waiting for a baseline suite run of a main commit', 
         // One token for the spec listing and one per shard (the recipe names no ceiling: the limit of 16), none for a re-run: a baseline has none.
         expect(cmd.moreRepoTokens).toHaveLength(16);
         expect(openSealed(cmd.moreRepoTokens[0], SUITE_ID)).toBe('ghs_download_2');
+    });
+
+    // Main's spec files go in the command, so the worker can tell whether this commit wants a baseline without booting a listing host.
+    it('puts main\'s spec files from the repository tree in the command', async () => {
+        const w = world({ tree: [{ path: 'cypress/e2e/a.cy.ts', size: 10 }, { path: 'README.md', size: 5 }] });
+        await w.step.run();
+        expect(commands(w.outbox)[0].mainSpecs).toEqual([{ path: 'cypress/e2e/a.cy.ts', sizeBytes: 10 }]);
     });
 
     it('mints only the tokens the recipe can use: the listing and its shard ceiling', async () => {
