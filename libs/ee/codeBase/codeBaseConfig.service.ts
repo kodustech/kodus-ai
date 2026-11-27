@@ -7,6 +7,7 @@ import {
     ICodeBaseConfigService,
     KodusConfigFileReadError,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { isTransientProviderError } from '@libs/platform/infrastructure/adapters/services/transient-provider-error';
 import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-key.enum';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
@@ -825,6 +826,25 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         return defaultBranch;
     }
 
+    /** `strict` keeps Bitbucket and Forgejo from guessing a branch when the lookup fails. */
+    private async getDefaultBranchOrReadError(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { name: string; id: string },
+    ): Promise<string> {
+        try {
+            return await this.codeManagementService.getDefaultBranch({
+                organizationAndTeamData,
+                repository,
+                strict: true,
+            });
+        } catch (error) {
+            if (isTransientProviderError(error)) {
+                throw new KodusConfigFileReadError(error);
+            }
+            throw error;
+        }
+    }
+
     async getKodusConfigFile(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
@@ -863,7 +883,15 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         const defaultBranchName =
             defaultBranch ||
-            (await this.getDefaultBranch(organizationAndTeamData, repository));
+            (params.throwOnReadError
+                ? await this.getDefaultBranchOrReadError(
+                      organizationAndTeamData,
+                      repository,
+                  )
+                : await this.getDefaultBranch(
+                      organizationAndTeamData,
+                      repository,
+                  ));
 
         const kodusConfigFileContent = await this.getConfigurationFile(
             organizationAndTeamData,
@@ -1024,7 +1052,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     throwOnReadError,
                 });
         } catch (error) {
-            if (throwOnReadError) throw new KodusConfigFileReadError(error);
+            if (throwOnReadError && isTransientProviderError(error)) {
+                throw new KodusConfigFileReadError(error);
+            }
             throw error;
         }
 
