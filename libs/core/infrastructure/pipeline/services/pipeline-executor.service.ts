@@ -158,7 +158,23 @@ export class PipelineExecutor<TContext extends PipelineContext> {
             });
         }
 
+        let pastPointOfNoReturn = false;
+
         for (const stage of stages) {
+            if (context.parentSignal?.aborted && !pastPointOfNoReturn) {
+                context = this.endOnAbort(
+                    context,
+                    stage,
+                    pipelineName,
+                    pipelineId,
+                );
+                break;
+            }
+
+            if (stage.pointOfNoReturn) {
+                pastPointOfNoReturn = true;
+            }
+
             // Per-stage opt-out: skipStages bypasses specific named stages
             // without changing pipeline status. Checked before the SKIPPED
             // fast-forward so a stage listed here is excluded from both
@@ -362,6 +378,57 @@ export class PipelineExecutor<TContext extends PipelineContext> {
         );
 
         return context;
+    }
+
+    /**
+     * The parent aborted before `stage` started. The reason is recorded as
+     * a critical error on the stage that did not run, so the pipeline
+     * ends as ERROR with that reason rather than as a success with no
+     * output.
+     */
+    private endOnAbort(
+        context: TContext,
+        stage: PipelineStage<TContext>,
+        pipelineName: string,
+        pipelineId: string,
+    ): TContext {
+        const reason = this.toError(
+            context.parentSignal?.reason ?? 'Pipeline aborted',
+        );
+
+        this.logger.warn({
+            message: `Pipeline '${pipelineName}:${pipelineId}' aborted before stage '${stage.stageName}': ${reason.message}`,
+            context: PipelineExecutor.name,
+            serviceName: PipelineExecutor.name,
+            metadata: {
+                ...context?.pipelineMetadata,
+                stage: stage.stageName,
+                correlationId: (context as any)?.correlationId ?? null,
+                organizationAndTeamData:
+                    (context as any)?.organizationAndTeamData ?? null,
+                status: context.statusInfo,
+            },
+        });
+
+        this.metricsCollector?.recordCounter('pipeline_aborted_total', 1, {
+            pipeline: pipelineName,
+            stage: stage.stageName,
+        });
+
+        return produce(context, (draft) => {
+            if (!Array.isArray(draft.errors)) {
+                draft.errors = [];
+            }
+
+            draft.errors.push({
+                pipelineId,
+                stage: stage.stageName,
+                substage: 'Aborted',
+                error: reason,
+                severity: 'critical',
+                metadata: { pipelineName },
+            });
+        });
     }
 
     private async notifyStageCompletion(

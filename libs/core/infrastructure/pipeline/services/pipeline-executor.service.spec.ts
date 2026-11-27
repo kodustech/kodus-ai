@@ -41,6 +41,113 @@ describe('PipelineExecutor', () => {
         expect(after[0].stage).toBe('after TestPipeline');
     });
 
+    describe('when parentSignal aborts', () => {
+        const makeContext = (signal: AbortSignal): PipelineContext =>
+            ({
+                statusInfo: { status: AutomationStatus.IN_PROGRESS },
+                errors: [],
+                parentSignal: signal,
+            }) as any;
+
+        const stageThat = (
+            name: string,
+            run: (ctx: PipelineContext) => PipelineContext,
+            extra: Partial<PipelineStage<PipelineContext>> = {},
+        ): jest.Mocked<PipelineStage<PipelineContext>> =>
+            ({
+                stageName: name,
+                execute: jest.fn().mockImplementation(async (ctx) => run(ctx)),
+                ...extra,
+            }) as any;
+
+        it('ends before the next stage and records the reason as a critical error', async () => {
+            const controller = new AbortController();
+            const reason = new Error('Superseded by a newer push (bbbbbbb)');
+            const first = stageThat('Review', (ctx) => {
+                controller.abort(reason);
+                return ctx;
+            });
+            const second = stageThat('PostComments', (ctx) => ctx);
+
+            const result = await executor.execute(
+                makeContext(controller.signal),
+                [first, second],
+                'TestPipeline',
+                undefined,
+                undefined,
+                [mockObserver],
+            );
+
+            expect(second.execute).not.toHaveBeenCalled();
+            expect(result.errors).toEqual([
+                expect.objectContaining({
+                    stage: 'PostComments',
+                    substage: 'Aborted',
+                    error: reason,
+                    severity: 'critical',
+                }),
+            ]);
+            expect(result.statusInfo.status).toBe(AutomationStatus.IN_PROGRESS);
+            expect(mockObserver.onPipelineFinish).toHaveBeenCalledTimes(1);
+        });
+
+        it('runs nothing when already aborted at start', async () => {
+            const controller = new AbortController();
+            controller.abort(new Error('timeout'));
+            const only = stageThat('Review', (ctx) => ctx);
+
+            const result = await executor.execute(
+                makeContext(controller.signal),
+                [only],
+                'TestPipeline',
+            );
+
+            expect(only.execute).not.toHaveBeenCalled();
+            expect(result.errors).toHaveLength(1);
+        });
+
+        it('finishes every remaining stage once a pointOfNoReturn stage has started', async () => {
+            const controller = new AbortController();
+            const posting = stageThat(
+                'PostComments',
+                (ctx) => {
+                    controller.abort(new Error('Superseded'));
+                    return ctx;
+                },
+                { pointOfNoReturn: true },
+            );
+            const after = stageThat('Summary', (ctx) => ctx);
+
+            const result = await executor.execute(
+                makeContext(controller.signal),
+                [posting, after],
+                'TestPipeline',
+            );
+
+            expect(after.execute).toHaveBeenCalledTimes(1);
+            expect(result.errors).toEqual([]);
+        });
+
+        it('still ends before a pointOfNoReturn stage that has not started yet', async () => {
+            const controller = new AbortController();
+            const review = stageThat('Review', (ctx) => {
+                controller.abort(new Error('Superseded'));
+                return ctx;
+            });
+            const posting = stageThat('PostComments', (ctx) => ctx, {
+                pointOfNoReturn: true,
+            });
+
+            await executor.execute(
+                makeContext(controller.signal),
+                [review, posting],
+                'TestPipeline',
+            );
+
+            expect(posting.execute).not.toHaveBeenCalled();
+        });
+    });
+
     it('should notify observer on stage start and finish', async () => {
         const context: PipelineContext = {
             statusInfo: { status: AutomationStatus.IN_PROGRESS },

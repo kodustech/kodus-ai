@@ -18,6 +18,7 @@ import {
     Reaction,
     ReviewStatusReaction,
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
+import { isReviewSupersededError } from '@libs/code-review/domain/errors/review-superseded.error';
 import { withFallbackWarnings } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
@@ -532,6 +533,20 @@ export class CodeReviewHandlerService {
 
         if (status === AutomationStatus.ERROR) {
             await this.removeCurrentReaction(context);
+
+            if (result.errors?.some((e) => isReviewSupersededError(e.error))) {
+                this.logger.log({
+                    message: `Review of PR#${context.pullRequest.number} superseded by a newer push - no error reaction, the new head gets its own review`,
+                    context: CodeReviewHandlerService.name,
+                    metadata: {
+                        reason: result.statusInfo?.message,
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                    },
+                });
+                return;
+            }
+
             await this.addStatusReaction(result, ReviewStatusReaction.ERROR);
 
             this.logger.error({

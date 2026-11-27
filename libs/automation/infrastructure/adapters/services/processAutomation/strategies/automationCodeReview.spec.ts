@@ -6,6 +6,7 @@ jest.mock('@libs/core/observability', () => ({
 
 import { AutomationCodeReviewService } from './automationCodeReview';
 import { isPrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
+import { isReviewSupersededError } from '@libs/code-review/domain/errors/review-superseded.error';
 
 const makePayload = (overrides: Record<string, unknown> = {}) => ({
     organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
@@ -328,6 +329,124 @@ describe('AutomationCodeReviewService', () => {
             finishReview({ statusInfo: { status: 'success' } });
 
             await expect(run).resolves.toBe('Automation executed successfully');
+        });
+    });
+
+    // A push for a new head while the automatic review of the old head is
+    // still running aborts that review instead of waiting for it: the push
+    // is deferred by the job processor anyway, and once it runs it reviews
+    // both heads from the last SUCCESS commit, so nothing is lost.
+    describe('when a push arrives for a PR whose automatic review is running', () => {
+        const SIGNAL_ARG = 14;
+
+        const startReview = (overrides: Record<string, unknown> = {}) => {
+            let finishReview!: (value: unknown) => void;
+            codeReviewHandlerService.handlePullRequest.mockReturnValueOnce(
+                new Promise((resolve) => (finishReview = resolve)),
+            );
+            const run = service.run!(
+                makePayload({
+                    pullRequest: { number: 42, head: { sha: 'aaa' } },
+                    ...overrides,
+                }),
+            );
+            return {
+                run,
+                finish: () =>
+                    finishReview({ statusInfo: { status: 'success' } }),
+                signal: async (): Promise<AbortSignal> => {
+                    await new Promise((resolve) => setImmediate(resolve));
+                    return codeReviewHandlerService.handlePullRequest.mock
+                        .calls[0][SIGNAL_ARG];
+                },
+            };
+        };
+
+        const pushArrives = (sha: string, origin?: string) => {
+            distributedLockService.acquire.mockResolvedValueOnce(null);
+            return service.run!(
+                makePayload({
+                    origin,
+                    pullRequest: { number: 42, head: { sha } },
+                }),
+            ).catch((raised) => raised);
+        };
+
+        it('aborts the running review with the superseding head and still defers the push', async () => {
+            const holder = startReview();
+            const signal = await holder.signal();
+            expect(signal.aborted).toBe(false);
+
+            const refusal = await pushArrives('bbb');
+
+            expect(isPrReviewInProgressError(refusal)).toBe(true);
+            expect(refusal.fromCommand).toBe(false);
+            expect(signal.aborted).toBe(true);
+            expect(isReviewSupersededError(signal.reason)).toBe(true);
+            expect(signal.reason).toMatchObject({
+                supersededHeadSha: 'aaa',
+                newHeadSha: 'bbb',
+            });
+
+            holder.finish();
+            await holder.run;
+        });
+
+        it('leaves the review alone when the push has the same head', async () => {
+            const holder = startReview();
+            const signal = await holder.signal();
+
+            await pushArrives('aaa');
+
+            expect(signal.aborted).toBe(false);
+            holder.finish();
+            await holder.run;
+        });
+
+        it('leaves the review alone when the newcomer is a command', async () => {
+            const holder = startReview();
+            const signal = await holder.signal();
+
+            await pushArrives('bbb', 'command');
+
+            expect(signal.aborted).toBe(false);
+            holder.finish();
+            await holder.run;
+        });
+
+        it('never aborts a review a command started', async () => {
+            const holder = startReview({ origin: 'command' });
+            const signal = await holder.signal();
+
+            await pushArrives('bbb');
+
+            expect(signal?.aborted ?? false).toBe(false);
+            holder.finish();
+            await holder.run;
+        });
+
+        it('keeps the pipeline under the job signal as well', async () => {
+            const job = new AbortController();
+            const holder = startReview({ signal: job.signal });
+            const signal = await holder.signal();
+
+            job.abort(new Error('timeout'));
+
+            expect(signal.aborted).toBe(true);
+            expect(signal.reason).toEqual(new Error('timeout'));
+            holder.finish();
+            await holder.run;
+        });
+
+        it('forgets the review once it finishes, so a later push does not abort a stale entry', async () => {
+            const holder = startReview();
+            const signal = await holder.signal();
+            holder.finish();
+            await holder.run;
+
+            await pushArrives('bbb');
+
+            expect(signal.aborted).toBe(false);
         });
     });
 

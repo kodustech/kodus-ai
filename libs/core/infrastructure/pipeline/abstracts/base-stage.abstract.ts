@@ -23,6 +23,12 @@ export abstract class BasePipelineStage<
     silent: boolean = false;
 
     /**
+     * See PipelineStage.pointOfNoReturn. Stages that post results to the
+     * outside world set this so an abort cannot stop them halfway.
+     */
+    pointOfNoReturn: boolean = false;
+
+    /**
      * How a thrown error in this stage contributes to the pipeline's final
      * conclusion. Default 'critical' preserves historical behavior. Stages
      * whose failure should not red-flag the whole review should override to

@@ -26,6 +26,7 @@ import {
     isPrReviewInProgressError,
     PrReviewInProgressError,
 } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
+import { ReviewSupersededError } from '@libs/code-review/domain/errors/review-superseded.error';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 
@@ -52,6 +53,17 @@ const ACTIVE_EXECUTION_LOOKBACK_MINUTES = 30;
 const ACTIVE_EXECUTION_HEARTBEAT_INTERVAL_MS = 60_000;
 const ACTIVE_EXECUTION_HEARTBEAT_STALE_MINUTES = 5;
 
+/**
+ * An automatic review this process is running, keyed by its lock key. A
+ * push that arrives for the same PR while it runs aborts it through the
+ * controller, so the deferred push reviews both heads in one run instead
+ * of waiting for a review of a head that no longer exists.
+ */
+type ActiveReview = {
+    headSha?: string;
+    controller: AbortController;
+};
+
 const STALE_STARTUP_MESSAGES = new Set([
     'pipeline started',
     'code review started',
@@ -73,6 +85,8 @@ export class AutomationCodeReviewService implements Omit<
 > {
     private readonly logger = createLogger(AutomationCodeReviewService.name);
     automationType = AutomationType.AUTOMATION_CODE_REVIEW;
+
+    private readonly activeReviews = new Map<string, ActiveReview>();
 
     constructor(
         @Inject(TEAM_AUTOMATION_SERVICE_TOKEN)
@@ -223,6 +237,7 @@ export class AutomationCodeReviewService implements Omit<
 
             this.refuseCommand(
                 'lock',
+                lockKey,
                 payload,
                 this.holderVisibleUntil(lockHolder?.createdAt),
             );
@@ -231,6 +246,7 @@ export class AutomationCodeReviewService implements Omit<
 
         let execution: IAutomationExecution | null = null;
         let stopHeartbeat: (() => void) | undefined;
+        let activeReview: ActiveReview | undefined;
 
         try {
             const existingExecution = await this.getActiveExecution(
@@ -252,10 +268,19 @@ export class AutomationCodeReviewService implements Omit<
                 });
                 this.refuseCommand(
                     'execution',
+                    lockKey,
                     payload,
                     this.holderVisibleUntil(existingExecution.createdAt),
                 );
                 return 'Code review already in progress for this PR';
+            }
+
+            if (!this.isCommandOrigin(origin)) {
+                activeReview = {
+                    headSha: pullRequest?.head?.sha,
+                    controller: new AbortController(),
+                };
+                this.activeReviews.set(lockKey, activeReview);
             }
 
             execution = await this.createAutomationExecution(
@@ -329,7 +354,7 @@ export class AutomationCodeReviewService implements Omit<
                     undefined, // workflowJobId
                     lastExecution?.dataExecution, // Pass last execution data
                     correlationId,
-                    signal, // parentSignal — forwarded to pipeline context
+                    this.pipelineSignal(signal, activeReview), // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
                     requestedReviewMode, // @kody review --heavy / --balanced, over the mode in settings
                     onlyCustomAgent, // @kody -v <slug> — that custom agent only
@@ -354,6 +379,12 @@ export class AutomationCodeReviewService implements Omit<
             return 'Error executing automation';
         } finally {
             stopHeartbeat?.();
+            if (
+                activeReview &&
+                this.activeReviews.get(lockKey) === activeReview
+            ) {
+                this.activeReviews.delete(lockKey);
+            }
             if (lock) {
                 try {
                     await lock.release();
@@ -396,6 +427,7 @@ export class AutomationCodeReviewService implements Omit<
 
     private refuseCommand(
         gate: 'lock' | 'execution',
+        lockKey: string,
         payload: Record<string, any>,
         holderVisibleUntil: Date,
     ): void {
@@ -408,12 +440,18 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
         } = payload;
 
+        const fromCommand = this.isCommandOrigin(origin);
+
+        if (!fromCommand) {
+            this.supersedeActiveReview(lockKey, pullRequest?.head?.sha);
+        }
+
         // Pushes defer too: dropping one leaves the new head unreviewed
         // (#2561). Only a command is answered on the PR if it gives up.
         throw new PrReviewInProgressError({
             gate,
             holderVisibleUntil,
-            fromCommand: this.isCommandOrigin(origin),
+            fromCommand,
             target: {
                 organizationAndTeamData,
                 repository: { id: repository?.id, name: repository?.name },
@@ -422,6 +460,61 @@ export class AutomationCodeReviewService implements Omit<
                 triggerCommentId,
             },
         });
+    }
+
+    /**
+     * The signal the pipeline runs under: the job's own (router timeout)
+     * plus, for an automatic review, the controller a newer push aborts.
+     */
+    private pipelineSignal(
+        signal: AbortSignal | undefined,
+        activeReview: ActiveReview | undefined,
+    ): AbortSignal | undefined {
+        if (!activeReview) {
+            return signal;
+        }
+
+        return signal
+            ? AbortSignal.any([signal, activeReview.controller.signal])
+            : activeReview.controller.signal;
+    }
+
+    /**
+     * A push for a head the running automatic review is not looking at
+     * aborts that review. The push itself is deferred by the caller and
+     * reviews both heads once the aborted run has released the PR. A
+     * command (`@kody review`) holding the PR is left alone: it may carry
+     * a directive or mode the replacement run would not.
+     */
+    private supersedeActiveReview(lockKey: string, newHeadSha?: string): void {
+        const activeReview = this.activeReviews.get(lockKey);
+
+        if (
+            !activeReview ||
+            !newHeadSha ||
+            !activeReview.headSha ||
+            activeReview.headSha === newHeadSha ||
+            activeReview.controller.signal.aborted
+        ) {
+            return;
+        }
+
+        this.logger.warn({
+            message: `Superseding the running review of PR ${lockKey}: a newer head arrived`,
+            context: AutomationCodeReviewService.name,
+            metadata: {
+                lockKey,
+                supersededHeadSha: activeReview.headSha,
+                newHeadSha,
+            },
+        });
+
+        activeReview.controller.abort(
+            new ReviewSupersededError({
+                supersededHeadSha: activeReview.headSha,
+                newHeadSha,
+            }),
+        );
     }
 
     private startExecutionHeartbeat(executionUuid: string): () => void {

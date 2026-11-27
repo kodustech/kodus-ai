@@ -29,6 +29,13 @@ export interface PipelineContext {
         [key: string]: any;
     };
     workflowJobId?: string;
+    /**
+     * Caller-level cancellation. Once it aborts, the executor ends the
+     * pipeline before the next stage and records `signal.reason` as a
+     * critical error — unless a `pointOfNoReturn` stage has already
+     * started, in which case the remaining stages run to completion.
+     */
+    parentSignal?: AbortSignal;
 }
 
 /**
