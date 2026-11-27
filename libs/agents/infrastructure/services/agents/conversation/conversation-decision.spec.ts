@@ -4,6 +4,7 @@ import {
     buildDecisionTool,
     grantIfAuthorized,
     readDecision,
+    readDecisions,
 } from './conversation-decision';
 import { createWriteAuthorization } from './write-authorization';
 
@@ -30,10 +31,14 @@ describe('readDecision', () => {
     // the developer asked for was never authorized.
     it("drops a leading 'functions.' from the tool the agent names", () => {
         expect(
-            readDecision([call({ intent: 'act', tool: 'functions.kodus_save_memory' })])?.tool,
+            readDecision([
+                call({ intent: 'act', tool: 'functions.kodus_save_memory' }),
+            ])?.tool,
         ).toBe('kodus_save_memory');
         expect(
-            readDecision([call({ intent: 'act', tool: 'kodus.functions.save' })])?.tool,
+            readDecision([
+                call({ intent: 'act', tool: 'kodus.functions.save' }),
+            ])?.tool,
         ).toBe('kodus.functions.save');
     });
 
@@ -193,5 +198,25 @@ describe('buildDecisionTool', () => {
                 authorizingQuote: 'x',
             },
         ]);
+    });
+});
+
+describe('readDecisions', () => {
+    it('keeps every decision of the run in order, skipping malformed calls', () => {
+        expect(
+            readDecisions([
+                call({ intent: 'act', tool: 'KODUS_CREATE_MEMORY' }),
+                call({ intent: 'nonsense' }),
+                call({ intent: 'act', tool: 'exec' }),
+            ]).map((d) => d.tool),
+        ).toEqual(['KODUS_CREATE_MEMORY', 'exec']);
+    });
+
+    it('agrees with readDecision on the last one', () => {
+        const steps = [
+            call({ intent: 'offer', tool: 'KODUS_CREATE_MEMORY' }),
+            call({ intent: 'answer' }),
+        ];
+        expect(readDecisions(steps).at(-1)).toEqual(readDecision(steps));
     });
 });

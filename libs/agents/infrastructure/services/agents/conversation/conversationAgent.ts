@@ -38,7 +38,7 @@ import {
     CONVERSATION_DECISION_TOOL,
     buildDecisionTool,
     grantIfAuthorized,
-    readDecision,
+    readDecisions,
 } from './conversation-decision';
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
@@ -504,8 +504,13 @@ export class ConversationAgentProvider {
         organizationAndTeamData: OrganizationAndTeamData,
         thread: ConversationThread,
     ): void {
-        const decision = readDecision(steps);
-        const divergence = decisionDivergence(decision, writes, isReadOnlyTool);
+        const decisions = readDecisions(steps);
+        const decision = decisions.at(-1);
+        const divergence = decisionDivergence(
+            decisions,
+            writes,
+            isReadOnlyTool,
+        );
         if (!divergence) return;
 
         const base = {
@@ -522,8 +527,10 @@ export class ConversationAgentProvider {
                 metadata: {
                     organizationAndTeamData,
                     threadId,
-                    intendedTool: decision?.tool,
-                    authorizingQuote: decision?.authorizingQuote,
+                    intendedTool: divergence.tool,
+                    authorizingQuote: decisions.find(
+                        (d) => d.intent === 'act' && d.tool === divergence.tool,
+                    )?.authorizingQuote,
                 },
             });
             return;

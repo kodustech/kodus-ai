@@ -100,11 +100,11 @@ export function buildDecisionTool(
     };
 }
 
-/** The decision the agent committed to this run, or undefined if it never did. */
-export function readDecision(
+/** Every decision the agent recorded this run, in order. Malformed calls recorded nothing. */
+export function readDecisions(
     steps: readonly RunStep[],
-): ConversationDecision | undefined {
-    let decision: ConversationDecision | undefined;
+): ConversationDecision[] {
+    const decisions: ConversationDecision[] = [];
 
     for (const step of steps) {
         for (const call of step.message?.toolCalls ?? []) {
@@ -113,12 +113,19 @@ export function readDecision(
             }
             const parsed = parse(call.input);
             if (parsed) {
-                decision = parsed;
+                decisions.push(parsed);
             }
         }
     }
 
-    return decision;
+    return decisions;
+}
+
+/** The decision the agent committed to this run, or undefined if it never did. */
+export function readDecision(
+    steps: readonly RunStep[],
+): ConversationDecision | undefined {
+    return readDecisions(steps).at(-1);
 }
 
 /**

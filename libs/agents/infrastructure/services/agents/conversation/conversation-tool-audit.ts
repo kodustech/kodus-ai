@@ -103,16 +103,20 @@ export function auditWriteTools(
 }
 
 /**
- * How the turn's declared decision and the writes that ran disagree, if they
+ * How the turn's declared decisions and the writes that ran disagree, if they
  * do. `unperformed` (an `act` on a write that was never attempted) and
- * `undeclared` (a write with no `act`) are the failures the decision exists
- * to catch. `failed` is an `act` whose write was attempted and refused or
- * thrown: the tool already reported that, and the agent saw the error.
+ * `undeclared` (a write while the final decision was not `act`) are the
+ * failures the decision exists to catch. `failed` is an `act` whose write was
+ * attempted and refused or thrown: the tool already reported that, and the
+ * agent saw the error.
  *
- * An `act` naming a tool that only reads (the sandbox `exec`, `grep`) is not
- * compared: no write was ever going to run for it, so "nothing written" is
- * expected. A name the run does not know is still compared, so a write
- * declared under a wrong name stays visible.
+ * Every `act` of the run counts, not just the last: a later `act` replaces the
+ * write an earlier one authorized (`grant` keeps one tool), so `act` on a
+ * write followed by `act` on `exec` is exactly the run that leaves the write
+ * undone. An `act` naming a tool that only reads (the sandbox `exec`, `grep`)
+ * is not compared on its own: no write was ever going to run for it. A name
+ * the run does not know is compared, so a write declared under a wrong name
+ * stays visible.
  */
 export type DecisionDivergence =
     | { kind: 'unperformed'; tool?: string }
@@ -120,23 +124,27 @@ export type DecisionDivergence =
     | { kind: 'undeclared'; tools: string[] };
 
 export function decisionDivergence(
-    decision: { intent: string; tool?: string } | undefined,
+    decisions: readonly { intent: string; tool?: string }[],
     writes: readonly WriteToolEvent[],
     isReadOnlyTool: (name: string) => boolean,
 ): DecisionDivergence | undefined {
     const performed = performedWrites(writes);
+    const acts = decisions.filter((d) => d.intent === 'act');
 
-    if (decision?.intent === 'act' && performed.length === 0) {
+    if (acts.length > 0 && performed.length === 0) {
         if (writes.length > 0) {
             return { kind: 'failed', tools: writes.map((w) => w.tool) };
         }
-        if (decision.tool && isReadOnlyTool(decision.tool)) {
+        const writeActs = acts.filter(
+            (d) => !d.tool || !isReadOnlyTool(d.tool),
+        );
+        if (writeActs.length === 0) {
             return undefined;
         }
-        return { kind: 'unperformed', tool: decision.tool };
+        return { kind: 'unperformed', tool: writeActs.at(-1)?.tool };
     }
 
-    if (decision?.intent !== 'act' && performed.length > 0) {
+    if (decisions.at(-1)?.intent !== 'act' && performed.length > 0) {
         return { kind: 'undeclared', tools: performed };
     }
 
