@@ -196,6 +196,14 @@ describe('extractJsonFromText', () => {
         expect(JSON.parse(out!)).toEqual({ description });
     });
 
+    it('ignores a blank fence and still finds the value after it', () => {
+        // A prose mention of an empty fence used to replace the whole text
+        // with '', so the balanced slice never ran and the answer was lost.
+        expect(
+            extractJsonFromText('Format attendu:\n```\n```\nRéponse: {"a":1}'),
+        ).toBe('{"a":1}');
+    });
+
     it('is string-aware (braces inside strings do not truncate)', () => {
         expect(JSON.parse(extractJsonFromText('x {"msg":"a } b"} y')!)).toEqual(
             { msg: 'a } b' },
