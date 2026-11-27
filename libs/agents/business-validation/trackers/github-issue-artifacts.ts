@@ -25,11 +25,13 @@ export interface IssueArtifactContext {
 
 /** One line of untrusted text, safe to put in a label. */
 function inline(value: string): string {
-    return value
-        .replace(/[\r\n]+/g, ' ')
-        .replace(/[<>]/g, '')
-        .trim()
-        .slice(0, 120);
+    return cutAt(
+        value
+            .replace(/(?:\r\n|[\r\n\v\f\u0085\u2028\u2029])+/g, ' ')
+            .replace(/[<>[\]]/g, '')
+            .trim(),
+        120,
+    );
 }
 
 /**
@@ -74,7 +76,7 @@ function delimited(content: string): {
     const name = fenceName(content);
     const open = `<${name}>\n`;
     const close = `\n</${name}>`;
-    const lines = content.split(/\r\n|[\r\n\u0085\u2028\u2029]/);
+    const lines = content.split(/\r\n|[\r\n\v\f\u0085\u2028\u2029]/);
     const quoted = lines.map(
         (line) => `> ${line.replace(/<\s*\/\s*/g, '&lt;/')}`,
     );
