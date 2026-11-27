@@ -167,10 +167,9 @@ describe('mergeKodyRuleFindings', () => {
         expect(out[1].kodyRuleOtherLocations).toBeUndefined();
     });
 
-    // Kody review on #2751: a file-name rule broken by two files is two
-    // violations, and a file-anchored finding is posted PR-level, so neither
-    // may be folded into one record.
-    it('keeps one PR-level finding per file and never folds a file-anchored one inline', () => {
+    // Kody review on #2751: a file-anchored finding is posted PR-level, so it
+    // is never folded into an inline one, and keeps its own file.
+    it('never folds a file-anchored finding inline and keeps it apart from line-less ones', () => {
         const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
             {
                 brokenKodyRulesIds: ['rule-1'],
@@ -201,9 +200,32 @@ describe('mergeKodyRuleFindings', () => {
             'a.cs',
             'b.cs',
             'c.cs',
-            'd.cs',
         ]);
         expect(out[0].kodyRuleOtherLocations).toBeUndefined();
+        expect(out[2].kodyRuleOtherLocations).toEqual(['d.cs']);
+    });
+
+    // Junior's review of #2751: every file shard sees the PR title, so a
+    // title rule scoped to files flags each matching file. One comment per
+    // file posted the same claim four times where main posted one.
+    it('posts a line-less rule finding flagged on several files once, naming the others', () => {
+        const title = (file: string) => ({
+            brokenKodyRulesIds: ['rule-title'],
+            relevantFile: file,
+            suggestionContent: 'The PR title "fix stuff" names no scope.',
+        });
+
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>(
+            ['src/A.cs', 'src/B.cs', 'src/C.cs', 'src/D.cs'].map(title),
+        );
+
+        expect(out).toHaveLength(1);
+        expect(out[0].relevantFile).toBe('src/A.cs');
+        expect(out[0].kodyRuleOtherLocations).toEqual([
+            'src/B.cs',
+            'src/C.cs',
+            'src/D.cs',
+        ]);
     });
 
     it('keeps the lines of file-anchored findings collapsed on one file', () => {

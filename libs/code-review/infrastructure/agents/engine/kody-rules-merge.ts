@@ -64,18 +64,26 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
                     !s.fileAnchored,
             ),
         );
-        // PR-level findings collapse per file: a file-name rule broken by
-        // two files is two violations, each kept on its own record.
+        // PR-level findings, three ways:
+        //   - file-anchored: per file, its other lines in "Also found in";
+        //   - a file and no line: one per rule. Every file shard sees the PR
+        //     title, so a title rule scoped to files flags each file; posting
+        //     one comment per file repeated the same claim N times. The other
+        //     files go in "Also found in";
+        //   - no file: one per rule, as before.
+        const LINE_LESS = '\0line-less';
         const prLevelByFile = new Map<string, T[]>();
         for (const s of group) {
             if (lined.has(s)) continue;
-            const key = s.relevantFile ?? '';
+            const key = s.fileAnchored
+                ? (s.relevantFile ?? '')
+                : s.relevantFile
+                  ? LINE_LESS
+                  : '';
             prLevelByFile.set(key, [...(prLevelByFile.get(key) ?? []), s]);
         }
         const prLevel = [...prLevelByFile.values()].map((same) => {
             const [kept, ...rest] = [...same].sort(byDetail);
-            // File-anchored findings on the same file keep their lines in
-            // "Also found in", as inline ones do.
             const otherLocations = collectOtherLocations(kept, rest);
             if (same.length > 1) {
                 onMerge?.({
@@ -161,15 +169,18 @@ export function otherLocationsToRender(
     );
 }
 
-/** The distinct lined locations of `others`, other than `kept`'s own. */
+/** The distinct locations of `others`, other than `kept`'s own. */
 function collectOtherLocations<T extends Partial<CodeSuggestion>>(
     kept: T,
     others: T[],
 ): string[] {
+    // A line-less finding names its file alone.
     const locationOf = (s: T) =>
-        s.relevantFile && s.relevantLinesStart
-            ? `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd ?? s.relevantLinesStart}`
-            : null;
+        !s.relevantFile
+            ? null
+            : s.relevantLinesStart
+              ? `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd ?? s.relevantLinesStart}`
+              : s.relevantFile;
     const keptLocation = locationOf(kept);
     const locations = new Set<string>();
     for (const s of others) {
