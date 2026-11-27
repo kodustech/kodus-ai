@@ -457,12 +457,17 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         const result = await run(stage, makeContext([applied]));
 
         expect(published(result)).toEqual([]);
-        expect(result.discardedSuggestions).toContainEqual(
+        expect(
+            result.discardedSuggestions.filter(
+                (s) => s.priorityStatus === PriorityStatus.DISCARDED_BY_REVERSAL,
+            ),
+        ).toEqual([
             expect.objectContaining({
-                priorityStatus: PriorityStatus.DISCARDED_BY_REVERSAL,
+                relevantFile: bugFinding.relevantFile,
+                suggestionContent: bugFinding.suggestionContent,
                 deliveryStatus: 'not_sent',
             }),
-        );
+        ]);
     });
 
     it('links a kept finding when the repeat check identifies the earlier suggestion', async () => {
