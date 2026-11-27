@@ -196,6 +196,22 @@ describe('extractJsonFromText', () => {
         expect(JSON.parse(out!)).toEqual({ description });
     });
 
+    it('does not read an example out of a non-JSON fence', () => {
+        // A ```ts block is code the model quoted, not the payload: the object
+        // it contains used to be extracted as the answer.
+        expect(
+            extractJsonFromText(
+                '```ts\nconst x = {"a":1};\n```\nAnswer: {"a":2}',
+            ),
+        ).toBeNull();
+        // And an unmatched quote in it no longer changes where the fence ends.
+        expect(
+            extractJsonFromText(
+                '```ts\nconst s = "unterminated;\n```\n{"a":2}',
+            ),
+        ).toBeNull();
+    });
+
     it('ignores a blank fence and still finds the value after it', () => {
         // A prose mention of an empty fence used to replace the whole text
         // with '', so the balanced slice never ran and the answer was lost.
