@@ -73,8 +73,23 @@ const MAX_PATH_LENGTH = 4096;
  * The last path segment every pattern in SECRET_FILE_GLOBS requires: a
  * cheap screen so only a plausible prefix pays for the full glob match.
  */
-const SECRET_BASENAME =
-    /^(?:\.env|id_(?:rsa|dsa|ecdsa|ed25519))|\.(?:pem|key|p12|pfx|jks|keystore)$/i;
+const SECRET_NAME_START = /^(?:\.env|id_(?:rsa|dsa|ecdsa|ed25519))/i;
+const SECRET_NAME_END = /\.(?:pem|key|p12|pfx|jks|keystore)$/i;
+/** Longer than any name start or extension the two patterns above test. */
+const NAME_EDGE = 16;
+/**
+ * Tests only the name's head and tail, never the whole of it. The one regex
+ * this replaces had an extension branch anchored only at the end, so every
+ * test scanned the whole candidate: up to MAX_PATH_LENGTH characters, once
+ * per `-N-` boundary of the line. On boundary-dense lines (SVG path data,
+ * JSON of numbers) that was ~85% of the filter's time and held a worker for
+ * minutes on a large `git log -p` (Nov 2026).
+ */
+const SECRET_BASENAME = {
+    test: (name: string): boolean =>
+        SECRET_NAME_START.test(name.slice(0, NAME_EDGE)) ||
+        SECRET_NAME_END.test(name.slice(-NAME_EDGE)),
+};
 
 const isSeparator = (c: number) => c === 47 || c === 92; // `/` or `\\`
 

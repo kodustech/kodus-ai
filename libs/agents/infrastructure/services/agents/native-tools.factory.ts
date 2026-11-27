@@ -12,6 +12,11 @@ import {
     secretFileRefusal,
     withoutSecretFileLines,
 } from '@libs/common/utils/tool-output/secret-files';
+import {
+    cutAt,
+    MAX_TOOL_SCAN_CHARS,
+    scanPrefix,
+} from '@libs/common/utils/tool-output/scan-prefix';
 import { beginToolActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
 import { createLogger } from '@libs/core/log/logger';
@@ -25,6 +30,9 @@ const logger = createLogger('ConversationTools');
  * the prompt and the compressor.
  */
 export const MAX_CONVERSATION_TOOL_OUTPUT_CHARS = 64_000;
+
+/** Most characters of a tool answer the guards read (see scan-prefix.ts). */
+export const MAX_CONVERSATION_TOOL_SCAN_CHARS = MAX_TOOL_SCAN_CHARS;
 
 /**
  * Shape of a legacy flow-engine tool config — locally typed to avoid importing from
@@ -250,22 +258,34 @@ function refuseSecret(
         : undefined;
 }
 
+/** What the agent reads beside an answer that was cut (`cut.hint`). */
+export const CUT_HINT =
+    'Only the start of this output is shown. Narrow the call: a path, a pattern, --stat or | head.';
+
 function guardOutput(name: string, out: unknown): unknown {
     if (!out || typeof out !== 'object') return out;
     const result = { ...(out as Record<string, unknown>) };
+    const hiddenChars: Record<string, number> = {};
     for (const field of ['matches', 'content', 'listing', 'stdout', 'stderr']) {
         const value = result[field];
         if (typeof value !== 'string') continue;
+        // Cut first: the guards below are synchronous and linear in what they
+        // read, so they only ever read a bounded head of the answer.
+        const { text: scanned, unread } = scanPrefix(value);
         let text =
             name === 'grep' || name === 'exec' || field === 'listing'
-                ? withoutSecretFileLines(value)
-                : value;
+                ? withoutSecretFileLines(scanned)
+                : scanned;
         const capped = cutLongLines(text);
         text = capped.text;
-        if (text.length > MAX_CONVERSATION_TOOL_OUTPUT_CHARS) {
-            text = `${text.slice(0, MAX_CONVERSATION_TOOL_OUTPUT_CHARS)}\n... (${text.length - MAX_CONVERSATION_TOOL_OUTPUT_CHARS} more characters not shown — narrow the call)`;
+        if (text.length > MAX_CONVERSATION_TOOL_OUTPUT_CHARS || unread > 0) {
+            const shown = cutAt(text, MAX_CONVERSATION_TOOL_OUTPUT_CHARS);
+            // Beside the content, not inside it: a file can print anything,
+            // including a line that looks like this notice.
+            hiddenChars[field] = text.length - shown.length + unread;
+            text = shown;
         }
-        if (capped.cut > 0 || text.length < value.length) {
+        if (capped.cut > 0 || unread > 0 || text.length < value.length) {
             logger.warn({
                 message: `[CONVERSATION-TOOLS] ${name} output cut before the agent`,
                 context: 'ConversationTools',
@@ -281,6 +301,9 @@ function guardOutput(name: string, out: unknown): unknown {
             });
         }
         result[field] = text;
+    }
+    if (Object.keys(hiddenChars).length > 0) {
+        result.cut = { hiddenChars, hint: CUT_HINT };
     }
     return result;
 }

@@ -699,6 +699,28 @@ describe('classifyLLMError', () => {
             expect(info.friendlyMessage).not.toMatch(/invalid/i);
         });
 
+        it('reads a spent monthly or weekly cap on a 429 as QUOTA_EXCEEDED', () => {
+            for (const message of [
+                'Your project has exceeded its monthly spending cap. Please go to AI Studio at https://ai.studio/spend to manage your project spend cap.',
+                'you (someone) have reached your weekly usage limit, resets in 3 days',
+            ]) {
+                expect(classifyLLMError(apiError(429, message)).category).toBe(
+                    LlmErrorCategory.QUOTA_EXCEEDED,
+                );
+            }
+        });
+
+        it('keeps a per-account requests-per-minute 429 on RATE_LIMIT', () => {
+            expect(
+                classifyLLMError(
+                    apiError(
+                        429,
+                        'Rate limit exceeded: new-account-rpm/moonshotai/kimi-k3.1-pro-20261023. Rate limit reached',
+                    ),
+                ).category,
+            ).toBe(LlmErrorCategory.RATE_LIMIT);
+        });
+
         it('keeps a 403 that says nothing about limits on AUTH_INVALID', () => {
             expect(
                 classifyLLMError(apiError(403, 'Forbidden: key revoked'))
