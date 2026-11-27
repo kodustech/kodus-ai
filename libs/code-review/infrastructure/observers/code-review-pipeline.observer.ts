@@ -197,7 +197,7 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
             // An auxiliary agent can still publish a finding when every
             // primary agent runs out of credits. The posting stages record delivery.
             const partialReview =
-                errors.some((e) => e.severity === 'partial') ||
+                hasPartialError ||
                 [context.lineComments, context.prLevelCommentResults].some(
                     (comments) =>
                         comments?.some(
