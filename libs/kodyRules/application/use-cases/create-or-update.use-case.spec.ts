@@ -218,6 +218,78 @@ describe('CreateOrUpdateKodyRulesUseCase — isInternalSyncActor', () => {
 });
 
 describe('CreateOrUpdateKodyRulesUseCase — detector compile on save', () => {
+    it('does not load a rule when the scheduler lacks a tenant', async () => {
+        const useCase = makeUseCase();
+        const findById = jest.fn();
+        (useCase as any).kodyRulesService.findById = findById;
+        await useCase.scheduleDetectorCompile('', 'r');
+        expect(findById).not.toHaveBeenCalled();
+    });
+    it('keeps rule content and provider details out of save failure diagnostics', async () => {
+        const canary = 'SYNTHETIC_SAVE_CONTENT_CANARY';
+        const failure = new Error(canary);
+        const useCase = makeUseCase();
+        (useCase as any).kodyRulesService.createOrUpdate = jest
+            .fn()
+            .mockRejectedValue(failure);
+        const log = jest
+            .spyOn((useCase as any).logger, 'error')
+            .mockImplementation(() => undefined);
+        try {
+            await expect(
+                useCase.execute(
+                    {
+                        uuid: 'r',
+                        rule: canary,
+                        examples: [{ snippet: canary, isCorrect: false }],
+                    } as any,
+                    'org',
+                    { userId: 'kody', userEmail: 'kody@kodus.io' },
+                ),
+            ).rejects.toBe(failure);
+            expect(log.mock.calls).toStrictEqual([
+                [
+                    {
+                        message: 'Could not create or update Kody rules',
+                        context: CreateOrUpdateKodyRulesUseCase.name,
+                        serviceName: 'CreateOrUpdateKodyRulesUseCase',
+                        metadata: { organizationId: 'org', ruleId: 'r' },
+                    },
+                ],
+            ]);
+        } finally {
+            log.mockRestore();
+        }
+    });
+
+    it('logs only identifiers if the compiler rejects with free-form content', async () => {
+        const useCase = makeUseCase();
+        const stored = { uuid: 'r', repositoryId: 'repo', rule: 'Rule' };
+        (useCase as any).kodyRulesService.findById = jest
+            .fn()
+            .mockResolvedValue(stored);
+        (useCase as any).detectorCompiler.compileAndSave = jest
+            .fn()
+            .mockRejectedValue(new Error('SYNTHETIC_COMPILER_ERROR_CANARY'));
+        const log = jest
+            .spyOn((useCase as any).logger, 'error')
+            .mockImplementation(() => undefined);
+        try {
+            await useCase.scheduleDetectorCompile('org', 'r');
+            expect(log.mock.calls).toStrictEqual([
+                [
+                    {
+                        message: 'Background detector compile failed',
+                        context: CreateOrUpdateKodyRulesUseCase.name,
+                        metadata: { organizationId: 'org', ruleId: 'r' },
+                    },
+                ],
+            ]);
+        } finally {
+            log.mockRestore();
+        }
+    });
+
     it('passes the stored compileAttempt and contextNeed to compileAndSave so unchanged rules are skipped', async () => {
         const compileAttempt = {
             sourceHash: 'hash-1',
@@ -234,9 +306,11 @@ describe('CreateOrUpdateKodyRulesUseCase — detector compile on save', () => {
             contextNeed,
         };
         const compileAndSave = jest.fn().mockResolvedValue({});
+        const findById = jest.fn().mockResolvedValue(stored);
         const useCase = new CreateOrUpdateKodyRulesUseCase(
             {
                 createOrUpdate: jest.fn().mockResolvedValue(stored),
+                findById,
             } as any,
             {} as any,
             {} as any,
@@ -247,22 +321,22 @@ describe('CreateOrUpdateKodyRulesUseCase — detector compile on save', () => {
             { kodyRuleChanged: jest.fn() } as any,
         );
 
+        const schedule = jest.spyOn(useCase, 'scheduleDetectorCompile');
         await useCase.execute(
             {
                 uuid: 'rule-1',
                 title: 't',
-                rule: 'r',
+                rule: 'SYNTHETIC_CLI_RULE_CONTENT_CANARY',
                 repositoryId: 'repo-1',
             } as any,
             'org-1',
             { userId: 'kody', userEmail: 'kody@kodus.io' },
         );
 
-        expect(compileAndSave).toHaveBeenCalledTimes(1);
-        expect(compileAndSave.mock.calls[0][2]).toMatchObject({
-            uuid: 'rule-1',
-            compileAttempt,
-            contextNeed,
-        });
+        expect(schedule).not.toHaveBeenCalled();
+        expect(findById).not.toHaveBeenCalled();
+        expect(compileAndSave.mock.calls).toStrictEqual([
+            [{ organizationId: 'org-1', teamId: undefined }, 'rule-1', stored],
+        ]);
     });
 });

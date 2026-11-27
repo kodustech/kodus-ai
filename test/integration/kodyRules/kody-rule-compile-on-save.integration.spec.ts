@@ -42,6 +42,9 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
         let compiler: KodyRuleDetectorCompilerService;
         let cli: CliKodyRulesController;
         let mcp: KodyRulesTools;
+        let schedule: jest.SpiedFunction<
+            CreateOrUpdateKodyRulesUseCase['scheduleDetectorCompile']
+        >;
         let compile: jest.SpiedFunction<
             KodyRuleDetectorCompilerService['compileAndSave']
         >;
@@ -82,6 +85,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 compiler,
                 { kodyRuleChanged: jest.fn() } as any,
             );
+            schedule = jest.spyOn(save, 'scheduleDetectorCompile');
             // Exercise direct saves with centralized routing and reference detection disabled.
             jest.spyOn(
                 save as any,
@@ -139,10 +143,11 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
 
         async function mcpPatch(uuid: string, kodyRule: Partial<IKodyRule>) {
             compile.mockClear();
+            schedule.mockClear();
             await mcp
                 .updateKodyRule()
                 .execute({ organizationId, ruleId: uuid, kodyRule }, undefined);
-            await Promise.all(compile.mock.results.map(({ value }) => value));
+            await Promise.all(schedule.mock.results.map(({ value }) => value));
         }
 
         it('recompiles a partial MCP edit from the saved examples before the next sweep', async () => {
@@ -534,8 +539,8 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 uuid,
                 'kodus_test',
             );
-            const first = compile.mock.results[0].value;
             await firstStarted;
+            const first = compile.mock.results[0].value;
             const rule = 'Reject forbiddenB.';
             try {
                 await patch(uuid, { rule });

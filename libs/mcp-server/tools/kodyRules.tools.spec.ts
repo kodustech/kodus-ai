@@ -263,6 +263,36 @@ describe('KodyRulesTools.updateKodyRule', () => {
         expect(structured.message).toMatch(/updated/i);
     });
 
+    it('schedules only tenant and rule identifiers when the MCP edit contains a canary', async () => {
+        const canary = 'SYNTHETIC_MCP_RULE_CONTENT_CANARY';
+        const stored = {
+            uuid: 'rule-789',
+            repositoryId: 'repo-1',
+            title: 'Policy',
+            rule: canary,
+            examples: [{ snippet: canary, isCorrect: false }],
+            status: KodyRulesStatus.ACTIVE,
+        };
+        mockKodyRulesService.findById.mockResolvedValue(stored as any);
+        mockKodyRulesService.updateRuleWithLogging.mockResolvedValue(stored);
+        await tools.updateKodyRule().execute(
+            {
+                organizationId: 'org-1',
+                ruleId: stored.uuid,
+                kodyRule: {
+                    rule: canary,
+                    examples: stored.examples,
+                    teamId: 'team-1',
+                },
+            },
+            undefined,
+        );
+
+        expect(scheduleDetectorCompile.mock.calls).toStrictEqual([
+            ['org-1', stored.uuid, 'team-1'],
+        ]);
+    });
+
     it('returns the PR URL as both prUrl and link in centralized-PR mode on update', async () => {
         (mockKodyRulesService.findById as jest.Mock).mockResolvedValue({
             uuid: 'rule-789',

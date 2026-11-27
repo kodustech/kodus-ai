@@ -27,6 +27,7 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import {
+    DETECTOR_INPUT_FIELDS,
     IKodyRuleDetectorCompiler,
     KODY_RULE_DETECTOR_COMPILER_TOKEN,
 } from '../../domain/contracts/kody-rule-detector-compiler.contract';
@@ -216,11 +217,29 @@ export class CreateOrUpdateKodyRulesUseCase {
                 });
             }
 
-            this.scheduleDetectorCompile(
-                organizationAndTeamData,
-                kodyRule,
-                result,
-            );
+            // The save already returned the committed rule. Re-reading each rule
+            // here would add Mongo traffic to every centralized sync.
+            if (
+                result.uuid &&
+                result.repositoryId &&
+                result.rule &&
+                DETECTOR_INPUT_FIELDS.some(
+                    (field) => kodyRule[field] !== undefined,
+                )
+            ) {
+                void this.detectorCompiler
+                    .compileAndSave(
+                        organizationAndTeamData,
+                        result.uuid,
+                        result,
+                    )
+                    .catch(() =>
+                        this.logDetectorCompileFailure(
+                            organizationId,
+                            result.uuid,
+                        ),
+                    );
+            }
 
             return result;
         } catch (error) {
@@ -228,44 +247,45 @@ export class CreateOrUpdateKodyRulesUseCase {
                 message: 'Could not create or update Kody rules',
                 context: CreateOrUpdateKodyRulesUseCase.name,
                 serviceName: 'CreateOrUpdateKodyRulesUseCase',
-                error: this.normalizeError(error),
-                metadata: {
-                    kodyRule,
-                    organizationAndTeamData: {
-                        organizationId,
-                    },
-                },
+                metadata: { organizationId, ruleId: kodyRule?.uuid },
             });
             throw error;
         }
     }
 
-    // CLI and MCP patches may omit compile inputs which are present in Mongo.
-    scheduleDetectorCompile(
-        organizationAndTeamData: OrganizationAndTeamData,
-        patch: CreateKodyRuleDto,
-        saved: Partial<IKodyRule> | null,
-    ): void {
-        if (
-            !saved?.uuid ||
-            !saved.repositoryId ||
-            !saved.rule ||
-            (patch.rule === undefined &&
-                patch.title === undefined &&
-                patch.examples === undefined)
-        ) {
-            return;
+    // The MCP scheduler only takes identifiers. The compiler reads the
+    // committed rule inside its organization when the job starts.
+    async scheduleDetectorCompile(
+        organizationId: string,
+        ruleId: string,
+        teamId?: string,
+    ): Promise<void> {
+        if (!organizationId || !ruleId) return;
+        try {
+            const saved = await this.kodyRulesService.findById(
+                ruleId,
+                organizationId,
+            );
+            if (!saved?.repositoryId || !saved.rule) return;
+            await this.detectorCompiler.compileAndSave(
+                { organizationId, teamId },
+                ruleId,
+                saved,
+            );
+        } catch {
+            this.logDetectorCompileFailure(organizationId, ruleId);
         }
-        this.detectorCompiler
-            .compileAndSave(organizationAndTeamData, saved.uuid, saved)
-            .catch((error) => {
-                this.logger.error({
-                    message: 'Background detector compile failed',
-                    context: CreateOrUpdateKodyRulesUseCase.name,
-                    error: this.normalizeError(error),
-                    metadata: { ruleId: saved.uuid },
-                });
-            });
+    }
+
+    private logDetectorCompileFailure(
+        organizationId: string,
+        ruleId: string,
+    ): void {
+        this.logger.error({
+            message: 'Background detector compile failed',
+            context: CreateOrUpdateKodyRulesUseCase.name,
+            metadata: { organizationId, ruleId },
+        });
     }
 
     /**
