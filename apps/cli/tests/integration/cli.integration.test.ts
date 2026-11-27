@@ -443,6 +443,11 @@ describe('review integration', () => {
     it('sends matching diff and inlined file context when run from a repository subdirectory', async () => {
         const { repoDir: nestedRepo, subdir } =
             await createNestedModifiedRepo();
+        const expectedDiff = (
+            await execFileAsync('git', ['diff', '--', 'src/nested.txt'], {
+                cwd: nestedRepo,
+            })
+        ).stdout.trim();
 
         try {
             const rootRun = await runCli(['review', '--format', 'json'], {
@@ -461,8 +466,8 @@ describe('review integration', () => {
             expect(reviewRequests).toHaveLength(2);
 
             const [rootReq, subdirReq] = reviewRequests;
-            expect(subdirReq.body.diff).toBe(rootReq.body.diff);
-            expect(subdirReq.body.diff).toContain('src/nested.txt');
+            expect(rootReq.body.diff).toBe(expectedDiff);
+            expect(subdirReq.body.diff).toBe(expectedDiff);
             expect(subdirReq.body.config.files).toEqual(
                 rootReq.body.config.files,
             );
@@ -471,9 +476,47 @@ describe('review integration', () => {
                     path: 'src/nested.txt',
                     content: 'line 1\nline 2\nline 3\n',
                     status: 'modified',
-                    diff: expect.stringContaining('+line 3'),
+                    diff: expectedDiff,
                 },
             ]);
+        } finally {
+            await fs.rm(nestedRepo, { recursive: true, force: true });
+        }
+    });
+
+    it('omits untracked files outside the requested diff from review context', async () => {
+        const { repoDir: nestedRepo, subdir } =
+            await createNestedModifiedRepo();
+        await fs.writeFile(
+            path.join(nestedRepo, 'untracked-secret.txt'),
+            'do not upload\n',
+        );
+        const expectedDiff = (
+            await execFileAsync('git', ['diff', '--', 'src/nested.txt'], {
+                cwd: nestedRepo,
+            })
+        ).stdout.trim();
+
+        try {
+            const { exitCode } = await runCli(['review', '--format', 'json'], {
+                cwd: subdir,
+            });
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toBe(expectedDiff);
+            expect(req!.body.config.files).toEqual([
+                {
+                    path: 'src/nested.txt',
+                    content: 'line 1\nline 2\nline 3\n',
+                    status: 'modified',
+                    diff: expectedDiff,
+                },
+            ]);
+            expect(JSON.stringify(req!.body)).not.toContain('do not upload');
         } finally {
             await fs.rm(nestedRepo, { recursive: true, force: true });
         }
@@ -482,6 +525,11 @@ describe('review integration', () => {
     it('preserves cwd-relative semantics for explicit file arguments from a subdirectory', async () => {
         const { repoDir: nestedRepo, subdir } =
             await createNestedModifiedRepo();
+        const expectedDiff = (
+            await execFileAsync('git', ['diff', '--', 'nested.txt'], {
+                cwd: subdir,
+            })
+        ).stdout.trim();
 
         try {
             const { exitCode } = await runCli(
@@ -494,14 +542,13 @@ describe('review integration', () => {
                 (r) => r.url === '/cli/review',
             );
             expect(req).toBeDefined();
-            expect(req!.body.diff).toContain('diff --git a/src/nested.txt');
-            expect(req!.body.diff).toContain('+line 3');
+            expect(req!.body.diff).toBe(expectedDiff);
             expect(req!.body.config.files).toEqual([
                 {
                     path: 'nested.txt',
                     content: 'line 1\nline 2\nline 3\n',
                     status: 'modified',
-                    diff: expect.stringContaining('+line 3'),
+                    diff: expectedDiff,
                 },
             ]);
         } finally {
@@ -528,6 +575,11 @@ describe('review integration', () => {
             path.join(subdir, 'inside.txt'),
             'inside v1\ninside v2\n',
         );
+        const expectedDiff = (
+            await execFileAsync('git', ['diff', '--', 'inside.txt'], {
+                cwd: subdir,
+            })
+        ).stdout.trim();
 
         try {
             const { exitCode } = await runCli(['review', '--format', 'json'], {
@@ -539,20 +591,15 @@ describe('review integration', () => {
                 (r) => r.url === '/cli/review',
             );
             expect(req).toBeDefined();
-            expect(req!.body.diff).toContain('diff --git a/inside.txt');
-            expect(req!.body.diff).not.toContain('outside.txt');
-            expect(req!.body.diff).not.toContain('outside secret');
+            expect(req!.body.diff).toBe(expectedDiff);
             expect(req!.body.config.files).toEqual([
                 {
                     path: 'inside.txt',
                     content: 'inside v1\ninside v2\n',
                     status: 'modified',
-                    diff: expect.stringContaining('+inside v2'),
+                    diff: expectedDiff,
                 },
             ]);
-            expect(req!.body.config.files[0].diff).toContain(
-                'diff --git a/inside.txt',
-            );
             expect(JSON.stringify(req!.body)).not.toContain('outside secret');
         } finally {
             await fs.rm(repoDir, { recursive: true, force: true });

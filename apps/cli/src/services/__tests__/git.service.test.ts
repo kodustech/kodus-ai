@@ -146,20 +146,34 @@ describe('subdirectory path handling', () => {
         }
     });
 
-    async function createNestedRepo() {
-        const repoDir = await fs.mkdtemp(
+    async function createNestedRepo({
+        repositoryName,
+        subdirectory = 'src',
+    }: {
+        repositoryName?: string;
+        subdirectory?: string;
+    } = {}) {
+        const tempDir = await fs.mkdtemp(
             path.join(os.tmpdir(), 'kodus-git-subdir-'),
         );
-        createdDirs.push(repoDir);
+        createdDirs.push(tempDir);
+        const repoDir = repositoryName
+            ? path.join(tempDir, repositoryName)
+            : tempDir;
+        if (repositoryName) {
+            await fs.mkdir(repoDir);
+        }
 
         runGit(repoDir, ['init', '-q', '-b', 'main']);
         runGit(repoDir, ['config', 'user.email', 'test@kodus.io']);
         runGit(repoDir, ['config', 'user.name', 'Test']);
 
-        await fs.mkdir(path.join(repoDir, 'src'), { recursive: true });
+        await fs.mkdir(path.join(repoDir, subdirectory), {
+            recursive: true,
+        });
         await fs.writeFile(path.join(repoDir, 'root.txt'), 'root v1\n');
         await fs.writeFile(
-            path.join(repoDir, 'src', 'nested.txt'),
+            path.join(repoDir, subdirectory, 'nested.txt'),
             'nested v1\n',
         );
         runGit(repoDir, ['add', '.']);
@@ -167,10 +181,10 @@ describe('subdirectory path handling', () => {
 
         runGit(repoDir, ['checkout', '-qb', 'feature']);
         await fs.writeFile(
-            path.join(repoDir, 'src', 'nested.txt'),
+            path.join(repoDir, subdirectory, 'nested.txt'),
             'nested v2\n',
         );
-        runGit(repoDir, ['add', 'src/nested.txt']);
+        runGit(repoDir, ['add', path.join(subdirectory, 'nested.txt')]);
         runGit(repoDir, ['commit', '-qm', 'update nested']);
 
         await fs.writeFile(
@@ -178,7 +192,7 @@ describe('subdirectory path handling', () => {
             'root v1\nroot v2\n',
         );
         await fs.writeFile(
-            path.join(repoDir, 'src', 'nested.txt'),
+            path.join(repoDir, subdirectory, 'nested.txt'),
             'nested v2\nnested v3\n',
         );
 
@@ -195,6 +209,16 @@ describe('subdirectory path handling', () => {
     it('resolves repository-derived modified files and full contents identically from a subdirectory', async () => {
         const repoDir = await createNestedRepo();
         const subdir = path.join(repoDir, 'src');
+        const expectedRootDiff = runGit(repoDir, [
+            'diff',
+            '--',
+            'root.txt',
+        ]).trim();
+        const expectedNestedDiff = runGit(repoDir, [
+            'diff',
+            '--',
+            'src/nested.txt',
+        ]).trim();
 
         const rootGit = await freshGitService(repoDir);
         const rootModified = await rootGit.getModifiedFiles();
@@ -222,13 +246,13 @@ describe('subdirectory path handling', () => {
                 path: 'root.txt',
                 content: 'root v1\nroot v2\n',
                 status: 'modified',
-                diff: expect.stringContaining('+root v2'),
+                diff: expectedRootDiff,
             },
             {
                 path: 'src/nested.txt',
                 content: 'nested v2\nnested v3\n',
                 status: 'modified',
-                diff: expect.stringContaining('+nested v3'),
+                diff: expectedNestedDiff,
             },
         ]);
     });
@@ -236,6 +260,19 @@ describe('subdirectory path handling', () => {
     it('resolves repository-derived commit and branch diffs from a subdirectory', async () => {
         const repoDir = await createNestedRepo();
         const subdirGit = await freshGitService(path.join(repoDir, 'src'));
+        const expectedCommitDiff = runGit(repoDir, [
+            'diff',
+            'HEAD^',
+            'HEAD',
+            '--',
+            'src/nested.txt',
+        ]);
+        const expectedBranchDiff = runGit(repoDir, [
+            'diff',
+            'main...HEAD',
+            '--',
+            'src/nested.txt',
+        ]);
 
         const commitContents = await subdirGit.getFullFileContents(undefined, {
             commit: 'HEAD',
@@ -249,7 +286,7 @@ describe('subdirectory path handling', () => {
                 path: 'src/nested.txt',
                 content: 'nested v2\n',
                 status: 'modified',
-                diff: expect.stringContaining('+nested v2'),
+                diff: expectedCommitDiff,
             },
         ]);
         expect(branchContents).toEqual([
@@ -257,14 +294,20 @@ describe('subdirectory path handling', () => {
                 path: 'src/nested.txt',
                 content: 'nested v2\n',
                 status: 'modified',
-                diff: expect.stringContaining('+nested v2'),
+                diff: expectedBranchDiff,
             },
         ]);
     });
 
     it('preserves cwd-relative semantics for explicit file paths from a subdirectory', async () => {
         const repoDir = await createNestedRepo();
-        const subdirGit = await freshGitService(path.join(repoDir, 'src'));
+        const subdir = path.join(repoDir, 'src');
+        const subdirGit = await freshGitService(subdir);
+        const expectedDiff = runGit(subdir, [
+            'diff',
+            '--',
+            'nested.txt',
+        ]).trim();
 
         const explicitContents = await subdirGit.getFullFileContents([
             'nested.txt',
@@ -275,15 +318,21 @@ describe('subdirectory path handling', () => {
                 path: 'nested.txt',
                 content: 'nested v2\nnested v3\n',
                 status: 'modified',
-                diff: expect.stringContaining('+nested v3'),
+                diff: expectedDiff,
             },
         ]);
     });
 
     it('respects diff.relative=true subdirectory scope and excludes outside files', async () => {
         const repoDir = await createNestedRepo();
+        const subdir = path.join(repoDir, 'src');
         runGit(repoDir, ['config', 'diff.relative', 'true']);
-        const subdirGit = await freshGitService(path.join(repoDir, 'src'));
+        const subdirGit = await freshGitService(subdir);
+        const expectedDiff = runGit(subdir, [
+            'diff',
+            '--',
+            'nested.txt',
+        ]).trim();
 
         const modified = await subdirGit.getModifiedFiles();
         const contents = await subdirGit.getFullFileContents();
@@ -294,9 +343,78 @@ describe('subdirectory path handling', () => {
                 path: 'nested.txt',
                 content: 'nested v2\nnested v3\n',
                 status: 'modified',
-                diff: expect.stringContaining('+nested v3'),
+                diff: expectedDiff,
             },
         ]);
-        expect(contents[0].diff).toContain('diff --git a/nested.txt');
+    });
+
+    it('omits untracked files that are absent from the requested diff', async () => {
+        const repoDir = await createNestedRepo();
+        await fs.writeFile(
+            path.join(repoDir, 'untracked-secret.txt'),
+            'do not upload\n',
+        );
+        const subdirGit = await freshGitService(path.join(repoDir, 'src'));
+
+        const modified = await subdirGit.getModifiedFiles();
+        const contents = await subdirGit.getFullFileContents();
+
+        expect(modified.map((file) => file.file)).toEqual([
+            'root.txt',
+            'src/nested.txt',
+        ]);
+        expect(contents.map((file) => file.path)).toEqual([
+            'root.txt',
+            'src/nested.txt',
+        ]);
+        expect(JSON.stringify(contents)).not.toContain('do not upload');
+    });
+
+    it('propagates unreadable diff.relative configuration', async () => {
+        const repoDir = await createNestedRepo();
+        runGit(repoDir, ['config', 'diff.relative', 'not-a-bool']);
+        const subdirGit = await freshGitService(path.join(repoDir, 'src'));
+        const getRepositoryReadContext = Reflect.get(
+            subdirGit,
+            'getRepositoryReadContext',
+        ) as () => Promise<unknown>;
+
+        await expect(getRepositoryReadContext.call(subdirGit)).rejects.toThrow(
+            "fatal: bad boolean config value 'not-a-bool' for 'diff.relative'",
+        );
+    });
+
+    it('preserves whitespace in repository root and subdirectory paths', async () => {
+        const repoDir = await createNestedRepo({
+            repositoryName: 'repo\r',
+            subdirectory: ' src ',
+        });
+        const subdir = path.join(repoDir, ' src ');
+        runGit(repoDir, ['config', 'diff.relative', 'true']);
+        const subdirGit = await freshGitService(subdir);
+        const expectedDiff = runGit(subdir, [
+            'diff',
+            '--',
+            'nested.txt',
+        ]).trim();
+
+        const modified = await subdirGit.getModifiedFiles();
+        const contents = await subdirGit.getFullFileContents();
+
+        expect(
+            modified.map((file) => ({
+                file: file.file,
+                additions: file.additions,
+                deletions: file.deletions,
+            })),
+        ).toEqual([{ file: 'nested.txt', additions: 1, deletions: 0 }]);
+        expect(contents).toEqual([
+            {
+                path: 'nested.txt',
+                content: 'nested v2\nnested v3\n',
+                status: 'modified',
+                diff: expectedDiff,
+            },
+        ]);
     });
 });

@@ -10,7 +10,7 @@ import {
     inferPlatformFromRemote,
 } from '../utils/git-remote.js';
 import { gitEnvironmentToKeep } from '../utils/git-environment.js';
-import { parseGitStatus } from '../utils/git-status.js';
+import { parseGitStatus, parseTrackedGitStatus } from '../utils/git-status.js';
 import { countDiffChanges } from '../utils/git-diff.js';
 import {
     buildFileContentReadPlan,
@@ -58,7 +58,10 @@ class GitService {
     }
 
     private async getRepoRoot(): Promise<string> {
-        return (await this.git.revparse(['--show-toplevel'])).trim();
+        return (await this.git.raw(['rev-parse', '--show-toplevel'])).replace(
+            /\n$/,
+            '',
+        );
     }
 
     /**
@@ -73,25 +76,16 @@ class GitService {
         relativePrefix?: string;
     }> {
         const repoRoot = await this.getRepoRoot();
-        try {
-            const diffRelative = (
-                await this.git.raw([
-                    'config',
-                    '--bool',
-                    '--get',
-                    'diff.relative',
-                ])
-            ).trim();
-            if (diffRelative === 'true') {
-                const prefix = (
-                    await this.git.revparse(['--show-prefix'])
-                ).trim();
-                if (prefix) {
-                    return { repoRoot, relativePrefix: prefix };
-                }
+        const diffRelative = (
+            await this.git.raw(['config', '--bool', '--get', 'diff.relative'])
+        ).trim();
+        if (diffRelative === 'true') {
+            const prefix = (
+                await this.git.raw(['rev-parse', '--show-prefix'])
+            ).replace(/\n$/, '');
+            if (prefix) {
+                return { repoRoot, relativePrefix: prefix };
             }
-        } catch {
-            // diff.relative unset or unreadable; use repository root scope.
         }
         return { repoRoot };
     }
@@ -306,8 +300,16 @@ class GitService {
         await this.ensureRepo();
         const { repoRoot, relativePrefix } =
             await this.getRepositoryReadContext();
-        const status = await this.git.status();
+        const status = parseTrackedGitStatus(
+            await this.git.raw([
+                'status',
+                '--porcelain=v1',
+                '-z',
+                '--untracked-files=no',
+            ]),
+        );
         const files: FileDiff[] = [];
+        const selectedFiles = new Set<string>();
 
         const toScopedFile = (repoRelativeFile: string): string | null => {
             if (!relativePrefix) {
@@ -321,45 +323,35 @@ class GitService {
         const processFile = async (
             repoRelativeFile: string,
             scopedFile: string,
-            gitStatus: string,
         ): Promise<FileDiff> => {
-            let status: FileDiff['status'] = 'modified';
-
-            if (gitStatus === 'A' || gitStatus === '?') {
-                status = 'added';
-            } else if (gitStatus === 'D') {
-                status = 'deleted';
-            } else if (gitStatus === 'R') {
-                status = 'renamed';
-            }
-
             const diff = await this.git.diff([
                 '--',
                 path.resolve(repoRoot, repoRelativeFile),
             ]);
             const { additions, deletions } = countDiffChanges(diff);
 
-            return { file: scopedFile, status, additions, deletions, diff };
+            return {
+                file: scopedFile,
+                status: 'modified',
+                additions,
+                deletions,
+                diff,
+            };
         };
 
         for (const file of status.staged) {
             const scopedFile = toScopedFile(file);
             if (scopedFile) {
-                files.push(await processFile(file, scopedFile, 'M'));
+                files.push(await processFile(file, scopedFile));
+                selectedFiles.add(scopedFile);
             }
         }
 
         for (const file of status.modified) {
             const scopedFile = toScopedFile(file);
-            if (scopedFile && !files.find((f) => f.file === scopedFile)) {
-                files.push(await processFile(file, scopedFile, 'M'));
-            }
-        }
-
-        for (const file of status.not_added) {
-            const scopedFile = toScopedFile(file);
-            if (scopedFile) {
-                files.push(await processFile(file, scopedFile, 'A'));
+            if (scopedFile && !selectedFiles.has(scopedFile)) {
+                files.push(await processFile(file, scopedFile));
+                selectedFiles.add(scopedFile);
             }
         }
 
