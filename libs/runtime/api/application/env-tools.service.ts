@@ -32,6 +32,7 @@ import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
 import { AuthoredFilesSchema, type AuthoredFile } from '@libs/runtime/contracts/authored-files';
 import { RUNTIME_RECIPE_MAX_BYTES } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipeSummary, recipeDigest, type RecipeExpose } from '@libs/runtime/run';
+import { parseRecipe, recipeTestLiteralWarnings } from '@libs/runtime/protocol/recipe';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { environmentHealthOf } from '@libs/runtime/environment/environment-health';
 import type { EnvironmentHealth } from '@libs/runtime/environment/environment-runtime';
@@ -669,10 +670,12 @@ export class RuntimeEnvToolsService {
         // A recipe that does not parse has nothing the repository checks could read.
         const repo = summary && recipe ? await this.repositoryProblems(where, env, recipe, files) : { errors: [], warnings: [] as string[] };
         const all = [...errors, ...repo.errors];
+        const parsedRecipe = recipe && summary ? parseRecipe(recipe) : undefined;
+        const literals = parsedRecipe?.ok ? recipeTestLiteralWarnings(parsedRecipe.recipe) : [];
         return {
             ok: all.length === 0,
             errors: all,
-            warnings: repo.warnings,
+            warnings: [...literals, ...repo.warnings],
             ...('readAt' in repo && repo.readAt ? { readAt: repo.readAt } : {}),
             environment: env ? { environmentId: env.environmentId, repositoryName: env.repositoryName } : { repositoryName: where.repositoryName },
             ...(summary ? { summary } : {}),

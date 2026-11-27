@@ -183,6 +183,34 @@ func checkPublic(r *Recipe) error {
 	return nil
 }
 
+var (
+	testLiteralShape = regexp.MustCompile(`^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)+$`)
+	testLiteralWord  = regexp.MustCompile(`^[A-Za-z]+$`)
+	// testLiteralMarkers is held to TEST_LITERAL_MARKERS in libs/runtime/protocol/recipe.ts.
+	testLiteralMarkers = map[string]bool{"test": true, "tests": true, "e2e": true, "fake": true, "dummy": true, "mock": true, "fixture": true, "fixtures": true, "example": true, "sample": true}
+)
+
+// isTestLiteral says whether a value under a secret-looking name is an
+// obviously-test literal ("e2e-admin-token-only"): short words joined by - _
+// or ., one of them a test marker, no long mixed letter and digit run, and
+// nothing a known secret pattern matches. A real credential is random and has
+// none of that shape. Held to isTestLiteral in libs/runtime/protocol/recipe.ts.
+func isTestLiteral(v string) bool {
+	if len(v) < 4 || len(v) > 64 || secretValue.MatchString(v) || !testLiteralShape.MatchString(v) {
+		return false
+	}
+	marked := false
+	for _, p := range strings.FieldsFunc(v, func(r rune) bool { return r == '-' || r == '_' || r == '.' }) {
+		if len(p) > 16 || (len(p) > 8 && !testLiteralWord.MatchString(p)) {
+			return false
+		}
+		if testLiteralMarkers[strings.ToLower(p)] {
+			marked = true
+		}
+	}
+	return marked
+}
+
 func refuseSecretsInEnv(r *Recipe) error {
 	return validateEnvironment(r.Services.Compose.Env, "services.compose.env")
 }
@@ -195,7 +223,7 @@ func validateEnvironment(env map[string]string, prefix string) error {
 		if isControlEnv(k) {
 			return fmt.Errorf("%s.%s changes what runs, not how the app is configured; a recipe never sets it", prefix, k)
 		}
-		if (secretName.MatchString(k) && !testValues[v]) || secretValue.MatchString(v) {
+		if (secretName.MatchString(k) && !testValues[v] && !isTestLiteral(v)) || secretValue.MatchString(v) {
 			return fmt.Errorf("%s.%s looks like a secret; secrets never go in the recipe", prefix, k)
 		}
 		if strings.ContainsAny(v, "\n\r") {

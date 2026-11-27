@@ -536,6 +536,17 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
             expect(check.warnings.length).toBeGreaterThan(0);
         });
 
+        it('warns, with how to mark it, of a test literal under a secret-looking name, and refuses a real-looking credential there', async () => {
+            const h = harness({ repoFiles: { 'package.json': '{}', 'src/index.js': '' } });
+            const withToken = (v: string) => RECIPE.replace('    public: app\n', `    public: app\n    env: { E2E_ADMIN_TOKEN: ${v} }\n`);
+            const fixture = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: withToken('e2e-admin-token-only'), files: [dockerfile, compose('.')] });
+            expect(fixture.ok).toBe(true);
+            expect(fixture.warnings.join('\n')).toMatch(/E2E_ADMIN_TOKEN holds "e2e-admin-token-only".*use kodus-test-value/);
+            const real = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: withToken('ghp_abcdefghijklmnopqrstuvwxyz0123'), files: [dockerfile, compose('.')] });
+            expect(real.ok).toBe(false);
+            expect(real.errors.join('\n')).toMatch(/looks like a secret/);
+        });
+
         it('is no verdict when the repository cannot be read: it passes what it can check and says it skipped the rest', async () => {
             const h = harness({ repoFiles: 'unreadable' });
             const check = await h.service.checkRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('.')] });

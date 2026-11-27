@@ -310,6 +310,42 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const HEALTH_PATH = /^\/[A-Za-z0-9._~/?=&%-]*$/;
 const SECRET_NAME = /(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|ACCESS_?KEY|CREDENTIAL)/i;
 const SECRET_VALUE = /(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9_-]{16,}|sk_live_|AKIA[0-9A-Z]{16}|xox[abpr]-|-----BEGIN)/;
+// Words that make a hyphenated literal read as a fixture ("e2e-admin-token-only"). Held to the same list as isTestLiteral in
+// apps/runtime-cell/internal/recipe/validate.go.
+const TEST_LITERAL_MARKERS = new Set(['test', 'tests', 'e2e', 'fake', 'dummy', 'mock', 'fixture', 'fixtures', 'example', 'sample']);
+
+/**
+ * Whether a value under a secret-looking name is an obviously-test literal: short words joined by - _ or ., at least one of
+ * them a test marker (e2e, test, fake, ...), no long mixed letter and digit run, and nothing a known secret pattern matches.
+ * A real credential is random, so it has none of this shape; one that does is a fixture, a warning and never a refusal.
+ */
+export function isTestLiteral(v: string): boolean {
+    if (v.length < 4 || v.length > 64 || SECRET_VALUE.test(v) || !/^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)+$/.test(v)) return false;
+    const parts = v.split(/[-_.]/);
+    if (parts.some((p) => p.length > 16 || (p.length > 8 && !/^[A-Za-z]+$/.test(p)))) return false;
+    return parts.some((p) => TEST_LITERAL_MARKERS.has(p.toLowerCase()));
+}
+
+/** Whether a variable of the recipe may hold the value though its name says secret: Kodus's own test values, or a test literal. */
+export function allowedUnderSecretName(v: string): boolean {
+    return (RECIPE_TEST_VALUES as readonly string[]).includes(v) || isTestLiteral(v);
+}
+
+/** What a check says of the test literals a recipe keeps under secret-looking names: accepted, and how to mark them. */
+export function recipeTestLiteralWarnings(r: Pick<Recipe, 'env' | 'suite'>): string[] {
+    const out: string[] = [];
+    const scan = (env: Record<string, string>, prefix: string) => {
+        for (const [k, v] of Object.entries(env)) {
+            if (SECRET_NAME.test(k) && !(RECIPE_TEST_VALUES as readonly string[]).includes(v) && isTestLiteral(v)) {
+                out.push(`${prefix}.${k} holds ${JSON.stringify(v)}, which reads as a test literal and is accepted; to mark it as a test value use ${RECIPE_TEST_VALUES[0]}. A real credential is refused.`);
+            }
+        }
+    };
+    scan(r.env, 'services.compose.env');
+    if (r.suite) scan(r.suite.env, 'suite.env');
+    return out;
+}
+
 // time.ParseDuration's grammar without the minus a positive duration never has.
 const GO_DURATION = /^\+?(\d+(\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h)((\d+(\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h))*$/;
 /** The longest time.Duration, in seconds: past it the cell's parser refuses the value, so the worker does too. */
@@ -370,7 +406,7 @@ function recipeEnvironmentError(env: Record<string, string>, prefix: string): st
     for (const [k, v] of Object.entries(env)) {
         if (!ENV_NAME.test(k)) return `${prefix}: bad name ${JSON.stringify(k)}`;
         if (isControlEnv(k)) return `${prefix}.${k} changes what runs, not how the app is configured; a recipe never sets it`;
-        if ((SECRET_NAME.test(k) && !(RECIPE_TEST_VALUES as readonly string[]).includes(v)) || SECRET_VALUE.test(v)) return `${prefix}.${k} looks like a secret; secrets never go in the recipe`;
+        if ((SECRET_NAME.test(k) && !allowedUnderSecretName(v)) || SECRET_VALUE.test(v)) return `${prefix}.${k} looks like a secret; secrets never go in the recipe`;
         if (/[\n\r]/.test(v)) return `${prefix}.${k} has a newline`;
     }
     return undefined;

@@ -103,7 +103,7 @@ func TestParseRefuses(t *testing.T) {
 		"health not a path":  "version: 1\nservices: { compose: { public: web, health: h }, expose: [ { service: web, port: 80, kind: http } ] }\n",
 		"files.copy":         "version: 1\nfiles: { copy: [.env] }\n",
 		"secret key":         "version: 1\nservices: { compose: { env: { STRIPE_SECRET: x } } }\n",
-		"secret key, almost": "version: 1\nservices: { compose: { env: { SESSION_SECRET: kodus-test-value-real } } }\n",
+		"secret key, almost": "version: 1\nservices: { compose: { env: { SESSION_SECRET: kodus-test-value-9f8a7b6c5d4e3f2a1b0c } } }\n",
 		"secret value":       "version: 1\nservices: { compose: { env: { X: ghp_abcdefghijklmnopqrstuvwxyz0123 } } }\n",
 		"env newline":        "version: 1\nservices: { compose: { env: { X: \"a\\nb\" } } }\n",
 		"env LD_PRELOAD":     "version: 1\nservices: { compose: { env: { LD_PRELOAD: /tmp/x.so } } }\n",
@@ -256,5 +256,27 @@ func TestARecipeLinkedOutOfTheCheckoutIsRefused(t *testing.T) {
 	}
 	if rec, err := Load(checkout); err == nil {
 		t.Fatalf("Load read a recipe outside the checkout: %+v", rec)
+	}
+}
+
+// A value the repository's own e2e specs use as a fixture, written under a
+// secret-looking name, boots; a real-looking credential never does, whatever
+// words surround it. The same cases sit in libs/runtime/protocol/recipe.spec.ts.
+func TestIsTestLiteral(t *testing.T) {
+	for _, v := range []string{"e2e-admin-token-only", "test_admin_token", "fake.token.local", "dummy-password"} {
+		if !isTestLiteral(v) {
+			t.Errorf("%q: a fixture was not read as one", v)
+		}
+		if _, err := Parse([]byte("version: 1\nservices: { compose: { env: { ADMIN_TOKEN: " + v + " } } }\n")); err != nil {
+			t.Errorf("%q: refused: %v", v, err)
+		}
+	}
+	for _, v := range []string{"abc123", "ghp_abcdefghijklmnopqrstuvwxyz0123", "test-9f8a7b6c5d4e3f2a1b0c", "e2e-sk-abcdefghijklmnopqrstuv", "prod-admin-token", "a3F9xQ2LmZ8vK1pR"} {
+		if isTestLiteral(v) {
+			t.Errorf("%q: read as a fixture", v)
+		}
+		if _, err := Parse([]byte("version: 1\nservices: { compose: { env: { ADMIN_TOKEN: " + v + " } } }\n")); err == nil {
+			t.Errorf("%q: accepted under a secret name", v)
+		}
 	}
 }

@@ -4,7 +4,7 @@ import * as yaml from 'js-yaml';
 
 import { AUTHORED_FILES_LIMITS } from '@libs/runtime/contracts/authored-files';
 import { RECIPE_FILE_PATHS } from '@libs/runtime/contracts/enums';
-import { type RecipeNeed, recipeNeedsConflict, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
+import { allowedUnderSecretName, type RecipeNeed, recipeNeedsConflict, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 
@@ -110,7 +110,7 @@ function secretProblem(text: string, hosts: ReadonlySet<string> = new Set()): st
 
 /** A variable whose name says secret holds only a test value (or nothing). */
 function secretVariable(name: string, value: string): boolean {
-    return SECRET_NAME.test(name) && value !== '' && !TEST_VALUES.includes(value);
+    return SECRET_NAME.test(name) && value !== '' && !allowedUnderSecretName(value);
 }
 
 // --- Images -----------------------------------------------------------------------------------

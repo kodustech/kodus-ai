@@ -1,6 +1,6 @@
 import * as yaml from 'js-yaml';
 
-import { parseRecipe, type Recipe, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
+import { allowedUnderSecretName, parseRecipe, type Recipe, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
@@ -181,7 +181,7 @@ export async function checkAuthoredRecipe(
     }
 
     for (const [name, value] of Object.entries(recipe.env)) {
-        if (SECRET_NAME.test(name) && !(RECIPE_TEST_VALUES as readonly string[]).includes(value)) {
+        if (SECRET_NAME.test(name) && !allowedUnderSecretName(value)) {
             errors.push(
                 `services.compose.env.${name}: looks like a secret; a recipe never holds one (use ${RECIPE_TEST_VALUES[0]} if the app only needs it set)`,
             );

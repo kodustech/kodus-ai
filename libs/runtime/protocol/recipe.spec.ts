@@ -1,4 +1,4 @@
-import { MAX_HEALTH_TIMEOUT_SECONDS, parseRecipe, RECIPE_NEEDS_SHAPE, recipeDurationSeconds, recipeNeedsConflict } from './recipe';
+import { isTestLiteral, MAX_HEALTH_TIMEOUT_SECONDS, parseRecipe, RECIPE_NEEDS_SHAPE, recipeDurationSeconds, recipeNeedsConflict } from './recipe';
 
 // The duration rules the cell holds too (apps/runtime-cell/internal/recipe,
 // TestParseRefuses and TestHealthTimeoutIsCappedAtTheMostASetupWaits).
@@ -85,5 +85,28 @@ describe('services.needs', () => {
         expect(recipeNeedsConflict(needs, { fullName: 'ACME/Billing', alias: 'shop' })).toContain("environment's own repository");
         expect(recipeNeedsConflict(needs, { fullName: 'acme/shop', alias: 'front' })).toContain('alias front');
         expect(recipeNeedsConflict(undefined, { fullName: 'acme/shop', alias: 'shop' })).toBeUndefined();
+    });
+});
+
+// The same cases sit in apps/runtime-cell/internal/recipe (TestIsTestLiteral): the worker and the cell must agree.
+const withEnv = (v: string) => `version: 1\nservices:\n  compose:\n    env: { ADMIN_TOKEN: ${v} }\n`;
+
+describe('a test literal under a secret-looking name', () => {
+    it('is accepted when its words say it is a fixture, as the repository\'s e2e specs write it', () => {
+        for (const v of ['e2e-admin-token-only', 'test_admin_token', 'fake.token.local', 'dummy-password']) {
+            expect([v, parseRecipe(withEnv(v)).ok]).toEqual([v, true]);
+        }
+    });
+
+    it('is refused when the value is a real-looking credential, whatever words surround it', () => {
+        for (const v of ['abc123', 'ghp_abcdefghijklmnopqrstuvwxyz0123', 'test-9f8a7b6c5d4e3f2a1b0c', 'e2e-sk-abcdefghijklmnopqrstuv', 'prod-admin-token', 'a3F9xQ2LmZ8vK1pR']) {
+            expect([v, parseRecipe(withEnv(v)).ok]).toEqual([v, false]);
+        }
+    });
+
+    it('is told apart by isTestLiteral on the same cases', () => {
+        expect(isTestLiteral('e2e-admin-token-only')).toBe(true);
+        expect(isTestLiteral('prod-admin-token')).toBe(false);
+        expect(isTestLiteral('test-9f8a7b6c5d4e3f2a1b0c')).toBe(false);
     });
 });
