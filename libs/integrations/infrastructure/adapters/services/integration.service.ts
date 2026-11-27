@@ -111,6 +111,18 @@ export class IntegrationService implements IIntegrationService {
         return this.integrationRepository.create(integration);
     }
 
+    saveCodeManagementAuth(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform: PlatformType,
+        authDetails: Record<string, unknown>,
+    ): Promise<IntegrationEntity> {
+        return this.integrationRepository.saveCodeManagementAuth(
+            organizationAndTeamData,
+            platform,
+            authDetails,
+        );
+    }
+
     update(
         filter: Partial<IIntegration>,
         data: Partial<IIntegration>,

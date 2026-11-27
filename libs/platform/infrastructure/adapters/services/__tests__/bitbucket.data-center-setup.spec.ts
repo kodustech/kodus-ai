@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import axios from 'axios';
 
+import { IntegrationConfigKey } from '@libs/core/domain/enums';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 
 import { BitbucketService } from '../bitbucket.service';
@@ -35,6 +36,25 @@ const facade = (storedAuth: any, storedAuthThrows = false) => {
 };
 
 describe('BitbucketService.createAuthIntegration', () => {
+    it.each([42, ['server'], { url: HOST }])(
+        'rejects a non-string host with HTTP 400 before routing (%j)',
+        async (host) => {
+            const svc = facade(undefined);
+            await expect(
+                svc.createAuthIntegration({
+                    organizationAndTeamData: ORG,
+                    host,
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(
+                svc.bitbucketCloudService.createAuthIntegration,
+            ).not.toHaveBeenCalled();
+            expect(
+                svc.bitbucketDataCenterService.createAuthIntegration,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
     it('runs a first-time Data Center setup on the Data Center implementation', async () => {
         // The reported case: nothing is stored yet, and the request carries the
         // host the user typed into the setup form.
@@ -239,6 +259,39 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
 
     afterEach(() => jest.restoreAllMocks());
 
+    it.each([
+        { status: 401, data: {} },
+        { status: 200, data: '<html>Sign in</html>' },
+    ])(
+        'refuses a public repository list without an authenticated profile (%j)',
+        async (profile) => {
+            const svc = dataCenter();
+            const get = jest
+                .fn()
+                .mockResolvedValueOnce({
+                    status: 200,
+                    data: { values: [{ public: true }] },
+                })
+                .mockResolvedValueOnce(profile);
+            jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+
+            await expect(
+                svc.createAuthIntegration({
+                    organizationAndTeamData: ORG,
+                    authMode: AuthMode.BASIC,
+                    username: 'acme',
+                    token: 'wrong',
+                    host: HOST,
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(get.mock.calls).toEqual([
+                ['/repos?limit=1'],
+                ['/profile/recent/repos?limit=1'],
+            ]);
+            expect(svc.addAccessToken).not.toHaveBeenCalled();
+        },
+    );
+
     it('probes the repository list the setup reads next, not the project list', async () => {
         const svc = dataCenter();
         const get = jest.fn(async () => ({
@@ -363,4 +416,50 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
             expect.objectContaining({ authMode: AuthMode.BASIC }),
         );
     });
+});
+
+describe('BitbucketDataCenterService.verifyConnection', () => {
+    it.each([
+        { repositories: [{ id: '7', name: 'api' }], ready: true },
+        { repositories: [], ready: false },
+        { repositories: null, ready: false },
+    ])(
+        'reports the persisted repository selection to the review guard (%j)',
+        async ({ repositories, ready }) => {
+            const integrationService = {
+                findOne: jest.fn().mockResolvedValue({
+                    uuid: 'integration',
+                    authIntegration: {
+                        authDetails: { appPassword: 'encrypted' },
+                    },
+                }),
+            };
+            const integrationConfigService = {
+                findOne: jest
+                    .fn()
+                    .mockResolvedValue(
+                        repositories && { configValue: repositories },
+                    ),
+            };
+            const dc = new BitbucketDataCenterService(
+                integrationService as any,
+                integrationConfigService as any,
+                {} as any,
+                {} as any,
+            );
+
+            await expect(
+                dc.verifyConnection({ organizationAndTeamData: ORG }),
+            ).resolves.toMatchObject({
+                hasConnection: true,
+                isSetupComplete: ready,
+                config: { hasRepositories: ready },
+            });
+            expect(integrationConfigService.findOne).toHaveBeenCalledWith({
+                integration: { uuid: 'integration' },
+                team: { uuid: ORG.teamId },
+                configKey: IntegrationConfigKey.REPOSITORIES,
+            });
+        },
+    );
 });

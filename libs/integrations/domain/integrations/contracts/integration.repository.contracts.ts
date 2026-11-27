@@ -13,6 +13,11 @@ export interface IIntegrationRepository {
         filter?: Partial<IIntegration>,
     ): Promise<IntegrationEntity | undefined>;
     create(integration: IIntegration): Promise<IntegrationEntity | undefined>;
+    saveCodeManagementAuth(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform: PlatformType,
+        authDetails: Record<string, unknown>,
+    ): Promise<IntegrationEntity>;
     update(
         filter: Partial<IIntegration>,
         data: Partial<IIntegration>,

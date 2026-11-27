@@ -75,6 +75,10 @@ export class BitbucketService implements Omit<
         organizationAndTeamData?: OrganizationAndTeamData,
         requestedHost?: string,
     ): Promise<any> {
+        if (requestedHost !== undefined && typeof requestedHost !== 'string') {
+            throw new BadRequestException('Bitbucket host must be a string.');
+        }
+
         // A request that carries a Data Center host is a first-time setup: no
         // auth is stored yet, so the lookup below cannot answer, and Cloud
         // would take the call and report a connection it never made (#2570).

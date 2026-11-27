@@ -10,7 +10,12 @@ import {
 } from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import pLimit from 'p-limit';
@@ -232,15 +237,23 @@ export class BitbucketDataCenterService implements Omit<
         host?: string;
         authMode?: AuthMode;
     }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        const {
+            organizationAndTeamData,
+            token,
+            username,
+            email,
+            host,
+            authMode = AuthMode.TOKEN,
+        } = params;
+        const authDetails: BitbucketAuthDetail = {
+            username: username || '',
+            appPassword: encrypt(token),
+            authMode,
+            email,
+            host,
+        };
+
         try {
-            const {
-                organizationAndTeamData,
-                token,
-                username,
-                email,
-                host,
-                authMode = AuthMode.TOKEN,
-            } = params;
             await assertGitServerUrlAllowed(host);
 
             if (!host) {
@@ -249,56 +262,21 @@ export class BitbucketDataCenterService implements Omit<
                 );
             }
 
-            const authDetails: BitbucketAuthDetail = {
-                username: username || '',
-                appPassword: encrypt(token),
-                authMode,
-                email: email,
-                host: host,
-            };
-
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            // Test the connection with the endpoint the setup reads next: a
-            // token that may list repositories is what Kodus needs, and asking
-            // /projects first refused tokens that can read repos but not
-            // administer projects.
-            const testResponse = await axiosClient.get('/repos?limit=1');
-
-            // A 200 is not proof that Bitbucket answered: an SSO login page
-            // also answers 200, with HTML in the body. Only the paginated
-            // shape the repository picker reads proves the token works, and an
-            // empty page is a valid answer.
-            if (
-                testResponse.status !== 200 ||
-                !Array.isArray(testResponse.data?.values)
-            ) {
-                throw new Error(
-                    'Bitbucket Data Center failed to validate the provided token.',
-                );
+            // The picker can list public repositories anonymously. The profile
+            // endpoint requires authentication even when both pages are empty.
+            for (const path of [
+                '/repos?limit=1',
+                '/profile/recent/repos?limit=1',
+            ]) {
+                const page = await axiosClient.get(path);
+                if (page.status !== 200 || !Array.isArray(page.data?.values)) {
+                    throw new Error(
+                        'Bitbucket Data Center failed to validate the provided token.',
+                    );
+                }
             }
-
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.BITBUCKET,
-            });
-
-            if (!integration) {
-                await this.addAccessToken(organizationAndTeamData, authDetails);
-            } else {
-                await this.updateAuthIntegration({
-                    organizationAndTeamData,
-                    authIntegrationId: integration?.authIntegration?.uuid,
-                    integrationId: integration?.uuid,
-                    authDetails,
-                });
-            }
-
-            return {
-                success: true,
-                status: CreateAuthIntegrationStatus.SUCCESS,
-            };
         } catch (err) {
             this.logger.error({
                 message: 'Error authenticating with Data Center token',
@@ -318,6 +296,16 @@ export class BitbucketDataCenterService implements Omit<
                 )
             );
         }
+
+        try {
+            await this.addAccessToken(organizationAndTeamData, authDetails);
+        } catch {
+            // A database error can carry bound credential values.
+            throw new InternalServerErrorException(
+                'Could not save the Bitbucket Data Center connection.',
+            );
+        }
+        return { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
     }
 
     async findOneByOrganizationAndTeamDataAndConfigKey(
@@ -387,7 +375,8 @@ export class BitbucketDataCenterService implements Omit<
                 );
 
             const hasRepositories =
-                bitbucketRepositories?.configValue?.length > 0;
+                Array.isArray(bitbucketRepositories) &&
+                bitbucketRepositories.length > 0;
             const hasAuthDetails =
                 !!bitbucketOrg?.authIntegration?.authDetails?.appPassword;
 
@@ -521,19 +510,10 @@ export class BitbucketDataCenterService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData,
         authDetails: BitbucketAuthDetail,
     ): Promise<IntegrationEntity> {
-        const authUuid = v4();
-
-        const authIntegration = await this.authIntegrationService.create({
-            uuid: authUuid,
-            status: true,
-            authDetails,
-            organization: { uuid: organizationAndTeamData.organizationId },
-            team: { uuid: organizationAndTeamData.teamId },
-        });
-
-        return await this.addIntegration(
+        return this.integrationService.saveCodeManagementAuth(
             organizationAndTeamData,
-            authIntegration?.uuid,
+            PlatformType.BITBUCKET,
+            authDetails,
         );
     }
 
