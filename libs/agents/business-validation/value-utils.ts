@@ -1,3 +1,17 @@
+import { randomBytes } from 'crypto';
+
+/**
+ * A fence name `<prefix>_<16 random hex>` that `content` does not contain, so
+ * the content cannot close its own fence early.
+ */
+export function uniqueFenceName(prefix: string, content: string): string {
+    let name: string;
+    do {
+        name = `${prefix}_${randomBytes(8).toString('hex')}`;
+    } while (content.includes(name));
+    return name;
+}
+
 export function asRecord(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object') {
         return {};

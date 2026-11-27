@@ -1,7 +1,5 @@
-import { randomBytes } from 'crypto';
-
 import type { TaskLinks } from '../business-validation.types';
-import { asRecord } from '../value-utils';
+import { asRecord, uniqueFenceName } from '../value-utils';
 import { MAX_DOCUMENTS, MAX_RELATED_CHARS } from './tracker';
 
 /**
@@ -49,15 +47,6 @@ function cutAt(text: string, max: number): string {
     return text.slice(0, end);
 }
 
-/** A fence name the content cannot contain, so it cannot close the block early. */
-function fenceName(content: string): string {
-    let name: string;
-    do {
-        name = `artifact_data_${randomBytes(8).toString('hex')}`;
-    } while (content.includes(name));
-    return name;
-}
-
 /**
  * Artifact text is data, never instructions: it sits in a fence whose name
  * is random per block, closing tags are escaped and every line is quoted, so
@@ -73,7 +62,7 @@ function delimited(content: string): {
     source: string;
     truncated: boolean;
 } {
-    const name = fenceName(content);
+    const name = uniqueFenceName('artifact_data', content);
     const open = `<${name}>\n`;
     const close = `\n</${name}>`;
     const lines = content.split(/\r\n|[\r\n\v\f\u0085\u2028\u2029]/);
