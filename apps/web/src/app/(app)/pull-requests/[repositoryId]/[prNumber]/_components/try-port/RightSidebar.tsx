@@ -6,6 +6,7 @@ import {
     normalizeSeverity,
 } from "@components/system/issue-severity-level-badge";
 import type { SeverityLevel } from "src/core/types";
+
 import type { PrInfo, ReviewIssue } from "./types";
 
 // Explicit tier groups so the implicit "bugs vs flags" sort becomes visible,
@@ -34,9 +35,7 @@ export function RightSidebar({
 }) {
     const groups = TIERS.map((tier) => ({
         ...tier,
-        items: issues.filter(
-            (i) => normalizeSeverity(i.severity) === tier.key,
-        ),
+        items: issues.filter((i) => normalizeSeverity(i.severity) === tier.key),
     })).filter((g) => g.items.length > 0);
 
     const hasFindings = groups.length > 0;
@@ -99,20 +98,20 @@ function SeverityGroup({
     const [open, setOpen] = useState(true);
     return (
         <section
-            className="rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 backdrop-blur-sm overflow-hidden"
+            className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 backdrop-blur-sm"
             style={{ boxShadow: "var(--shadow-card)" }}>
             <button
                 onClick={() => setOpen((v) => !v)}
-                className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-[var(--bg-3)]/40 transition-colors">
+                className="flex w-full items-center justify-between px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--bg-3)]/40">
                 <span className="flex items-center gap-2">
                     <span
-                        className="w-1.5 h-1.5 rounded-full"
+                        className="h-1.5 w-1.5 rounded-full"
                         style={{ backgroundColor: color }}
                     />
-                    <span className="text-3xs uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
+                    <span className="text-3xs font-semibold tracking-[0.14em] text-[var(--text-dim)] uppercase">
                         {label}
                     </span>
-                    <span className="text-3xs font-mono px-1.5 py-0.5 rounded bg-[var(--bg-3)] text-[var(--text-muted)]">
+                    <span className="text-3xs rounded bg-[var(--bg-3)] px-1.5 py-0.5 font-mono text-[var(--text-muted)]">
                         {items.length}
                     </span>
                 </span>
@@ -147,15 +146,13 @@ function AssigneesCard({
                 {assignees.map((a) => (
                     <li
                         key={a.login}
-                        className="px-3.5 py-1.5 flex items-center gap-2.5 text-sm"
-                    >
+                        className="flex items-center gap-2.5 px-3.5 py-1.5 text-sm">
                         <Avatar src={a.avatarUrl} alt="" />
                         <a
                             href={a.htmlUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 truncate text-[var(--text)] hover:text-[var(--accent)] transition-colors"
-                        >
+                            className="flex-1 truncate text-[var(--text)] transition-colors hover:text-[var(--accent)]">
                             {a.login}
                         </a>
                     </li>
@@ -165,19 +162,15 @@ function AssigneesCard({
     );
 }
 
-function LabelsCard({
-    labels,
-}: {
-    labels: NonNullable<PrInfo["labels"]>;
-}) {
+function LabelsCard({ labels }: { labels: NonNullable<PrInfo["labels"]> }) {
     return (
         <SidebarCard title={`Labels ${labels.length}`}>
-            <div className="px-3 py-2.5 flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 px-3 py-2.5">
                 {labels.map((l) => (
                     <span
                         key={l.name}
                         title={l.description}
-                        className="inline-flex items-center text-2xs font-medium px-2 py-0.5 rounded-full border"
+                        className="text-2xs inline-flex items-center rounded-full border px-2 py-0.5 font-medium"
                         style={{
                             // Use the GitHub label color as a tinted
                             // background + matching border. Text stays
@@ -189,11 +182,8 @@ function LabelsCard({
                             borderColor: l.color
                                 ? `#${l.color}55`
                                 : "var(--border)",
-                            color: l.color
-                                ? `#${l.color}`
-                                : "var(--text)",
-                        }}
-                    >
+                            color: l.color ? `#${l.color}` : "var(--text)",
+                        }}>
                         {l.name}
                     </span>
                 ))}
@@ -232,11 +222,11 @@ function ChecksCard({ checks }: { checks: NonNullable<PrInfo["checks"]> }) {
 
     return (
         <SidebarCard title="Checks">
-            <div className="px-3.5 py-3 flex items-center justify-between">
+            <div className="flex items-center justify-between px-3.5 py-3">
                 <span className={`text-review font-medium ${tone}`}>
                     {label}
                 </span>
-                <span className="text-xs font-mono text-[var(--text-muted)]">
+                <span className="font-mono text-xs text-[var(--text-muted)]">
                     {verb}
                 </span>
             </div>
@@ -255,8 +245,7 @@ function ReviewersCard({
                 {reviewers.map((r) => (
                     <li
                         key={r.login}
-                        className="px-3.5 py-1.5 flex items-center gap-2.5 text-sm"
-                    >
+                        className="flex items-center gap-2.5 px-3.5 py-1.5 text-sm">
                         <Avatar src={r.avatarUrl} alt="" />
                         <span className="flex-1 truncate text-[var(--text)]">
                             {r.login}
@@ -278,8 +267,7 @@ function ReviewerStateIcon({
         return (
             <span
                 title="Approved"
-                className="w-4 h-4 rounded-full bg-[var(--green)]/15 text-[var(--green)] flex items-center justify-center"
-            >
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--green)]/15 text-[var(--green)]">
                 <CheckMini />
             </span>
         );
@@ -288,8 +276,7 @@ function ReviewerStateIcon({
         return (
             <span
                 title="Changes requested"
-                className="w-4 h-4 rounded-full bg-[var(--red)]/15 text-[var(--red)] flex items-center justify-center"
-            >
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--red)]/15 text-[var(--red)]">
                 <DotMini />
             </span>
         );
@@ -298,8 +285,7 @@ function ReviewerStateIcon({
         return (
             <span
                 title="Pending"
-                className="w-4 h-4 rounded-full bg-[var(--yellow)]/15 text-[var(--yellow)] flex items-center justify-center"
-            >
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--yellow)]/15 text-[var(--yellow)]">
                 <ClockMini />
             </span>
         );
@@ -307,8 +293,7 @@ function ReviewerStateIcon({
     return (
         <span
             title="Commented"
-            className="w-4 h-4 rounded-full bg-[var(--bg-3)] text-[var(--text-muted)] flex items-center justify-center"
-        >
+            className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--bg-3)] text-[var(--text-muted)]">
             <CommentMini />
         </span>
     );
@@ -334,19 +319,21 @@ function IssueRow({
                 // selected state (left accent bar in the tier colour + raised
                 // bg) kept in sync with the open inline card.
                 style={
-                    active ? { boxShadow: `inset 2px 0 0 0 ${color}` } : undefined
+                    active
+                        ? { boxShadow: `inset 2px 0 0 0 ${color}` }
+                        : undefined
                 }
-                className={`w-full text-left px-3.5 py-2.5 cursor-pointer transition-colors group ${
+                className={`group w-full cursor-pointer px-3.5 py-2.5 text-left transition-colors ${
                     active
                         ? "bg-[var(--bg-input)]/60"
                         : "hover:bg-[var(--bg-input)]/40"
                 }`}>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="mb-1 flex items-center gap-2">
                     <span
-                        className="w-1.5 h-1.5 rounded-full"
+                        className="h-1.5 w-1.5 rounded-full"
                         style={{ backgroundColor: color }}
                     />
-                    <span className="text-3xs uppercase tracking-wider font-semibold text-[var(--text-muted)]">
+                    <span className="text-3xs font-semibold tracking-wider text-[var(--text-muted)] uppercase">
                         {issue.severity || "info"}
                     </span>
                     {issue.category && (
@@ -356,15 +343,17 @@ function IssueRow({
                     )}
                 </div>
                 <p
-                    className={`text-sm leading-snug line-clamp-2 transition-colors ${
+                    className={`line-clamp-2 text-sm leading-snug transition-colors ${
                         active
                             ? "text-[var(--accent)]"
                             : "text-[var(--text)] group-hover:text-[var(--accent)]"
                     }`}>
                     {issue.message}
                 </p>
-                <p className="text-2xs font-mono text-[var(--text-dim)] mt-1 truncate">
-                    {basename(issue.file)}:{issue.line}
+                <p className="text-2xs mt-1 truncate font-mono text-[var(--text-dim)]">
+                    {issue.file
+                        ? `${basename(issue.file)}:${issue.line}`
+                        : "PR-level comment"}
                 </p>
             </button>
         </li>
@@ -386,19 +375,17 @@ function SidebarCard({
 }) {
     return (
         <section
-            className="rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 backdrop-blur-sm overflow-hidden"
-            style={{ boxShadow: "var(--shadow-card)" }}
-        >
-            <header className="px-3.5 py-2.5 border-b border-[var(--border)]/60 flex items-center justify-between">
-                <p className="text-3xs uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
+            className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 backdrop-blur-sm"
+            style={{ boxShadow: "var(--shadow-card)" }}>
+            <header className="flex items-center justify-between border-b border-[var(--border)]/60 px-3.5 py-2.5">
+                <p className="text-3xs font-semibold tracking-[0.14em] text-[var(--text-dim)] uppercase">
                     {title}
                 </p>
                 {collapsible && onToggle && (
                     <button
                         onClick={onToggle}
-                        className="text-[var(--text-dim)] hover:text-[var(--text-muted)] transition-colors"
-                        aria-label={open ? "Collapse" : "Expand"}
-                    >
+                        className="text-[var(--text-dim)] transition-colors hover:text-[var(--text-muted)]"
+                        aria-label={open ? "Collapse" : "Expand"}>
                         <Chevron open={open} />
                     </button>
                 )}
@@ -411,7 +398,7 @@ function SidebarCard({
 function Avatar({ src, alt }: { src?: string; alt: string }) {
     if (!src) {
         return (
-            <span className="w-5 h-5 rounded-full bg-[var(--bg-3)] border border-[var(--border)] shrink-0" />
+            <span className="h-5 w-5 shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg-3)]" />
         );
     }
     return (
@@ -421,7 +408,7 @@ function Avatar({ src, alt }: { src?: string; alt: string }) {
             alt={alt}
             width={20}
             height={20}
-            className="rounded-full shrink-0"
+            className="shrink-0 rounded-full"
         />
     );
 }
@@ -439,8 +426,7 @@ function Chevron({ open }: { open: boolean }) {
             strokeLinejoin="round"
             className={`text-[var(--text-dim)] transition-transform ${
                 open ? "rotate-180" : ""
-            }`}
-        >
+            }`}>
             <polyline points="6 9 12 15 18 9" />
         </svg>
     );
@@ -457,17 +443,14 @@ function CheckMini() {
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
-            aria-hidden
-        >
+            aria-hidden>
             <polyline points="20 6 9 17 4 12" />
         </svg>
     );
 }
 
 function DotMini() {
-    return (
-        <span className="w-1 h-1 rounded-full bg-current" aria-hidden />
-    );
+    return <span className="h-1 w-1 rounded-full bg-current" aria-hidden />;
 }
 
 function ClockMini() {
@@ -479,8 +462,7 @@ function ClockMini() {
             fill="none"
             stroke="currentColor"
             strokeWidth="2.5"
-            aria-hidden
-        >
+            aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <polyline points="12 7 12 12 15 14" />
         </svg>
@@ -494,8 +476,7 @@ function CommentMini() {
             height="10"
             viewBox="0 0 24 24"
             fill="currentColor"
-            aria-hidden
-        >
+            aria-hidden>
             <path d="M3 4h18v12H5l-2 4z" />
         </svg>
     );

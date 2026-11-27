@@ -414,8 +414,9 @@ function ReviewLayout({
             adaptForTryDiffViewer({
                 patchFiles,
                 suggestions: fileSuggestions,
+                prLevelSuggestions,
             }),
-        [patchFiles, fileSuggestions],
+        [patchFiles, fileSuggestions, prLevelSuggestions],
     );
 
     // The right rail only ever holds findings on the web app (checks /
@@ -436,8 +437,8 @@ function ReviewLayout({
     // summary bar, file tree, rail). All four derive from treeIssues — the
     // findings actually rendered — so their totals can never disagree.
     // bugs = critical/high, flags = everything else (medium/low), matching the
-    // rail's tier groups. PR-level suggestions aren't shown on this screen, so
-    // they no longer silently inflate the badge.
+    // rail's tier groups. PR-level findings are in treeIssues too, listed in
+    // the rail with no file.
     const bugCount = useMemo(
         () =>
             treeIssues.filter((i) =>
