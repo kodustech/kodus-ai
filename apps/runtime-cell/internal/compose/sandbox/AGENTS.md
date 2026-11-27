@@ -31,7 +31,7 @@ The compose allowlist of a cell whose services run on a shared host (S-10): the 
 
 ## Module map
 
-Files (8, tests apart): `build.go`, `build_secrets.go`, `canonical.go`, `health.go`, `image.go`, `names.go`, `sandbox.go`, `stop_tmpfs.go`
+Files (9, tests apart): `build.go`, `build_secrets.go`, `canonical.go`, `health.go`, `image.go`, `memplan.go`, `names.go`, `sandbox.go`, `stop_tmpfs.go`
 
 Imports these Runtime modules:
 
