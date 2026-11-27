@@ -542,8 +542,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
     /**
      * The boolean already stored for the scope this file writes. A directory
-     * group written from one file is kept only when every matching directory
-     * stores the same boolean. Anything else stays absent, so sync deletes it.
+     * file matches a group only when the folder paths are the same set. A
+     * group that merely shares a path is a different scope, and an expanded
+     * set must not copy the old boolean onto the new paths.
      */
     private storedImplicitReplies(
         parameter: CodeReviewParameter | undefined,
@@ -578,11 +579,16 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             );
         }
 
-        const matches = (repository.directories ?? []).filter((directory) =>
-            (directory.folders ?? []).some((folder) =>
-                paths.includes(folder.path),
-            ),
-        );
+        const requested = new Set(paths);
+        const matches = (repository.directories ?? []).filter((directory) => {
+            const folderPaths = (directory.folders ?? []).map(
+                (folder) => folder.path,
+            );
+            return (
+                folderPaths.length === requested.size &&
+                folderPaths.every((path) => requested.has(path))
+            );
+        });
         if (matches.length === 0) return undefined;
 
         const values = matches.map((directory) =>

@@ -77,10 +77,10 @@ describe('kodus-config.yml conversation.implicitReplies', () => {
                 onRejectedImplicitReplies,
             );
 
-            await expect(file).resolves.toMatchObject({
+            await expect(file).resolves.toEqual({
                 automatedReviewActive: false,
+                conversation: {},
             });
-            expect((await file)?.conversation?.implicitReplies).toBeUndefined();
             expect(onRejectedImplicitReplies).toHaveBeenCalledTimes(1);
             expect(svc.logger.warn).toHaveBeenCalledTimes(1);
             expect(svc.logger.warn).toHaveBeenCalledWith(
@@ -96,7 +96,7 @@ describe('kodus-config.yml conversation.implicitReplies', () => {
             onRejectedImplicitReplies,
         );
 
-        expect((await file)?.conversation).toBeUndefined();
+        await expect(file).resolves.toEqual({});
         expect(onRejectedImplicitReplies).toHaveBeenCalledTimes(1);
         expect(svc.logger.warn).toHaveBeenCalledTimes(1);
         expect(svc.logger.warn).toHaveBeenCalledWith(expectedWarn('string'));
@@ -113,7 +113,10 @@ describe('kodus-config.yml conversation.implicitReplies', () => {
             `conversation:\n  ${field}\nautomatedReviewActive: false\n`,
         );
 
-        expect((await file)?.conversation?.implicitReplies).toBeUndefined();
+        await expect(file).resolves.toEqual({
+            automatedReviewActive: false,
+            conversation: {},
+        });
         expect(JSON.stringify(svc.logger.warn.mock.calls)).not.toContain(
             'kodus-canary-secret-SHOULD-NOT-LOG',
         );
@@ -131,7 +134,9 @@ describe('kodus-config.yml conversation.implicitReplies', () => {
             onRejectedImplicitReplies,
         );
 
-        expect((await file)?.conversation?.implicitReplies).toBe(expected);
+        await expect(file).resolves.toEqual({
+            conversation: { implicitReplies: expected },
+        });
         expect(onRejectedImplicitReplies).not.toHaveBeenCalled();
         expect(svc.logger.warn).not.toHaveBeenCalled();
     });
