@@ -327,6 +327,12 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
             inference: z.strictObject({ reason: z.enum(RECIPE_INFERENCE_GAPS), message: z.string().min(1).max(500) }).optional(),
             /** The .kodus/ build files a submitted recipe carries (the same bounds as Kody's). */
             files: AuthoredFilesSchema.optional(),
+            /**
+             * A committed recipe's `.kodus/` build files (compose files, Dockerfiles) as the product read them at `sha`,
+             * for a Run whose PR branch was cut before they were committed. Never with an inferred or submitted recipe.
+             * The Runs' claims lay them only where the checkout has none (`filesMode: 'fill_missing'`).
+             */
+            buildFiles: AuthoredFilesSchema.optional(),
         })
         .refine((r) => r.origin !== 'inferred' || (r.content !== null && r.path === RUNTIME_RECIPE_PATH && !r.inference), {
             message: 'an inferred recipe carries its text, at the shared path',
@@ -335,6 +341,8 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
             message: 'a submitted recipe carries its text, at the shared path',
         })
         .refine((r) => !r.files || r.origin === 'submitted', { message: 'only a submitted recipe carries build files' })
+        .refine((r) => !r.buildFiles || (r.content !== null && !r.origin), { message: 'only a committed recipe carries buildFiles' })
+        .refine((r) => !r.buildFiles || !r.files, { message: 'a recipe carries files or buildFiles, not both' })
         .refine((r) => !r.inference || r.content === null, { message: 'an inference gap goes with no recipe text' })
         .optional(),
     /**

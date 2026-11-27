@@ -1844,6 +1844,29 @@ describe('CellHub', () => {
             expect(sent.req.body.recipe).toEqual(recipe);
         });
 
+        it("a committed recipe's build files go in fill_missing mode only to a cell that names authoredFilesFill; any other cell boots the recipe without them", async () => {
+            const files = [{ path: '.kodus/compose.yaml', content: 'services: {}\n' }];
+            const recipe = { path: '.kodus/workspace.yaml', content: 'version: 1\n', digest: 'sha256:d', files, filesMode: 'fill_missing' as const };
+
+            // A cell with authoredFiles only (before the mode): neither blocked nor sent the field its decoder would refuse.
+            const ctx = setup();
+            const before = await ctx.connect('cell-a', 'kodus', CURRENT_CELL);
+            const old = await setupOn(ctx, before, 'setup:fill-old', { recipe });
+            expect(old.claim).not.toMatchObject({ status: 'blocked' });
+            expect(old.req.body.recipe).toEqual({ path: '.kodus/workspace.yaml', content: 'version: 1\n', digest: 'sha256:d' });
+
+            // A cell with no authoredFiles at all still boots it: the files are the checkout's to have, not required.
+            const none = setup();
+            const bare = await none.connect('cell-a', 'kodus', { features: ['seedsCache', 'claimSize', 'egressAllow'] });
+            const bareSent = await setupOn(none, bare, 'setup:fill-bare', { recipe });
+            expect(bareSent.req.body.recipe).toEqual({ path: '.kodus/workspace.yaml', content: 'version: 1\n', digest: 'sha256:d' });
+
+            const fresh = setup();
+            const current = await fresh.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'authoredFilesFill'] });
+            const sent = await setupOn(fresh, current, 'setup:fill-new', { recipe });
+            expect(sent.req.body.recipe).toEqual({ path: '.kodus/workspace.yaml', content: 'version: 1\n', digest: 'sha256:d', files, filesMode: 'fill_missing' });
+        });
+
         it('a cell that names the features gets seedsCache and the size it grants', async () => {
             const ctx = setup();
             const c = await ctx.connect('cell-a', 'kodus', CURRENT_CELL);

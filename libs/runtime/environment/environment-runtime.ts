@@ -97,6 +97,11 @@ export interface RecipeForClaim {
     digest?: string;
     /** The files Kody wrote with an authored recipe (only with a content), written by the cell under .kodus/ before it boots. */
     files?: Array<{ path: string; content: string }>;
+    /**
+     * `fill_missing`: `files` are a committed recipe's build files (read at its commit) that the cell lays only where the
+     * checkout has none, never over a file the PR has. Absent: Kody's authored files (a file with other bytes fails the claim).
+     */
+    filesMode?: 'create' | 'fill_missing';
 }
 
 export interface Claim {

@@ -27,6 +27,7 @@ import { CatalogMeter } from '@libs/runtime/telemetry/instruments';
 import type { PreviewRow, PreviewStore } from '../../shared/persistence/preview-store';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
 import type { EnvSessionEnvironmentInput } from '../env-session/env-session.service';
+import { recipeForClaimOf } from '../setup/recipe-for-claim';
 
 // The worker side of preview URLs (docs/runtime/preview-urls.md §5): one
 // claim of consumer preview per start of a preview, booted from the
@@ -411,16 +412,9 @@ export class PreviewService {
         if (setup.state !== 'active') return this.block(row, `The environment setup is ${setup.state}; fix it before opening a preview.`);
         const env = this.env(row, setup);
         const canaries = this.deps.canaries?.(row.previewId, row.starts) ?? [];
-        const recipe = setup.recipe
-            ? {
-                  path: setup.recipe.path,
-                  content: setup.recipe.state === 'found' && typeof setup.recipe.content === 'string' ? setup.recipe.content : null,
-                  ...(setup.recipe.digest ? { digest: setup.recipe.digest } : {}),
-                  // Kody's build files from the setup's record, as a Run boots them (run-requested.handler.ts): an authored
-                  // recipe's compose file is not in the repository, and without them the cell answers compose_load.
-                  ...(setup.recipe.state === 'found' && typeof setup.recipe.content === 'string' && setup.recipe.files?.length ? { files: setup.recipe.files } : {}),
-              }
-            : undefined;
+        // The recipe and build files from the setup's record, as a Run boots them (run-requested.handler.ts): an authored
+        // recipe's compose file is not in the repository, and without them the cell answers compose_load.
+        const recipe = recipeForClaimOf(setup.recipe);
         let claim: Claim;
         try {
             const r = await acquireWaitingForRoom(

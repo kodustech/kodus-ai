@@ -41,6 +41,7 @@ import {
 import { RUN_TOKEN_DEFAULT_TTL_SECONDS, signSetupToken } from '../domain/run-token';
 import { RepositoryFullNameSchema } from '@libs/runtime/contracts/workspace';
 import { RuntimeEnvironmentMembers } from './environment-members.service';
+import { readCommittedBuildFiles } from './recipe-build-files.reader';
 import { inferRecipeAtCommit } from './recipe-inference.reader';
 import { sealForRuntime } from './secret-sealer';
 
@@ -193,6 +194,12 @@ export class RuntimeSetupRequester {
         // Not found anywhere: recorded as absent at the shared path.
         if (content === null) path = RUNTIME_RECIPE_PATH;
         let recipe: NonNullable<Resolved['recipe']> = { path, sha: head.sha, content };
+        // A committed recipe: its .kodus/ build files at this commit travel with it, for a PR branch cut before them (the Runs'
+        // claims lay them only where the checkout has none). Over the authored-files bounds or unreadable: none, as before.
+        if (content !== null) {
+            const buildFiles = await readCommittedBuildFiles(this.git, { ...orgTeam, ...repo, sha: head.sha }, content);
+            if (buildFiles) recipe = { ...recipe, buildFiles };
+        }
         // No recipe committed, but a developer's agent sent one (env_recipe_submit): it boots, with its .kodus/ files,
         // until a recipe is committed. A committed recipe always wins; Kodus infers nothing over one a developer sent.
         const submitted = content === null ? env.submittedRecipe : undefined;

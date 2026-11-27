@@ -8,7 +8,7 @@ The environment setup: boot the default-branch head the product resolved with th
 - The inferred recipe Kody replaced stays replaced: an authored recipe that descends from an inferred one carries its digest as `replacesInferred` on the record's recipe (set by `author-repair.ts` and `resolveRecipe`, carried by every later setup that keeps, reuses or repairs it), and `repairedBefore` boots Kody's recipe while the product sends that same inferred digest, whatever the number of setups between.
 - The suite check (`suite-check.ts` `checkSuite`, step `suite` in `boot-once.ts`, after the ready check and before the bake): for a recipe that declares a suite, one spec run in `suite.service`; no spec there or no result file blocks the setup with `suite_unrunnable` on the recipe's account (Kody repairs it), anything it cannot ask is skipped. Bounded by `SUITE_CHECK_TIMEOUT_MS` and by the claim's ceiling less `SUITE_CHECK_BAKE_RESERVE_MS`.
 - The ready check (`boot-once.ts` `readyCheck`) ends at once, blocked `not_ready` with signature `setup:not_ready_exited:<service>:<port><path>`, when a probe's `services` (cell feature `serviceStates`) say the public service exited: its exit code and last log lines are the message, and the card (`libs/runtime/blockers/rules/setup.ts`) proposes a retry, never a longer wait. A cell without the feature, or a service still starting, keeps the wait to `health_timeout`.
-- The recipe a claim boots with, shared by the Run's handler and the suite: `recipe-for-claim.ts` `recipeForClaimOf`.
+- The recipe a claim boots with, shared by the Run's handler, the suite and the preview: `recipe-for-claim.ts` `recipeForClaimOf`. A committed recipe's `buildFiles` (read by the product at the recipe's commit) go out as `files` with `filesMode: 'fill_missing'`, never counted as recipe files of a PR.
 - What a setup learns: `learn-from-failure.ts` `learnFromSetup` (a clean boot after a blocked setup becomes a lesson, and so does a repair of Kody's recipe whose rewrite booted: `author-repair.ts` keeps `learned` on the repair, `deriveRepairLesson` in `libs/runtime/blockers/lessons.ts` builds it; the author reads it for the organization's other repositories) and `learn-loop.ts` `SetupLearnLoop` (one typed recipe change per hypothesis, booted on its own clean claim, at most `MAX_HYPOTHESES_PER_BLOCKER` per blocker signature).
 - The record's journal: `setup-journal.ts` `SetupJournal` (every clock read `clock:<n>` and save `record:<n>` is a step), `countSetupOutcome`.
 - Fresh download tokens for later boots: `setup-tokens.ts` (`askTokens`, `learnTokens`; the cell revokes a token after its first download).
@@ -70,6 +70,7 @@ Imported by:
 - [`apps/runtime/src/worker`](../AGENTS.md)
 - [`apps/runtime/src/worker/commands`](../commands/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
+- [`apps/runtime/src/worker/preview`](../preview/AGENTS.md)
 - [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 
 <!-- module-map:end -->

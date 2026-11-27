@@ -48,6 +48,8 @@ export interface AdoptedRecipe {
     origin?: SetupRecipeOrigin;
     notes?: string;
     files?: AuthoredFile[];
+    /** A committed recipe's build files (EnvironmentRecipeRecord.buildFiles). */
+    buildFiles?: AuthoredFile[];
     adjusted?: string[];
     authorVersion?: number;
     /** The digest of the inferred recipe this authored recipe replaces (EnvironmentRecipeRecord.replacesInferred). */
@@ -80,7 +82,7 @@ export function checkRecipe(run: SetupRun, content: string): { blocker: Omit<Env
 
 /** The recipe the next boot boots: recorded on the setup, its expose list taken. Returns what the recipe step says after its label. */
 export function adoptRecipe(run: SetupRun, a: AdoptedRecipe, parsed: RecipeSummary): string {
-    const { path, content, origin, notes, files, adjusted, authorVersion, replacesInferred } = a;
+    const { path, content, origin, notes, files, buildFiles, adjusted, authorVersion, replacesInferred } = a;
     const r: EnvironmentRecipeRecord = {
         path,
         sha: run.sha,
@@ -88,6 +90,7 @@ export function adoptRecipe(run: SetupRun, a: AdoptedRecipe, parsed: RecipeSumma
         digest: recipeDigest(content, files),
         content,
         ...(files?.length ? { files } : {}),
+        ...(buildFiles?.length ? { buildFiles } : {}),
         ...(parsed.public ? { public: parsed.public } : {}),
         ...(parsed.health ? { health: parsed.health } : {}),
         ...(parsed.healthTimeoutSeconds !== undefined ? { healthTimeoutSeconds: parsed.healthTimeoutSeconds } : {}),
@@ -159,7 +162,7 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
         const replaces = recipe.origin === 'inferred' && repairedBefore(run, recipe.content) ? recipeDigest(recipe.content) : undefined;
         const written = replaces ? await writtenRecipe(run) : undefined;
         if (written?.status === 'recipe') return useWritten(run, recipeStep, written, replaces);
-        if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipeLabel(recipe.origin, recipe.path), origin: recipe.origin, ...(recipe.files?.length ? { files: recipe.files } : {}) }))) {
+        if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipeLabel(recipe.origin, recipe.path), origin: recipe.origin, ...(recipe.files?.length ? { files: recipe.files } : {}), ...(recipe.buildFiles?.length ? { buildFiles: recipe.buildFiles } : {}) }))) {
             return false;
         }
     }

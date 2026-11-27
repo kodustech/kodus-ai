@@ -101,6 +101,12 @@ export interface EnvironmentRecipeRecord {
      */
     files?: AuthoredFile[];
     /**
+     * The `.kodus/` build files a committed recipe carries at `sha` (compose files, Dockerfiles), read by the product.
+     * Runs' claims lay them only where the checkout has none (RecipeForClaim.filesMode 'fill_missing'), so a PR branch
+     * cut before the recipe still boots. Not Kody's `files`: never digested, never a recipe file of the PR.
+     */
+    buildFiles?: AuthoredFile[];
+    /**
      * What Kodus rewrote in Kody's compose files before the checks passed them
      * (dropped container_name, inlined extends, dropped a missing env_file),
      * in Kodus's words; `files` already holds the rewritten text.

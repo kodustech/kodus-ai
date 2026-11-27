@@ -234,6 +234,8 @@ export function kodusFilesChangedBy(paths: Iterable<string | undefined>): Recipe
  */
 export interface BootRecipe {
     files?: ReadonlyArray<{ path: string }>;
+    /** `fill_missing`: the files are only filled where the checkout has none (a committed recipe's build files), so a PR's copy of them boots. */
+    filesMode?: 'create' | 'fill_missing';
 }
 
 /**
@@ -245,7 +247,9 @@ export interface BootRecipe {
  */
 export function recipeFilesChangedBy(paths: Iterable<string | undefined>, recipe: BootRecipe | undefined): RecipeChangedPath[] {
     if (!recipe) return [];
-    const ours = new Set<string>([...RECIPE_FILE_PATHS, ...(recipe.files ?? []).map((f) => f.path)]);
+    // Files filled only where missing are the PR's to change: its copy boots, so changing one is no recipe change.
+    const authored = recipe.filesMode === 'fill_missing' ? [] : (recipe.files ?? []).map((f) => f.path);
+    const ours = new Set<string>([...RECIPE_FILE_PATHS, ...authored]);
     return kodusFilesChangedBy([...paths].filter((p) => p !== undefined && ours.has(p)));
 }
 

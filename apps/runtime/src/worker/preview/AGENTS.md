@@ -41,6 +41,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/shared/persistence`](../../shared/persistence/AGENTS.md)
 - [`apps/runtime/src/worker/env`](../env/AGENTS.md)
 - [`apps/runtime/src/worker/env-session`](../env-session/AGENTS.md)
+- [`apps/runtime/src/worker/setup`](../setup/AGENTS.md)
 - [`libs/runtime/api/domain`](../../../../../libs/runtime/api/domain/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)

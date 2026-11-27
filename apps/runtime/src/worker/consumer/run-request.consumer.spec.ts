@@ -280,6 +280,34 @@ describe('RuntimeCommandConsumer', () => {
         expect((await projection.get(req.runId))?.recipe).toMatchObject({ prChangesRecipe: true });
     });
 
+    it("a committed recipe's build files reach the claims in fill_missing mode, and a PR that changes one is no recipe change", async () => {
+        const { projection, engine, commands } = setup();
+        const req = shopRunRequest();
+        const store = new InMemoryEnvironmentSetupStore();
+        const buildFiles = [{ path: '.kodus/compose.yaml', content: 'services: {}\n' }];
+        await store.save({
+            environmentId: req.environment.environmentId,
+            organizationId: req.organizationId,
+            repositoryId: req.repository.id,
+            key: 'k',
+            state: 'active',
+            steps: [],
+            blockers: [],
+            sha: req.pullRequest.baseSha,
+            recipe: { path: '.kodus/workspace.yaml', sha: req.pullRequest.baseSha, state: 'found', content: 'version: 1\n', digest: 'sha256:c', buildFiles },
+            requestedAt: req.requestedAt,
+            updatedAt: req.requestedAt,
+        });
+        const consumer = consumerWith({ engine: engine as any, projection, commands, admissions: new InMemoryPrAdmissionStore(), setups: store });
+        await consumer.handle(asMessage({ ...req, diff: [...req.diff, { path: '.kodus/compose.yaml', patch: '+x' }] }));
+        expect(engine.start).toHaveBeenLastCalledWith(
+            expect.objectContaining({ environment: expect.objectContaining({ recipe: { path: '.kodus/workspace.yaml', content: 'version: 1\n', digest: 'sha256:c', files: buildFiles, filesMode: 'fill_missing' } }) }),
+        );
+        // The PR's own compose file boots (the cell never replaces it), so it is not reported as a recipe the Run replaced.
+        expect((await projection.get(req.runId))?.recipeChangedInPr).toBeUndefined();
+        expect((await projection.get(req.runId))?.recipe).toMatchObject({ prChangesRecipe: false });
+    });
+
     it('an unknown event is dead-lettered, not parsed as a Run', async () => {
         const { engine, consumer } = setup();
         const out = await consumer.handle(asMessage(shopRunRequest(), 'runtime.something.else'));

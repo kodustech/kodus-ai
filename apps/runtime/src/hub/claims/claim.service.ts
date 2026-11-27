@@ -72,13 +72,20 @@ export type AcquireInput = AcquireRequest & { expose: Claim['manifest']['expose'
 /** The ids every claim log line carries. */
 type ClaimIds = { claimId: string; cellId: string; runId?: string };
 
-/** claim.acquire recipe: the files only when there are any (the cell names authoredFiles, checked before). */
-function claimRecipe(r: NonNullable<AcquireInput['recipe']>): MessageBody<'claim.acquire'>['recipe'] {
+/**
+ * claim.acquire recipe: the files only when there are any (the cell names authoredFiles, checked before). A committed
+ * recipe's build files (`fill_missing`) go only to a cell that names authoredFilesFill: any other cell gets the recipe
+ * with none of them and boots as before, the checkout's own files only.
+ */
+function claimRecipe(r: NonNullable<AcquireInput['recipe']>, fillSupported: boolean): MessageBody<'claim.acquire'>['recipe'] {
+    const fill = r.filesMode === 'fill_missing';
+    const files = r.files?.length && (!fill || fillSupported) ? r.files : undefined;
     return {
         path: r.path,
         content: r.content ?? null,
         ...(r.digest ? { digest: r.digest } : {}),
-        ...(r.files?.length ? { files: r.files.map((f) => ({ path: f.path, content: f.content })) } : {}),
+        ...(files ? { files: files.map((f) => ({ path: f.path, content: f.content })) } : {}),
+        ...(files && fill ? { filesMode: 'fill_missing' as const } : {}),
     };
 }
 
@@ -508,7 +515,7 @@ export class ClaimService {
             this.log('warn', 'claim.size_unavailable', { ...ids, memoryMb: req.size.memoryMb, cpus: req.size.cpus });
             return sizeUnavailable(session, req.size);
         }
-        if (req.recipe?.files?.length && !supports(session, 'authoredFiles')) {
+        if (req.recipe?.files?.length && req.recipe.filesMode !== 'fill_missing' && !supports(session, 'authoredFiles')) {
             // Never booted without them: the recipe names files only they provide. Nothing was sent or recorded.
             this.log('warn', 'claim.authored_files_unsupported', { ...ids, files: req.recipe.files.length });
             return authoredFilesUnsupported();
@@ -723,7 +730,7 @@ export class ClaimService {
                     ...(hold ? { diagnosticHold: true } : {}),
                     ...(seedsCache ? { seedsCache: true } : {}),
                     ...(req.skipBake ? { skipBake: true } : {}),
-                    ...(req.recipe ? { recipe: claimRecipe(req.recipe) } : {}),
+                    ...(req.recipe ? { recipe: claimRecipe(req.recipe, supports(session, 'authoredFilesFill')) } : {}),
                     ...(egressAllow.length ? { egressAllow } : {}),
                     ...egressTiers,
                     // The environment's machine size, which the cell grants (checked above).

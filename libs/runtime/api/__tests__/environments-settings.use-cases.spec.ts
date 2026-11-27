@@ -143,7 +143,7 @@ const HEAD = 'd'.repeat(40);
 const RECIPE = 'version: 1\nservices:\n  expose:\n    - { service: app, port: 3000, kind: http }\n';
 
 /** The Git API as the product reads it for a setup (default-branch head and the recipe at that commit). */
-class FakeSetupGit implements Pick<RuntimeGitPort, 'getDefaultBranchHead' | 'readFileAtCommit'> {
+class FakeSetupGit implements Pick<RuntimeGitPort, 'getDefaultBranchHead' | 'readFileAtCommit' | 'listFilesAtCommit'> {
     head: DefaultBranchHead | Error = { status: 'ok', branch: 'main', sha: HEAD };
     recipe: string | null | 'unsupported_platform' | Error = RECIPE;
     /** .kodus/workspace.runtime.yaml, read first; none by default. */
@@ -151,6 +151,11 @@ class FakeSetupGit implements Pick<RuntimeGitPort, 'getDefaultBranchHead' | 'rea
     /** Other root files (compose, Dockerfile, package.json) the recipe inference reads. */
     files: Record<string, string | Error> = {};
     reads: Array<{ path: string; sha: string }> = [];
+    /** Every file path at the head, as the tree API lists them; the committed recipe's build files are read from it. */
+    tree: string[] = [];
+    async listFilesAtCommit() {
+        return this.tree;
+    }
     async getDefaultBranchHead() {
         if (this.head instanceof Error) throw this.head;
         return this.head;
@@ -314,6 +319,33 @@ describe('Runtime environments', () => {
             { path: '.kodus/workspace.runtime.yaml', sha: HEAD },
             { path: '.kodus/workspace.yaml', sha: HEAD },
         ]);
+    });
+
+    it("a committed recipe's .kodus/ build files travel with the setup command, so a PR branch cut before them can still boot", async () => {
+        const s = await setup();
+        s.git.recipe = 'version: 1\nservices:\n  compose:\n    files: [.kodus/compose.yaml]\n    public: app\n';
+        s.git.tree = ['.kodus/workspace.yaml', '.kodus/compose.yaml', '.kodus/Dockerfile.app', 'src/index.ts'];
+        s.git.files = { '.kodus/compose.yaml': 'services: {}\n', '.kodus/Dockerfile.app': 'FROM node:22\n' };
+        await s.create.execute({ user: owner, repositoryId: REPO });
+        const { recipe } = s.outbox.rows[0].payload.payload;
+        expect(recipe.buildFiles).toEqual([
+            { path: '.kodus/Dockerfile.app', content: 'FROM node:22\n' },
+            { path: '.kodus/compose.yaml', content: 'services: {}\n' },
+        ]);
+        expect(recipe.files).toBeUndefined();
+        expect(s.git.reads.every((r) => r.sha === HEAD)).toBe(true);
+    });
+
+    it('a recipe with no build files under .kodus/, or none committed, carries no buildFiles', async () => {
+        const s = await setup();
+        await s.create.execute({ user: owner, repositoryId: REPO });
+        expect(s.outbox.rows[0].payload.payload.recipe.buildFiles).toBeUndefined();
+        const none = await setup();
+        none.git.recipe = null;
+        none.git.tree = ['.kodus/Dockerfile.app'];
+        none.git.files = { '.kodus/Dockerfile.app': 'FROM node:22\n' };
+        await none.create.execute({ user: owner, repositoryId: REPO });
+        expect(none.outbox.rows[0].payload.payload.recipe.buildFiles).toBeUndefined();
     });
 
     it('a default branch without a recipe or anything to infer one from still sets up, with content null and why', async () => {
