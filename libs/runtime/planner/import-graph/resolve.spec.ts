@@ -1,4 +1,4 @@
-import { aliasesOf, packageOf, parseJsonc, type ResolveContext, resolveSpecifier } from './resolve';
+import { aliasesOf, isWorkspaceDir, packageOf, parseJsonc, type ResolveContext, resolveSpecifier, workspaceGlobsOf } from './resolve';
 
 const ctx = (files: string[], over: Partial<ResolveContext> = {}): ResolveContext => ({ files: new Set(files), aliases: [], packages: [], ...over });
 const readerOf = (files: Record<string, string>) => async (path: string) => files[path] ?? null;
@@ -69,5 +69,38 @@ describe('which repository file an import names', () => {
 
     it('keeps a comment marker that sits inside a string', () => {
         expect(parseJsonc('{"paths":{"@/*":["./src/*"]},"url":"http://x"}')).toEqual({ paths: { '@/*': ['./src/*'] }, url: 'http://x' });
+    });
+
+    // A package that names its entry only in nested `exports` conditions still resolves to its source.
+    it('resolves a workspace package whose entry is a nested exports condition', () => {
+        const pkg = packageOf('packages/shared/package.json', '{"name":"@acme/shared","exports":{".":{"import":{"types":"./dist/index.d.ts","default":"./dist/index.js"}}}}')!;
+        expect(resolveSpecifier('@acme/shared', 'apps/api/src/main.ts', ctx(['packages/shared/src/index.ts'], { packages: [pkg] }))).toBe('packages/shared/src/index.ts');
+    });
+
+    // `exports` with no subpath keys is the conditions of '.' itself.
+    it('reads an exports object of bare conditions as the package entry', () => {
+        const pkg = packageOf('packages/shared/package.json', '{"name":"shared","exports":{"default":"./src/main.ts"}}')!;
+        expect(resolveSpecifier('shared', 'apps/api/src/main.ts', ctx(['packages/shared/src/main.ts'], { packages: [pkg] }))).toBe('packages/shared/src/main.ts');
+    });
+
+    // A subpath the manifest maps to a different folder is followed, not guessed under src/.
+    it('resolves a workspace subpath through the exports map', () => {
+        const pkg = packageOf('packages/shared/package.json', '{"name":"@acme/shared","exports":{"./money":"./dist/lib/money.js"}}')!;
+        expect(resolveSpecifier('@acme/shared/money', 'apps/api/src/main.ts', ctx(['packages/shared/src/lib/money.ts'], { packages: [pkg] }))).toBe('packages/shared/src/lib/money.ts');
+    });
+
+    it('reads the workspace patterns of npm/yarn (array and packages object) and pnpm', () => {
+        expect(workspaceGlobsOf('{"workspaces":["apps/*","libs/*"]}', null)).toEqual(['apps/*', 'libs/*']);
+        expect(workspaceGlobsOf('{"workspaces":{"packages":["pkgs/**"]}}', null)).toEqual(['pkgs/**']);
+        expect(workspaceGlobsOf(null, "packages:\n  - 'apps/*'\n  - \"libs/*\" # comment\n  - '!libs/legacy'\ncatalog:\n  - x\n")).toEqual(['apps/*', 'libs/*', '!libs/legacy']);
+    });
+
+    it('matches a directory against workspace patterns, with ** and ! exclusion', () => {
+        const globs = ['packages/*', 'tools/**', '!packages/legacy'];
+        expect(isWorkspaceDir('packages/shared', globs)).toBe(true);
+        expect(isWorkspaceDir('packages/shared/inner', globs)).toBe(false);
+        expect(isWorkspaceDir('tools/a/b', globs)).toBe(true);
+        expect(isWorkspaceDir('packages/legacy', globs)).toBe(false);
+        expect(isWorkspaceDir('apps/web', globs)).toBe(false);
     });
 });

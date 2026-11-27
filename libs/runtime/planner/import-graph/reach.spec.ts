@@ -80,6 +80,35 @@ describe('routes that reach a changed file through its importers', () => {
         });
     });
 
+    // pnpm-workspace.yaml names the packages; more manifests than the config budget must not hide a declared one.
+    it('maps a changed helper to the route that imports its pnpm workspace package, past a crowd of other configs', async () => {
+        const files: Record<string, string> = {
+            'pnpm-workspace.yaml': "packages:\n  - 'libs/*'\n",
+            'package.json': '{ "name": "root" }',
+            'libs/zeta/package.json': '{ "name": "@acme/zeta", "exports": { ".": "./src/index.ts" } }',
+            'libs/zeta/src/index.ts': "export * from './tax';",
+            'libs/zeta/src/tax.ts': 'export const tax = 0.1;',
+            'apps/api/src/app.ts': "import { tax } from '@acme/zeta';\napp.get('/tax', (_, res) => res.json(tax));",
+        };
+        for (let i = 0; i < IMPORT_GRAPH_LIMITS.configReads; i++) files[`apps/a${String(i).padStart(2, '0')}/tsconfig.json`] = '{}';
+        expect(await routesReaching({ base: treeOf(files) }, ['libs/zeta/src/tax.ts'])).toEqual({
+            'libs/zeta/src/tax.ts': [{ route: 'GET /tax', file: 'apps/api/src/app.ts', hops: 2 }],
+        });
+    });
+
+    it('maps a changed helper to the route that imports its yarn workspace package by a bare name', async () => {
+        const files = {
+            'package.json': '{ "name": "root", "workspaces": ["packages/*"] }',
+            'packages/money/package.json': '{ "name": "money", "main": "lib/index.js" }',
+            'packages/money/src/index.ts': "export * from './round';",
+            'packages/money/src/round.ts': 'export const round = (n: number) => n;',
+            'apps/api/src/app.ts': "import { round } from 'money';\napp.get('/total', (_, res) => res.json(round(1)));",
+        };
+        expect(await routesReaching({ base: treeOf(files) }, ['packages/money/src/round.ts'])).toEqual({
+            'packages/money/src/round.ts': [{ route: 'GET /total', file: 'apps/api/src/app.ts', hops: 2 }],
+        });
+    });
+
     it('does not count the routes of an app root that imports the changed file only through many other files', async () => {
         const files: Record<string, string> = {
             'src/util.ts': 'export const u = 1;',

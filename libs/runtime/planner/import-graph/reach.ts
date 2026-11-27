@@ -2,7 +2,7 @@ import { posix } from 'path';
 import ts from 'typescript';
 
 import { READ_MANY_MAX, type RepoReader } from '../repo-reader';
-import { aliasesOf, packageOf, type PathAliases, type ResolveContext, resolveSpecifier, type WorkspacePackage } from './resolve';
+import { aliasesOf, isWorkspaceDir, packageOf, workspaceGlobsOf, type PathAliases, type ResolveContext, resolveSpecifier, type WorkspacePackage } from './resolve';
 import { routesOf } from './routes';
 
 // Reverse reachability over a static JS/TS import graph (docs §9.8): a
@@ -192,7 +192,9 @@ const CODE_FILE = /\.[cm]?[jt]sx?$/;
 const SKIPPED_DIR = /(^|\/)(node_modules|vendor|dist|build|out|\.next|\.nuxt|\.turbo|\.git|coverage|storybook-static)\//;
 /** Tests, stories and mocks import what they check; they are not a way in from outside. */
 const NOT_A_WAY_IN = /\.(spec|test|stories|story|e2e|cy)\.[cm]?[jt]sx?$|(^|\/)(__tests__|__mocks__|__fixtures__|test|tests|e2e|cypress|playwright|fixtures|mocks?)\//;
-const CONFIG_FILE = /(^|\/)(tsconfig[^/]*\.json|jsconfig\.json|package\.json)$/;
+const CONFIG_FILE = /(^|\/)(tsconfig[^/]*\.json|jsconfig\.json|package\.json)$|^pnpm-workspace\.yaml$/;
+/** Workspace manifests read ahead of the other configs, so a large monorepo's packages are not crowded out by its tsconfigs. */
+const WORKSPACE_MANIFEST_READS = 40;
 const ROUTE_LIKE = /(controller|resolver|routes?|router|handler|server|app|main|api|endpoints?|page|layout)\.[cm]?[jt]sx?$|(^|\/)(app|pages|routes|api)\//i;
 
 const isGraphFile = (p: string) => CODE_FILE.test(p) && !p.endsWith('.d.ts') && !SKIPPED_DIR.test(p) && !NOT_A_WAY_IN.test(p);
@@ -260,10 +262,30 @@ async function treeOf(reader: RepoReader, changed: string[], deadline: number, s
 }
 
 async function contextOf(reader: RepoReader, paths: string[], files: Set<string>, spend: Spend): Promise<ResolveContext> {
-    const configs = paths.filter((p) => CONFIG_FILE.test(p) && !SKIPPED_DIR.test(p)).sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));
-    // A reader of many files at once gets the configs the loop below reads first in one call; a config one of them
+    const found = paths.filter((p) => CONFIG_FILE.test(p) && !SKIPPED_DIR.test(p)).sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));
+    // The declaration of the workspaces (root package.json, pnpm-workspace.yaml) is read first: it says which manifests are packages.
+    // A reader of many files at once gets the first configs in one call (the root ones sort first); a config one of them
     // extends is read on its own.
-    const prefetched = reader.readMany ? await readAll(reader, configs.slice(0, IMPORT_GRAPH_LIMITS.configReads), spend) : new Map<string, string | null>();
+    const prefetched = reader.readMany ? await readAll(reader, found.slice(0, IMPORT_GRAPH_LIMITS.configReads), spend) : new Map<string, string | null>();
+    const readFirst = async (p: string) => {
+        if (prefetched.has(p)) return prefetched.get(p)!;
+        if (!found.includes(p) || spend.callsLeft <= 0) return null;
+        spend.calls++;
+        const t = await reader.read(p, IMPORT_GRAPH_LIMITS.fileBytes).catch(() => null);
+        prefetched.set(p, t);
+        return t;
+    };
+    const rootManifest = await readFirst('package.json');
+    const pnpmYaml = await readFirst('pnpm-workspace.yaml');
+    const globs = workspaceGlobsOf(rootManifest, pnpmYaml);
+    const isWorkspaceManifest = (p: string) => p.endsWith('package.json') && p !== 'package.json' && isWorkspaceDir(dirOf(p), globs);
+    const workspaceFirst = globs.length ? found.filter(isWorkspaceManifest).slice(0, WORKSPACE_MANIFEST_READS) : [];
+    if (reader.readMany) {
+        const missing = workspaceFirst.filter((p) => !prefetched.has(p));
+        if (missing.length) for (const [p, t] of await readAll(reader, missing, spend)) prefetched.set(p, t);
+    }
+    const first = new Set(workspaceFirst);
+    const configs = [...workspaceFirst, ...found.filter((p) => !first.has(p) && p !== 'pnpm-workspace.yaml')];
     const texts = new Map<string, string | null>();
     const read = async (p: string) => {
         if (texts.has(p)) return texts.get(p)!;

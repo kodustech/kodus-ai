@@ -25,6 +25,8 @@ export interface WorkspacePackage {
     dir: string;
     /** Entry files the manifest names (source, main, module, types, exports['.']), relative to the root. */
     entries: string[];
+    /** `exports` subpaths ('./money' without the './'), each with its candidate targets relative to the root. */
+    subpaths?: Record<string, string[]>;
 }
 
 export interface ResolveContext {
@@ -134,19 +136,88 @@ export async function aliasesOf(configPath: string, read: (path: string) => Prom
     return { dir: dirOf(configPath), ...(baseUrl !== undefined ? { baseUrl } : {}), paths: paths ?? [] };
 }
 
+const EXPORT_CONDITIONS = ['source', 'import', 'default', 'require', 'types', 'node'] as const;
+
+/** The file strings an `exports` target names, through nested conditions (bounded depth), most source-like first. */
+function exportTargets(target: unknown, depth = 0): string[] {
+    if (typeof target === 'string') return [target];
+    if (Array.isArray(target) && depth < 4) return target.slice(0, 4).flatMap((t) => exportTargets(t, depth + 1));
+    if (!isRecord(target) || depth >= 4) return [];
+    return EXPORT_CONDITIONS.flatMap((c) => (c in target ? exportTargets(target[c], depth + 1) : []));
+}
+
+const MAX_SUBPATHS = 100;
+
 /** A workspace package from its package.json text, or undefined when it has no name. */
 export function packageOf(manifestPath: string, text: string): WorkspacePackage | undefined {
     const json = parseJsonc(text);
     if (!isRecord(json) || typeof json.name !== 'string' || !json.name || json.name.length > 214) return undefined;
     const dir = dirOf(manifestPath);
     const exp = json.exports;
-    const dot = typeof exp === 'string' ? exp : isRecord(exp) ? exp['.'] : undefined;
-    const dotEntry = typeof dot === 'string' ? dot : isRecord(dot) ? (dot.source ?? dot.import ?? dot.default ?? dot.require ?? dot.types) : undefined;
-    const entries = [json.source, dotEntry, json.module, json.main, json.types, json.typings]
-        .filter((e): e is string => typeof e === 'string' && e.length < 512)
-        .map((e) => inRepo(dir, e))
-        .filter((e): e is string => e !== undefined);
-    return { name: json.name, dir, entries };
+    // `exports` is either a map of subpaths ('.', './x') or, with no key starting with '.', the conditions of '.' itself.
+    const map = isRecord(exp) && Object.keys(exp).some((k) => k.startsWith('.')) ? exp : { '.': exp };
+    const inPackage = (list: string[]) =>
+        list
+            .filter((e) => e.length < 512)
+            .map((e) => inRepo(dir, e))
+            .filter((e): e is string => e !== undefined);
+    const entries = inPackage([json.source, ...exportTargets(map['.']), json.module, json.main, json.types, json.typings].filter((e): e is string => typeof e === 'string'));
+    const subpaths: Record<string, string[]> = {};
+    for (const [key, target] of Object.entries(map).slice(0, MAX_SUBPATHS)) {
+        // Patterns ('./features/*') are not followed: a specifier is matched against exact subpaths only.
+        if (!key.startsWith('./') || key.includes('*')) continue;
+        const list = inPackage(exportTargets(target));
+        if (list.length) subpaths[key.slice(2)] = list;
+    }
+    return { name: json.name, dir, entries, ...(Object.keys(subpaths).length ? { subpaths } : {}) };
+}
+
+const globRegex = (glob: string): RegExp | undefined => {
+    const g = glob.replace(/^\.\//, '').replace(/\/+$/, '');
+    if (!g || g.length > 200 || g.startsWith('/') || g.includes('..')) return undefined;
+    const body = g
+        .split(/(\*\*\/?|\*)/)
+        .map((part, i, all) => (part.startsWith('**') ? (all.slice(i + 1).every((x) => x === '') ? '.*' : '(?:.*/)?') : part === '*' ? '[^/]*' : part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')))
+        .join('');
+    return new RegExp(`^${body}$`);
+};
+
+/**
+ * The workspace directory patterns of a monorepo: the root package.json's `workspaces` (an array, or yarn's
+ * `{ packages }`) and pnpm-workspace.yaml's `packages` list. A `!` pattern excludes. Read as data, bounded.
+ */
+export function workspaceGlobsOf(rootManifest: string | null, pnpmYaml: string | null): string[] {
+    const out: string[] = [];
+    const json = rootManifest === null ? undefined : parseJsonc(rootManifest);
+    if (isRecord(json)) {
+        const w = json.workspaces;
+        const list = Array.isArray(w) ? w : isRecord(w) && Array.isArray(w.packages) ? w.packages : [];
+        out.push(...list.filter((g): g is string => typeof g === 'string'));
+    }
+    if (pnpmYaml !== null && pnpmYaml.length <= LIMITS.configBytes) {
+        let inPackages = false;
+        for (const raw of pnpmYaml.split('\n').slice(0, 500)) {
+            const line = raw.replace(/\s+#.*$/, '').trimEnd();
+            if (/^packages\s*:/.test(line)) inPackages = true;
+            else if (/^\S/.test(line)) inPackages = false;
+            else if (inPackages) {
+                const m = /^\s*-\s*(['"]?)(.+?)\1\s*$/.exec(line);
+                if (m) out.push(m[2]);
+            }
+        }
+    }
+    return out.slice(0, 100);
+}
+
+/** Whether a directory is one of the workspace patterns' (the last pattern that matches decides, so `!` excludes). */
+export function isWorkspaceDir(dir: string, globs: string[]): boolean {
+    let yes = false;
+    for (const g of globs) {
+        const neg = g.startsWith('!');
+        const re = globRegex(neg ? g.slice(1) : g);
+        if (re?.test(dir)) yes = !neg;
+    }
+    return yes;
 }
 
 /** The file a candidate path names: itself, with an extension, its index, or the TS source of a .js path. */
@@ -227,7 +298,7 @@ export function resolveSpecifier(spec: string, from: string, ctx: ResolveContext
     if (!pkg) return undefined;
     const sub = spec.slice(pkg.name.length + 1);
     const candidates = sub
-        ? [inRepo(pkg.dir, 'src', sub), inRepo(pkg.dir, sub)]
+        ? [...(pkg.subpaths?.[sub] ?? []).flatMap((e) => sourceOfBuilt(e, pkg.dir)), inRepo(pkg.dir, 'src', sub), inRepo(pkg.dir, sub)]
         : [...pkg.entries.flatMap((e) => sourceOfBuilt(e, pkg.dir)), inRepo(pkg.dir, 'src/index'), inRepo(pkg.dir, 'index')];
     for (const c of candidates) {
         const file = c === undefined ? undefined : fileFor(c, ctx.files);
