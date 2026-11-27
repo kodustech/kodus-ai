@@ -268,6 +268,29 @@ describe('GithubService.getRepositoryContentFile — rate-limit gate', () => {
         expect(logger.error).toHaveBeenCalledTimes(1);
     });
 
+    it('rejects a flagged read inside the window when nothing is cached', async () => {
+        const getContent = jest.fn().mockRejectedValue(primaryRateLimit());
+        const { service } = makeService(getContent);
+        await read(service, 'src/a.ts');
+        getContent.mockClear();
+
+        const readConfig = (throwOnReadError?: boolean) =>
+            service.getRepositoryContentFile({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: '1', name: 'repo' },
+                file: { filename: 'kodus-config.yml' },
+                pullRequest: { head: { ref: 'main' }, base: { ref: 'main' } },
+                throwOnReadError,
+            });
+
+        await expect(readConfig(true)).rejects.toThrow(/rate limit/i);
+        await expect(readConfig()).resolves.toBeUndefined();
+        expect(getContent).not.toHaveBeenCalled();
+    });
+
     describe('credential identity (App installation or PAT)', () => {
         it.each([
             [

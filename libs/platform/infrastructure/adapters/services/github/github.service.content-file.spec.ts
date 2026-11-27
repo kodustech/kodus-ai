@@ -78,4 +78,44 @@ describe('GithubService.getRepositoryContentFile — missing file', () => {
 
         expect(logger.error).toHaveBeenCalledTimes(1);
     });
+
+    describe('throwOnReadError, head and base on the default branch', () => {
+        const serverError = () =>
+            Object.assign(new Error('Server Error'), { status: 502 });
+
+        const readConfig = (
+            service: GithubService,
+            throwOnReadError?: boolean,
+        ) =>
+            service.getRepositoryContentFile({
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repository: { id: '1', name: 'repo' },
+                file: { filename: 'kodus-config.yml' },
+                pullRequest: { head: { ref: 'main' }, base: { ref: 'main' } },
+                throwOnReadError,
+            });
+
+        it('rejects on a provider failure', async () => {
+            const error = serverError();
+            const { service } = makeService(jest.fn().mockRejectedValue(error));
+
+            await expect(readConfig(service, true)).rejects.toBe(error);
+        });
+
+        it('still answers a missing file as empty', async () => {
+            const { service } = makeService(
+                jest.fn().mockRejectedValue(notFound()),
+            );
+
+            await expect(readConfig(service, true)).resolves.toBeUndefined();
+        });
+
+        it('swallows the failure without the flag', async () => {
+            const { service } = makeService(
+                jest.fn().mockRejectedValue(serverError()),
+            );
+
+            await expect(readConfig(service)).resolves.toBeUndefined();
+        });
+    });
 });

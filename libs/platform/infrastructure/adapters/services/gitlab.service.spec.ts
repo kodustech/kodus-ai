@@ -738,6 +738,68 @@ describe('GitlabService', () => {
             );
         });
 
+        describe('throwOnReadError, head and base on the default branch', () => {
+            const gitbeakerError = (status: number) =>
+                Object.assign(new Error(`HTTP ${status}`), {
+                    cause: { description: 'x', response: { status } },
+                });
+
+            const readConfig = (
+                show: jest.Mock,
+                throwOnReadError?: boolean,
+            ) => {
+                Object.defineProperty(service, 'getAuthDetails', {
+                    value: jest.fn().mockResolvedValue({
+                        accessToken: 'oauth-token',
+                        authMode: AuthMode.OAUTH,
+                    }),
+                });
+                jest.spyOn(service, 'getDefaultBranch').mockResolvedValue(
+                    'main',
+                );
+                mockedGitlab.mockReturnValue({ RepositoryFiles: { show } });
+                return service.getRepositoryContentFile({
+                    organizationAndTeamData,
+                    repository: { id: 'repo-1', name: 'repo' },
+                    file: { filename: 'kodus-config.yml' },
+                    pullRequest: {
+                        head: { ref: 'main' },
+                        base: { ref: 'main' },
+                    },
+                    throwOnReadError,
+                });
+            };
+
+            it('rejects on a provider failure', async () => {
+                const error = gitbeakerError(502);
+
+                await expect(
+                    readConfig(jest.fn().mockRejectedValue(error), true),
+                ).rejects.toBe(error);
+            });
+
+            it('still answers a missing file as null', async () => {
+                await expect(
+                    readConfig(
+                        jest
+                            .fn()
+                            .mockRejectedValue(
+                                gitbeaker404('404 File Not Found'),
+                            ),
+                        true,
+                    ),
+                ).resolves.toBeNull();
+            });
+
+            it('swallows the failure without the flag', async () => {
+                await expect(
+                    readConfig(
+                        jest.fn().mockRejectedValue(gitbeakerError(502)),
+                    ),
+                ).resolves.toBeNull();
+            });
+        });
+
         it('logs an unknown user ID as warn, not as error', async () => {
             Object.defineProperty(service, 'getAuthDetails', {
                 value: jest.fn().mockResolvedValue({

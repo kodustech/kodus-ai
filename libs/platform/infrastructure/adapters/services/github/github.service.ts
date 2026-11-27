@@ -6071,6 +6071,11 @@ This is an experimental feature that generates committable changes. Review the d
                         },
                     });
                 }
+                if (params.throwOnReadError) {
+                    throw new Error(
+                        'GitHub rate limit open for this installation',
+                    );
+                }
                 return undefined;
             }
 
@@ -6177,6 +6182,7 @@ This is an experimental feature that generates committable changes. Review the d
                     error,
                     metadata: { ...params },
                 });
+                if (params.throwOnReadError) throw error;
             }
         }
     }

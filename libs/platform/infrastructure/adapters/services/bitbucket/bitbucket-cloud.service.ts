@@ -2602,6 +2602,7 @@ export class BitbucketCloudService implements Omit<
         repository: { name: string; id: string };
         file: any;
         pullRequest: any;
+        throwOnReadError?: boolean;
     }): Promise<any | null> {
         try {
             const { organizationAndTeamData, repository, file, pullRequest } =
@@ -2692,6 +2693,7 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
+            if (params.throwOnReadError) throw error;
             return null;
         }
     }

@@ -90,4 +90,55 @@ describe('ForgejoService.getRepositoryContentFile — response shape', () => {
         expect(await read()).toBeNull();
         expect((service as any).logger.error).toHaveBeenCalledTimes(1);
     });
+
+    describe('throwOnReadError, head and base on the default branch', () => {
+        const axiosError = (status: number) =>
+            Object.assign(new Error(`Request failed with status ${status}`), {
+                isAxiosError: true,
+                response: { status },
+            });
+
+        // The client resolves { error, response } unless asked to throw.
+        const providerAnswers = (status: number) => {
+            const error = axiosError(status);
+            repoGetContents.mockImplementation(async (opts: any) => {
+                if (opts.throwOnError) throw error;
+                return { data: undefined, error: {}, response: { status } };
+            });
+            return error;
+        };
+
+        const readConfig = (throwOnReadError?: boolean) =>
+            service.getRepositoryContentFile({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { name: 'acme/widget-api' },
+                file: { filename: 'kodus-config.yml' },
+                pullRequest: { head: { ref: 'main' }, base: { ref: 'main' } },
+                throwOnReadError,
+            });
+
+        it('rejects on a provider failure', async () => {
+            const error = providerAnswers(502);
+
+            await expect(readConfig(true)).rejects.toBe(error);
+        });
+
+        it('still answers a missing file as null', async () => {
+            providerAnswers(404);
+
+            await expect(readConfig(true)).resolves.toBeNull();
+            expect((service as any).logger.error).not.toHaveBeenCalled();
+        });
+
+        it('answers the failure as no content without the flag', async () => {
+            providerAnswers(502);
+
+            const result = await readConfig();
+
+            expect(result?.data?.content).toBeUndefined();
+        });
+    });
 });

@@ -800,6 +800,8 @@ export class CodeManagementService implements ICodeManagementService {
             file: any;
             pullRequest: any;
             suppressNotFoundLogs?: boolean;
+            /** Throw a provider failure instead of answering it as "no file"; a missing file still returns empty. */
+            throwOnReadError?: boolean;
         },
         type?: PlatformType,
     ) {

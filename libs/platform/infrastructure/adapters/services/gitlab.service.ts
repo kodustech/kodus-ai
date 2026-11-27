@@ -3091,6 +3091,7 @@ export class GitlabService implements Omit<
         repository: { name: string; id: string };
         file: any;
         pullRequest: any;
+        throwOnReadError?: boolean;
     }): Promise<any | null> {
         const gitlabAuthDetail = await this.getAuthDetails(
             params.organizationAndTeamData,
@@ -3181,6 +3182,7 @@ export class GitlabService implements Omit<
                     }
 
                     this.logger.error(logPayload);
+                    if (params.throwOnReadError) throw attemptError;
                 }
             }
 
@@ -3235,10 +3237,18 @@ export class GitlabService implements Omit<
                                 this.logger.warn(logPayload);
                             } else {
                                 this.logger.error(logPayload);
+                                if (params.throwOnReadError)
+                                    throw defaultAttemptError;
                             }
                         }
                     }
                 } catch (defaultBranchError) {
+                    if (
+                        params.throwOnReadError &&
+                        !this.isGitlabNotFoundError(defaultBranchError)
+                    ) {
+                        throw defaultBranchError;
+                    }
                     this.logger.warn({
                         message:
                             'Could not resolve default branch while fetching file content',
@@ -3270,6 +3280,7 @@ export class GitlabService implements Omit<
                 error,
                 metadata: { repository: params.repository, file: params.file },
             });
+            if (params.throwOnReadError) throw error;
             return null;
         }
     }

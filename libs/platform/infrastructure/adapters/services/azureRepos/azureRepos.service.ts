@@ -1990,6 +1990,7 @@ export class AzureReposService implements Omit<
         repository: { name: string; id: string; project: { id: string } };
         file: { filename: string };
         pullRequest: { number: number };
+        throwOnReadError?: boolean;
     }): Promise<any | null> {
         try {
             const { organizationAndTeamData, repository, file, pullRequest } =
@@ -2077,7 +2078,13 @@ export class AzureReposService implements Omit<
                                     filePath: file.filename,
                                 },
                             );
-                    } catch {
+                    } catch (branchReadError) {
+                        if (
+                            params.throwOnReadError &&
+                            (branchReadError as any)?.response?.status !== 404
+                        ) {
+                            throw branchReadError;
+                        }
                         // Fallback: if branch lookup fails (e.g. deleted or PR merged), try latest PR commit again
                         const prNumberFallback: number | undefined = (
                             pullRequest as any
@@ -2136,6 +2143,12 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
+            if (
+                params.throwOnReadError &&
+                (error as any)?.response?.status !== 404
+            ) {
+                throw error;
+            }
             return null;
         }
     }
