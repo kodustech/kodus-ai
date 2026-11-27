@@ -44,7 +44,7 @@ describe('who may read and write what', () => {
 
     it('a default-branch setup writes main and cache, and a setup of a PR writes nothing (S-52)', () => {
         expect(summary(planGrant(ask(`setup:${ORG}/abc`, 'base'), 'p'))).toEqual(['cache:rw', 'main:rw']);
-        expect(summary(planGrant(ask(`setup:${ORG}/abc`, 'pr'), 'p'))).toEqual(['main:r']);
+        expect(summary(planGrant(ask(`setup:${ORG}/abc`, 'pr'), 'p'))).toEqual(['cache:r', 'main:r']);
     });
 
     it('a template setup host only reads main', () => {
@@ -55,6 +55,16 @@ describe('who may read and write what', () => {
         expect(planGrant(ask(undefined, 'pr'), 'p')).toBeNull();
         expect(planGrant(ask('run:other-org/r1', 'pr'), 'p')).toBeNull();
         expect(boundKeyKind(ORG, `run:${ORG}x/r1`)).toBeNull();
+    });
+
+    it('a PR claim that builds reads main and cache and never writes either, whatever its bound key kind', () => {
+        for (const key of [`run:${ORG}/r`, `setup:${ORG}/h`]) {
+            const grant = planGrant(ask(key, 'pr'), 'p') ?? [];
+            for (const scope of ['main', 'cache'] as const) {
+                const r = grant.find((g) => g.scope === scope);
+                expect({ key, scope, pull: r?.pull, push: r?.push }).toEqual({ key, scope, pull: true, push: false });
+            }
+        }
     });
 
     it('no grant ever lets a PR side write main or cache', () => {

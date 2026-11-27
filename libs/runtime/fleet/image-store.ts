@@ -119,8 +119,8 @@ export function planGrant(ask: GrantScopeAsk, prefix: string): GrantRepo[] | nul
     const repo = (scope: StoreScope, pull: boolean, push: boolean): GrantRepo => ({ scope, name: storeRepoName(prefix, ask.organizationId, ask.environmentId, scope, ask.sha), pull, push });
     switch (kind) {
         case 'setup':
-            // Only the default branch's setup writes the layers and images others read.
-            return ask.side === 'pr' ? [repo('main', true, false)] : [repo('main', true, true), repo('cache', true, true)];
+            // Only the default branch's setup writes the layers, images and build cache others read; a PR's setup reads both and writes neither.
+            return ask.side === 'pr' ? [repo('main', true, false), repo('cache', true, false)] : [repo('main', true, true), repo('cache', true, true)];
         case 'template':
             return [repo('main', true, false)];
         case 'run':

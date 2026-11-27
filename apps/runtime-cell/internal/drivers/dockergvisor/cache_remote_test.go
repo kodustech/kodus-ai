@@ -181,3 +181,43 @@ func TestOnlyTheSeedPushesAndOnlyItsOrgReads(t *testing.T) {
 		}
 	}
 }
+
+// The store's build cache is written only by a setup that seeds the default
+// branch: a PR build and a setup that does not seed (a bake's build) never write it.
+func TestOnlyASeedingSetupMayWriteTheRemoteCache(t *testing.T) {
+	cases := []struct {
+		name string
+		m    machineState
+		want bool
+	}{
+		{"a pull request build", machineState{}, false},
+		{"a setup that does not seed", machineState{setup: true}, false},
+		{"seeds without setup", machineState{seeds: true}, false},
+		{"the default branch's setup", machineState{setup: true, seeds: true}, true},
+	}
+	for _, c := range cases {
+		if got := mayWriteRemoteCache(c.m); got != c.want {
+			t.Errorf("%s: mayWriteRemoteCache = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// A push the build asks for on a machine that may not write is dropped and its
+// release still runs, so a PR side can never reach the store through this path.
+func TestAPushFromAMachineThatMayNotWriteIsDroppedAndReleased(t *testing.T) {
+	d, _ := bakeDriver(t)
+	remote := &fakeRemote{}
+	d.remote = remote
+	pr := machine("claim-pr-push", bakeEnv)
+	asSetup(d, pr, false)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	released := false
+	d.pushRemote(pr.MachineID, "org", "env", "api", dir, func() { released = true })
+	d.WaitRemotePushes()
+	if len(remote.pushes) != 0 || !released {
+		t.Fatalf("pushes = %+v, released = %v", remote.pushes, released)
+	}
+}

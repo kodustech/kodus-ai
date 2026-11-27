@@ -29,6 +29,14 @@ import (
 // setup pushes (S-52): a pull request reads the default branch's layers and
 // writes nothing that outlives it.
 
+// mayWriteRemoteCache is the one rule for writing the store's build cache
+// (S-52): only a setup of the default branch writes it (setup and seeds; the
+// agent refuses seeds on a PR side, acquire.go). A pull request's build reads
+// main's cache and writes nothing to the store, and a setup that does not seed
+// (a bake's builds) keeps its cache on the cell. Reads are never gated here:
+// the hub's grant scopes them to the org.
+func mayWriteRemoteCache(m machineState) bool { return m.setup && m.seeds }
+
 // remoteCache is what the driver needs of the store; remotecache.Registry
 // implements it.
 type remoteCache interface {
@@ -130,7 +138,7 @@ func (d *Driver) pullRemote(ctx context.Context, machine, org, env, service stri
 // pushRemote sends a seeding setup's exported cache in dir to the store, off
 // the build's path, then calls done (which removes or releases dir).
 func (d *Driver) pushRemote(machine, org, env, service, dir string, done func()) {
-	if d.remote == nil || org == "" || env == "" {
+	if d.remote == nil || org == "" || env == "" || !mayWriteRemoteCache(d.peek(machine)) {
 		done()
 		return
 	}
