@@ -7,6 +7,14 @@ import {
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
+/** The provider failed to answer whether kodus-config.yml exists, as opposed to it being absent. */
+export class KodusConfigFileReadError extends Error {
+    constructor(cause: unknown) {
+        super('Could not read kodus-config.yml from the provider', { cause });
+        this.name = 'KodusConfigFileReadError';
+    }
+}
+
 export const CODE_BASE_CONFIG_SERVICE_TOKEN = Symbol.for(
     'CodeBaseConfigService',
 );
@@ -67,6 +75,8 @@ export interface ICodeBaseConfigService {
         removeProperties?: boolean;
         /** A non-boolean `conversation.implicitReplies` was dropped. */
         onRejectedImplicitReplies?: () => void;
+        /** A provider failure on the read throws KodusConfigFileReadError instead of reading as "no file". */
+        throwOnReadError?: boolean;
     }): Promise<KodusConfigFile | undefined>;
 
     getE2BIpAddress(): Promise<string | null>;

@@ -3,7 +3,10 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 
-import { ICodeBaseConfigService } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import {
+    ICodeBaseConfigService,
+    KodusConfigFileReadError,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-key.enum';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
@@ -836,6 +839,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         tolerateReviewSettingsErrors?: boolean;
         /** A non-boolean `conversation.implicitReplies` was dropped. */
         onRejectedImplicitReplies?: () => void;
+        throwOnReadError?: boolean;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -867,6 +871,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             defaultBranchName,
             directoryPath,
             directoryId,
+            params.throwOnReadError,
         );
 
         if (!kodusConfigFileContent) {
@@ -987,6 +992,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         defaultBranchName = 'main',
         directoryPath?: string,
         directoryId?: string,
+        throwOnReadError = false,
     ): Promise<string | null> {
         const configFileName = 'kodus-config.yml';
         let fullPath = configFileName;
@@ -1004,16 +1010,23 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             fullPath = `${normalizedPath}${configFileName}`;
         }
 
-        const response =
-            await this.codeManagementService.getRepositoryContentFile({
-                organizationAndTeamData,
-                repository: { id: repository.id, name: repository.name },
-                file: { filename: fullPath },
-                pullRequest: {
-                    head: { ref: defaultBranchName },
-                    base: { ref: defaultBranchName },
-                },
-            });
+        let response: any;
+        try {
+            response =
+                await this.codeManagementService.getRepositoryContentFile({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                    file: { filename: fullPath },
+                    pullRequest: {
+                        head: { ref: defaultBranchName },
+                        base: { ref: defaultBranchName },
+                    },
+                    throwOnReadError,
+                });
+        } catch (error) {
+            if (throwOnReadError) throw new KodusConfigFileReadError(error);
+            throw error;
+        }
 
         if (!response || !response.data || !response.data.content) {
             return null;

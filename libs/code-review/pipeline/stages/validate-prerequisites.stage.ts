@@ -64,6 +64,7 @@ import {
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
+    KodusConfigFileReadError,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import {
     IPullRequestManagerService,
@@ -602,6 +603,13 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
 
             const fileShowStatusFeedback =
                 await this.configFileShowStatusFeedback(context);
+
+            // The file may silence the notice, and the flag would keep a wrong
+            // one on the PR: stay quiet and let the next run read it again.
+            if (fileShowStatusFeedback === 'read_failed') {
+                return { outcome: 'failed', showStatusFeedback: false };
+            }
+
             const feedbackOn = fileShowStatusFeedback ?? showStatusFeedback;
 
             if (!feedbackOn) {
@@ -802,11 +810,12 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
      * yet; it is read only when the stage is about to post. As in the review,
      * the file applies only when the repository opted into
      * `kodusConfigFileOverridesWebPreferences`, and then wins over the web
-     * settings. Undefined leaves the web settings in charge.
+     * settings. Undefined leaves the web settings in charge; 'read_failed'
+     * means the provider did not answer whether the file exists.
      */
     private async configFileShowStatusFeedback(
         context: CodeReviewPipelineContext,
-    ): Promise<boolean | undefined> {
+    ): Promise<boolean | undefined | 'read_failed'> {
         if (typeof context.codeReviewConfig?.showStatusFeedback === 'boolean') {
             return undefined;
         }
@@ -835,12 +844,27 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 repository: { id: repository.id, name: repository.name },
                 overrideConfig: true,
                 tolerateReviewSettingsErrors: true,
+                throwOnReadError: true,
             });
 
             return typeof file?.showStatusFeedback === 'boolean'
                 ? file.showStatusFeedback
                 : undefined;
         } catch (error) {
+            if (error instanceof KodusConfigFileReadError) {
+                this.logger.warn({
+                    message:
+                        'Provider failed to read kodus-config.yml for status feedback, the license notice is held until the next run',
+                    context: this.stageName,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repository?.id,
+                        prNumber: pullRequest?.number,
+                    },
+                });
+                return 'read_failed';
+            }
             this.logger.warn({
                 message:
                     'Could not read kodus-config.yml for status feedback, the web settings apply',

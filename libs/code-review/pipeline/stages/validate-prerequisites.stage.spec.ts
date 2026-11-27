@@ -19,7 +19,10 @@ import { NotificationService } from '@libs/notifications/application/notificatio
 import { NotificationRateLimiter } from '@libs/notifications/application/notification-rate-limiter.service';
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.service.contract';
-import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    KodusConfigFileReadError,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -1311,6 +1314,7 @@ describe('ValidatePrerequisitesStage', () => {
                         repository: { id: 'repo-1', name: 'repo-1' },
                         overrideConfig: true,
                         tolerateReviewSettingsErrors: true,
+                        throwOnReadError: true,
                     }),
                 );
                 expect(
@@ -1396,6 +1400,38 @@ describe('ValidatePrerequisitesStage', () => {
                 expect(
                     mockCodeManagementService.createIssueComment,
                 ).toHaveBeenCalledTimes(2);
+            });
+
+            it('holds the notice when the provider fails to read the file, and posts on a later run that reads it', async () => {
+                failNoSeat();
+                storedConfig(true, true);
+                mockCodeManagementService.createIssueComment.mockResolvedValue({
+                    id: 1,
+                });
+
+                mockCodeBaseConfigService.getKodusConfigFile.mockRejectedValueOnce(
+                    new KodusConfigFileReadError(new Error('502')),
+                );
+                const held = await stage.execute(makeContext());
+
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).not.toHaveBeenCalled();
+                expect(held.licenseNoticePostedAt).toBeUndefined();
+                expect(held.pipelineMetadata?.showStatusFeedback).toBe(false);
+
+                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValueOnce(
+                    { showStatusFeedback: true },
+                );
+                const next = await stage.execute(makeContext());
+
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(1);
+                expect(next.licenseNoticePostedAt).toEqual(expect.any(String));
             });
 
             it.each(['IGNORED_USER', 'NOT_ALLOWED_USER'])(
