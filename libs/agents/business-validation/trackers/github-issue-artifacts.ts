@@ -1,3 +1,5 @@
+import { randomBytes } from 'crypto';
+
 import type { TaskLinks } from '../business-validation.types';
 import { asRecord } from '../value-utils';
 import { MAX_DOCUMENTS, MAX_RELATED_CHARS } from './tracker';
@@ -20,8 +22,6 @@ export interface IssueArtifactContext {
 }
 
 const CUT = '… (cut)';
-/** Unread artifacts named in the note; the rest are counted. */
-const MAX_NAMED = 5;
 
 /** One line of untrusted text, safe to put in a label. */
 function inline(value: string): string {
@@ -33,21 +33,75 @@ function inline(value: string): string {
 }
 
 /**
- * Artifact text is data, never instructions: closing tags are escaped and
- * every line is quoted, so it cannot end its block or pose as a prompt
- * section header. The block is clipped here, with its closing tag intact,
- * to fit the document limit `relate` applies.
+ * `text` cut to at most `max` UTF-16 units, never ending on the first half
+ * of a surrogate pair.
  */
-function delimited(content: string): string {
-    const open = '<artifact_data>\n';
-    const close = '\n</artifact_data>';
-    const quoted = content
-        .replace(/<\s*\/\s*/g, '&lt;/')
-        .split(/\r\n|[\r\n\u0085\u2028\u2029]/)
-        .map((line) => `> ${line}`)
-        .join('\n');
-    const room = MAX_RELATED_CHARS - open.length - close.length - CUT.length;
-    return `${open}${quoted.length > MAX_RELATED_CHARS - open.length - close.length ? `${quoted.slice(0, room)}${CUT}` : quoted}${close}`;
+function cutAt(text: string, max: number): string {
+    let end = Math.min(Math.max(0, max), text.length);
+    if (end < text.length && end > 0) {
+        const last = text.charCodeAt(end - 1);
+        if (last >= 0xd800 && last <= 0xdbff) {
+            end -= 1;
+        }
+    }
+    return text.slice(0, end);
+}
+
+/** A fence name the content cannot contain, so it cannot close the block early. */
+function fenceName(content: string): string {
+    let name: string;
+    do {
+        name = `artifact_data_${randomBytes(8).toString('hex')}`;
+    } while (content.includes(name));
+    return name;
+}
+
+/**
+ * Artifact text is data, never instructions: it sits in a fence whose name
+ * is random per block, closing tags are escaped and every line is quoted, so
+ * it cannot end its block or pose as a prompt section header. The block is
+ * clipped here, with its closing tag intact, to fit the document limit
+ * `relate` applies. When clipped, only whole lines are kept (a first line
+ * longer than the limit is cut), and `source` holds exactly the raw lines
+ * shown, so criteria are never read from text the judge does not see.
+ */
+function delimited(content: string): {
+    text: string;
+    source: string;
+    truncated: boolean;
+} {
+    const name = fenceName(content);
+    const open = `<${name}>\n`;
+    const close = `\n</${name}>`;
+    const lines = content.split(/\r\n|[\r\n\u0085\u2028\u2029]/);
+    const quoted = lines.map(
+        (line) => `> ${line.replace(/<\s*\/\s*/g, '&lt;/')}`,
+    );
+    const budget = MAX_RELATED_CHARS - open.length - close.length;
+    const whole = quoted.join('\n');
+    if (whole.length <= budget) {
+        return {
+            text: `${open}${whole}${close}`,
+            source: lines.join('\n'),
+            truncated: false,
+        };
+    }
+    const room = budget - CUT.length;
+    let used = 0;
+    let kept = 0;
+    while (
+        kept < quoted.length &&
+        used + (kept ? 1 : 0) + quoted[kept].length <= room
+    ) {
+        used += (kept ? 1 : 0) + quoted[kept].length;
+        kept += 1;
+    }
+    const body = kept ? quoted.slice(0, kept).join('\n') : cutAt(whole, room);
+    return {
+        text: `${open}${body}${CUT}${close}`,
+        source: lines.slice(0, kept).join('\n'),
+        truncated: true,
+    };
 }
 
 export function artifactContext(
@@ -80,18 +134,24 @@ export function artifactContext(
         } else if (documents.length >= MAX_DOCUMENTS) {
             unread.push(`${label} (over the ${MAX_DOCUMENTS}-document limit)`);
         } else {
-            const text = delimited(a.content);
-            documents.push({ id: label, title: label, content: text });
-            sourceTexts.push({
-                label,
-                text: a.content.slice(0, MAX_RELATED_CHARS),
-            });
-            if (text.endsWith(`${CUT}\n</artifact_data>`)) {
+            const shown = delimited(a.content);
+            documents.push({ id: label, title: label, content: shown.text });
+            if (shown.source.trim()) {
+                sourceTexts.push({ label, text: shown.source });
+            }
+            if (shown.truncated) {
                 unread.push(
                     `${label} (only read in part, cut at the size limit)`,
                 );
             }
         }
+    }
+    if (
+        issue.unreadArtifacts !== undefined &&
+        !Array.isArray(issue.unreadArtifacts)
+    ) {
+        // Fail closed: a list of unread artifacts we cannot read is not "none".
+        unread.push('the artifact list could not be verified');
     }
     for (const entry of Array.isArray(issue.unreadArtifacts)
         ? issue.unreadArtifacts
@@ -119,7 +179,7 @@ export function artifactContext(
         ...(unread.length
             ? {
                   coverageNotes: [
-                      `Coverage incomplete: not every artifact of this issue was read (${unread.slice(0, MAX_NAMED).join('; ')}${unread.length > MAX_NAMED ? `; and ${unread.length - MAX_NAMED} more` : ''}). What they contain is unknown, so do not assume it.`,
+                      `Coverage incomplete: not every artifact of this issue was read (${unread.join('; ')}). What they contain is unknown, so do not assume it.`,
                   ],
               }
             : {}),
