@@ -127,6 +127,7 @@ import {
 } from '../code-management-defaults.constants';
 import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
 import { attachRepliesToComments } from './bitbucket-comment-threads';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -5164,6 +5165,66 @@ export class BitbucketCloudService implements Omit<
                 error: error,
                 metadata: {
                     params,
+                },
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!bitbucketAuthDetail) return null;
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+            if (!workspace) return null;
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            const comments = await bitbucketAPI.pullrequests
+                .listComments({
+                    repo_slug: `{${repository.id}}`,
+                    workspace: `{${workspace}}`,
+                    pull_request_id: prNumber,
+                    // Bitbucket's largest page: half the requests on a long PR.
+                    pagelen: 100,
+                })
+                .then((res) => this.getPaginatedResults(bitbucketAPI, res));
+
+            // Inline and PR-level findings alike are saved under the root
+            // comment's id; a reply under Kody's prompt reply still counts.
+            return answeredThreadRootIds(
+                attachRepliesToComments(comments as any[])
+                    .filter((comment) => !comment?.parent)
+                    .map((comment) => ({
+                        rootIds: [comment.id],
+                        replies: comment.replies
+                            .filter((reply: any) => reply?.deleted !== true)
+                            .map((reply: any) => ({
+                                body: reply?.content?.raw,
+                            })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: BitbucketCloudService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
                 },
             });
             return null;

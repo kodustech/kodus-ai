@@ -1,0 +1,88 @@
+[
+ {
+  "suggestionId": "kodus-2663-r4658004920",
+  "relevantFile": "libs/common/utils/webhooks/webhook-source-host.ts",
+  "relevantLinesStart": 140,
+  "relevantLinesEnd": 154,
+  "suggestionContent": "**sameRepository fallback can match a config on another instance**\n\nThe name-only match can hand the webhook to a config known to live on another instance when two servers share the same `group/project` path and numeric id, routing `WebhookContextService.getContext` to the wrong organization. Require `configHostsOf(config, repositoryId).length === 0` before a name match wins, and add a spec for two same-path projects on two hosts.",
+  "label": "bug",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:36Z"
+ },
+ {
+  "suggestionId": "kodus-2663-r4658005100",
+  "relevantFile": "libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case.ts",
+  "relevantLinesStart": 289,
+  "relevantLinesEnd": 298,
+  "suggestionContent": "**GitLab SSH clone URL drops configs and skips issue generation**\n\nWhen `GitlabMapper.mapRepository` sets `url` to the SSH clone remote, `normalizeHost` returns a value no stored host equals, so `instanceConfigsForWebhook` drops every config and issues are silently skipped. Pass `gitlabWebhookSource(payload)` for the GitLab branch, as the handlers and `SavePullRequestUseCase` do.",
+  "label": "bug",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:39Z"
+ },
+ {
+  "suggestionId": "kodus-2663-r4658005290",
+  "relevantFile": "libs/platform/application/services/webhook-context.service.spec.ts",
+  "relevantLinesStart": 254,
+  "relevantLinesEnd": 261,
+  "suggestionContent": "**Legacy-config test passes on the pre-fix revision, pinning nothing**\n\nThis input resolves to org-only with or without the new legacy-matching logic, so the case cannot catch a regression. Use a host-less legacy config listed beside a config storing another instance's host, with the payload naming a host no config matches, and assert the legacy config wins.\n\n**Also found in:**\n- `libs/platform/infrastructure/adapters/services/find-config-by-repository.spec.ts:72-82`",
+  "label": "kody_rules",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:42Z",
+  "brokenKodyRulesIds": [
+   "6f992492-5af6-4605-b11d-edb39ceacfaf"
+  ]
+ },
+ {
+  "suggestionId": "kodus-2663-r4658005447",
+  "relevantFile": "libs/platform/infrastructure/adapters/services/azureRepos/azureRepos.service.ts",
+  "relevantLinesStart": 829,
+  "relevantLinesEnd": 832,
+  "suggestionContent": "**Azure config lookup ignores the sending instance host**\n\nCorrelating by repository id and platform alone lets `findOne` return a config on another server that lists the same repository id, routing the event to the wrong workspace. Match configs whose listed repo URL or auth host equals `webhookHost`, keep host-less legacy configs, and drop the event when nothing on the sending instance matches.\n\n**Also found in:**\n- `libs/platform/infrastructure/adapters/services/bitbucket.service.ts:137-140`\n- `libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case.ts:1677-1683`",
+  "label": "kody_rules",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:45Z",
+  "brokenKodyRulesIds": [
+   "1f4a66a2-d445-4164-b134-59d94eccd347"
+  ]
+ },
+ {
+  "suggestionId": "kodus-2663-r4658005606",
+  "relevantFile": "libs/platform/infrastructure/adapters/services/find-config-by-repository.spec.ts",
+  "relevantLinesStart": 72,
+  "relevantLinesEnd": 83,
+  "suggestionContent": "**Test passes even with the unscoped-lookup regression it should catch**\n\nThis case passes on the pre-fix revision: `findOne` resolves `undefined`, so the method returns `null` whether or not the lookup is scoped. Make the `findOne` mock resolve a config on the other server and assert `findOne` was not called, so an unscoped-lookup regression fails.",
+  "label": "bug",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:49Z"
+ },
+ {
+  "suggestionId": "kodus-2663-r4658005755",
+  "relevantFile": "libs/platform/infrastructure/adapters/services/gitlab.service.ts",
+  "relevantLinesStart": 3255,
+  "relevantLinesEnd": 3260,
+  "suggestionContent": "**GitLab webhook config lookup drops repository-name fallback**\n\nWithout a fallback, a call with no `repositoryFullName` can never reach the same-repository match in `instanceConfigsForWebhook`, and `gitlabWebhookSource` yields undefined exactly when the payload has no parseable project URL, so the comment is dropped. Fall back to `params.repositoryFullName ?? params.repository.fullName ?? params.repository.name`, as Forgejo does.",
+  "label": "bug",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:51Z"
+ },
+ {
+  "suggestionId": "kodus-2663-r4658005895",
+  "relevantFile": "libs/platformData/application/use-cases/pullRequests/save.use-case.spec.ts",
+  "relevantLinesStart": 487,
+  "relevantLinesEnd": 487,
+  "suggestionContent": "**GitLab regressions assert only mocked calls, not persisted data**\n\nMocked calls pin nothing about stored fields, so a regression that saves under the wrong organization or drops a lookup clause stays green. Run the use case against a real store, read the pull-request document back, and assert it landed under org-b/team-b with org-a unchanged.",
+  "label": "kody_rules",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-22T12:01:55Z",
+  "brokenKodyRulesIds": [
+   "2f0dc602-0d29-4b69-9599-019c0f70cdb5"
+  ]
+ }
+]

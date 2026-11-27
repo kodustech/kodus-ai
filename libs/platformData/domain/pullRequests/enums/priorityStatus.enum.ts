@@ -10,6 +10,8 @@ export enum PriorityStatus {
     DISCARDED_BY_KODY_FINE_TUNING = 'discarded-by-kody-fine-tuning',
     /** An earlier comment on the same PR already raised it (#2097). */
     DISCARDED_BY_REPEAT = 'discarded-by-repeat',
+    /** It asks to undo a change an earlier comment on the same PR asked for (#2676). */
+    DISCARDED_BY_REVERSAL = 'discarded-by-reversal',
     /** A likely repeat whose comparison never returned a verdict. */
     WITHHELD_BY_REPEAT_CHECK = 'withheld-by-repeat-check',
     /** Its verify run failed, so nobody judged it (#2171). */

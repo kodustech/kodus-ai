@@ -1,0 +1,159 @@
+diff --git a/libs/platform/application/services/webhook-context.service.spec.ts b/libs/platform/application/services/webhook-context.service.spec.ts
+index 99dd520e4..43f05c7c8 100644
+--- a/libs/platform/application/services/webhook-context.service.spec.ts
++++ b/libs/platform/application/services/webhook-context.service.spec.ts
+@@ -118,45 +118,33 @@ describe('WebhookContextService', () => {
+             // Real-world scenario: two GitLab self-hosted instances both have a
+             // project with id=93. Without disambiguation the first one (sorted
+             // by updatedAt DESC) wins and the webhook is routed to the wrong org.
+-            const legacyConfigD = buildConfig(
+-                'org-d',
+-                'team-d',
+-                'gitlab-d.example',
+-            );
+-            const legacyConfigC = buildConfig(
+-                'org-old-c',
+-                'team-c',
+-                'gitlab-c.example',
+-            );
++            const configD = buildConfig('org-d', 'team-d', 'gitlab-d.example');
++            const configC = buildConfig('org-c', 'team-c', 'gitlab-c.example');
+ 
+             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+-                [legacyConfigD, legacyConfigC],
++                [configD, configC],
+             );
+ 
+             const result = await service.getContext(PlatformType.GITLAB, '93', {
+-                host: 'gitlab-old-c.example',
++                host: 'gitlab-c.example',
+             });
+ 
+             expect(result?.organizationAndTeamData.organizationId).toBe(
+-                'org-old-c',
++                'org-c',
+             );
+-            expect(result?.organizationAndTeamData.teamId).toBe('team-old-c');
++            expect(result?.organizationAndTeamData.teamId).toBe('team-c');
+         });
+ 
+         it('normalises host (full URL, trailing slash, casing) before comparing', async () => {
+-            const configA = buildConfig(
+-                'org-a',
+-                'team-a',
+-                'GitLab-C.Example',
+-            );
+-            const configB = buildConfig('org-b', 'team-b', 'gitlab-old-d.example');
++            const configA = buildConfig('org-a', 'team-a', 'GitLab-C.Example');
++            const configB = buildConfig('org-b', 'team-b', 'gitlab-d.example');
+ 
+             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                 [configA, configB],
+             );
+ 
+             const result = await service.getContext(PlatformType.GITLAB, '93', {
+-                host: 'https://gitlab-old-c.example/initech/old-portal',
++                host: 'https://gitlab-c.example/initech/portal',
+             });
+ 
+             expect(result?.organizationAndTeamData.organizationId).toBe(
+@@ -232,22 +220,18 @@ describe('WebhookContextService', () => {
+ 
+         it('takes the config on the sending host beside a legacy config that stores no host', async () => {
+             const configWithoutHost = buildConfig('org-legacy', 'team-legacy');
+-            const legacyConfigC = buildConfig(
+-                'org-old-c',
+-                'team-c',
+-                'gitlab-c.example',
+-            );
++            const configC = buildConfig('org-c', 'team-c', 'gitlab-c.example');
+ 
+             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+-                [configWithoutHost, legacyConfigC],
++                [configWithoutHost, configC],
+             );
+ 
+             const result = await service.getContext(PlatformType.GITLAB, '93', {
+-                host: 'gitlab-old-c.example',
++                host: 'gitlab-c.example',
+             });
+ 
+             expect(result?.organizationAndTeamData.organizationId).toBe(
+-                'org-old-c',
++                'org-c',
+             );
+         });
+ 
+@@ -264,6 +248,72 @@ describe('WebhookContextService', () => {
+                 'org-only',
+             );
+         });
++
++        const listedAt = (org: string, httpUrl: string, name: string) => ({
++            ...buildConfig(org, `team-${org}`),
++            configValue: [{ id: '9', name, http_url: httpUrl }],
++        });
++
++        it('never routes to a config whose listed project is on another server, even with the same path', async () => {
++            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
++                [
++                    listedAt(
++                        'org-a',
++                        'https://gitlab-a.example/acme/api.git',
++                        'acme/api',
++                    ),
++                ],
++            );
++
++            const result = await service.getContext(PlatformType.GITLAB, '9', {
++                host: 'gitlab-b.example',
++                repositoryFullName: 'acme/api',
++            });
++
++            expect(result).toBeNull();
++        });
++
++        it('keeps a legacy config that stores no host beside a config on another server', async () => {
++            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
++                [
++                    buildConfig(
++                        'org-other',
++                        'team-other',
++                        'gitlab-other.example',
++                    ),
++                    buildConfig('org-only', 'team-only'),
++                ],
++            );
++
++            const result = await service.getContext(PlatformType.GITLAB, '93', {
++                host: 'gitlab.example.com',
++            });
++
++            expect(result?.organizationAndTeamData.organizationId).toBe(
++                'org-only',
++            );
++        });
++
++        it('takes a config reached at an internal address that lists the same project and no URL', async () => {
++            // Older configs list no repository URL, and Kodus may reach the
++            // server at an IP while GitLab builds its URLs from external_url.
++            const internal = {
++                ...buildConfig('org-a', 'team-a', 'http://10.0.0.5:8080'),
++                configValue: [{ id: '9', name: 'acme/api' }],
++            };
++            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
++                [internal],
++            );
++
++            const result = await service.getContext(PlatformType.GITLAB, '9', {
++                host: 'gitlab.acme.example',
++                repositoryFullName: 'acme/api',
++            });
++
++            expect(result?.organizationAndTeamData.organizationId).toBe(
++                'org-a',
++            );
++        });
+     });
+ 
+     describe('Forgejo', () => {

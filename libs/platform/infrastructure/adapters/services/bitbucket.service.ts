@@ -823,6 +823,16 @@ export class BitbucketService implements Omit<
         return impl.getPullRequestReviewComments(params);
     }
 
+    async getAnsweredReviewThreadRootIds(params: any) {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        if (typeof impl.getAnsweredReviewThreadRootIds !== 'function') {
+            return null;
+        }
+        return impl.getAnsweredReviewThreadRootIds(params);
+    }
+
     async isWebhookActive(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,

@@ -67,6 +67,7 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -2826,6 +2827,107 @@ export class BitbucketDataCenterService implements Omit<
                 message: `Error getting review comments for PR #${params.prNumber} in Data Center`,
                 context: BitbucketDataCenterService.name,
                 error,
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const authDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const repoConfig = await this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            );
+            if (!authDetails || !repoConfig) return null;
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+
+            // A partial read still marks what it saw: an answered mark is
+            // never wrong, and what it missed stays as loaded.
+            const { values } = await this.readAllPages(
+                axiosClient,
+                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/activities`,
+            );
+
+            // Data Center nests a thread's replies under the root comment, a
+            // reply to a reply under its parent, and may also add each reply
+            // as its own activity, which names its parent.
+            const descendants = (comment: any): any[] =>
+                (comment?.comments ?? []).flatMap((reply: any) => [
+                    reply,
+                    ...descendants(reply),
+                ]);
+            const added = values
+                .filter(
+                    (activity: any) =>
+                        activity?.action === 'COMMENTED' &&
+                        activity?.commentAction === 'ADDED' &&
+                        activity?.comment,
+                )
+                .map((activity: any) => activity.comment);
+
+            const parentOf = new Map<string, string>();
+            added.forEach((comment: any) => {
+                if (comment?.parent?.id != null)
+                    parentOf.set(String(comment.id), String(comment.parent.id));
+                descendants(comment).forEach((reply: any) =>
+                    parentOf.set(
+                        String(reply.id),
+                        String(reply?.parent?.id ?? comment.id),
+                    ),
+                );
+            });
+            const rootOf = (id: string) => {
+                const seen = new Set<string>();
+                while (parentOf.has(id) && !seen.has(id)) {
+                    seen.add(id);
+                    id = parentOf.get(id);
+                }
+                return id;
+            };
+
+            const replies = new Map<string, Map<string, any>>();
+            const addReply = (reply: any) => {
+                const root = rootOf(String(reply.id));
+                if (root === String(reply.id)) return;
+                if (!replies.has(root)) replies.set(root, new Map());
+                replies.get(root).set(String(reply.id), reply);
+            };
+            added.forEach((comment: any) => {
+                addReply(comment);
+                descendants(comment).forEach(addReply);
+            });
+
+            return answeredThreadRootIds(
+                added
+                    .filter((comment: any) => comment?.parent?.id == null)
+                    .map((comment: any) => ({
+                        rootIds: [comment.id],
+                        replies: [
+                            ...(replies.get(String(comment.id))?.values() ??
+                                []),
+                        ].map((reply) => ({ body: reply?.text })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
             });
             return null;
         }
