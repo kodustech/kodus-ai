@@ -1,6 +1,7 @@
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '@libs/runtime/blockers/catalog';
 import { type EnvironmentRuntime, isEnvError } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
+import type { ExitedService } from '@libs/runtime/protocol';
 
 // The ready check (§6): GET the health path on the public http service until it
 // answers under 500. A setup runs it once its claim is ready; a Run runs it after
@@ -55,6 +56,8 @@ export interface ReadyTarget {
     path: string;
     /** How long the check waits for the app, in seconds: the recipe's health_timeout, bounded. */
     waitSeconds: number;
+    /** How long the setup's boot of this environment took (ms): a 5xx before that is a start still under way, not the behavior to measure. */
+    bootMs?: number;
 }
 
 type ProbeOutcome = Awaited<ReturnType<EnvironmentRuntime['probe']>>;
@@ -116,6 +119,20 @@ export interface ReadyWaitResult {
     last?: ProbeOutcome;
     /** Ready because the app answered this same 5xx STABLE_ERROR_TRIES times in a row (acceptStableError only). */
     stableError?: number;
+    /** The public service ran and stopped (or restarts in a loop): no wait brings it back, so the wait ended at once. */
+    exited?: ExitedService;
+}
+
+/** The public service as a probe that got no answer found it: exited, with the exit code and the tail of its log. */
+export function exitedServiceOf(out: ProbeOutcome | undefined, service: string): ExitedService | undefined {
+    const services = out === undefined ? undefined : 'services' in out ? out.services : undefined;
+    return services?.find((s) => s.name === service);
+}
+
+/** What a ready check says of a public service that exited: its exit code and last log lines. */
+export function exitedMessage(target: Pick<ReadyTarget, 'service' | 'port' | 'path'>, exited: ExitedService): string {
+    const tail = exited.logTail.slice(-10).join('\n');
+    return `${target.service} exited with code ${exited.exitCode} before it answered GET ${target.path} on port ${target.port} (${exited.state}).${tail ? `\nLast log lines:\n${tail}` : ''}`;
 }
 
 /**
@@ -137,8 +154,15 @@ export async function waitUntilReady(args: {
      * A Run's replay: an app that keeps answering the same 5xx is up, and that
      * answer is what the round measures. A setup never sets it: there a stable
      * 5xx on the default branch is a boot that failed.
+     * Only once the app is known to have started: it had already answered under
+     * 500 on this claim (answeredBefore), or the setup's measured boot time
+     * (target.bootMs) has passed. An app that takes minutes to boot answers 503
+     * the whole time, and that is a start under way. With neither known, the
+     * wait runs to its deadline.
      */
     acceptStableError?: boolean;
+    /** The claim already answered under 500 since its last boot: it is the same app, so a 5xx now is its behavior. */
+    answeredBefore?: boolean;
     /** Between two tries; HEALTH_RETRY_INTERVAL_SECONDS when unset. */
     intervalMs?: number;
 }): Promise<ReadyWaitResult> {
@@ -152,17 +176,25 @@ export async function waitUntilReady(args: {
     let same = 0;
     let previous: number | undefined;
     let stableError: number | undefined;
+    let exited: ExitedService | undefined;
     let sameSince = startedAt;
     for (;;) {
         const at = args.now();
         last = await env.probe(claimId, probe, args.stepIdOf(tries));
         tries++;
         if (!notAnsweringYet(last)) break;
+        // A service that exited does not come back by waiting: end here with what the cell read of it.
+        const gone = exitedServiceOf(last, target.service);
+        if (gone) {
+            exited = gone;
+            break;
+        }
         const status = isEnvError(last) ? undefined : last.http?.status;
         same = status !== undefined && status === previous ? same + 1 : status !== undefined ? 1 : 0;
         if (same === 1) sameSince = at;
         previous = status;
-        if (args.acceptStableError && status !== undefined && same >= STABLE_ERROR_TRIES && at - sameSince >= STABLE_ERROR_WINDOW_MS) {
+        const started = args.answeredBefore === true || (target.bootMs !== undefined && at - startedAt >= target.bootMs);
+        if (args.acceptStableError && started && status !== undefined && same >= STABLE_ERROR_TRIES && at - sameSince >= STABLE_ERROR_WINDOW_MS) {
             stableError = status;
             break;
         }
@@ -170,10 +202,11 @@ export async function waitUntilReady(args: {
         await args.sleep(interval);
     }
     return {
-        ready: answered(last) || stableError !== undefined,
+        ready: exited === undefined && (answered(last) || stableError !== undefined),
         tries,
         waitedMs: args.now() - startedAt,
         last,
         ...(stableError !== undefined ? { stableError } : {}),
+        ...(exited ? { exited } : {}),
     };
 }

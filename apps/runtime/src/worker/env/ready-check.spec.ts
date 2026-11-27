@@ -1,6 +1,7 @@
-import { readyTarget, readyWaitSeconds, resetTimeoutMs, RUN_READY_INTERVAL_MS, STABLE_ERROR_TRIES, STABLE_ERROR_WINDOW_MS, waitUntilReady } from './ready-check';
+import { exitedMessage, readyTarget, readyWaitSeconds, resetTimeoutMs, RUN_READY_INTERVAL_MS, STABLE_ERROR_TRIES, STABLE_ERROR_WINDOW_MS, waitUntilReady } from './ready-check';
 
 const unreachable = { code: 'vm_unhealthy', stepId: 's', vmHealth: 'unreachable' } as const;
+const exitedApp = { name: 'grafana', state: 'exited', exitCode: 1, logTail: ['seed failed: relation "x" does not exist'] };
 const answered = (status: number) => ({ stepId: 's', http: { status } }) as any;
 
 describe('ready check', () => {
@@ -103,7 +104,7 @@ describe('ready check', () => {
     });
 
     describe('a stable 5xx after a reset', () => {
-        const run = (answers: Array<number | 'down'>, acceptStableError: boolean, waitSeconds = 600, intervalMs?: number) => {
+        const run = (answers: Array<number | 'down'>, acceptStableError: boolean, waitSeconds = 600, intervalMs?: number, started: { answeredBefore?: boolean; bootMs?: number } = { answeredBefore: true }) => {
             let clock = 0;
             let n = 0;
             const probe = jest.fn(async (_c: string, _p: unknown, stepId: string) => {
@@ -113,9 +114,10 @@ describe('ready check', () => {
             return waitUntilReady({
                 env: { probe } as any,
                 claimId: 'c',
-                target: { service: 'grafana', port: 3000, path: '/api/health', waitSeconds },
+                target: { service: 'grafana', port: 3000, path: '/api/health', waitSeconds, ...(started.bootMs ? { bootMs: started.bootMs } : {}) },
                 who: { id: 'run-ready', purpose: 'p' },
                 stepIdOf: (i) => `s${i}`,
+                ...(started.answeredBefore ? { answeredBefore: true } : {}),
                 now: () => clock,
                 sleep: async (ms) => {
                     clock += ms;
@@ -147,6 +149,62 @@ describe('ready check', () => {
             const r = await run([503], false, 60);
             expect(r.ready).toBe(false);
             expect(r.stableError).toBeUndefined();
+        });
+
+        // An app that takes minutes to boot answers 503 the whole time: that is a start under way.
+        it('an app that has not answered before and has no measured boot time keeps being waited for through a stable 5xx', async () => {
+            const r = await run([503], true, 60, undefined, {});
+            expect(r.ready).toBe(false);
+            expect(r.stableError).toBeUndefined();
+            expect(r.waitedMs).toBeGreaterThanOrEqual(55_000);
+        });
+
+        it('a stable 5xx counts as the answer once the setup measured boot time has passed', async () => {
+            const r = await run([503], true, 600, undefined, { bootMs: 120_000 });
+            expect(r).toMatchObject({ ready: true, stableError: 503 });
+            expect(r.waitedMs).toBeGreaterThanOrEqual(120_000);
+        });
+
+        it('an app that comes up while it is waited for is ready at its first answer under 500', async () => {
+            const r = await run([503, 503, 503, 200], true, 600, undefined, {});
+            expect(r).toMatchObject({ ready: true, tries: 4 });
+        });
+    });
+
+    describe('a public service that exited', () => {
+        const runWith = (outs: unknown[]) => {
+            let clock = 0;
+            const probe = jest.fn(async () => (outs.length > 1 ? outs.shift() : outs[0]) as any);
+            return waitUntilReady({
+                env: { probe } as any,
+                claimId: 'c',
+                target: { service: 'grafana', port: 3000, path: '/api/health', waitSeconds: 900 },
+                who: { id: 'run-ready', purpose: 'p' },
+                stepIdOf: (i) => `s${i}`,
+                now: () => clock,
+                sleep: async (ms) => {
+                    clock += ms;
+                },
+            }).then((r) => ({ r, probe }));
+        };
+
+        it('ends the wait at once with its exit code and log lines, not at the timeout', async () => {
+            const { r, probe } = await runWith([{ code: 'vm_unhealthy', stepId: 's' }, { stepId: 's', services: [exitedApp] }]);
+            expect(r.ready).toBe(false);
+            expect(r.exited).toEqual(exitedApp);
+            expect(r.tries).toBe(2);
+            expect(probe).toHaveBeenCalledTimes(2);
+        });
+
+        it('reads it from a lost transport too', async () => {
+            const { r } = await runWith([{ code: 'transport_lost', stepId: 's', services: [exitedApp] }]);
+            expect(r).toMatchObject({ ready: false, tries: 1, exited: exitedApp });
+        });
+
+        it('says what exited, with the code and the last log lines', () => {
+            expect(exitedMessage({ service: 'grafana', port: 3000, path: '/api/health' }, exitedApp)).toBe(
+                'grafana exited with code 1 before it answered GET /api/health on port 3000 (exited).\nLast log lines:\nseed failed: relation "x" does not exist',
+            );
         });
     });
 });

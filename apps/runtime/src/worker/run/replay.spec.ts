@@ -210,6 +210,43 @@ describe('ready check after the reset', () => {
     });
 });
 
+describe('an app that died after the reset', () => {
+    // Behavior: the round ends at the first try that finds the service exited, says why on the Run page, and never sends the probe at the dead app.
+    it('ends the round with the exit code and log lines and sends no probe', async () => {
+        const sent: string[] = [];
+        const env = {
+            reset: async () => undefined,
+            probe: async (_c: string, p: { id: string }, stepId: string) => {
+                sent.push(p.id);
+                return { stepId, services: [{ name: 'web', state: 'exited', exitCode: 1, logTail: ['seed failed'] }] };
+            },
+        } as any;
+        const objects = new Map<string, any>();
+        const evidence = { organizationId: 'o', store: { put: async (k: string, b: string | Buffer) => void objects.set(k, JSON.parse(String(b))) } };
+        const out = await replayProbe({
+            run: RUN,
+            index: 0,
+            probe,
+            claims: { base: 'b', pr: 'p' },
+            pinnedImageId: 'img',
+            env,
+            step: ((_n: string, fn: () => Promise<unknown>) => fn()) as StepRunner,
+            evidence: evidence as any,
+            maxRoundsPerSide: 1,
+            ready: { service: 'web', port: 3000, path: '/health', waitSeconds: 900 },
+            now: () => 0,
+            sleep: async () => undefined,
+        });
+        expect(sent.every((id) => id === 'run-ready')).toBe(true);
+        expect(sent.length).toBe(2);
+        expect(out.steps[0]).toMatchObject({ transport: 'lost' });
+        const body = objects.get(`o/${RUN.runId}/base/${out.steps[0].stepId}/output`);
+        expect(body.stage).toBe('ready');
+        expect(body.error.reason).toContain('web exited with code 1');
+        expect(body.error.reason).toContain('seed failed');
+    });
+});
+
 describe('round evidence', () => {
     const evidenceOf = () => {
         const objects = new Map<string, any>();

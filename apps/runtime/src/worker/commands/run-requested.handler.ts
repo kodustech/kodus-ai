@@ -128,7 +128,7 @@ export class RunRequestedHandler implements CommandHandler {
         if (setupBootMs) environment.setupBootMs = setupBootMs;
         // The ready check the setup passed, so a Run waits for the app after each reset as the setup did after its boot.
         const ready = readyTarget(environment.expose, setup.recipe ?? {}, this.opts.healthPath);
-        if (ready) environment.ready = { ...ready, waitSeconds: Math.ceil(ready.waitSeconds) };
+        if (ready) environment.ready = { ...ready, waitSeconds: Math.ceil(ready.waitSeconds), ...(setupBootMs ? { bootMs: setupBootMs } : {}) };
         return { req: { ...req, environment }, recipe };
     }
 

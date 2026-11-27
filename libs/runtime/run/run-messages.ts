@@ -247,6 +247,7 @@ export const RuntimeRunRequestedSchema = z.strictObject({
                 port: z.number().int().min(1).max(65_535),
                 path: z.string().startsWith('/').max(1_024),
                 waitSeconds: z.number().int().min(0).max(900),
+                bootMs: z.number().int().positive().max(86_400_000).optional(),
             })
             .optional(),
     }),

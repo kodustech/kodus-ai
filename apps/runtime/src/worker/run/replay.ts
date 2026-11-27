@@ -8,7 +8,7 @@ import { type ResponseDiff, responseDiffOf, type ResponseSample, statusChangeOf,
 import { redactPatterns } from '@libs/runtime/redaction';
 
 import { Canary, CanaryLeakError, containsCanary, redactCanaries, redactDeep } from '../canary/canary';
-import { type ReadyTarget, RUN_READY_INTERVAL_MS, waitUntilReady } from '../env/ready-check';
+import { exitedMessage, type ReadyTarget, RUN_READY_INTERVAL_MS, waitUntilReady } from '../env/ready-check';
 import { checkClaimLease, type ClaimLeaseFailed, throwClaimLeaseFailure } from '../env/claim-liveness';
 import type { StepRunner } from './ports';
 import { toGateStep } from './probe-fields';
@@ -112,10 +112,12 @@ export interface ReplayArgs {
      * the base's second round beside the PR's first.
      */
     firstBaseRound?: RoundOut;
+    /** The claims whose app already answered under 500 in this replay: a 5xx after a later reset is that app's behavior, not a start under way. */
+    answeredClaims?: Set<string>;
 }
 
 /** What a round needs from the replay's arguments. */
-type RoundArgs = Pick<ReplayArgs, 'run' | 'index' | 'probe' | 'assertions' | 'intent' | 'securityOf' | 'claims' | 'pinnedImageId' | 'rounds' | 'env' | 'canaries' | 'evidence' | 'ready' | 'now' | 'sleep'>;
+type RoundArgs = Pick<ReplayArgs, 'run' | 'index' | 'probe' | 'assertions' | 'intent' | 'securityOf' | 'claims' | 'pinnedImageId' | 'rounds' | 'env' | 'canaries' | 'evidence' | 'ready' | 'now' | 'sleep' | 'answeredClaims'>;
 
 /** The step name of one round: the same whether the replay or playFirstBaseRound plays it, so its stepId and evidence are the same. */
 const roundName = (args: Pick<RoundArgs, 'index' | 'probe'>, side: 'base' | 'pr', round: number) => `probe:${args.index}:${args.probe.id}:${side}:${round}`;
@@ -158,12 +160,20 @@ async function playRoundBody(args: RoundArgs, side: 'base' | 'pr', round: number
             stepIdOf: (i) => stableStepId(args.run.runId, args.run.attempt, `${name}:ready:${i}`),
             // A PR that breaks the health path itself still gets compared.
             acceptStableError: true,
+            answeredBefore: args.answeredClaims?.has(claims[side]) === true,
             intervalMs: RUN_READY_INTERVAL_MS,
             now,
             sleep,
         });
         const last = readiness.last;
         if (last && !isEnvError(last) && last.http) readyStatus = last.http.status;
+        if (readiness.ready && readyStatus !== undefined && readyStatus < 500) args.answeredClaims?.add(claims[side]);
+        // The app died: the probe would reach nothing. The round ends as a lost transport with what the cell read of the service.
+        if (readiness.exited) {
+            const lost = { code: 'transport_lost' as const, stepId, services: [readiness.exited] };
+            if (args.evidence) await putStepOutput(args.evidence, { runId: args.run.runId, side, stepId }, { ...head(stepId), stage: 'ready', error: { ...envErrorEvidence(lost), reason: exitedMessage(args.ready, readiness.exited) } });
+            return { gate: toGateStep({ probe, side, round, stepId, result: lost }), leaked: false };
+        }
     }
     // Issued here, right before the probe, so a grant lives the probe's timeout and not the reset's.
     const at = { runId: args.run.runId, side, stepId };
@@ -213,6 +223,7 @@ export function playFirstBaseRound(args: Omit<RoundArgs, 'claims'> & { baseClaim
 
 export async function replayProbe(args: ReplayArgs): Promise<ReplayResult> {
     const { probe, step } = args;
+    const roundArgs: RoundArgs = { ...args, answeredClaims: args.answeredClaims ?? new Set<string>() };
     const maxRounds = args.maxRoundsPerSide ?? 4;
     const steps: GateStep[] = [];
     const rounds = { base: 0, pr: 0 };
@@ -231,7 +242,7 @@ export async function replayProbe(args: ReplayArgs): Promise<ReplayResult> {
         // The baseline this round diffs against, and whether its side has a lane: what is known when it starts.
         const knownBaseline = baseline;
         const sideHasLane = !!lanes[side];
-        const played = step(roundName(args, side, round), () => playRoundBody(args, side, round, knownBaseline, sideHasLane));
+        const played = step(roundName(args, side, round), () => playRoundBody(roundArgs, side, round, knownBaseline, sideHasLane));
         return played.then((out) => ({ side, out }));
     };
 
