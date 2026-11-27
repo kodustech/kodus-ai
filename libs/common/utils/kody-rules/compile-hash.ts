@@ -1,5 +1,20 @@
 import { createHash } from 'crypto';
 
+type CompileInput = { rule?: string; examples?: unknown[] };
+type AttemptedRule = CompileInput & {
+    compileAttempt?: { sourceHash?: string };
+};
+
+function hashCompileInput(
+    rule: CompileInput,
+    exampleFields?: string[],
+): string {
+    const examples = JSON.stringify(rule?.examples ?? [], exampleFields);
+    return createHash('sha256')
+        .update(`${rule?.rule ?? ''} ${examples}`)
+        .digest('hex');
+}
+
 /**
  * The fingerprint of everything the detector compiler's DECISION depends on.
  *
@@ -17,17 +32,11 @@ import { createHash } from 'crypto';
  *
  * It covers the rule text AND the examples because the examples are the compile
  * gate: the same text with a different `incorrect` snippet can flip a rule from
- * compiled to declined. Same shape as `atomsHashOf` in the summary service, and
- * for the same reason — deliberately identical so the two cannot drift into
- * disagreeing about what "this rule changed" means.
+ * compiled to declined. Use the web DTO's field order for every example so an
+ * equivalent CLI payload also matches attempts already stored by web saves.
  */
-export function ruleCompileHash(rule: {
-    rule?: string;
-    examples?: unknown[];
-}): string {
-    return createHash('sha256')
-        .update(`${rule?.rule ?? ''} ${JSON.stringify(rule?.examples ?? [])}`)
-        .digest('hex');
+export function ruleCompileHash(rule: CompileInput): string {
+    return hashCompileInput(rule, ['snippet', 'isCorrect']);
 }
 
 /**
@@ -37,13 +46,13 @@ export function ruleCompileHash(rule: {
  * A rule whose attempt ERRORED is not recorded at all (see the compiler
  * service), so a transient failure never freezes a rule out of compilation.
  */
-export function compileAttemptIsCurrent(rule: {
-    rule?: string;
-    examples?: unknown[];
-    compileAttempt?: { sourceHash?: string };
-}): boolean {
+export function compileAttemptIsCurrent(rule: AttemptedRule): boolean {
     const stored = rule?.compileAttempt?.sourceHash;
-    return !!stored && stored === ruleCompileHash(rule);
+    // Older CLI attempts used the field order persisted on that rule.
+    return (
+        !!stored &&
+        (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
+    );
 }
 
 /**

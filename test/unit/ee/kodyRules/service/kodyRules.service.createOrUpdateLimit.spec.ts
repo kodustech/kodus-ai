@@ -790,10 +790,10 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 compilerNeed,
             );
 
-            const update = capturedUpdate(updateRule);
-            expect(update.title).toBe('Original title');
-            expect(update.rule).toBe('original body text');
-            expect(update.status).toBe(KodyRulesStatus.ACTIVE);
+            expect(capturedUpdate(updateRule)).toEqual({
+                contextNeed: compilerNeed,
+                updatedAt: expect.any(Date),
+            });
         });
 
         it('passes null through so a stale need is actually cleared', async () => {
@@ -953,7 +953,10 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 compilerScope,
             );
 
-            expect(capturedUpdate(updateRule).fileScope).toEqual(compilerScope);
+            expect(capturedUpdate(updateRule)).toEqual({
+                fileScope: compilerScope,
+                updatedAt: expect.any(Date),
+            });
         });
 
         it('clears a stale scope when passed null', async () => {

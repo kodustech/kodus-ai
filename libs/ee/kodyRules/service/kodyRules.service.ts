@@ -28,6 +28,10 @@ import {
     prompt_kodyMemoryResolution_user,
 } from '@libs/common/utils/prompts/kodyMemoryResolution';
 import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRulesRecommendation';
+import {
+    compileAttemptIsCurrent,
+    ruleCompileHash,
+} from '@libs/common/utils/kody-rules/compile-hash';
 import { ProgrammingLanguage } from '@libs/core/domain/enums';
 import {
     ActionType,
@@ -906,6 +910,21 @@ export class KodyRulesService implements IKodyRulesService {
             kodyRule.examples !== undefined &&
             JSON.stringify(kodyRule.examples) !==
                 JSON.stringify(existingRule.examples);
+        // A legacy CLI attempt can only be verified against the original key
+        // order. Translate a matching marker before the edit discards that order.
+        if (
+            examplesChanged &&
+            compileAttemptIsCurrent({
+                rule: existingRule.rule,
+                examples: existingRule.examples,
+                compileAttempt: updatedRule.compileAttempt,
+            })
+        ) {
+            updatedRule.compileAttempt = {
+                ...updatedRule.compileAttempt,
+                sourceHash: ruleCompileHash(existingRule),
+            };
+        }
         if (ruleTextChanged) {
             delete (updatedRule as Partial<IKodyRule>).summary;
             delete (updatedRule as Partial<IKodyRule>).atoms;
@@ -1208,20 +1227,12 @@ export class KodyRulesService implements IKodyRulesService {
             return existingRule as IKodyRule;
         }
 
-        const updatedRule = {
-            ...existingRule,
-            // `null` passes through as-is: updateRule skips only `undefined`,
-            // so this writes `$set rules.$.contextNeed = null` and clears a
-            // stale inference instead of silently no-op-ing the clear.
-            contextNeed: contextNeed,
+        // The compiler saves context and scope concurrently. Only $set this
+        // field so the earlier read cannot restore a stale scope.
+        const updatedKodyRules = await this.updateRule(existing.uuid, ruleId, {
+            contextNeed,
             updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
+        });
 
         if (!updatedKodyRules) {
             this.logger.error({
@@ -1270,20 +1281,10 @@ export class KodyRulesService implements IKodyRulesService {
             return existingRule as IKodyRule;
         }
 
-        const updatedRule = {
-            ...existingRule,
-            // `null` passes through as-is (updateRule skips only `undefined`),
-            // so an edited rule that no longer names a language gets its scope
-            // CLEARED instead of keeping a narrowing nobody can see.
-            fileScope: fileScope,
+        const updatedKodyRules = await this.updateRule(existing.uuid, ruleId, {
+            fileScope,
             updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
+        });
 
         if (!updatedKodyRules) {
             this.logger.error({

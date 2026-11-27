@@ -206,20 +206,13 @@ export class CreateOrUpdateKodyRulesUseCase {
                 // rules so review checks them in pure code. Fire-and-forget,
                 // gated — a rule only gets a detector if it passes the compile
                 // gate; otherwise it stays semantic. Never blocks the save.
+                // A partial PATCH can omit examples that still gate the detector.
                 this.detectorCompiler
-                    .compileAndSave(organizationAndTeamData, result.uuid, {
-                        ...kodyRule,
-                        uuid: result.uuid,
-                        // Carry the persisted detector (the DTO has none) so
-                        // compileAndSave can clear a stale one when an edited
-                        // rule stops being mechanical.
-                        detector: (result as IKodyRule).detector,
-                        // Carry the stored compile records too: the compile
-                        // gate skips a rule only when it finds its own
-                        // compileAttempt/contextNeed, which the DTO never has.
-                        compileAttempt: (result as IKodyRule).compileAttempt,
-                        contextNeed: (result as IKodyRule).contextNeed,
-                    })
+                    .compileAndSave(
+                        organizationAndTeamData,
+                        result.uuid,
+                        result,
+                    )
                     .catch((error) => {
                         this.logger.error({
                             message: 'Background detector compile failed',
