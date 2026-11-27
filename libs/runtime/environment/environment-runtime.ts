@@ -45,6 +45,11 @@ export interface AcquireRequest {
      */
     suiteRunId?: string;
     shard?: number;
+    /**
+     * An environment's own setup (consumer `setup`, not a template build): the setup's key, which names the perRun host
+     * bound to it (`setup:<org>/<hash>`). Placement alone reads it; the worker never sends it to the cell or the hub.
+     */
+    setupKey?: string;
     /** The default branch's recipe the cell boots with (content null: there is none), never the checkout's. */
     recipe?: RecipeForClaim;
     /** The environment's machine size for the workload's builds and services; absent: the cell's default. */

@@ -1,4 +1,4 @@
-import { templateSetupKey, boundKeyOfRun, boundKeyOfSuite, boundKeyOfTemplate, candidatePools, suiteKeyOf, type PoolView } from './candidate-pools';
+import { templateSetupKey, boundKeyOfRun, boundKeyOfSetup, boundKeyOfSuite, boundKeyOfTemplate, candidatePools, suiteKeyOf, type PoolView } from './candidate-pools';
 
 const pool = (over: Partial<PoolView> & Pick<PoolView, 'poolId'>): PoolView => ({
     scope: 'kodus',
@@ -46,10 +46,20 @@ describe('candidatePools', () => {
         expect(candidatePools([kodusStatic, { ...boat, scalable: false }], run)).toBeNull();
     });
 
-    it('only a Run goes to a perRun pool: a setup or a sandbox has no Run to bind a host to', () => {
+    it('only a claim with something to bind a host to goes to a perRun pool: a sandbox, a Run with no id, a setup with no environment never do', () => {
         expect(candidatePools([kodusStatic, boat], { ...run, consumer: 'setup', runId: undefined })).toBeNull();
         expect(candidatePools([kodusStatic, boat], { ...run, consumer: 'sandbox' })).toBeNull();
         expect(candidatePools([kodusStatic, boat], { ...run, runId: undefined })).toBeNull();
+    });
+
+    it("an environment's own setup goes to a perRun pool like a Run, bound to that setup", () => {
+        const setup = { organizationId: 'kodus', consumer: 'setup', setupKey: 'env-1:2026-11-27T00:00:00.000Z' };
+        const boundKey = boundKeyOfSetup('kodus', setup.setupKey);
+        expect(candidatePools([kodusStatic, boat], setup)).toEqual({ pools: ['boat-eu-perrun', 'kodus-static'], perRun: ['boat-eu-perrun'], boundKey });
+        // Only boat: the setup still has a machine (before, placement was unrestricted and found no cell).
+        expect(candidatePools([boat], setup)).toEqual({ pools: ['boat-eu-perrun'], perRun: ['boat-eu-perrun'], boundKey });
+        // A setup key never makes a sandbox's claim perRun.
+        expect(candidatePools([kodusStatic, boat], { ...setup, consumer: 'sandbox' })).toBeNull();
     });
 
     it('a pool whose isolation label does not satisfy the claim minimum is dropped', () => {
@@ -66,6 +76,16 @@ describe('candidatePools', () => {
     it("binds a template's setup host to its environment alone", () => {
         expect(boundKeyOfTemplate('a', 'e')).toBe('template:a/e');
         expect(boundKeyOfTemplate('a', 'e')).not.toBe(boundKeyOfRun('a', 'e'));
+    });
+
+    it('binds a setup host to that one setup: the next setup of the environment gets a key, and so a host, of its own', () => {
+        const first = boundKeyOfSetup('a', 'env-1:2026-11-27T00:00:00.000Z');
+        expect(first).toMatch(/^setup:a\/[0-9a-f]{32}$/);
+        expect(boundKeyOfSetup('a', 'env-1:2026-11-27T00:00:00.000Z')).toBe(first);
+        expect(boundKeyOfSetup('a', 'env-1:2026-11-27T01:00:00.000Z')).not.toBe(first);
+        // Two orgs never share it, and it is never a template's key (its setup record stays the environment's).
+        expect(boundKeyOfSetup('b', 'env-1:2026-11-27T00:00:00.000Z')).not.toBe(first);
+        expect(templateSetupKey('a', first)).toBeNull();
     });
 
     it('accepts only the claim org\'s own template key for a template setup', () => {

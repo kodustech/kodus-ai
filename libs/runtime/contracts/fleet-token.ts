@@ -25,7 +25,7 @@ export interface FleetTokenRecord {
     tokenHash: string;
     poolId: string;
     hostId: string;
-    /** A perRun host's Run (`run:<org>/<runId>`, or `suite:<org>/<suiteRunId>/<shard>` for one shard of a suite run); null for a host any claim of its pool may use. */
+    /** A perRun host's Run (`run:<org>/<runId>`, `suite:<org>/<suiteRunId>/<shard>` for one shard of a suite run, `setup:<org>/<hash>` for one setup of an environment); null for a host any claim of its pool may use. */
     boundKey: string | null;
     expiresAt: string;
     issuedBy: string;

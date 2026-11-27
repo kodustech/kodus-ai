@@ -29,7 +29,9 @@ flowchart LR
 - A **host pool** names a provider, a provider-specific **host class**, labels, an admission list and a **lifecycle**:
   - `perRun` (built, the boat profile): one host per Run. The controller creates it when a Run asks for room, the cell
     on it serves only that Run, and the controller deletes it when the Run is done. The provider's own TTL is the
-    dead-man switch. Nothing is kept warm, nothing is consolidated.
+    dead-man switch. Nothing is kept warm, nothing is consolidated. An environment's own setup and a suite shard get a
+    host the same way, bound to `setup:<org>/<hash of the setup key>` and `suite:<org>/<suiteRun>/<shard>`: with only
+    boat pools there is no other machine for them, and customer code never runs on a static cell it was not sent to.
   - `pooled` (documented, not built): long-lived hosts shared by Runs, with `min`/`max`/`warm`, consolidation, drift
     and drain for scale-in (sections 7.1 and 7.3). This is what AWS without boat and bare metal need later; adding
     them is an adapter plus the `pooled` loop, nothing else.
@@ -838,8 +840,10 @@ utilization under 20% for a day.
 
 Consequences written into the defaults:
 
-- boat pools run `microvm` only, and a `perRun` host serves one Run of one org (`bound_key`), so a boat host never
-  holds two orgs' claims. At $0.072/h for a `large`, a host per Run is cheap.
+- boat pools run `microvm` only, and a `perRun` host serves one Run, one setup or one suite shard of one org
+  (`bound_key`), so a boat host never holds two orgs' claims. A setup's key is per setup, never per environment: the
+  host id and its workflow derive from the key, so the next setup of the environment gets a host of its own, while
+  Kody's repair boots, which share the setup's key, reuse the setup's host and its build cache. At $0.072/h for a `large`, a host per Run is cheap.
 - A boat host is created with `noEnv: true`, which removes boat's in-sandbox API key; `ASCII_TOKEN` stays (it can only
   publish ports of that host), and the cell's egress never routes a machine to boat's agent or tunnel.
 - A pool admits orgs by `admission.allowOrgs` until legal accepts the provider (boat: DPA and the subprocessor list);

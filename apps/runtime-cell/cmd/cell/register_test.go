@@ -514,11 +514,16 @@ func TestBakeAdoptOrgNeedsAFleetHostAndAHubGivenKey(t *testing.T) {
 	}
 	// A suite shard's host (the spec listing, a shard, the fresh and main re-run hosts) starts from the template too: without
 	// the catalog every shard built the environment cold.
+	// An environment's own setup on a perRun host starts from the environment's template like a Run host does.
+	key("setup:org-4/0123456789abcdef0123456789abcdef\n")
+	if got := bakeAdoptOrg(unit, cert, "kodus"); got != "org-4" {
+		t.Fatalf("a setup host: org %q", got)
+	}
 	key("suite:org-3/suite-run-1/2\n")
 	if got := bakeAdoptOrg(unit, cert, "kodus"); got != "org-3" {
 		t.Fatalf("a suite shard host: org %q", got)
 	}
-	for _, bad := range []string{"", "org-1/run", "run:/run", "run:org-1/a/b", "x:org-1/run", "run:org 1/run", "suite:org-1/run", "suite:org-1/run/x", "suite:/run/1", "suite:org-1/run/1/2", "template:org-1/env/1"} {
+	for _, bad := range []string{"", "org-1/run", "run:/run", "run:org-1/a/b", "x:org-1/run", "run:org 1/run", "suite:org-1/run", "suite:org-1/run/x", "suite:/run/1", "suite:org-1/run/1/2", "template:org-1/env/1", "setup:org-1/a/b", "setup:/abc"} {
 		key(bad)
 		if got := bakeAdoptOrg(unit, cert, "kodus"); got != "" {
 			t.Fatalf("key %q adopted for %q", bad, got)

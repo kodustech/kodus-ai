@@ -61,12 +61,13 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
             claimIdFor(req.organizationId, m.idempotencyKey),
         );
         // The same placement as the legacy path (docs/runtime/host-providers.md §4.4): a Run's pair on its
-        // first pool; on a perRun pool only the Run's bound cell, with the demand that makes the fleet start it.
+        // first pool; on a perRun pool only the Run's (or the environment setup's) bound cell, with the demand that makes the fleet start it.
         const placement = this.opts.pools
             ? candidatePools(await this.opts.pools.list(), {
                   organizationId: req.organizationId,
                   consumer: req.kind === 'run' ? 'runtime' : 'setup',
                   runId: req.kind === 'run' ? req.key : undefined,
+                  ...(req.kind === 'setup' && req.setupKey ? { setupKey: req.setupKey } : {}),
                   ...(req.isolation ? { isolation: req.isolation } : {}),
               })
             : null;
@@ -136,7 +137,7 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
             const cap =
                 this.opts.sharedClaimCap ?? DEFAULT_ORG_SHARED_CLAIM_CAP;
             if (perRun) {
-                const demand = await recordPoolDemand(db, { poolId: first!, boundKey: key!, organizationId: req.organizationId, runId: req.key, sizeMb: req.size?.memoryMb });
+                const demand = await recordPoolDemand(db, { poolId: first!, boundKey: key!, organizationId: req.organizationId, ...(req.kind === 'run' ? { runId: req.key } : { environmentId: req.environmentId }), sizeMb: req.size?.memoryMb });
                 if (demand.failure) return { status: 'refused', reason: 'unavailable', retryable: false };
             }
             const candidates = await db.query(

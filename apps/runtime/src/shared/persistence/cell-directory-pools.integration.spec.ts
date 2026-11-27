@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 
 import { Pool, type PoolClient } from 'pg';
 
+import { boundKeyOfSetup } from '@libs/runtime/placement/candidate-pools';
+
 import { PgHubStore } from '../../hub/hub-store';
 import { isolatedDatabase } from '../../testing/isolated-database';
 import { PgPhysicalAdmissionDirectory } from '../admission/physical-admission-directory';
@@ -180,7 +182,36 @@ const BOAT = 'boat-eu-perrun';
             expect(await cells.reserveCell(org, want)).toEqual({ refused: 'host_unavailable', pool: BOAT, reason: 'registration_timeout' });
         }));
 
-    it('an org the boat pool does not admit, and a setup of an admitted one, place as before', () =>
+    it("an environment's own setup waits for its own host on the perRun pool, under its setup's key, and never takes the static cell; the next setup gets a host of its own", () =>
+        isolated(async (db, s) => {
+            const org = `org-${randomUUID()}`;
+            await boatPool(db, [org]);
+            const fallback = await connect(db, s, { slots: 9 });
+            const runHost = await connect(db, s, { poolId: BOAT, boundKey: `run:${org}/r-1` });
+            const cells = directory(db);
+            const setup = (key: string) => ({ claimId: claimIdFor(org, `${key}:boot`), consumer: 'setup', environmentId: 'env-1', setupKey: key }) as const;
+            const [first, next] = ['env-1:2026-11-27T00:00:00.000Z', 'env-1:2026-11-27T01:00:00.000Z'];
+
+            expect(await cells.reserveCell(org, setup(first))).toEqual({ refused: 'no_capacity', pool: BOAT, hostStarting: true });
+            expect((await db.query(`SELECT pool_id, bound_key, environment_id, run_id FROM runtime.runtime_pool_demand`)).rows).toEqual([
+                { pool_id: BOAT, bound_key: boundKeyOfSetup(org, first), environment_id: 'env-1', run_id: null },
+            ]);
+            expect(await freeSlots(db, fallback)).toBe(9);
+            expect(await freeSlots(db, runHost)).toBe(4);
+
+            const host = await connect(db, s, { poolId: BOAT, boundKey: boundKeyOfSetup(org, first) });
+            expect(cellOf(await cells.reserveCell(org, setup(first)))).toBe(host);
+            // A repair boot of the same setup (another claim, the same setup key) reuses that host.
+            expect(cellOf(await cells.reserveCell(org, { ...setup(first), claimId: claimIdFor(org, `${first}:repair-1`) }))).toBe(host);
+
+            // The environment's next setup never lands on the previous setup's host: it asks for a host of its own.
+            expect(await cells.reserveCell(org, setup(next))).toEqual({ refused: 'no_capacity', pool: BOAT, hostStarting: true });
+            expect((await db.query(`SELECT bound_key FROM runtime.runtime_pool_demand ORDER BY bound_key`)).rows.map((r) => r.bound_key).sort()).toEqual(
+                [boundKeyOfSetup(org, first), boundKeyOfSetup(org, next)].sort(),
+            );
+        }));
+
+    it('an org the boat pool does not admit, and a setup of an admitted one that names no setup key, place as before', () =>
         isolated(async (db, s) => {
             const [admitted, other] = [`org-${randomUUID()}`, `org-${randomUUID()}`];
             await boatPool(db, [admitted]);
@@ -228,6 +259,33 @@ const BOAT = 'boat-eu-perrun';
             expect((await db.query(`SELECT bound_key FROM runtime.runtime_pool_demand`)).rows).toEqual([{ bound_key: `run:${org}/${key2}` }]);
             const host = await connect(db, s, { poolId: BOAT, boundKey: `run:${org}/${key2}`, epoch: true });
             expect(await physical.reserve(run2)).toMatchObject({ status: 'located', cell: { cellId: host } });
+        }));
+
+    it("physical admission places an environment's own setup on its own perRun host, under its setup's key", () =>
+        isolated(async (db, s) => {
+            const org = `org-${randomUUID()}`;
+            const setupKey = `env-1:${randomUUID()}`;
+            const req: PhysicalAdmissionRequest = {
+                organizationId: org,
+                kind: 'setup',
+                key: setupKey,
+                generation: 1,
+                ticketOwnerToken: randomUUID(),
+                executionId: randomUUID(),
+                deadlineAt: new Date(Date.now() + 120_000).toISOString(),
+                members: [{ side: 'setup', idempotencyKey: `setup:${setupKey}` }],
+                setupKey,
+                environmentId: 'env-1',
+            };
+            await boatPool(db, [org]);
+            await connect(db, s, { slots: 9, epoch: true });
+            const physical = new PgPhysicalAdmissionDirectory(db, { inTransaction: savepoint(db), sharedClaimCap: 100, pools: new PgHostPoolReader(db, { cacheMs: 0 }) });
+            expect(await physical.reserve(req)).toMatchObject({ status: 'refused', reason: 'no_capacity', retryable: true });
+            expect((await db.query(`SELECT bound_key, environment_id, run_id FROM runtime.runtime_pool_demand`)).rows).toEqual([
+                { bound_key: boundKeyOfSetup(org, setupKey), environment_id: 'env-1', run_id: null },
+            ]);
+            const host = await connect(db, s, { poolId: BOAT, boundKey: boundKeyOfSetup(org, setupKey), epoch: true });
+            expect(await physical.reserve(req)).toMatchObject({ status: 'located', cell: { cellId: host } });
         }));
 
     describe("a template's setup (host-providers.md §8.2)", () => {

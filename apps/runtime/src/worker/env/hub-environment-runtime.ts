@@ -336,8 +336,8 @@ function refusalBlocker(r: CellRefusal): Blocked['blockers'][number] {
 }
 
 /** The acquire as the hub takes it: placement-only fields (boundKey) stay on the worker. */
-function wireOf(req: AcquireRequest): Omit<AcquireRequest, 'boundKey' | 'suiteRunId' | 'shard'> {
-    const { boundKey: _placementOnly, suiteRunId: _suitePlacement, shard: _shardPlacement, ...wire } = req;
+function wireOf(req: AcquireRequest): Omit<AcquireRequest, 'boundKey' | 'suiteRunId' | 'shard' | 'setupKey'> {
+    const { boundKey: _placementOnly, suiteRunId: _suitePlacement, shard: _shardPlacement, setupKey: _setupPlacement, ...wire } = req;
     return wire;
 }
 
@@ -482,6 +482,8 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             ...(req.environmentId ? { environmentId: req.environmentId } : {}),
             // A template's setup: only the cell bound to its key (the directory checks it is this org's).
             ...(req.consumer === 'setup' && req.boundKey ? { boundKey: req.boundKey } : {}),
+            // An environment's own setup: its own perRun host, bound to `setup:<org>/<hash of the setup key>`.
+            ...(req.consumer === 'setup' && !req.boundKey && req.setupKey ? { setupKey: req.setupKey } : {}),
             // A suite shard: its own perRun host, bound to `suite:<org>/<suiteRun>/<shard>`.
             ...(req.consumer === 'suite' && req.suiteRunId && req.shard !== undefined ? { suiteRunId: req.suiteRunId, shard: req.shard } : {}),
         });

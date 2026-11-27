@@ -53,7 +53,7 @@ export type IssuedIdentity = {
     caCertificate: string;
     expiresAt: string;
     serial: string;
-    /** A fleet host's token key (`run:<org>/<run>`, `template:<org>/<env>` or `suite:<org>/<suiteRun>/<shard>`): how the cell learns the org it serves. */
+    /** A fleet host's token key (`run:<org>/<run>`, `template:<org>/<env>`, `setup:<org>/<hash>` or `suite:<org>/<suiteRun>/<shard>`): how the cell learns the org it serves. */
     boundKey?: string;
 };
 

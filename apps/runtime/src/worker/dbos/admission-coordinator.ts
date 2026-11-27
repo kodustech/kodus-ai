@@ -35,7 +35,7 @@ function physicalRequest(record: AdmissionRecord, lease: AdmissionLease): Physic
         ? (['base', 'pr'] as const).map((side) => ({ side, idempotencyKey: `${payload.request.runId}:${side}:${payload.request.attempt}` }))
         : [{ side: 'setup', idempotencyKey: `setup:${payload.request.key}` }];
     const size = payload.kind === 'run' ? payload.request.environment.size : payload.request.machineSize;
-    return { ...admissionIdentityOf(lease), executionId: record.executionId, deadlineAt: record.deadlineAt, members, ...(size ? { size } : {}), ...(payload.kind === 'setup' && payload.request.boundKey ? { boundKey: payload.request.boundKey } : {}) };
+    return { ...admissionIdentityOf(lease), executionId: record.executionId, deadlineAt: record.deadlineAt, members, ...(size ? { size } : {}), ...(payload.kind === 'setup' && payload.request.boundKey ? { boundKey: payload.request.boundKey } : {}), ...(payload.kind === 'setup' ? { environmentId: payload.request.environmentId, ...(payload.request.boundKey ? {} : { setupKey: payload.request.key }) } : {}) };
 }
 
 export class AdmissionCoordinator {

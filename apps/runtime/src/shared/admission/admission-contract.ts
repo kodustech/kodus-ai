@@ -67,6 +67,10 @@ export interface PhysicalAdmissionRequest extends AdmissionIdentity {
     isolation?: IsolationMinimum;
     /** A template setup (kind 'setup'): placed only on the cell bound to this `template:<org>/<env>` key. */
     boundKey?: string;
+    /** An environment's own setup (kind 'setup', no template key): its key, which names its perRun host (`setup:<org>/<hash>`). */
+    setupKey?: string;
+    /** The setup's environment (kind 'setup'): recorded on the demand, so its host starts from the environment's template. */
+    environmentId?: string;
 }
 export interface PhysicalAdmissionTicket extends AdmissionIdentity {
     ticketId: string;

@@ -94,6 +94,8 @@ export interface CellWant {
     /** A suite shard's claim (consumer 'suite'): the suite run and the shard, which name the host bound to it. */
     suiteRunId?: string;
     shard?: number;
+    /** An environment's own setup (consumer 'setup'): its key names the perRun host bound to it. */
+    setupKey?: string;
     environmentId?: string;
     /** The pools the claim may use, in order (libs/runtime/placement); absent: computed by the directory, or none. */
     placement?: Placement;
@@ -308,7 +310,7 @@ export async function reserveCellFor(
     const first = pools?.[0];
     const perRun = !!first && !!placement?.boundKey && placement.perRun.includes(first);
     if (perRun) {
-        // The Run's own host: only its bound cell, and the demand that makes the fleet start one.
+        // The Run's (or the setup's, or the shard's) own host: only its bound cell, and the demand that makes the fleet start one.
         pools = [first!];
         key = placement!.boundKey!;
         const demand = await recordPoolDemand(pool, { poolId: first!, boundKey: key, organizationId: orgId, environmentId: opts.environmentId, runId: opts.suiteRunId ?? opts.runId, sizeMb: opts.size?.memoryMb });
@@ -402,7 +404,7 @@ export class PgCellDirectory implements CellDirectory {
         const placement =
             want.placement ??
             (this.opts.pools && want.consumer
-                ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, suiteRunId: want.suiteRunId, shard: want.shard, isolation: want.isolation }) ?? undefined)
+                ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, suiteRunId: want.suiteRunId, shard: want.shard, setupKey: want.setupKey, isolation: want.isolation }) ?? undefined)
                 : undefined);
         const r = await reserveCellCapped(this.opts.inTransaction, orgId, { ...want, placement, sharedClaimCap: this.opts.sharedClaimCap ?? DEFAULT_ORG_SHARED_CLAIM_CAP });
         if ('row' in r) return { cellId: r.row.cell_id, replicaUrl: r.row.replica_url, owner: r.row.owner, orgId: r.row.org_id };

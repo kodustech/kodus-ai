@@ -114,7 +114,8 @@ async function bootAttempt(run: SetupRun, env: EnvironmentRuntime, path: string,
                 idempotencyKey: `setup:${cmd.key}:${label}`,
                 recipe: { path, content: text, digest: recipeDigest(text) },
                 ...(cmd.machineSize ? { size: cmd.machineSize } : {}),
-                ...(cmd.boundKey ? { boundKey: cmd.boundKey } : {}),
+                // A template's setup: its bound cell; the environment's own: the perRun host of this setup, as its first boot.
+                ...(cmd.boundKey ? { boundKey: cmd.boundKey } : { setupKey: cmd.key }),
             }, cancellationSignal?.(), noCapacityWait),
         );
         if (noCapacityWait && isCapacityWait(claim)) throw new AdmissionCapacityLostError();

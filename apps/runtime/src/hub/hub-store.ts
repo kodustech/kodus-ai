@@ -151,7 +151,7 @@ export interface RegisteredCell {
      */
     poolId?: string | null;
     hostId?: string | null;
-    /** A perRun host's cell serves only claims of this key (`run:<org>/<runId>`, or `suite:<org>/<suiteRunId>/<shard>` for one shard of a suite run). */
+    /** A perRun host's cell serves only claims of this key (`run:<org>/<runId>`, `suite:<org>/<suiteRunId>/<shard>` for one shard of a suite run, or `setup:<org>/<hash>` for one setup of an environment). */
     boundKey?: string | null;
 }
 
