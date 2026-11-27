@@ -122,6 +122,11 @@ export interface Task {
      * the judge as such: `description` already carries them, quoted.
      */
     sourceTexts?: Array<{ label: string; text: string }>;
+    /**
+     * True when artifacts were read with the task (GitHub issue artifacts),
+     * whatever their text: the signal that its content is untrusted data.
+     */
+    hasArtifacts?: boolean;
 }
 
 /** Another work item a task points at: its parent or one of its sub-tasks. */

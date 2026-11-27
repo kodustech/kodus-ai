@@ -264,7 +264,7 @@ const CRITERION_LABEL = /^[*_`\s]*(?:AC|CA)[\s#-]*\d+[*_`\s]*[:.)\-–—]\s*/i;
  * says which issue it is: otherwise nothing is recognised as one's own.
  */
 function ownArtifactLink(task: Task): RegExp | undefined {
-    if (!task.sourceTexts?.length || !task.url) {
+    if (!task.hasArtifacts || !task.url) {
         return undefined;
     }
     let url: URL;
@@ -317,15 +317,47 @@ const REFERENCE_WORDS = new Set([
  * "see X", a references-list line with a name and a hash). A line that says
  * something and also links one is not.
  */
+/**
+ * The line with its links to the issue's own artifacts blanked: Markdown
+ * `[text](url)` links and bare URLs. One forward scan, never backtracking,
+ * so a line of unclosed brackets costs no more than a line of text.
+ */
+function withoutOwnLinks(line: string, own: RegExp): string {
+    let out = '';
+    let at = 0;
+    let parenGone = false;
+    while (at < line.length) {
+        const open = line.indexOf('[', at);
+        if (open < 0) {
+            break;
+        }
+        const close = line.indexOf(']', open + 1);
+        if (close < 0) {
+            break;
+        }
+        let end = -1;
+        if (line[close + 1] === '(' && !parenGone) {
+            end = line.indexOf(')', close + 2);
+            parenGone = end < 0;
+        }
+        if (end < 0) {
+            out += line.slice(at, close + 1);
+            at = close + 1;
+            continue;
+        }
+        const link = line.slice(open, end + 1);
+        out += line.slice(at, open) + (own.test(link) ? ' ' : link);
+        at = end + 1;
+    }
+    out += line.slice(at);
+    return out.replace(/\S+/g, (token) => (own.test(token) ? ' ' : token));
+}
+
 function isReferenceOnly(line: string, own: RegExp | undefined): boolean {
     if (!own?.test(line)) {
         return false;
     }
-    const rest = line
-        .replace(/\[[^\]]*\]\([^)]*\)/g, (link) =>
-            own.test(link) ? ' ' : link,
-        )
-        .replace(new RegExp(`${own.source}\\S*`, 'gi'), ' ')
+    const rest = withoutOwnLinks(line, own)
         .replace(/`[^`]*`/g, ' ')
         .toLowerCase();
     const words = rest.match(/\p{L}[\p{L}\p{N}._-]*/gu) ?? [];

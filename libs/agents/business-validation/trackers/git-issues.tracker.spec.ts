@@ -318,10 +318,10 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         );
         const open = `<${FENCE}>\n`;
         const close = `\n</${FENCE}>`;
-        const room = 6000 - open.length - close.length - '… (cut)'.length;
+        const room = 6000 - open.length - close.length;
         expect(taskText).toBe(
             taskTextOf(
-                `${BODY}\n\n## Document: artifact #1 qa.md\n\n${open}${`> ${long}`.slice(0, room)}… (cut)${close}`,
+                `${BODY}\n\n## Document: artifact #1 qa.md\n\n${open}${`> ${long}`.slice(0, room)}${close}`,
                 note(
                     'artifact #1 qa.md (only read in part, cut at the size limit)',
                 ),
@@ -343,17 +343,86 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         );
     });
 
+    it('shows a prefix of the next line after a blank one, but promotes nothing from it', async () => {
+        const open = `<${FENCE}>\n`;
+        const close = `\n</${FENCE}>`;
+        const budget = 6000 - open.length - close.length;
+        const long = 'x'.repeat(10_000);
+        const { task, taskText } = await read(
+            issue({ artifacts: [artifact(1, 'qa.md', `\n${long}`)] }),
+        );
+        expect(taskText).toBe(
+            taskTextOf(
+                `${BODY}\n\n## Document: artifact #1 qa.md\n\n${open}> \n${`> ${long}`.slice(0, budget - 3)}${close}`,
+                note(
+                    'artifact #1 qa.md (only read in part, cut at the size limit)',
+                ),
+            ),
+        );
+        expect(task.sourceTexts).toBeUndefined();
+        expect(
+            applyCriteriaLocation(task, { location: 'auto' })
+                .acceptanceCriteria,
+        ).toBeUndefined();
+    });
+
+    it('still treats artifact content as untrusted and filters own links when no source text survives the clip', async () => {
+        const { task, prompt } = await read(
+            issue({
+                body: [
+                    '- See the spec: [artifact #1](https://github.com/acme/web/issues/1/artifacts/1)',
+                    '- Keep the form accessible',
+                    '- Keep the form fast',
+                ].join('\n'),
+                artifacts: [artifact(1, 'qa.md', 'x'.repeat(7000))],
+            }),
+        );
+        expect(task.sourceTexts).toBeUndefined();
+        expect(task.hasArtifacts).toBe(true);
+        expect(
+            prompt
+                .split('\n')
+                .filter((line) =>
+                    line.startsWith('Text inside the <artifact_data_'),
+                ),
+        ).toHaveLength(1);
+        expect(
+            applyCriteriaLocation(task, { location: 'auto' })
+                .acceptanceCriteria,
+        ).toEqual(['Keep the form accessible', 'Keep the form fast']);
+    });
+
+    it('reads a very long line of unclosed brackets without blowing up', async () => {
+        const brackets = '['.repeat(50_000);
+        const own = 'https://github.com/acme/web/issues/1/artifacts/1';
+        const { task } = await read(
+            issue({
+                body: [
+                    `- ${brackets} [spec](${own})`,
+                    `- ${brackets} ${own}`,
+                    '- Keep the form accessible',
+                    '- Keep the form fast',
+                ].join('\n'),
+                artifacts: [artifact(1, 'qa.md', 'Plain notes, no criteria.')],
+            }),
+        );
+        expect(
+            applyCriteriaLocation(task, { location: 'auto' })
+                .acceptanceCriteria,
+        ).toEqual(['Keep the form accessible', 'Keep the form fast']);
+    });
+
     it('never ends a clipped artifact on the first half of a surrogate pair', async () => {
         const open = `<${FENCE}>\n`;
         const close = `\n</${FENCE}>`;
-        const room = 6000 - open.length - close.length - '… (cut)'.length;
+        const room = 6000 - open.length - close.length;
         const content = `${'a'.repeat(room - 3)}😀${'z'.repeat(14)}`;
         const { taskText } = await read(
             issue({ artifacts: [artifact(1, 'qa.md', content)] }),
         );
         expect(taskText).toBe(
             taskTextOf(
-                `${BODY}\n\n## Document: artifact #1 qa.md\n\n${open}> ${'a'.repeat(room - 3)}… (cut)${close}`,
+                `${BODY}\n\n## Document: artifact #1 qa.md\n\n${open}> ${'a'.repeat(room - 3)}${close}`,
                 note(
                     'artifact #1 qa.md (only read in part, cut at the size limit)',
                 ),

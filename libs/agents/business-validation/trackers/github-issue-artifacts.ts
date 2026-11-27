@@ -19,9 +19,9 @@ export interface IssueArtifactContext {
     coverageNotes?: string[];
     /** Raw text of each document folded in, for criteria detection. */
     sourceTexts: Array<{ label: string; text: string }>;
+    /** True when at least one artifact document was read, whatever its text. */
+    hasArtifacts: boolean;
 }
-
-const CUT = '… (cut)';
 
 /** One line of untrusted text, safe to put in a label. */
 function inline(value: string): string {
@@ -61,9 +61,10 @@ function fenceName(content: string): string {
  * is random per block, closing tags are escaped and every line is quoted, so
  * it cannot end its block or pose as a prompt section header. The block is
  * clipped here, with its closing tag intact, to fit the document limit
- * `relate` applies. When clipped, only whole lines are kept (a first line
- * longer than the limit is cut), and `source` holds exactly the raw lines
- * shown, so criteria are never read from text the judge does not see.
+ * `relate` applies, with no marker in the text: `truncated` carries the cut.
+ * When clipped, the whole lines that fit are shown, then as much of the next
+ * one as fits; `source` holds only the whole lines, so criteria are never
+ * read from a cut line.
  */
 function delimited(content: string): {
     text: string;
@@ -86,19 +87,25 @@ function delimited(content: string): {
             truncated: false,
         };
     }
-    const room = budget - CUT.length;
     let used = 0;
     let kept = 0;
     while (
         kept < quoted.length &&
-        used + (kept ? 1 : 0) + quoted[kept].length <= room
+        used + (kept ? 1 : 0) + quoted[kept].length <= budget
     ) {
         used += (kept ? 1 : 0) + quoted[kept].length;
         kept += 1;
     }
-    const body = kept ? quoted.slice(0, kept).join('\n') : cutAt(whole, room);
+    // The next line is shown as far as it fits, for the judge only: it is
+    // not in `source`, so a cut line is never read as a criterion.
+    const left = budget - used - (kept ? 1 : 0);
+    const prefix =
+        kept < quoted.length && left > 0 ? cutAt(quoted[kept], left) : '';
+    const body = [...quoted.slice(0, kept), ...(prefix ? [prefix] : [])].join(
+        '\n',
+    );
     return {
-        text: `${open}${body}${CUT}${close}`,
+        text: `${open}${body}${close}`,
         source: lines.slice(0, kept).join('\n'),
         truncated: true,
     };
@@ -176,6 +183,7 @@ export function artifactContext(
     return {
         documents,
         sourceTexts,
+        hasArtifacts: documents.length > 0,
         ...(unread.length
             ? {
                   coverageNotes: [

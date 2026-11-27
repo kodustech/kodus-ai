@@ -110,6 +110,7 @@ export class GitIssuesTracker extends McpTaskTracker {
                 ...(artifacts?.sourceTexts.length
                     ? { sourceTexts: artifacts.sourceTexts }
                     : {}),
+                ...(artifacts?.hasArtifacts ? { hasArtifacts: true } : {}),
                 ...(artifacts?.coverageNotes
                     ? { coverageNotes: artifacts.coverageNotes }
                     : {}),
