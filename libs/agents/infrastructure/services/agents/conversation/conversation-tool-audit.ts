@@ -101,3 +101,44 @@ export function auditWriteTools(
 
     return audited;
 }
+
+/**
+ * How the turn's declared decision and the writes that ran disagree, if they
+ * do. `unperformed` (an `act` on a write that was never attempted) and
+ * `undeclared` (a write with no `act`) are the failures the decision exists
+ * to catch. `failed` is an `act` whose write was attempted and refused or
+ * thrown: the tool already reported that, and the agent saw the error.
+ *
+ * An `act` naming a tool that only reads (the sandbox `exec`, `grep`) is not
+ * compared: no write was ever going to run for it, so "nothing written" is
+ * expected. A name the run does not know is still compared, so a write
+ * declared under a wrong name stays visible.
+ */
+export type DecisionDivergence =
+    | { kind: 'unperformed'; tool?: string }
+    | { kind: 'failed'; tools: string[] }
+    | { kind: 'undeclared'; tools: string[] };
+
+export function decisionDivergence(
+    decision: { intent: string; tool?: string } | undefined,
+    writes: readonly WriteToolEvent[],
+    isReadOnlyTool: (name: string) => boolean,
+): DecisionDivergence | undefined {
+    const performed = performedWrites(writes);
+
+    if (decision?.intent === 'act' && performed.length === 0) {
+        if (writes.length > 0) {
+            return { kind: 'failed', tools: writes.map((w) => w.tool) };
+        }
+        if (decision.tool && isReadOnlyTool(decision.tool)) {
+            return undefined;
+        }
+        return { kind: 'unperformed', tool: decision.tool };
+    }
+
+    if (decision?.intent !== 'act' && performed.length > 0) {
+        return { kind: 'undeclared', tools: performed };
+    }
+
+    return undefined;
+}
