@@ -47,7 +47,7 @@ describe('planner extraction behavior and compatibility', () => {
     it('preserves the golden read/search/submit result and the core export identities without calling a model', async () => {
         const before = await scriptedPlan(planner);
         expect(before.result).toMatchObject({ status: 'planned', plan: submitted, rejected: [], usage: { inputTokens: 321, outputTokens: 45 }, steps: 0, runStatus: 'completed' });
-        expect(before.answers.limits).toEqual({ steps: 12, tokens: 60_000, reads: 30 });
+        expect(before.answers.limits).toEqual({ steps: 20, tokens: 80_000, reads: 45 });
         expect(before.answers.submit).toEqual({ output: 'Accepted.' });
         expect(before.answers.escape).toEqual({ output: 'the path leaves the repository', isError: true });
         expect(JSON.stringify(before.answers)).not.toContain('fixture-secret');

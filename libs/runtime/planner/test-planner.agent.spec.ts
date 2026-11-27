@@ -13,7 +13,9 @@ import { searchCode } from './code-search';
 import { planWithoutModel } from './plan-without-model';
 import { ENVIRONMENT_NOTES_LIMITS, readEnvironmentNotes } from './environment-notes';
 import { changedLinesByFile, windowedView } from './file-window';
-import { EXEC_ON_BASE_TOOL, BROWSER_EXPLORE_TOOL, planTests, plannerState, testPlannerTools, testPlannerPrompt, SUBMIT_PLAN_TOOL, testPlannerSystemPrompt, touchesUi, REACH_PROMPT_CHARS } from './test-planner.agent';
+import type { AgentRunner } from '@libs/agent-harness/domain/contracts/agent.contract';
+import { DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
+import { EXEC_ON_BASE_TOOL, BROWSER_EXPLORE_TOOL, plannerRoundTokens, planTests, plannerState, TEST_PLANNER_LIMITS, testPlannerTools, testPlannerPrompt, SUBMIT_PLAN_TOOL, testPlannerSystemPrompt, touchesUi, REACH_PROMPT_CHARS } from './test-planner.agent';
 
 const FAKE_SECRET = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -272,9 +274,9 @@ describe('planTests on the harness (the Grafana PR)', () => {
         expect(prompts[2]).toContain('no match');
     });
 
-    it('leaves only submit_plan once two more steps would not fit in the round\'s tokens, so a long read still ends in a plan', async () => {
+    it('leaves only submit_plan once a submission and a fix would not fit in the round\'s tokens, so a long read still ends in a plan', async () => {
         // Each scripted step costs 120 tokens plus what the tools answered since (about a token per 3 characters):
-        // after the search, two more steps and the reserve fit in 600; after the read, they do not.
+        // after the search, three more steps (the next, a submission and a fix) and the reserve fit in 800; after the read, they do not.
         const prompts = scripted([
             { tool: 'search_code', input: { text: 'apiHealthHandler' } },
             { tool: 'read_file', input: { path: 'pkg/api/api.go' } },
@@ -283,7 +285,7 @@ describe('planTests on the harness (the Grafana PR)', () => {
         const req = request();
         const r = await planTests(
             { runner: new AiSdkAgentRunner(undefined), base: readerOf(BASE), head: readerOf(HEAD) },
-            { runId: req.runId, repositoryName: 'grafana/grafana', baseSha: 'a'.repeat(40), request: req, maxTokens: 600 },
+            { runId: req.runId, repositoryName: 'grafana/grafana', baseSha: 'a'.repeat(40), request: req, maxTokens: 800 },
         );
         expect(JSON.parse(prompts[1]).tools).toContain('read_file');
         expect(JSON.parse(prompts[2]).tools).toEqual([SUBMIT_PLAN_TOOL]);
@@ -596,5 +598,143 @@ describe('environment notes', () => {
     it('plans without the notes when reading them fails', async () => {
         const failing: RepoReader = { ...readerOf(BASE), read: async (p: string) => { if (p.startsWith('.kodus/')) throw new Error('git down'); return BASE[p] ?? null; } };
         await expect(readEnvironmentNotes(failing)).resolves.toBeUndefined();
+    });
+});
+
+describe('a changed helper in a large monorepo (exploring, not giving up)', () => {
+    const MONO: Record<string, string> = {
+        'packages/shared/src/total.ts': 'export function total(items: number[]) { return items.reduce((a, b) => a + b, 0); }',
+        'functions/orders/src/index.ts':
+            "import { total } from '../../../packages/shared/src/total';\nimport { requireUser } from '@acme/auth';\nconst app = express();\napp.get('/health', (_req, res) => res.send('ok'));\napp.post('/orders', requireUser, (req, res) => res.json({ total: total(req.body.items) }));",
+        'packages/auth/package.json': '{"name":"@acme/auth"}',
+        'packages/auth/src/index.ts': 'export const requireUser = (_req, _res, next) => next();',
+        'packages/shared/package.json': '{"name":"@acme/shared"}',
+        'functions/health/src/index.ts': "import { total } from '@acme/shared';\napp.get('/ping', (_req, res) => res.json({ n: total([]) }));",
+    };
+    const monoRequest = (over: Partial<RunPlanRequest> = {}) =>
+        request({
+            entryPoints: [{ id: 'unmapped:packages/shared/src/total.ts', kind: 'unmapped' }],
+            changedPaths: ['packages/shared/src/total.ts'],
+            diff: '--- packages/shared/src/total.ts\n@@ -1 +1 @@\n-export function total(items: number[]) { return 0; }\n+export function total(items: number[]) { return items.reduce((a, b) => a + b, 0); }',
+            targets: [{ service: 'functions', port: 5001, kind: 'http' }],
+            ...over,
+        });
+    const runMono = (req: RunPlanRequest) =>
+        planTests({ runner: new AiSdkAgentRunner(undefined), base: readerOf(MONO), head: readerOf(MONO) }, { runId: req.runId, repositoryName: 'acme/mono', baseSha: 'd'.repeat(40), request: req });
+
+    // Behavior: a plan with no probe, while a route reaches the changed code and the base machine can be asked, is sent back to explore with commands.
+    it('sends a no-probe plan back to explore on the base machine instead of letting it stand', async () => {
+        const prompts = scripted([
+            { tool: SUBMIT_PLAN_TOOL, input: { probes: [], cannotProve: ['packages/shared/src/total.ts: the auth middleware lives outside the repository'] } },
+            { tool: EXEC_ON_BASE_TOOL, input: { commands: ["wget -qO- http://localhost:5001/demo/us-central1/orders/orders || true"], notes: 'POST /orders runs total(); probe it with a body of items' } },
+        ]);
+        const r = await runMono(monoRequest());
+        expect(prompts).toHaveLength(2);
+        expect(prompts[1]).toContain('Call exec_on_base first');
+        expect(r).toMatchObject({ status: 'explore', commands: [expect.stringContaining('wget')], notes: expect.stringContaining('POST /orders') });
+    });
+
+    // Behavior: the nudge happens once; a second empty plan from the same round stands with its reasons.
+    it('lets a no-probe plan stand once it was sent back and still holds', async () => {
+        const empty = { tool: SUBMIT_PLAN_TOOL, input: { probes: [], cannotProve: ['packages/shared/src/total.ts: only a job reaches it'] } };
+        const prompts = scripted([empty, empty]);
+        const r = await runMono(monoRequest());
+        expect(prompts).toHaveLength(2);
+        expect(r).toMatchObject({ status: 'planned', plan: { probes: [], cannotProve: [expect.stringContaining('only a job')] }, rejected: [] });
+    });
+
+    // Behavior: a round after commands ran, or one with none left, is never sent back: it plans with what it knows.
+    it('does not send a plan back to explore when no command may run', async () => {
+        const prompts = scripted([{ tool: SUBMIT_PLAN_TOOL, input: { probes: [], cannotProve: ['packages/shared/src/total.ts: no route found'] } }]);
+        const r = await runMono(monoRequest({ round: 2, execLeft: 0, observations: [] }));
+        expect(prompts).toHaveLength(1);
+        expect(r.status).toBe('planned');
+    });
+
+    // Behavior: the import graph's route is given as a hint, and the planner may follow the call chain to a route
+    // that runs the changed lines instead (here the route the graph did not rank first).
+    it('tells the model the graph route is a hint, and plans the request it finds that runs the changed lines', async () => {
+        const probe = {
+            id: 'orders-total',
+            purpose: 'the order total sums the items',
+            expected: '200 with total 6',
+            compare: ['status', 'json'],
+            spec: { kind: 'http', target: { service: 'functions', port: 5001 }, method: 'POST', path: '/demo/us-central1/orders/orders', headers: { 'Content-Type': 'application/json' }, body: '{"items":[1,2,3]}', timeoutMs: 30_000 },
+        };
+        const prompts = scripted([
+            { tool: 'search_code', input: { text: 'total(' } },
+            { tool: 'read_file', input: { path: 'functions/orders/src/index.ts' } },
+            { tool: SUBMIT_PLAN_TOOL, input: { probes: [{ entryPoint: 'POST /orders', via: 'packages/shared/src/total.ts', probe, assertions: { kind: 'http', status: 200, bodyIncludes: '6' } }] } },
+        ]);
+        const r = await runMono(monoRequest());
+        const system = testPlannerSystemPrompt(['packages/shared/src/total.ts']);
+        expect(system).toContain('is a hint and not the answer');
+        expect(system).toContain('search the changed function\'s name for its callers');
+        expect(prompts[0]).toContain('routesReaching');
+        // The route the model chose is the one its search found, with a body that reaches the changed function.
+        expect(prompts[2]).toContain('functions/orders/src/index.ts');
+        expect(r).toMatchObject({ status: 'planned', rejected: [] });
+        if (r.status === 'planned') expect((r.plan.probes[0] as { probe: { spec: unknown } }).probe.spec).toMatchObject({ method: 'POST', path: '/demo/us-central1/orders/orders' });
+    });
+
+    // Behavior: a package named in an import is in-repo code, and the planner is told to find it by name before calling it external.
+    it('tells the model a workspace package imported by name is in the repository', () => {
+        const system = testPlannerSystemPrompt(['packages/shared/src/total.ts']);
+        expect(system).toContain('A workspace package imported by its name');
+        expect(system).toContain('is in-repo source');
+        expect(system).toContain('Never write that a middleware, helper or config is "outside the repository" before you searched');
+    });
+});
+
+describe('the planner budget fits a large monorepo inside a Run', () => {
+    // Behavior: the three rounds of one plan stay inside what a Run may spend by default, and the round that reads gets the most.
+    it('keeps the three rounds under a Run\'s default tokens, the first round with the largest share', () => {
+        const total = [0, 1, 2].reduce((n, round) => n + plannerRoundTokens(round), 0);
+        expect(total).toBeLessThanOrEqual(DEFAULT_MAX_TOKENS_PER_RUN);
+        expect(plannerRoundTokens(0)).toBeGreaterThan(plannerRoundTokens(1));
+        expect(plannerRoundTokens(1)).toBe(plannerRoundTokens(2));
+        // A PR (600k by default) holds at least three Runs of it.
+        expect(3 * total).toBeLessThanOrEqual(600_000);
+    });
+
+    // Behavior: the round that reads has the steps to trace a call chain; later rounds, that start from notes, have fewer.
+    it('gives the reading round more steps than a round that starts from notes', async () => {
+        const seen: number[] = [];
+        const runner: AgentRunner = {
+            run: async (spec, _input, ctx) => {
+                seen.push(spec.maxSteps ?? 0);
+                return { runId: ctx.runId, agentId: spec.id, status: 'completed', steps: [], artifacts: [], usage: { inputTokens: 1, outputTokens: 1 }, trace: [] };
+            },
+        };
+        for (const round of [0, 1]) {
+            const req = request({ round, execLeft: 3 });
+            await planTests({ runner, base: readerOf(BASE), head: readerOf(HEAD) }, { runId: req.runId, repositoryName: 'g/g', baseSha: 'a'.repeat(40), request: req });
+        }
+        expect(seen).toEqual([TEST_PLANNER_LIMITS.maxSteps, TEST_PLANNER_LIMITS.laterRoundSteps]);
+        expect(seen[0]).toBeGreaterThan(seen[1]);
+    });
+
+    // Behavior: after the first refusal the fix step is still in budget, so a refused browser probe is fixed in the round instead of left standing.
+    it('keeps room in the round to fix a refusal of the first submission', async () => {
+        const browser = {
+            id: 'page',
+            purpose: 'the page shows the orders',
+            expected: 'the list shows the orders',
+            compare: ['pixels'],
+            spec: { kind: 'browser', steps: [{ goto: '/' }], viewport: { width: 800, height: 600 }, timeoutMs: 60_000 },
+        };
+        const fixed = { ...browser, spec: { ...browser.spec, steps: [{ goto: '/' }, { waitFor: '#orders li' }, { screenshot: 'orders' }] } };
+        const req = request({ changedPaths: ['public/app.js'], entryPoints: [{ id: 'unmapped:public/app.js', kind: 'unmapped' }], diff: '--- public/app.js\n@@ -1 +1 @@\n-a\n+b' });
+        const prompts = scripted([
+            { tool: SUBMIT_PLAN_TOOL, input: { probes: [{ entryPoint: 'GET /', via: 'public/app.js', probe: browser }] } },
+            { tool: SUBMIT_PLAN_TOOL, input: { probes: [{ entryPoint: 'GET /', via: 'public/app.js', probe: fixed }] } },
+        ]);
+        const r = await planTests(
+            { runner: new AiSdkAgentRunner(undefined), base: readerOf({ 'public/app.js': 'a' }), head: readerOf({ 'public/app.js': 'b' }) },
+            { runId: req.runId, repositoryName: 'g/g', baseSha: 'a'.repeat(40), request: req, maxTokens: 500 },
+        );
+        expect(prompts[1]).toContain('a browser probe looks at the page');
+        expect(r).toMatchObject({ status: 'planned', rejected: [] });
+        expect(r.usage.inputTokens + r.usage.outputTokens).toBeLessThanOrEqual(500);
     });
 });

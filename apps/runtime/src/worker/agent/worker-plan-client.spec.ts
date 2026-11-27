@@ -663,7 +663,8 @@ it('propagates a planted canary returned by the actual product/provider boundary
 it('refuses a canary in a later source tool result before the next product model dispatch', async () => {
     const h = await fixture(),
         calls = script();
-    h.git.readFileAtCommit = async () => h.vault.forRun(h.call)[0].value;
+    // The repository's notes file is read first, with the prompt: it has none here, so the canary comes in a later tool result.
+    h.git.readFileAtCommit = async ({ path }) => (path === '.kodus/runtime-notes.md' ? null : h.vault.forRun(h.call)[0].value);
     await expect(
         new WorkerRunPlanClient('https://product.test', {
             secrets: h.secrets,

@@ -20,6 +20,8 @@ The shared core of a Run's test planner (ADR-069): an agent that reads the repos
 - Nothing of the repository is executed, and no pattern is compiled from model text, so a search cannot hang.
 - Every read is bounded (bytes, count, time) and passes `redactForModel` before the model sees it.
 - The intent author never reads the diff, a changed file or the repository (`planner-boundary.spec.ts`): a planner that reads the code copies the bug. A change to its prompt or checks bumps `INTENT_AUTHOR_VERSION`.
+- The import graph's route is a hint, never the answer (the prompt says so, and says a workspace package imported by name is in-repo code). A round-0 plan with no probe, while a route reaches the changed code and `exec_on_base` is available, is sent back once to explore on the base machine (`exploreNudged`); the next submission stands. A first submission keeps room for one fix step (the stop policy reserves three steps before it, two after a refusal).
+- Budgets: round 0 (reads the code) `TEST_PLANNER_LIMITS.maxTokens` 80k and 20 steps; rounds 1 and 2 (start from notes) `laterRoundTokens` 50k and 12 steps (`plannerRoundTokens`). The three are 180k, inside a Run's default 200k, and a PR's 600k holds three Runs.
 - A change to the prompt, tools or limits bumps `TEST_PLANNER_VERSION`; the Run records it. It touches the review pipeline: carry eval evidence (root `AGENTS.md`, docs/runtime/planner-eval.md).
 - The README's note that moving the loop to the worker "requires a gateway contract" is stale: the worker host and the model-turn gateway exist.
 

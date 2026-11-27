@@ -34,7 +34,7 @@ import { withFailureContext } from '../failure-context';
 import { GitRepoReader } from '../recipe-author/git-repo-reader';
 import { type BudgetRefusal, liveRunFor, llmBudgetExceeded, orgLlmBudget, reservationFor, type ReservationRequest, withReservation } from '../llm-run-budget';
 import { planWithoutModel } from '@libs/runtime/planner/plan-without-model';
-import { planTests, TEST_PLANNER_LIMITS } from '@libs/runtime/planner/test-planner.agent';
+import { planTests, plannerRoundTokens } from '@libs/runtime/planner/test-planner.agent';
 
 /** The task the Run's budget counts the planner's tokens under (the worker's 2-turn plan used the same). */
 export const TEST_PLANNER_TASK = 'runtime.plan';
@@ -126,7 +126,7 @@ export class RuntimeTestPlannerUseCase {
                 refused = d;
                 return null;
             }
-            const tokens = Math.min(TEST_PLANNER_LIMITS.maxTokens, d.remaining);
+            const tokens = Math.min(plannerRoundTokens(req.round), d.remaining);
             if (tokens < TEST_PLANNER_MIN_TOKENS) {
                 refused = tightestBudgetScope(spend, limits, claims.maxTokens);
                 return null;

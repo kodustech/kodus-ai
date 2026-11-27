@@ -9,7 +9,7 @@ import { isSecretFile, redactForModel, type RepoReader, repoPath } from './repo-
 
 export const SEARCH_LIMITS = {
     /** Searches in one run. */
-    searches: 8,
+    searches: 12,
     /** Files one search reads; it says when there were more candidates. */
     filesPerSearch: 80,
     /** Paths one search walks to find candidates. */
