@@ -16,6 +16,8 @@ import {
 import { CodeManagementService } from '../../../infrastructure/adapters/services/codeManagement.service';
 
 const VERIFICATIONS_AT_ONCE = 4;
+/** The page renders on this read; past it the subscription reads as unknown. */
+const OWN_SUBSCRIPTION_READ_TIMEOUT_MS = 2000;
 
 @Injectable()
 export class GetConnectionsUseCase implements IUseCase {
@@ -67,11 +69,11 @@ export class GetConnectionsUseCase implements IUseCase {
                 ),
                 // A connection billed on its own subscription keeps billing
                 // after a reset, so the reset says so first. Null when
-                // billing could not be read.
-                this.licenseService.getConnectionLicenses({
-                    organizationId,
-                    teamId,
-                }),
+                // billing could not be read in time.
+                this.licenseService.getConnectionLicenses(
+                    { organizationId, teamId },
+                    { timeoutMs: OWN_SUBSCRIPTION_READ_TIMEOUT_MS },
+                ),
             ]);
             const ownSubscriptions = licences
                 ? new Set(licences.ownLicenceConnectionIds)

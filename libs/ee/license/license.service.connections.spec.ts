@@ -1,3 +1,6 @@
+import { createServer } from 'http';
+import { AddressInfo } from 'net';
+
 import { LicenseService } from './license.service';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -180,6 +183,30 @@ describe('LicenseService per Git connection', () => {
         await expect(
             service.getConnectionLicenses(workspace),
         ).resolves.toBeNull();
+    });
+
+    it('gives up on a billing that does not answer within the call’s own timeout, answering unreadable', async () => {
+        // A billing that accepts the request and never answers.
+        const server = createServer(() => undefined);
+        await new Promise<void>((resolve) =>
+            server.listen(0, '127.0.0.1', resolve),
+        );
+        const { port } = server.address() as AddressInfo;
+        const previous = process.env.GLOBAL_KODUS_SERVICE_BILLING;
+        process.env.GLOBAL_KODUS_SERVICE_BILLING = `http://127.0.0.1:${port}`;
+        try {
+            const service = new LicenseService();
+            const started = Date.now();
+
+            await expect(
+                service.getConnectionLicenses(workspace, { timeoutMs: 100 }),
+            ).resolves.toBeNull();
+            expect(Date.now() - started).toBeLessThan(2000);
+        } finally {
+            process.env.GLOBAL_KODUS_SERVICE_BILLING = previous;
+            server.closeAllConnections();
+            await new Promise((resolve) => server.close(resolve));
+        }
     });
 
     it('answers unreadable when billing does not say whether a connection has its own subscription', async () => {

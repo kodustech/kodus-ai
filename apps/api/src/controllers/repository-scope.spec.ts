@@ -509,7 +509,9 @@ describe('repository scope — execution events stream', () => {
                 controller.integrationConfigService,
             );
 
-        const received = firstValueFrom(
+        const received = firstValueFrom<
+            Array<{ data: { executionUuid?: string } }>
+        >(
             controller.executionEvents().pipe(
                 filter((event: any) => event.data.type === 'execution_updated'),
                 take(2),
@@ -531,7 +533,7 @@ describe('repository scope — execution events stream', () => {
         }
 
         expect(
-            (await received).map((event: any) => event.data.executionUuid),
+            (await received).map((event) => event.data.executionUuid),
         ).toEqual(['e-mine', 'e-signal']);
     });
 

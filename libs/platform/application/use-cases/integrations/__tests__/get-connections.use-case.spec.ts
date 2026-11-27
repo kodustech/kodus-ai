@@ -100,10 +100,10 @@ describe('GetConnectionsUseCase', () => {
 
         const result = await useCase.execute(TEAM);
 
-        expect(licenseService.getConnectionLicenses).toHaveBeenCalledWith({
-            organizationId: ORG,
-            teamId: TEAM,
-        });
+        expect(licenseService.getConnectionLicenses).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            expect.anything(),
+        );
         expect(
             result.map(({ connectionId, ownSubscription }) => ({
                 connectionId,
@@ -142,6 +142,18 @@ describe('GetConnectionsUseCase', () => {
         expect(result.map(({ connectionId }) => connectionId)).toEqual(
             rows.map(({ uuid }) => uuid).filter((uuid) => uuid !== 'conn-3'),
         );
+    });
+
+    it('bounds the billing read to a few seconds, so a slow billing never holds the Git settings page', async () => {
+        const { useCase, licenseService } = build([
+            { uuid: 'gh-a', platform: 'GITHUB' },
+        ]);
+
+        await useCase.execute(TEAM);
+
+        const [, options] = licenseService.getConnectionLicenses.mock.calls[0];
+        expect(options.timeoutMs).toBeGreaterThan(0);
+        expect(options.timeoutMs).toBeLessThanOrEqual(3000);
     });
 
     it('says it could not tell when billing cannot be read', async () => {

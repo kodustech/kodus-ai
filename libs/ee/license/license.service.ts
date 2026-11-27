@@ -466,6 +466,7 @@ export class LicenseService implements ILicenseService {
 
     async getConnectionLicenses(
         organizationAndTeamData: OrganizationAndTeamData,
+        options: { timeoutMs?: number } = {},
     ): Promise<WorkspaceConnectionLicenses | null> {
         try {
             const result = await this.licenseRequest.get('connections', {
@@ -473,6 +474,7 @@ export class LicenseService implements ILicenseService {
                     organizationId: organizationAndTeamData.organizationId,
                     teamId: organizationAndTeamData.teamId,
                 },
+                ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
             });
             // Only a connection with its own subscription keeps its own
             // plan: a licence row left by a failed seat call or an abandoned
@@ -508,7 +510,10 @@ export class LicenseService implements ILicenseService {
                 message: 'license_connection_licenses_read_failed',
                 context: LicenseService.name,
                 error,
-                metadata: { ...organizationAndTeamData },
+                metadata: {
+                    ...organizationAndTeamData,
+                    timeoutMs: options.timeoutMs ?? null,
+                },
             });
             return null;
         }

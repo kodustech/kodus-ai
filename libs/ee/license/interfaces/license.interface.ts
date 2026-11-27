@@ -281,9 +281,10 @@ export interface ILicenseService {
         connectionId: string,
     ): Promise<void>;
 
-    /** The workspace's primary connection and the connections billed on their own licence; null when billing could not be asked. */
+    /** The workspace's primary connection and the connections billed on their own licence; null when billing could not be asked, or did not answer within `timeoutMs`. */
     getConnectionLicenses(
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: { timeoutMs?: number },
     ): Promise<WorkspaceConnectionLicenses | null>;
 
     // ── Prepaid credits ("Kodus as the provider") ────────────────────────
