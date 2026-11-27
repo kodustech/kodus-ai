@@ -20,6 +20,9 @@ export const REBUILD_WINDOW_MS = 24 * 3_600_000;
 export const REBUILD_FAILURE_BACKOFF_MS = 30 * 60_000;
 const BATCH = 200;
 
+/** A template build's own setup (bound key `template:`) is never a reason to build again; nor is a setup that is not active on the default branch. */
+const eligible = (rec: EnvironmentSetupRecord) => rec.state === 'active' && rec.refSource === 'default_branch' && !rec.key.startsWith('template:');
+
 export interface TemplateRebuildDeps {
     setups: SetupCandidatesReader;
     templates: Pick<TemplateStore, 'holds' | 'building' | 'failStale' | 'readyOfKey' | 'noteMain' | 'refreshInFlight'>;
@@ -29,7 +32,7 @@ export interface TemplateRebuildDeps {
     liveSetupHosts?(): Promise<Set<string> | null>;
     /** The boat perRun pools of the fleet, with the orgs each admits. */
     boatPools(): Promise<Array<{ poolId: string; pool: HostPool }>>;
-    trigger: Pick<TemplateBuildTrigger, 'onSetupFinished'>;
+    trigger: Pick<TemplateBuildTrigger, 'onSetupFinished' | 'onMainKept'>;
     now(): number;
     log?(msg: string, fields: Record<string, unknown>): void;
 }
@@ -64,8 +67,13 @@ export class TemplateRebuildPass {
         const candidates = await this.d.setups.activeSince(new Date(now - REBUILD_WINDOW_MS), orgs, BATCH);
         let triggered = 0;
         for (const rec of candidates) {
+            if (!eligible(rec)) continue;
             const why = await this.needsBuild(rec, pools.filter((p) => admitted(p, rec.organizationId)), now);
-            if (!why) continue;
+            if (!why) {
+                // The template is kept although main moved: the main commit still gets its baseline suite run (e2e-suites.md section 2.1).
+                await this.d.trigger.onMainKept(rec);
+                continue;
+            }
             triggered++;
             await this.d.trigger.onSetupFinished(rec, why === 'new' ? undefined : { refresh: why });
         }
@@ -96,8 +104,6 @@ export class TemplateRebuildPass {
      * which keeps serving until the new one is promoted. Null: nothing to build. Also counts the main commit the setup shows.
      */
     private async needsBuild(rec: EnvironmentSetupRecord, pools: Array<{ poolId: string; pool: HostPool }>, now: number): Promise<'new' | 'max_age' | 'max_main_commits' | null> {
-        // A template build's own setup (bound key `template:`) is never a reason to build again.
-        if (rec.state !== 'active' || rec.refSource !== 'default_branch' || rec.key.startsWith('template:')) return null;
         const fingerprint = bakeFingerprintOf(rec);
         if (!fingerprint) return null;
         const failedAfter = new Date(now - REBUILD_FAILURE_BACKOFF_MS);

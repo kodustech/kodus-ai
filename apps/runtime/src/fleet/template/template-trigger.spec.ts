@@ -191,3 +191,44 @@ describe('a freshness rebuild (host-providers.md §8.2.2)', () => {
     });
 });
 
+// docs/runtime/e2e-suites.md §2.1: "main baseline once per main commit" must survive a template that is kept across main commits.
+describe('a main commit whose template is kept', () => {
+    const SUITE = 'suite:\n  runner: cypress\n  command: npx cypress run --spec "{specs}"\n  specs: "cypress/e2e/**/*.cy.ts"\n';
+    const rec = (over: Partial<EnvironmentSetupRecord> = {}) =>
+        record({ sha: 'e'.repeat(40), repositoryId: 'repo-9', recipe: { path: '.kodus/workspace.yaml', sha: 'e'.repeat(40), state: 'found', content: `version: 1\n${SUITE}` }, ...over });
+    async function keptWorld(ready: boolean) {
+        const asked: any[] = [];
+        const store = new InMemoryTemplateStore();
+        if (ready) {
+            const row = { organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n', cellBase: '' };
+            await store.begin(row);
+            await store.promote(row, 'a'.repeat(40));
+        }
+        const trigger = new TemplateBuildTrigger({
+            store,
+            environmentSetups: { get: async () => null },
+            poolOf: async (poolId) => ({ poolId, pool }),
+            boatPoolsOf: async () => [{ poolId: 'p', pool }],
+            build: async () => ({ ok: true, name: 'n', reused: true }),
+            baselines: { request: async (r) => void asked.push(r) },
+        });
+        return { asked, trigger };
+    }
+    it("asks for the baseline of the new main commit, under the template's key, while a ready template exists", async () => {
+        const w = await keptWorld(true);
+        await w.trigger.onMainKept(rec());
+        expect(w.asked).toEqual([{ organizationId: 'org-1', environmentId: 'env-1', repositoryId: 'repo-9', mainSha: 'e'.repeat(40), fingerprint: FP }]);
+    });
+    it('asks for nothing while the environment has no ready template: the shards would have nothing to start from', async () => {
+        const w = await keptWorld(false);
+        await w.trigger.onMainKept(rec());
+        expect(w.asked).toEqual([]);
+    });
+    it('asks for nothing when the recipe declares no suite, or the setup has no commit', async () => {
+        const w = await keptWorld(true);
+        await w.trigger.onMainKept(rec({ recipe: { path: '.kodus/workspace.yaml', sha: 'e'.repeat(40), state: 'found', content: 'version: 1\n' } }));
+        await w.trigger.onMainKept(rec({ sha: undefined }));
+        expect(w.asked).toEqual([]);
+    });
+});
+

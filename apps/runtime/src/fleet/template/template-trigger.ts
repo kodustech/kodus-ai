@@ -81,6 +81,25 @@ export class TemplateBuildTrigger {
         }
     }
 
+    /**
+     * An environment's setup finished on a main commit and its template is kept (the build inputs did not change): the commit still
+     * gets its baseline suite run, "once per main commit" (e2e-suites.md section 2.1), when a ready template exists on a boat pool for
+     * the shards to start from. The request is idempotent per commit. Never throws.
+     */
+    async onMainKept(rec: EnvironmentSetupRecord): Promise<void> {
+        try {
+            const inputKey = bakeFingerprintOf(rec);
+            if (!inputKey || !rec.sha || !this.d.baselines || !wantsBaseline(rec)) return;
+            for (const p of await this.d.boatPoolsOf(rec.organizationId)) {
+                if (!(await this.d.store.readyName(rec.organizationId, rec.environmentId, p.poolId, cellBaseOf(p.pool.hostClass) ?? ''))) continue;
+                await this.requestBaseline({ organizationId: rec.organizationId, environmentId: rec.environmentId, repositoryId: rec.repositoryId, mainSha: rec.sha, fingerprint: inputKey });
+                return;
+            }
+        } catch (e) {
+            this.d.log?.('template.trigger_failed', { environmentId: rec.environmentId, error: (e as Error).message });
+        }
+    }
+
     private async requestBaseline(req: Parameters<SuiteBaselineRequester['request']>[0]): Promise<void> {
         if (!this.d.baselines) return;
         try {

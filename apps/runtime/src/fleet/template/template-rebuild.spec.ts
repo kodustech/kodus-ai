@@ -15,6 +15,7 @@ function world(recs: EnvironmentSetupRecord[], onPool = pool, liveSetupHosts?: (
     const templates = new InMemoryTemplateStore();
     const finished: EnvironmentSetupRecord[] = [];
     const opts: Array<{ refresh?: string } | undefined> = [];
+    const kept: EnvironmentSetupRecord[] = [];
     const locks = { withLock: async (_k: string, fn: () => Promise<any>) => fn(), tryWithLock: async (_k: string, fn: () => Promise<any>) => fn() };
     const pass = new TemplateRebuildPass(locks, {
         setups: { activeSince: async () => recs },
@@ -22,10 +23,10 @@ function world(recs: EnvironmentSetupRecord[], onPool = pool, liveSetupHosts?: (
         boatPools: async () => [{ poolId: 'p', pool: onPool }],
         liveSetupHosts,
         freshness,
-        trigger: { onSetupFinished: async (r, o) => void (finished.push(r), opts.push(o)) },
+        trigger: { onSetupFinished: async (r, o) => void (finished.push(r), opts.push(o)), onMainKept: async (r) => void kept.push(r) },
         now: () => Date.now(),
     });
-    return { templates, finished, opts, pass };
+    return { templates, finished, opts, kept, pass };
 }
 
 describe('the template rebuild pass', () => {
@@ -86,7 +87,7 @@ describe('the template rebuild pass', () => {
             setups: { activeSince: async () => [record()] },
             templates: new InMemoryTemplateStore(),
             boatPools: async () => [{ poolId: 'p', pool: admitted }],
-            trigger: { onSetupFinished: async (r) => void finished.push(r) },
+            trigger: { onSetupFinished: async (r) => void finished.push(r), onMainKept: async () => undefined },
             now: () => Date.now(),
         });
         await pass.tick();
@@ -164,6 +165,17 @@ describe('the template rebuild pass, keyed by build inputs', () => {
         const w = await withReadyTemplate([main('b'.repeat(40))]);
         await w.pass.tick();
         expect(w.finished).toEqual([]);
+    });
+    it('tells the trigger the template was kept for a main commit, so that commit still gets its baseline; not when it builds, nor for a template build or another branch', async () => {
+        const kept = await withReadyTemplate([main('b'.repeat(40))]);
+        await kept.pass.tick();
+        expect(kept.kept.map((r) => r.sha)).toEqual(['b'.repeat(40)]);
+        const built = await withReadyTemplate([main('b'.repeat(40), INPUTS_B)]);
+        await built.pass.tick();
+        expect(built.kept).toEqual([]);
+        const other = await withReadyTemplate([{ ...main('c'.repeat(40)), key: 'template:org-1/env-1:tpl-1' }, { ...main('d'.repeat(40)), refSource: 'dev_override' }]);
+        await other.pass.tick();
+        expect(other.kept).toEqual([]);
     });
     it('builds a template when a main push changed a build input (the inputs digest differs)', async () => {
         const w = await withReadyTemplate([main('b'.repeat(40), INPUTS_B)]);
