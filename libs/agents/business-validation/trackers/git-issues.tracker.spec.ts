@@ -412,6 +412,20 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         ).toEqual(['Keep the form accessible', 'Keep the form fast']);
     });
 
+    it('detects a labelled criterion of the body when no whole artifact line survives the clip', async () => {
+        const { task } = await read(
+            issue({
+                body: '- AC1: The API returns 422 on an empty form',
+                artifacts: [artifact(1, 'qa.md', 'x'.repeat(7000))],
+            }),
+        );
+        expect(task.sourceTexts).toBeUndefined();
+        expect(
+            applyCriteriaLocation(task, { location: 'auto' })
+                .acceptanceCriteria,
+        ).toEqual(['AC1: The API returns 422 on an empty form']);
+    });
+
     it('reads a very long line of unclosed brackets without blowing up', async () => {
         const brackets = '['.repeat(50_000);
         const own = 'https://github.com/acme/web/issues/1/artifacts/1';

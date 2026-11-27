@@ -152,7 +152,7 @@ function detectCriteria(task: Task): Task {
     // read, AC-labelled items (`AC1: ...`). They beat the implicit list of
     // the description's bullets. All places are kept, deduplicated; those
     // from a document say which.
-    const body = explicitIn(description, !!task.sourceTexts?.length, own);
+    const body = explicitIn(description, !!task.hasArtifacts, own);
     // Without artifacts the criteria stay as the tracker wrote them.
     const explicit = withArtifactCriteria(
         task,
@@ -313,11 +313,6 @@ const REFERENCE_WORDS = new Set([
 ]);
 
 /**
- * A line that is only a pointer to an artifact of this issue (a bare link,
- * "see X", a references-list line with a name and a hash). A line that says
- * something and also links one is not.
- */
-/**
  * The line with its links to the issue's own artifacts blanked: Markdown
  * `[text](url)` links and bare URLs. One forward scan, never backtracking,
  * so a line of unclosed brackets costs no more than a line of text.
@@ -354,6 +349,11 @@ function withoutOwnLinks(line: string, own: RegExp): string {
     return out.replace(/\S+/g, (token) => (own.test(token) ? ' ' : token));
 }
 
+/**
+ * A line that is only a pointer to an artifact of this issue (a bare link,
+ * "see X", a references-list line with a name and a hash). A line that says
+ * something and also links one is not.
+ */
 function isReferenceOnly(line: string, own: RegExp | undefined): boolean {
     if (!own?.test(line)) {
         return false;
