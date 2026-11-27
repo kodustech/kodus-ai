@@ -42,12 +42,18 @@ var ErrDigestMismatch = errors.New("remotecache: the manifest is not the digest 
 // matches a bake's image by on the cell that baked it.
 type ImageKey struct {
 	Org, Env, Fingerprint string
+	// Repo, when set, is the full repository name the hub's grant names (the PR image's), used
+	// as given: the cell never builds a name for a credential it was handed.
+	Repo string
 }
 
 // Repository is the environment's baked images under prefix:
 // <prefix>/o-<org>/b-<org, env>, each a hash. The org's hash is its own path
 // segment, as the build cache's, so one access rule per org holds both.
 func (k ImageKey) Repository(prefix string) string {
+	if k.Repo != "" {
+		return k.Repo
+	}
 	return prefix + "/o-" + hashOf(k.Org) + "/b-" + hashOf(k.Org, k.Env)
 }
 

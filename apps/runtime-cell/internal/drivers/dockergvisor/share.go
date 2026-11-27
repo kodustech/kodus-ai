@@ -108,32 +108,40 @@ func (d *Driver) shareGeneration(ctx context.Context, spec driver.BakeSpec, g ba
 // pushImage saves one baked image, checks it for the claim's secret values
 // and pushes it, returning its manifest digest.
 func (d *Driver) pushImage(ctx context.Context, g bakecatalog.Generation, fp, image string, secrets []string, i int) (string, error) {
-	dir := filepath.Join(d.workDir(), "share", "push-"+g.Nonce+"-"+strconv.Itoa(i))
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	tarball := dir + ".tar"
-	defer func() { _ = os.Remove(tarball) }()
 	began := time.Now()
-	if err := d.d.SaveImage(ctx, image, tarball); err != nil {
-		return "", err
-	}
-	err := extractSaved(tarball, dir)
-	_ = os.Remove(tarball)
-	if err != nil {
-		return "", err
-	}
-	if err := remotecache.CheckImageSecrets(dir, func(r io.Reader) (bool, error) { return redact.ReaderContains(r, secrets) }); err != nil {
-		return "", err
-	}
-	digest, st, err := d.share.PushImage(ctx, remotecache.ImageKey{Org: g.Org, Env: g.Environment, Fingerprint: fp}, dir)
+	digest, st, err := d.savePush(ctx, d.share, remotecache.ImageKey{Org: g.Org, Env: g.Environment, Fingerprint: fp}, image, secrets, "push-"+g.Nonce+"-"+strconv.Itoa(i))
 	if err != nil {
 		return "", err
 	}
 	d.log().Info("bake.share.pushed", "env", g.Environment, "fingerprint", short(fp), "digest", digest, "blobs", st.Blobs, "bytes", st.Bytes,
 		"sentBlobs", st.Moved, "sentBytes", st.MovedBytes, "ms", time.Since(began).Milliseconds())
 	return digest, nil
+}
+
+// savePush saves image with docker save, checks every layer for the secret
+// values and pushes it to reg under key, returning the manifest's digest and
+// what moved. work names the scratch directory under the cell's work dir.
+func (d *Driver) savePush(ctx context.Context, reg imageShare, key remotecache.ImageKey, image string, secrets []string, work string) (string, remotecache.Stats, error) {
+	var none remotecache.Stats
+	dir := filepath.Join(d.workDir(), "share", work)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", none, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	tarball := dir + ".tar"
+	defer func() { _ = os.Remove(tarball) }()
+	if err := d.d.SaveImage(ctx, image, tarball); err != nil {
+		return "", none, err
+	}
+	err := extractSaved(tarball, dir)
+	_ = os.Remove(tarball)
+	if err != nil {
+		return "", none, err
+	}
+	if err := remotecache.CheckImageSecrets(dir, func(r io.Reader) (bool, error) { return redact.ReaderContains(r, secrets) }); err != nil {
+		return "", none, err
+	}
+	return reg.PushImage(ctx, key, dir)
 }
 
 // extractSaved unpacks the archive docker save wrote into dir: directories

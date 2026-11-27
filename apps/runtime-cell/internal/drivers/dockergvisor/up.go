@@ -283,8 +283,13 @@ func (b *projectBoot) build() error {
 				return fmt.Errorf("dockergvisor: the spare has no image for %s", bl.Service)
 			}
 		}
-	} else if b.opts.Built, b.steps, err = d.build(ctx, ref, builds, b.network, b.resolv, b.subnet, b.req.BuildSecrets, b.req.SharedImages); err != nil {
-		return err
+	} else {
+		// The shared image store (prstore.go): the PR image a shard pulls, the one the PR side pushes after its builds.
+		d.bindPRStore(ref, b.req)
+		if b.opts.Built, b.steps, err = d.build(ctx, ref, builds, b.network, b.resolv, b.subnet, b.req.BuildSecrets, b.req.SharedImages); err != nil {
+			return err
+		}
+		d.startPRPush(ref)
 	}
 	b.buildMs = d.clock.Now().Sub(b.started).Milliseconds()
 	if b.keys, err = dataKeys(b.composeFile, b.projectDir); err != nil {

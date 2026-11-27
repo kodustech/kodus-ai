@@ -239,6 +239,18 @@ func (d *Driver) buildUnit(ctx context.Context, ref driver.MachineRef, u *buildU
 			return fmt.Errorf("dockergvisor: baked image for %s: %w", b.Service, err)
 		}
 	}
+	// The PR's own image, which its builder pushed to the store (UpRequest.PRImages): by the hub's
+	// digest, before any other source, since it is this commit's.
+	fromPR := false
+	if pr := d.prUseOf(ref.MachineID); !reused && fp != "" && pr != nil {
+		if digest := pr.pull[fp]; digest != "" {
+			at := d.clock.Now()
+			if fromPR = d.takePR(ctx, ref, b.Service, fp, digest, tag, pr); fromPR {
+				u.pulled = append(u.pulled, driver.BootPhase{Name: PhasePullPRImage, Ms: d.clock.Now().Sub(at).Milliseconds()})
+			}
+			reused = fromPR
+		}
+	}
 	// Another cell of the org baked this build (UpRequest.SharedImages):
 	// its image by the hub's digest, before building it here.
 	fromShare := false
@@ -282,9 +294,14 @@ func (d *Driver) buildUnit(ctx context.Context, ref driver.MachineRef, u *buildU
 		if err != nil {
 			return err
 		}
+		if pr := d.prUseOf(ref.MachineID); pr != nil && fp != "" {
+			pr.noteBuilt(builtImage{service: b.Service, tag: tag, fp: fp})
+		}
 	}
 	source := "build"
 	switch {
+	case fromPR:
+		source = "pr_image"
 	case fromShare:
 		source = "shared"
 	case reused:
@@ -1416,6 +1433,8 @@ type output struct {
 	// volumes are the keys of the project volumes a bake copies: set when
 	// the recipe keeps data in named volumes (data.reset: snapshot).
 	volumes []string
+	// pr is what the machine's builds may do in the shared image store (prstore.go), nil without a grant.
+	pr *prUse
 }
 
 // machineOutput is the machine's output, made on its first boot. Known to

@@ -48,6 +48,15 @@ type UpRequest struct {
 	// no image of, and builds as before when the pull fails. Empty for a
 	// setup.
 	SharedImages []SharedImage
+	// ImageStore is the claim's credential for the org's image store (claim.acquire
+	// imageStore, renewed with the lease), nil without one. PRImages are the images the PR's
+	// builder pushed that this claim pulls by digest instead of building (a suite shard),
+	// and PRPushed hears what this claim's own push of its built images came to (the PR
+	// side of a Run: its grant holds a push right on the PR repository). Any failure of
+	// the store builds as before and never fails the boot. Docs: shared-image-store.md.
+	ImageStore *StoreCreds
+	PRImages   []SharedImage
+	PRPushed   func(PRPush)
 }
 
 // Coverage is a Run's V8 coverage files, in the claim's own directory and

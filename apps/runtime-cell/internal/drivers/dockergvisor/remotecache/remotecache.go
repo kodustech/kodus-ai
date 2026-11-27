@@ -96,6 +96,9 @@ type Registry struct {
 	prefix   string
 	user     string
 	password string
+	// token, when set, is asked on every request for a bearer token: a claim's store credential,
+	// renewed while a long push or pull runs.
+	token    func() string
 	http     *http.Client
 	maxBytes int64
 }
@@ -104,8 +107,10 @@ type Registry struct {
 // Plain HTTP is taken only for a loopback host. Auth is "user:password"
 // for basic auth, or empty.
 type Config struct {
-	URL      string
-	Auth     string
+	URL  string
+	Auth string
+	// Token, when set, takes the place of Auth: the registry gets `Authorization: Bearer <Token()>`.
+	Token    func() string
 	MaxBytes int64
 	HTTP     *http.Client
 }
@@ -150,7 +155,8 @@ func New(c Config) (*Registry, error) {
 	if r.maxBytes <= 0 {
 		r.maxBytes = DefaultMaxBytes
 	}
-	if c.Auth != "" {
+	r.token = c.Token
+	if c.Auth != "" && c.Token == nil {
 		user, pass, ok := strings.Cut(c.Auth, ":")
 		if !ok || user == "" {
 			return nil, errors.New("remotecache: auth is user:password")
@@ -209,8 +215,12 @@ func (r *Registry) request(ctx context.Context, method, path string, body io.Rea
 	for k, v := range header {
 		req.Header.Set(k, v)
 	}
-	if r.user != "" && sameHost(req.URL, r.base) {
-		req.SetBasicAuth(r.user, r.password)
+	if sameHost(req.URL, r.base) {
+		if r.token != nil {
+			req.Header.Set("Authorization", "Bearer "+r.token())
+		} else if r.user != "" {
+			req.SetBasicAuth(r.user, r.password)
+		}
 	}
 	return r.http.Do(req)
 }
