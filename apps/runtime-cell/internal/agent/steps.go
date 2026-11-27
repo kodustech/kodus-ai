@@ -293,9 +293,13 @@ func (a *Agent) runReset(ctx context.Context, c *claims.Claim, b *protocol.Machi
 	default:
 		// What the round ran is written before its services go down.
 		a.flushCoverageBeforeReset(ctx, c, workload)
-		// A ready warm spare is the reset (spares.go); otherwise, or when
-		// the swap fails, the machine is reset and its project brought up.
-		if sources, ok := a.takeSpare(ctx, c, workload); ok {
+		// A data-only recipe resets its data services and keeps its app
+		// (datareset.go); a ready warm spare is the reset (spares.go);
+		// otherwise, or when either fails, the machine is reset and its
+		// project brought up.
+		if sources, ok := a.dataReset(ctx, c, workload); ok {
+			err = a.afterSwap(ctx, c, workload, sources)
+		} else if sources, ok := a.takeSpare(ctx, c, workload); ok {
 			err = a.afterSwap(ctx, c, workload, sources)
 		} else {
 			err = a.cfg.Parts.Resetter.Reset(ctx, workload, driver.SnapshotRef{Kind: string(b.Snapshot.Kind), Ref: b.Snapshot.Ref})
@@ -303,7 +307,7 @@ func (a *Agent) runReset(ctx context.Context, c *claims.Claim, b *protocol.Machi
 				err = a.composeUpAgain(ctx, c, workload)
 			}
 		}
-		if err == nil {
+		if err == nil && !a.dataOnly(c) {
 			a.bootSpare(c) // for the next round
 		}
 	}

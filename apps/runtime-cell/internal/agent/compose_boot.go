@@ -12,7 +12,7 @@ import (
 )
 
 // recipeSteps is true when the claim's driver runs the recipe's boot steps
-// and the recipe it booted has some.
+// and the recipe it booted has some, or resets its data only.
 func (a *Agent) recipeSteps(c *claims.Claim) bool {
 	if a.cfg.Parts.Recipes == nil {
 		return false
@@ -22,7 +22,9 @@ func (a *Agent) recipeSteps(c *claims.Claim) bool {
 		return false
 	}
 	rec, err := recipe.Load(dir)
-	return err == nil && rec != nil && rec.HasBootSteps()
+	// A data-only recipe runs the driver's steps even with none of its own:
+	// the driver copies the first boot's data after them.
+	return err == nil && rec != nil && (rec.HasBootSteps() || rec.ResetStrategy() == recipe.ResetDataOnly)
 }
 
 // runRecipe runs the recipe's boot steps through the driver; a failed step
