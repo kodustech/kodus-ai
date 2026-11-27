@@ -1,4 +1,23 @@
+jest.mock('@libs/core/log/logger', () => {
+    const spy = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        info: jest.fn(),
+    };
+    return { createLogger: () => spy, __loggerSpy: spy };
+});
+
 import { KodyLearningCronProvider } from '../kodyLearning.cron';
+import { KodyLearningStatus } from '@libs/organization/domain/parameters/types/configValue.type';
+import { MAX_STUCK_RETRIES } from '../kody-learning-staleness';
+
+const loggerSpy = (
+    jest.requireMock('@libs/core/log/logger') as {
+        __loggerSpy: { error: jest.Mock };
+    }
+).__loggerSpy;
 
 describe('KodyLearningCronProvider — distributed lock', () => {
     const build = (lockAcquired: boolean) => {
@@ -44,5 +63,84 @@ describe('KodyLearningCronProvider — distributed lock', () => {
 
         expect(teamService.findTeamsWithIntegrations).toHaveBeenCalledTimes(1);
         expect(lock.release).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('KodyLearningCronProvider — organization on error logs', () => {
+    const team = {
+        uuid: 'team-1',
+        organization: { uuid: 'org-1' },
+    };
+
+    const build = (platformConfigs: unknown) => {
+        const teamService = {
+            findTeamsWithIntegrations: jest.fn().mockResolvedValue([team]),
+        };
+        const parametersService = {
+            findByKey: jest.fn().mockResolvedValue(platformConfigs),
+        };
+        const lock = { release: jest.fn().mockResolvedValue(undefined) };
+        const distributedLockService = {
+            acquire: jest.fn().mockResolvedValue(lock),
+        };
+        const cron = new KodyLearningCronProvider(
+            teamService as any,
+            parametersService as any,
+            { execute: jest.fn() } as any,
+            { hasPastReviewRulesForRepos: jest.fn() } as any,
+            distributedLockService as any,
+        );
+        return { cron, lock };
+    };
+
+    const loggedAt = '2026-11-27T03:00:00.000Z';
+
+    beforeEach(() => {
+        loggerSpy.error.mockClear();
+        jest.spyOn(Date.prototype, 'toISOString').mockReturnValue(loggedAt);
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('logs the organization when platform configs are missing', async () => {
+        const { cron } = build(null);
+
+        await cron.handleCron();
+
+        expect(loggerSpy.error).toHaveBeenCalledWith({
+            message: 'Platform configs not found',
+            context: KodyLearningCronProvider.name,
+            metadata: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                timestamp: loggedAt,
+            },
+        });
+    });
+
+    it('logs the organization when a stuck team has exhausted retries', async () => {
+        const { cron } = build({
+            updatedAt: new Date(0),
+            configValue: {
+                kodyLearningStatus: KodyLearningStatus.GENERATING_RULES,
+                kodyLearningStuckRetries: MAX_STUCK_RETRIES,
+            },
+        });
+
+        await cron.handleCron();
+
+        expect(loggerSpy.error).toHaveBeenCalledWith({
+            message: 'Kody learning stuck and exhausted retries — giving up',
+            context: KodyLearningCronProvider.name,
+            metadata: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                kodyLearningStatus: KodyLearningStatus.GENERATING_RULES,
+                stuckRetries: MAX_STUCK_RETRIES,
+                timestamp: loggedAt,
+            },
+        });
     });
 });
