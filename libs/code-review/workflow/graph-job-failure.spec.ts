@@ -14,17 +14,18 @@ function sdkSandboxError(message: string): Error {
         [
             '-e',
             'const { SandboxError } = require("e2b");' +
-                'const error = new SandboxError(process.env.SANDBOX_MESSAGE);' +
+                'const error = new SandboxError(process.argv[1]);' +
                 'const own = {};' +
                 'for (const key of Object.getOwnPropertyNames(error)) {' +
                 '  if (key !== "stack") own[key] = error[key];' +
                 '}' +
                 'process.stdout.write(JSON.stringify({ own }));',
+            '--',
+            message,
         ],
         {
             cwd: path.resolve(__dirname, '../../..'),
             encoding: 'utf8',
-            env: { ...process.env, SANDBOX_MESSAGE: message },
         },
     );
     const payload = JSON.parse(stdout) as {
