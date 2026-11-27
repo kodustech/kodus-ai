@@ -1,3 +1,4 @@
+import { boundKeyOfSetup } from '@libs/runtime/placement/candidate-pools';
 import { HttpException } from '@nestjs/common';
 
 import { hashFleetToken } from '@libs/runtime/contracts/fleet-token';
@@ -35,6 +36,15 @@ describe('the hub fleet routes', () => {
         expect(r.token.startsWith('kcf_')).toBe(true);
         expect([...tokens.records?.values?.() ?? []].some((x: any) => x.boundKey === 'template:org-a/env-1')).toBe(true);
         expect(await status(controller.mint({}, { ...body, hostId: 'tpl-2', boundKey: 'other:org-a/env-1' }))).toBe(400);
+    });
+
+    it("mints a token bound to one environment's own setup (setup:<org>/<hash>), the key placement gives it", async () => {
+        const { controller, tokens } = setup();
+        const boundKey = boundKeyOfSetup('org-a', 'env-1:2026-11-27T00:00:00.000Z');
+        const r = await controller.mint({}, { ...body, hostId: 'su-1', boundKey });
+        expect(r.token.startsWith('kcf_')).toBe(true);
+        expect([...tokens.records.values()].some((x) => x.boundKey === boundKey)).toBe(true);
+        expect(await status(controller.mint({}, { ...body, hostId: 'su-2', boundKey: 'setup:org-a/a/b' }))).toBe(400);
     });
 
     it('mints a token bound to a suite shard (suite:<org>/<suiteRun>/<shard>) and refuses a shard that is not a number', async () => {
