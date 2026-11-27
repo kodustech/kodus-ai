@@ -86,6 +86,9 @@ export type ReadyOutcome =
 export type StepOutcome = Envelope<'step.result'> | { type: 'lost' } | { type: 'compromised'; signature: string } | { type: 'refused'; code: string };
 
 /** The boot phases of claim.ready.timing, as the metric's `phase` label (a closed set). */
+/** The named boot phase a cell reports for pulling the PR's image from the store (the Go cell's PhasePullPRImage). */
+export const PHASE_PULL_PR_IMAGE = 'pull pr image';
+
 export const BOOT_PHASES = { prepareMs: 'prepare', bootMs: 'boot', buildMs: 'build', upMs: 'up', seedMs: 'seed', readyMs: 'ready', snapshotMs: 'snapshot' } as const;
 export type BootPhase = (typeof BOOT_PHASES)[keyof typeof BOOT_PHASES];
 
@@ -121,6 +124,10 @@ export class HubMetrics {
     private readonly reconciled;
     private readonly transitions;
     private readonly renewals;
+    private readonly storeGrants;
+    private readonly storePrImages;
+    private readonly storeShards;
+    private readonly storeShardTime;
     private readonly capacityWaits;
     private readonly connectionOverloads;
     private readonly gbMinutes;
@@ -138,6 +145,10 @@ export class HubMetrics {
         this.reconciled = m.counter('runtime.claim.reconciled');
         this.transitions = m.counter('runtime.claim.transition');
         this.renewals = m.counter('runtime.claim.renew');
+        this.storeGrants = m.counter('runtime.image_store.grant');
+        this.storePrImages = m.counter('runtime.image_store.pr_image');
+        this.storeShards = m.counter('runtime.image_store.shard');
+        this.storeShardTime = m.histogram('runtime.image_store.shard_time');
         this.capacityWaits = m.counter('runtime.claim.capacity_wait');
         this.connectionOverloads = m.counter('runtime.hub.connection_overload');
         this.gbMinutes = m.counter('runtime.machine.gb_minutes');
@@ -180,6 +191,22 @@ export class HubMetrics {
     /** Both labels are closed sets: ClaimState and ClaimReason. */
     claimTransition(attrs: { to: string; reason: string }) {
         this.transitions.add(1, { [ATTR.claimState]: attrs.to, [ATTR.claimReason]: attrs.reason });
+    }
+    imageStoreGrant(outcome: string) {
+        this.storeGrants.add(1, { outcome });
+    }
+    imageStorePrImage(outcome: string) {
+        this.storePrImages.add(1, { outcome });
+    }
+    /**
+     * A suite shard's PR image (claim.ready of a claim the store was offered to): what its boot spent pulling it from the store or
+     * building it, from the cell's named phases. `offered`: the hub gave the shard the builder's digests.
+     */
+    imageStoreShard(a: { offered: boolean; phases: ReadonlyArray<{ name: string; ms: number }> | undefined; buildMs: number | undefined }) {
+        const pull = a.phases?.find((p) => p.name === PHASE_PULL_PR_IMAGE);
+        if (pull) this.storeShardTime.record(pull.ms, { kind: 'pull' });
+        else if (typeof a.buildMs === 'number') this.storeShardTime.record(a.buildMs, { kind: 'build' });
+        this.storeShards.add(1, { outcome: pull ? 'pulled' : a.offered ? 'built_after_ask' : 'built_no_image' });
     }
     claimRenew(attrs: { outcome: RenewOutcome; consumer: string }) {
         this.renewals.add(1, { outcome: attrs.outcome, [ATTR.claimConsumer]: attrs.consumer });

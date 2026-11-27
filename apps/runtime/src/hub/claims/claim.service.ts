@@ -23,6 +23,7 @@ import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-c
 import type { TicketService } from './ticket.service';
 import type { MachineMinuteBudget } from './machine-minutes';
 import type { OrgSecretRefs } from './org-secret-refs';
+import { ImageStoreService, type PreparedImageStore } from './image-store.service';
 import { type BuilderAcquire, ToolLayerService } from './tool-layers';
 
 // The claim lifecycle on the hub: acquire (with rebind on a retry), the
@@ -233,11 +234,14 @@ export class ClaimService {
         private readonly metrics: RuntimeMetrics,
         private readonly hubMetrics: HubMetrics,
         private readonly log: HubLog,
-        private readonly opts: { readyTimeoutMs?: number; now: () => Date; machineMinutes?: MachineMinuteBudget; secrets?: OrgSecretRefs; sandboxMemoryMb?: number },
+        private readonly opts: { readyTimeoutMs?: number; now: () => Date; machineMinutes?: MachineMinuteBudget; secrets?: OrgSecretRefs; sandboxMemoryMb?: number; imageStore?: ImageStoreService },
     ) {
         this.egress = new ClaimEgressService(store, connections, log, () => this.opts.now());
         this.layers = new ToolLayerService(store, this.egress, connections, log, () => this.opts.now(), (cellId, req) => this.acquireBuilder(cellId, req), (ref) => this.release(ref));
     }
+
+    /** Claims whose acquire carried a store grant (and whether it carried the PR image's digests), until their claim.ready is read. */
+    private readonly storeOffered = new Map<string, 'grant' | 'digests'>();
 
     private get now() {
         return this.opts.now;
@@ -251,6 +255,8 @@ export class ClaimService {
     private async move(ids: ClaimIds, from: readonly ClaimState[], to: ClaimState, cause: ClaimCause): Promise<boolean> {
         const moved = await this.store.transitionClaim(ids.claimId, from, to, cause);
         if (moved) {
+            // A claim that left the live states stops renewing its store credential, and a PR image it never finished is failed.
+            if (!LIVE_CLAIM_STATES.includes(to)) void this.opts.imageStore?.onClaimEnded(ids.claimId);
             this.hubMetrics.claimTransition({ to, reason: cause.reason });
             this.log('info', 'claim.transition', { ...ids, to, reason: cause.reason, ...(cause.detail ? { detail: telemetryDetail(cause.detail) } : {}) });
         }
@@ -424,10 +430,14 @@ export class ClaimService {
             throw new ClaimScopeError('cell does not serve this organization');
         }
         const conn = this.connections.require(cellId);
-        const at = this.now().getTime();
+        let at = this.now().getTime();
         const ids = { cellId, claimId, runId: req.runId, orgId: req.organizationId, environmentId: req.environmentId };
         const refused = await this.refusalBeforeAdmission(session, ids, req);
         if (refused) return refused;
+        // The image store's credential, and for a suite shard the PR image its builder is pushing (waited for here, before any
+        // minute or memory is held). Any failure is its own: undefined, and the claim builds as it always did.
+        const store = await this.opts.imageStore?.prepare(session, req, { claimId, cellId });
+        if (store) at = this.now().getTime();
         const overBudget = await this.reserveMachineMinutes(ids, req);
         if (overBudget) return overBudget;
         // Until the claim.acquire goes out, every way out gives the round's minutes back.
@@ -450,7 +460,7 @@ export class ClaimService {
             await giveBack();
             return deadlines;
         }
-        return this.sendAndAwaitReady(conn, session, ids, req, at, deadlines);
+        return this.sendAndAwaitReady(conn, session, ids, req, at, deadlines, store);
     }
 
     /**
@@ -635,13 +645,14 @@ export class ClaimService {
      * only means "accepted"; the claim is bound on claim.ready and fails on
      * claim.failed.
      */
-    private async sendAndAwaitReady(conn: CellConnection, session: CellSession, ids: ClaimIds & { orgId: string; environmentId: string }, req: AcquireInput, at: number, deadlines: ClaimDeadlines): Promise<Claim | Blocked> {
+    private async sendAndAwaitReady(conn: CellConnection, session: CellSession, ids: ClaimIds & { orgId: string; environmentId: string }, req: AcquireInput, at: number, deadlines: ClaimDeadlines, store?: PreparedImageStore): Promise<Claim | Blocked> {
         const { cellId, claimId } = ids;
         const { leaseExpiresAt, hardExpiresAt } = deadlines;
         // A new round: what the cell settled for this claimId before no longer answers it.
         this.settledClaimOutcomes.delete(claimId);
         // From claim.acquire to claim.ready (machines, code, observer), never past the claim's ceiling.
         const ready = this.awaitReady(conn, claimId, readyWaitMs(req.consumer, deadlines, at, req.ref.side, req.setupBootMs));
+        if (store) this.storeOffered.set(claimId, store.prImages?.length ? 'digests' : 'grant');
         // A diagnostic hold is only ever asked for a setup claim that is not a PR.
         const hold = req.diagnosticHold === true && req.consumer === 'setup' && req.ref.side !== 'pr';
         // Optional work a cell that cannot read the field simply goes without (the cache is seeded at the bake).
@@ -741,6 +752,7 @@ export class ClaimService {
                     ...(req.repos?.length ? { repos: req.repos.map((r) => ({ alias: r.alias, repo: r.repo, sha: r.sha, repoToken: r.repoToken })) } : {}),
                     ...(secrets.length ? { secrets } : {}),
                     ...(sharedImages.length ? { sharedImages } : {}),
+                    ...(store ? { imageStore: ImageStoreService.wire(store) } : {}),
                 },
                 claimId,
             );
@@ -901,6 +913,10 @@ export class ClaimService {
             seedSha: manifest.seedSha,
         });
         this.hubMetrics.claimBootPhases(timing, { consumer: req.consumer, driver: session.driver });
+        // A suite shard the store was offered to: did it pull the PR image or build it, and for how long (docs/runtime/shared-image-store.md section 9).
+        const offered = this.storeOffered.get(claimId);
+        this.storeOffered.delete(claimId);
+        if (offered && req.consumer === 'suite') this.hubMetrics.imageStoreShard({ offered: offered === 'digests', phases: named, buildMs: timing?.buildMs });
         this.hubMetrics.claimExport(named, { consumer: req.consumer, driver: session.driver });
         this.hubMetrics.claimStarted(start, { consumer: req.consumer });
         // A claim created after an approval gets the environment's approved hosts now, not only the base list.
@@ -1016,6 +1032,7 @@ export class ClaimService {
     }
 
     private forgetReady(conn: CellConnection, claimId: string) {
+        this.storeOffered.delete(claimId);
         const r = conn.readies.get(claimId);
         if (r) clearTimeout(r.timer);
         conn.readies.delete(claimId);

@@ -12,6 +12,8 @@ import { capabilitiesOfHello } from './cell-capabilities';
 import { ClaimLeaseService } from './claims/claim-lease';
 import { AcquireInput, claimIdFor, ClaimService } from './claims/claim.service';
 import { ClaimImageService } from './claims/claim-image.service';
+import { type ImageStoreBook, ImageStoreService, type PoolImageStores } from './claims/image-store.service';
+import type { ImageStoreConfig, ImageStoreProvider } from '@libs/runtime/fleet/image-store';
 import { StepDispatcher } from './claims/step-dispatcher';
 import { CellIdentityService } from './enrollment/cell-identity.service';
 import { CellConnection, CellConnectionRegistry } from './gateway/cell-connections';
@@ -41,7 +43,7 @@ export { CELL_CERT_HOURS } from './enrollment/cell-identity.service';
 export { CellUnavailableError, ClaimScopeError } from './hub-types';
 export type { CellCredential, ClaimRef, HubLogLine, IssuedIdentity, PeerCert, SocketLike } from './hub-types';
 
-const CELL_TO_HUB: ReadonlySet<MessageType> = new Set(['hello', 'heartbeat', 'claim.ready', 'claim.failed', 'claim.progress', 'step.result', 'step.stream', 'blocked', 'egress.blocked', 'image.shared', 'toollayer.built', 'toollayer.failed', 'org.purged', 'ack', 'nack']);
+const CELL_TO_HUB: ReadonlySet<MessageType> = new Set(['hello', 'heartbeat', 'claim.ready', 'claim.failed', 'claim.progress', 'step.result', 'step.stream', 'blocked', 'egress.blocked', 'image.shared', 'toollayer.built', 'toollayer.failed', 'image.pushed', 'org.purged', 'ack', 'nack']);
 
 /** How often a heartbeat's memory is written to the cell's session when only committed moved. */
 const MEMORY_PERSIST_MS = 5 * 60_000;
@@ -64,6 +66,12 @@ export interface CellHubOptions {
     secrets?: OrgSecretRefs;
     /** What a sandbox that asks no size is admitted at on a cell whose hello names no sandboxSize (RUNTIME_SANDBOX_MEMORY_MB; default DEFAULT_SANDBOX_MEMORY_MB). */
     sandboxMemoryMb?: number;
+    /**
+     * The shared image store (docs/runtime/shared-image-store.md): the grants and PR image rows, where a pool's store is
+     * configured, and the provider for a config (undefined: this hub cannot serve it, so its pool's claims build as before).
+     * Absent: no claim gets a grant.
+     */
+    imageStore?: { book: ImageStoreBook; pools: PoolImageStores; providerFor: (config: ImageStoreConfig) => ImageStoreProvider | undefined; waitMs: number; pollMs?: number; sleep?: (ms: number) => Promise<void> };
     /** The preview edge's tunnel endpoint the hub sends cells (RUNTIME_PREVIEW_TUNNEL_URL) and where it records their tickets; absent, no preview is routed. */
     preview?: { tunnelUrl: string; tickets: PreviewTicketSink };
     /** How long a cell may send no frame before its session is ended (default CELL_SILENCE_MS). */
@@ -83,6 +91,8 @@ export class CellHub {
     /** Bakes and pool targets: never from a claim that ran PR code. */
     readonly images: ClaimImageService;
     readonly leases: ClaimLeaseService;
+    /** The shared image store's grants and PR image digests; absent when the hub has none configured. */
+    readonly imageStore?: ImageStoreService;
     /** The org purge's cell leg: org.purge to the cells that hold data of an org, org.purged back. */
     readonly orgPurges: OrgDataPurges;
     readonly steps: StepDispatcher;
@@ -113,7 +123,10 @@ export class CellHub {
         this.connections = new CellConnectionRegistry(store, metrics, this.hubMetrics, opts.replicaId, this.log);
         this.hubMetrics.observeCells(() => this.connections.views(), () => now().getTime());
         this.identity = new CellIdentityService(store, opts.ca, this.hubMetrics, this.log, now);
-        this.claims = new ClaimService(store, this.connections, metrics, this.hubMetrics, this.log, { readyTimeoutMs: opts.readyTimeoutMs, now, machineMinutes: opts.machineMinutes, secrets: opts.secrets, sandboxMemoryMb: opts.sandboxMemoryMb });
+        this.imageStore = opts.imageStore
+            ? new ImageStoreService({ ...opts.imageStore, claimState: async (id) => (await store.claim(id))?.state ?? null, metrics: this.hubMetrics, log: this.log, now })
+            : undefined;
+        this.claims = new ClaimService(store, this.connections, metrics, this.hubMetrics, this.log, { readyTimeoutMs: opts.readyTimeoutMs, now, machineMinutes: opts.machineMinutes, secrets: opts.secrets, sandboxMemoryMb: opts.sandboxMemoryMb, imageStore: this.imageStore });
         this.images = new ClaimImageService(store, this.connections, metrics, now);
         if (opts.admission) {
             this.tickets = new TicketService(
@@ -130,7 +143,7 @@ export class CellHub {
             this.claims.tickets = this.tickets;
         }
         this.orgPurges = new OrgDataPurges(this.connections, this.log);
-        this.leases = new ClaimLeaseService(this.claims, store, this.connections, this.hubMetrics, this.log, now);
+        this.leases = new ClaimLeaseService(this.claims, store, this.connections, this.hubMetrics, this.log, now, this.imageStore);
         this.previews = new ClaimPreviewService(this.claims, this.connections, opts.preview?.tickets, opts.preview?.tunnelUrl, this.log, now);
         this.steps = new StepDispatcher(
             this.claims,
@@ -331,6 +344,16 @@ export class CellHub {
                     return this.connections.nack(conn, msg.id, refused.code, refused.message);
                 }
                 this.log('info', 'image.shared', fields);
+                this.connections.ack(conn, msg.id);
+                return;
+            }
+            case 'image.pushed': {
+                // The builder's cell says what it pushed to its PR repository. Recorded only for the claim that was granted the write.
+                const claim = msg.claimId ? await this.store.claim(msg.claimId) : null;
+                if (!claim || claim.cellId !== conn.cred.cellId) return this.connections.nack(conn, msg.id, 'unknown_claim', 'claim is not held by this cell');
+                const body = msg.body as MessageBody<'image.pushed'>;
+                const outcome = (await this.imageStore?.onPushed(claim, body)) ?? 'ignored';
+                this.log('info', 'image.pushed', { cellId: claim.cellId, claimId: claim.claimId, orgId: claim.orgId, status: body.status, images: body.images.length, outcome, ...(body.reason ? { reason: body.reason } : {}) });
                 this.connections.ack(conn, msg.id);
                 return;
             }

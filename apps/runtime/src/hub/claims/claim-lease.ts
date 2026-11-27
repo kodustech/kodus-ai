@@ -5,6 +5,7 @@ import type { MessageBody } from '@libs/runtime/protocol';
 import type { CellConnectionRegistry } from '../gateway/cell-connections';
 import type { ClaimState } from '@libs/runtime/contracts/enums';
 import type { ClaimRow, HubStore } from '../hub-store';
+import type { ImageStoreService } from './image-store.service';
 import { CellUnavailableError, ClaimRef, HubLog, HubMetrics } from '../hub-types';
 
 // claim.renew on the hub (§1b): the owner of a live claim (a Run still
@@ -28,11 +29,12 @@ const GONE_CODES = new Set(['unknown_claim', 'claim_expired']);
 export class ClaimLeaseService {
     constructor(
         private readonly claims: { scoped(ref: ClaimRef): Promise<ClaimRow | null> },
-        private readonly store: Pick<HubStore, 'renewClaimLease'>,
+        private readonly store: Pick<HubStore, 'renewClaimLease' | 'session'>,
         private readonly connections: Pick<CellConnectionRegistry, 'request'>,
         private readonly hubMetrics: Pick<HubMetrics, 'claimRenew'>,
         private readonly log: HubLog,
         private readonly now: () => Date,
+        private readonly imageStore?: Pick<ImageStoreService, 'renewal'>,
     ) {}
 
     /**
@@ -63,7 +65,9 @@ export class ClaimLeaseService {
         if (!(hard > at)) return gone('past_hard_expiry');
         const until = Math.min(at + LEASE_TTL_MINUTES[consumer] * 60_000, hard);
         const leaseExpiresAt = new Date(until).toISOString();
-        const body: MessageBody<'claim.renew'> = { leaseExpiresAt };
+        // The claim's store credential is short: it is renewed with the lease, for a cell that names the feature.
+        const imageStoreGrant = await this.imageStore?.renewal(claim, await this.store.session(claim.cellId));
+        const body: MessageBody<'claim.renew'> = { leaseExpiresAt, ...(imageStoreGrant ? { imageStoreGrant } : {}) };
         // A connection lost here or no ack in time: CellUnavailableError, retried by the caller.
         const reply = await this.connections.request(claim.cellId, 'claim.renew', body, claim.claimId);
         if (reply.type !== 'ack') {

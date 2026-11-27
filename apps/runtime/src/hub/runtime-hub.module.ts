@@ -28,6 +28,9 @@ import { PublicCellController } from './http/public-cell.controller';
 import { TraceContextInterceptor } from './http/trace-context.interceptor';
 import { PgMachineMinuteStore } from './claims/pg-machine-minutes.store';
 import { PgOrgSecretRefs } from './claims/org-secret-refs';
+import { imageStoreProviders } from './claims/image-store-providers';
+import { PgImageStoreBook } from './claims/pg-image-store.book';
+import { PgPoolImageStores } from '../shared/persistence/host-pools';
 
 /** The product Postgres the org secrets' references are read from (names and hosts only), when configured. */
 export const PRODUCT_SECRETS_POOL = Symbol('PRODUCT_SECRETS_POOL');
@@ -74,6 +77,7 @@ export const HUB_LOGGER = Symbol('HUB_LOGGER');
                     logger: logger.child('CellHub'),
                     machineMinutes: { store: new PgMachineMinuteStore(pool), limitMinutes: c.machineMinutesPerOrgDay },
                     sandboxMemoryMb: c.sandboxMemoryMb,
+                    imageStore: { book: new PgImageStoreBook(pool), pools: new PgPoolImageStores(pool), providerFor: imageStoreProviders(c.imageStoreSigningKey), waitMs: c.prImageWaitMs },
                     ...(c.previewTunnelUrl ? { preview: { tunnelUrl: c.previewTunnelUrl, tickets: new PgPreviewStore(pool) } } : {}),
                     ...(secretsPool ? { secrets: new PgOrgSecretRefs(secretsPool) } : {}),
                     ...(c.durableAdmission ? { admission: {

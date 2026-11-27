@@ -92,6 +92,14 @@ export interface RuntimeConfig {
      * gets the org's secrets.
      */
     productSecretsReadUrl?: string;
+    /**
+     * Hub: the EC P-256 private key (PEM, read from the file RUNTIME_IMAGE_STORE_SIGNING_KEY names) that signs the image
+     * store's registry tokens (docs/runtime/shared-image-store.md). Absent: a pool whose store is an `oci-registry` gets no
+     * grant, so its claims build as before.
+     */
+    imageStoreSigningKey?: string;
+    /** Hub: the longest a suite shard's claim waits for the PR image its builder is pushing, in ms (RUNTIME_PR_IMAGE_WAIT_SECONDS; default 1800). After it, or when the builder ends without one, the shard builds. */
+    prImageWaitMs: number;
     maxTokensPerRun: number;
     /** Product API base URL of the LLM gateway (RUNTIME_LLM_GATEWAY_URL); unset → recorded responses. */
     llmGatewayUrl?: string;
@@ -335,6 +343,8 @@ export function loadRuntimeConfig(env: Env = process.env): RuntimeConfig {
         machineMinutesPerOrgDay: int(env, 'RUNTIME_MACHINE_MINUTES_PER_ORG_DAY', DEFAULT_MACHINE_MINUTES_PER_ORG_DAY, 0),
         sandboxMemoryMb: boundedInt(env, 'RUNTIME_SANDBOX_MEMORY_MB', DEFAULT_SANDBOX_MEMORY_MB, MACHINE_SIZE_LIMITS.memoryMb.min, MACHINE_SIZE_LIMITS.memoryMb.max),
         productSecretsReadUrl: env.RUNTIME_PRODUCT_SECRETS_READ_URL || undefined,
+        imageStoreSigningKey: file(env, 'RUNTIME_IMAGE_STORE_SIGNING_KEY'),
+        prImageWaitMs: boundedInt(env, 'RUNTIME_PR_IMAGE_WAIT_SECONDS', 1800, 0, 7200) * 1000,
         maxTokensPerRun: int(env, 'RUNTIME_MAX_TOKENS_PER_RUN', DEFAULT_MAX_TOKENS_PER_RUN, 1),
         llmGatewayUrl: env.RUNTIME_LLM_GATEWAY_URL || undefined,
         ...previewSettings(env),

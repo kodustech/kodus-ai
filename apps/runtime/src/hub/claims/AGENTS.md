@@ -15,6 +15,7 @@ Everything the runtime-hub does with a claim: acquire, the cell's outcome, relea
 - A claim of consumer `suite` (docs/runtime/e2e-suites.md section 4) goes only to a cell that names the `suite` feature (`suite_unsupported` otherwise, before anything is recorded or sent), with the suite's ceiling (`HARD_EXPIRY_MINUTES.suite`) and a Run's lease, egress hosts and secrets (`cell-hub.suite.spec.ts`).
 - Preview routes: `claim-preview.service.ts` `ClaimPreviewService` (`route`, `unroute`, the tunnel ticket).
 - Steps at most once per `stepId`: `step-dispatcher.ts` `StepDispatcher` (`probe`, `exec`, `reset`, `exploreBrowser`, `sandboxOp`, `snapshot`, `upload` (a cell's `not_implemented`/`not_supported` answer is `upload_unavailable`, not a lost transport; a nonzero exec in its result is `upload_failed`; the command hash leaves out each file's read grant `url`), `onStepReply`, `onStepFrame`).
+- The shared image store (docs/runtime/shared-image-store.md; feature `imageStore`): `image-store.service.ts` `ImageStoreService` (`prepare`: the grant a claim.acquire carries, scoped by `planGrant` from the host's bound key and never from the cell, and for a suite shard the wait for its PR image's digests; `renewal`: the credential renewed inside claim.renew; `onClaimEnded`: revoke and fail a PR image the builder never finished; `onPushed`: the digest from `image.pushed`), the `ImageStoreBook` port (grants audit, `runtime_pr_images`) with `pg-image-store.book.ts`, and `image-store-providers.ts` (which provider serves a pool's config). Any failure is logged and counted and the claim builds as before.
 - Boot progress for the setup view: `claim-progress.ts` `ClaimProgressBook`.
 - The org's daily machine minutes: `machine-minutes.ts` (port), `pg-machine-minutes.store.ts` `PgMachineMinuteStore`. `reserve` reads the org's own limit (`runtime_org_machine_budget`, written by the runtime-worker from `runtime.org.machine_minutes_changed`) under the org day's lock and holds the org to the lower of it and `RUNTIME_MACHINE_MINUTES_PER_ORG_DAY`.
 - The org's secrets by reference: `org-secret-refs.ts` `PgOrgSecretRefs` (names and hosts, never a value).
@@ -50,7 +51,7 @@ Everything the runtime-hub does with a claim: acquire, the cell's outcome, relea
 
 ## Module map
 
-Files (14, tests apart): `cell-memory.ts`, `claim-deadlines.ts`, `claim-egress.service.ts`, `claim-image.service.ts`, `claim-lease.ts`, `claim-preview.service.ts`, `claim-progress.ts`, `claim.service.ts`, `machine-minutes.ts`, `org-secret-refs.ts`, `pg-machine-minutes.store.ts`, `step-dispatcher.ts`, `ticket.service.ts`, `tool-layers.ts`
+Files (17, tests apart): `cell-memory.ts`, `claim-deadlines.ts`, `claim-egress.service.ts`, `claim-image.service.ts`, `claim-lease.ts`, `claim-preview.service.ts`, `claim-progress.ts`, `claim.service.ts`, `image-store-providers.ts`, `image-store.service.ts`, `machine-minutes.ts`, `org-secret-refs.ts`, `pg-image-store.book.ts`, `pg-machine-minutes.store.ts`, `step-dispatcher.ts`, `ticket.service.ts`, `tool-layers.ts`
 
 Imports these Runtime modules:
 
@@ -62,6 +63,7 @@ Imports these Runtime modules:
 - [`libs/runtime/api/domain`](../../../../../libs/runtime/api/domain/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
+- [`libs/runtime/fleet`](../../../../../libs/runtime/fleet/AGENTS.md)
 - [`libs/runtime/probe`](../../../../../libs/runtime/probe/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
 - [`libs/runtime/redaction`](../../../../../libs/runtime/redaction/AGENTS.md)

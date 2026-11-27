@@ -1328,6 +1328,44 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         // environment page turns into words. Null while queued or started. The product reads it with the read-only role.
         sql: `ALTER TABLE runtime.runtime_suite_baseline_requests ADD COLUMN IF NOT EXISTS reason text;`,
     },
+    {
+        version: 63,
+        name: 'the shared image store: grants audited and the PR image digest per sha',
+        // docs/runtime/shared-image-store.md section 4 and 5. runtime_image_store_grants: one row per claim that was given a
+        // store credential (its repositories and rights, expiry, renewals, end), never the token. runtime_pr_images: one row per
+        // org, environment and PR sha: `pending` from the builder claim's grant, `ready` with the digests the builder's
+        // image.pushed named (images: [{fingerprint, digest, bytes, pushMs}]), `failed` when the push failed or the builder
+        // ended without one; the shards of the suite pull `ready` digests and build themselves otherwise. expires_at is the
+        // 48 h hard end; the sweep that removes rows and images is a TODO (the design's step 7).
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_image_store_grants (
+            claim_id text PRIMARY KEY,
+            org_id text NOT NULL,
+            environment_id text NOT NULL,
+            pool_id text NOT NULL,
+            provider text NOT NULL,
+            sha text NOT NULL,
+            repos jsonb NOT NULL,
+            issued_at timestamptz NOT NULL,
+            expires_at timestamptz NOT NULL,
+            renewals integer NOT NULL DEFAULT 0,
+            revoked_at timestamptz
+        );
+        CREATE INDEX IF NOT EXISTS runtime_image_store_grants_org_idx ON runtime.runtime_image_store_grants (org_id, issued_at DESC);
+        CREATE TABLE IF NOT EXISTS runtime.runtime_pr_images (
+            org_id text NOT NULL,
+            environment_id text NOT NULL,
+            pr_sha text NOT NULL,
+            state text NOT NULL CHECK (state IN ('pending', 'ready', 'failed')),
+            builder_claim text NOT NULL,
+            images jsonb NOT NULL DEFAULT '[]'::jsonb,
+            reason text,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            ready_at timestamptz,
+            expires_at timestamptz NOT NULL,
+            PRIMARY KEY (org_id, environment_id, pr_sha)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_pr_images_expiry_idx ON runtime.runtime_pr_images (expires_at);`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

@@ -7,6 +7,7 @@ import { InMemoryCellTokenStore, InMemoryFleetTokenStore } from '@libs/runtime/c
 import { FleetTokenLedger } from '@libs/runtime/contracts/fleet-token';
 import { SANDBOX_ENVIRONMENT_ID } from '@libs/runtime/protocol/sandbox';
 
+import type { GrantRecord, ImageStoreBook, PrImage, PrImageRow } from './claims/image-store.service';
 import { BAKE_ASK_TTL_MS, PIN_EXPIRY_MARGIN_HOURS, type BakeAskRow, type CellSession, type ClaimBlockerRow, type ClaimCause, type ClaimMetering, type ClaimRow, type EvictedBuildStateRow, type HubStore, type RegisteredCell, type SandboxAuditRow, SHARED_IMAGE_BAKES_KEPT, type SharedBakeRecord, type StepRow } from './hub-store';
 
 export class InMemoryHubStore implements HubStore {
@@ -293,5 +294,53 @@ export class InMemoryHubStore implements HubStore {
         return [...this.cells.values()]
             .filter((c) => !c.certificateExpiresAt || Date.parse(c.certificateExpiresAt) > since)
             .map((c) => ({ cellId: c.cellId, serial: c.certificateSerial, status: c.status }));
+    }
+}
+
+/** The image store's grants and PR image rows in memory, with the semantics of PgImageStoreBook (the Pg integration spec holds both to them). */
+export class InMemoryImageStoreBook implements ImageStoreBook {
+    readonly grants = new Map<string, GrantRecord & { revokedAt?: string }>();
+    readonly prImages = new Map<string, PrImageRow & { expiresAt: string }>();
+    private key = (o: string, e: string, s: string) => `${o}/${e}/${s}`;
+
+    async recordGrant(g: GrantRecord) {
+        const prev = this.grants.get(g.claimId);
+        if (prev && prev.orgId !== g.orgId) return;
+        this.grants.set(g.claimId, { ...g, renewals: prev?.renewals ?? 0, issuedAt: prev?.issuedAt ?? g.issuedAt });
+    }
+    async grantOf(claimId: string) {
+        const g = this.grants.get(claimId);
+        return g && !g.revokedAt ? { ...g } : null;
+    }
+    async renewGrant(claimId: string, expiresAt: string) {
+        const g = this.grants.get(claimId);
+        if (!g || g.revokedAt) return false;
+        if (expiresAt > g.expiresAt) g.expiresAt = expiresAt;
+        g.renewals += 1;
+        return true;
+    }
+    async revokeGrant(claimId: string, at: string) {
+        const g = this.grants.get(claimId);
+        if (g && !g.revokedAt) g.revokedAt = at;
+    }
+    async startPrImage(r: { orgId: string; environmentId: string; prSha: string; builderClaim: string; expiresAt: string }) {
+        const k = this.key(r.orgId, r.environmentId, r.prSha);
+        if (this.prImages.get(k)?.state === 'ready') return;
+        this.prImages.set(k, { orgId: r.orgId, environmentId: r.environmentId, prSha: r.prSha, state: 'pending', builderClaim: r.builderClaim, images: [], reason: null, expiresAt: r.expiresAt });
+    }
+    async finishPrImage(r: { orgId: string; environmentId: string; prSha: string; builderClaim: string; state: 'ready' | 'failed'; images: PrImage[]; reason?: string }) {
+        const row = this.prImages.get(this.key(r.orgId, r.environmentId, r.prSha));
+        if (!row || row.builderClaim !== r.builderClaim || row.state !== 'pending') return false;
+        Object.assign(row, { state: r.state, images: r.images, reason: r.reason ?? null });
+        return true;
+    }
+    async failPendingOf(builderClaim: string, reason: string) {
+        let n = 0;
+        for (const row of this.prImages.values()) if (row.builderClaim === builderClaim && row.state === 'pending') (Object.assign(row, { state: 'failed', reason }), n++);
+        return n;
+    }
+    async prImage(orgId: string, environmentId: string, prSha: string) {
+        const row = this.prImages.get(this.key(orgId, environmentId, prSha));
+        return row && Date.parse(row.expiresAt) > Date.now() ? { ...row } : null;
     }
 }

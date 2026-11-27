@@ -45,6 +45,7 @@ Imports these Runtime modules:
 
 - [`libs/runtime/api/domain`](../../../../../libs/runtime/api/domain/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
+- [`libs/runtime/fleet`](../../../../../libs/runtime/fleet/AGENTS.md)
 - [`libs/runtime/gate`](../../../../../libs/runtime/gate/AGENTS.md)
 - [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)

@@ -104,7 +104,7 @@ export interface GrantScopeAsk {
     organizationId: string;
     environmentId: string;
     boundKey: string | null | undefined;
-    side: 'base' | 'pr';
+    side: 'base' | 'pr' | 'setup';
     sha: string;
 }
 

@@ -31,7 +31,7 @@ The host provider port and host pools (docs/runtime/host-providers.md §4.2, §5
 
 ## Module map
 
-Files (5, tests apart): `fake-provider.ts`, `host-provider.ts`, `pool.ts`, `provider-error.ts`, `testing.ts`
+Files (8, tests apart): `fake-provider.ts`, `host-provider.ts`, `image-store-fake.ts`, `image-store-oci.ts`, `image-store.ts`, `pool.ts`, `provider-error.ts`, `testing.ts`
 
 Imports these Runtime modules:
 
@@ -44,5 +44,7 @@ Imported by:
 - [`apps/runtime/src/fleet/providers/boat`](../../../apps/runtime/src/fleet/providers/boat/AGENTS.md)
 - [`apps/runtime/src/fleet/template`](../../../apps/runtime/src/fleet/template/AGENTS.md)
 - [`apps/runtime/src/hub`](../../../apps/runtime/src/hub/AGENTS.md)
+- [`apps/runtime/src/hub/claims`](../../../apps/runtime/src/hub/claims/AGENTS.md)
+- [`apps/runtime/src/shared/persistence`](../../../apps/runtime/src/shared/persistence/AGENTS.md)
 
 <!-- module-map:end -->

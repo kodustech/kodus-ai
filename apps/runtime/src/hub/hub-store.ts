@@ -37,6 +37,9 @@ export interface CellSession extends Partial<CellCapabilities> {
     owner: 'kodus' | 'customer';
     orgId?: string | null;
     driver: string;
+    /** The pool and the perRun binding the hub took from the cell's row at its hello, never from the hello (read by the image store's grant). */
+    poolId?: string | null;
+    boundKey?: string | null;
 }
 
 /**
@@ -478,6 +481,8 @@ export class PgHubStore implements HubStore {
             owner: r.owner,
             orgId: r.org_id,
             driver: r.driver,
+            ...(r.pool_id !== undefined ? { poolId: r.pool_id ?? null } : {}),
+            ...(r.bound_key !== undefined ? { boundKey: r.bound_key ?? null } : {}),
             features: knownCellFeatures(r.features ?? []),
             maxClaimSize: r.max_claim_memory_mb != null && r.max_claim_cpus != null ? { memoryMb: r.max_claim_memory_mb, cpus: r.max_claim_cpus } : null,
             defaultClaimSize: r.default_claim_memory_mb != null && r.default_claim_cpus != null ? { memoryMb: r.default_claim_memory_mb, cpus: r.default_claim_cpus } : null,
