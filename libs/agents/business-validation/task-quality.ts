@@ -166,10 +166,16 @@ function detectCriteria(task: Task): Task {
             acceptanceCriteria: withArtifactCriteria(task, section),
         };
     }
-    // An implicit list of the body yields to criteria the artifacts state.
-    const fromArtifacts = withArtifactCriteria(task, []);
-    if (fromArtifacts.length) {
-        return { ...task, acceptanceCriteria: fromArtifacts };
+    // An implicit list of the body yields to criteria the artifacts state;
+    // the body's own AC-labelled items stay, ahead of them.
+    if (withArtifactCriteria(task, []).length) {
+        const labelled = keepSubstantive(listItems(description), own).filter(
+            isLabelledCriterion,
+        );
+        return {
+            ...task,
+            acceptanceCriteria: withArtifactCriteria(task, labelled),
+        };
     }
     const items = keepSubstantive(listItems(description), own);
     return items.length >= 2 ? { ...task, acceptanceCriteria: items } : task;

@@ -1048,4 +1048,23 @@ describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
             'Keep the form accessible',
         ]);
     });
+
+    it('keeps the AC-labelled items of the body ahead of the artifact criteria, and the contract lines out', async () => {
+        const { graded } = await criteria(
+            issue({
+                body: '- AC1: Return 422 on an empty form\n- Some contract line here',
+                artifacts: [
+                    artifact(
+                        2,
+                        'qa.md',
+                        '- AC2: The API returns 409 on a taken email',
+                    ),
+                ],
+            }),
+        );
+        expect(graded.acceptanceCriteria).toEqual([
+            'AC1: Return 422 on an empty form',
+            '[artifact #2 qa.md] AC2: The API returns 409 on a taken email',
+        ]);
+    });
 });
