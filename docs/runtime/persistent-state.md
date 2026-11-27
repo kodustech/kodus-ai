@@ -665,6 +665,26 @@ environment that needs `restart-app` or `recreate` does not pay a failed attempt
 forgets it. A recipe also falls to recreate, without trying, when no copy was taken (the copy failed or was off)
 or the app is instrumented for V8 coverage (only its exit flushes it).
 
+**In-place modes (before `data`).** Two faster paths never stop the data services, and are tried first, per service
+kind (`dockergvisor/datareset_inplace.go`):
+
+- Postgres, found by image (or by `data.in_place.postgres`): after the first seeded boot, and before the volume copy
+  (so the copy holds it too), each database the app uses gets `CREATE DATABASE <db>_kodus_golden TEMPLATE <db>`, with
+  new connections to `<db>` refused and the open ones ended first. A reset ends the app's connections the same way,
+  `DROP DATABASE <db> WITH (FORCE)` and `CREATE DATABASE <db> TEMPLATE <db>_kodus_golden`, keeping the owner. It
+  needs PostgreSQL 13 or later and fails before dropping anything when the golden copy is missing. The database is
+  the hint's, else `data.seed.database`, else `POSTGRES_DB`, else the user.
+- Firebase emulators, only when the recipe declares them (`data.in_place.firebase: {service, import_dir, project}`):
+  `firebase emulators:export <import_dir> --force` after the seed, and a restart of that service on a reset. The
+  service's own command must pass `--import <import_dir>` (and no export on exit), and should have a healthcheck:
+  the cell waits for the container, not for the emulators' ports.
+
+The mode covers a machine only when every data service of the plan is Postgres: a Redis next to it keeps the volume
+restore, which restores both. `data.in_place.off: true` keeps the volume restore. The ladder is then in-place ->
+`data` -> `restart-app` -> `recreate`; a failed swap lets the app connect again and falls to `data`, which brings the
+golden copies back with the volume (a recreate loses them, the next volume restore restores them). The remembered
+mode can now be `data` for an environment whose swap failed.
+
 **What it does not keep.** The app's memory and the files of the app's own containers: a recipe whose app holds round
 state in its process, or on its own disk, keeps `recreate`. The copy is per machine, dies with it, and is never read
 by anything that trusts what the Run wrote (the cell restores it into the same machine only).

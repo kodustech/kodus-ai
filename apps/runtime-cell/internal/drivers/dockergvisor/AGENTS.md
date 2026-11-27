@@ -43,7 +43,7 @@ The cell's driver for self-hosted Linux hosts (`-driver docker-gvisor`, the defa
 
 ## Module map
 
-Files (46, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_lanes.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `coverage.go`, `data.go`, `datareset.go`, `decoy.go`, `diagnose.go`, `diskfloor.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `helper_image.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `prstore.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, `share.go`, … and 6 more
+Files (47, tests apart): `bake.go`, `browser.go`, `browser_explore.go`, `build.go`, `build_lanes.go`, `build_states.go`, `cache.go`, `cache_remote.go`, `claim_limits.go`, `coverage.go`, `data.go`, `datareset.go`, `datareset_inplace.go`, `decoy.go`, `diagnose.go`, `diskfloor.go`, `docker.go`, `driver.go`, `exec.go`, `generation.go`, `golden.go`, `helper_image.go`, `hostdirs.go`, `lifecycle.go`, `lifetime.go`, `machines.go`, `network.go`, `observer.go`, `observer_sql.go`, `orphans.go`, `owner_other.go`, `owner_unix.go`, `pool.go`, `prstore.go`, `reap.go`, `recipe_steps.go`, `registry.go`, `sandbox.go`, `service_logs.go`, `settle.go`, … and 7 more
 
 Imports these Runtime modules:
 
