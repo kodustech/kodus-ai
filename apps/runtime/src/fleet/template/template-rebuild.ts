@@ -6,6 +6,7 @@ import { bakeFingerprintOf } from './bake-probe';
 import type { SetupCandidatesReader } from './setup-candidates-store';
 import type { TemplateStore } from './template-store';
 import type { TemplateBuildTrigger } from './template-trigger';
+import { staleBuild } from './template-watchdog';
 
 // Nothing in the fleet process hears a setup finish (the setup runs in runtime-worker), so a periodic pass finds the
 // environments whose default-branch setup baked a fingerprint no template holds yet and hands them to
@@ -20,7 +21,9 @@ const BATCH = 200;
 
 export interface TemplateRebuildDeps {
     setups: SetupCandidatesReader;
-    templates: Pick<TemplateStore, 'holds'>;
+    templates: Pick<TemplateStore, 'holds' | 'building' | 'failStale'>;
+    /** The setup host ids the provider lists as alive; null when it could not be asked. Absent: the watchdog never judges by the host. */
+    liveSetupHosts?(): Promise<Set<string> | null>;
     /** The boat perRun pools of the fleet, with the orgs each admits. */
     boatPools(): Promise<Array<{ poolId: string; pool: HostPool }>>;
     trigger: Pick<TemplateBuildTrigger, 'onSetupFinished'>;
@@ -51,6 +54,7 @@ export class TemplateRebuildPass {
     async run(): Promise<number> {
         const pools = await this.d.boatPools();
         if (pools.length === 0) return 0;
+        await this.reapStaleBuilds(pools);
         const admitted = (p: { pool: HostPool }, org: string) => !p.pool.admission || p.pool.admission.allowOrgs.includes(org);
         const orgs = pools.some((p) => !p.pool.admission) ? null : [...new Set(pools.flatMap((p) => p.pool.admission?.allowOrgs ?? []))];
         const now = this.d.now();
@@ -62,6 +66,24 @@ export class TemplateRebuildPass {
             await this.d.trigger.onSetupFinished(rec);
         }
         return triggered;
+    }
+
+    /**
+     * Ends the `building` rows whose build died (a fleet restart drops the in-process build) or whose pool moved to another cell
+     * base, so the normal pass below builds them again at once. A row of a pool this fleet does not control is left alone.
+     */
+    private async reapStaleBuilds(pools: Array<{ poolId: string; pool: HostPool }>): Promise<void> {
+        const rows = await this.d.templates.building();
+        if (rows.length === 0) return;
+        const liveSetupHosts = (await this.d.liveSetupHosts?.()) ?? null;
+        for (const row of rows) {
+            const p = pools.find((x) => x.poolId === row.poolId);
+            if (!p) continue;
+            const reason = staleBuild(row, { poolCellBase: cellBaseOf(p.pool.hostClass) ?? '', liveSetupHosts });
+            if (!reason) continue;
+            if (await this.d.templates.failStale(row, row.setupHostId, reason))
+                this.d.log?.('template.build_reaped', { environmentId: row.environmentId, poolId: row.poolId, reason, setupHostId: row.setupHostId, idleMs: row.idleMs });
+        }
     }
 
     private async needsBuild(rec: EnvironmentSetupRecord, pools: Array<{ poolId: string; pool: HostPool }>, now: number): Promise<boolean> {

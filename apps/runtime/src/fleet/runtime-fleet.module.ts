@@ -111,7 +111,17 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
             });
             templates = new TriggeringTemplateResolver(templates, trigger);
             this.templateTrigger = trigger;
-            const pass = new TemplateRebuildPass(new PgDistributedLocks(this.pool), { setups: new PgSetupCandidates(this.pool), templates: templateStore, boatPools: allBoatPools, trigger, now: () => Date.now(), log });
+            const pass = new TemplateRebuildPass(new PgDistributedLocks(this.pool), { setups: new PgSetupCandidates(this.pool), templates: templateStore,
+                boatPools: allBoatPools,
+                // A setup host the provider lists as gone or failed (or does not list) belongs to no live build.
+                liveSetupHosts: async () => {
+                    try {
+                        return new Set((await boat.list({ installation: c.installation })).filter((h) => h.state !== 'gone' && h.state !== 'failed').flatMap((h) => (h.tags.host ? [h.tags.host] : [])));
+                    } catch {
+                        return null;
+                    }
+                },
+                trigger, now: () => Date.now(), log });
             this.rebuildTimer = setInterval(() => void pass.tick(), TEMPLATE_REBUILD_INTERVAL_MS);
             this.rebuildTimer.unref?.();
         }

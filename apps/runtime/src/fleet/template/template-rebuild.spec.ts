@@ -9,7 +9,7 @@ const pool = parseHostPool({ kind: 'HostPool', name: 'boat-perrun', scope: 'kodu
 const record = (over: Partial<EnvironmentSetupRecord> = {}) => ({ environmentId: 'env-1', organizationId: 'org-1', repositoryId: 'r', key: 'k', state: 'active', steps: [], blockers: [], refSource: 'default_branch', bakeRefsDigest: FP, ...over }) as EnvironmentSetupRecord;
 const tpl = { organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n', cellBase: '' };
 
-function world(recs: EnvironmentSetupRecord[], onPool = pool) {
+function world(recs: EnvironmentSetupRecord[], onPool = pool, liveSetupHosts?: () => Promise<Set<string> | null>) {
     const templates = new InMemoryTemplateStore();
     const finished: EnvironmentSetupRecord[] = [];
     const locks = { withLock: async (_k: string, fn: () => Promise<any>) => fn(), tryWithLock: async (_k: string, fn: () => Promise<any>) => fn() };
@@ -17,6 +17,7 @@ function world(recs: EnvironmentSetupRecord[], onPool = pool) {
         setups: { activeSince: async () => recs },
         templates,
         boatPools: async () => [{ poolId: 'p', pool: onPool }],
+        liveSetupHosts,
         trigger: { onSetupFinished: async (r) => void finished.push(r) },
         now: () => Date.now(),
     });
@@ -86,5 +87,54 @@ describe('the template rebuild pass', () => {
         });
         await pass.tick();
         expect(finished).toEqual([]);
+    });
+
+    describe('the watchdog', () => {
+        const aged = (w: ReturnType<typeof world>, ms: number) => void (w.templates.rows[0].touchedAt = Date.now() - ms);
+
+        it('ends a building row whose setup host the provider does not list and builds it again in the same pass, with no failure backoff', async () => {
+            const w = world([record()], pool, async () => new Set());
+            await w.templates.begin({ ...tpl, setupHostId: 'tpl-dead' });
+            aged(w, 90 * 60_000);
+            await w.pass.tick();
+            expect(w.templates.rows[0]).toMatchObject({ state: 'failed', failure: 'watchdog:setup_host_gone' });
+            expect(w.finished).toHaveLength(1);
+        });
+        it('leaves a building row alone while its setup host is listed', async () => {
+            const w = world([record()], pool, async () => new Set(['tpl-live']));
+            await w.templates.begin({ ...tpl, setupHostId: 'tpl-live' });
+            aged(w, 90 * 60_000);
+            await w.pass.tick();
+            expect(w.templates.rows[0].state).toBe('building');
+            expect(w.finished).toEqual([]);
+        });
+        it('leaves a fresh building row alone even before its host exists', async () => {
+            const w = world([record()], pool, async () => new Set());
+            await w.templates.begin({ ...tpl, setupHostId: 'tpl-new' });
+            await w.pass.tick();
+            expect(w.templates.rows[0].state).toBe('building');
+        });
+        it('ends a building row past the ceiling even when the provider could not be asked', async () => {
+            const w = world([record()], pool, async () => null);
+            await w.templates.begin({ ...tpl, setupHostId: 'tpl-x' });
+            aged(w, 3 * 3_600_000);
+            await w.pass.tick();
+            expect(w.templates.rows[0]).toMatchObject({ state: 'failed', failure: 'watchdog:build_timeout' });
+        });
+        it('retires a building row on the pool\'s former cell base and builds it again on the new one', async () => {
+            const v30 = parseHostPool({ ...pool, hostClass: { ...pool.hostClass, boat: { type: 'large', base: 'kodus-cell-v30' } } } as any);
+            const w = world([record()], v30, async () => new Set(['tpl-old']));
+            await w.templates.begin({ ...tpl, cellBase: 'kodus-cell-v29', setupHostId: 'tpl-old' });
+            await w.pass.tick();
+            expect(w.templates.rows[0]).toMatchObject({ state: 'failed', failure: 'watchdog:cell_base_changed' });
+            expect(w.finished).toHaveLength(1);
+        });
+        it('does not touch a building row of a pool this fleet does not control', async () => {
+            const w = world([record()], pool, async () => new Set());
+            await w.templates.begin({ ...tpl, poolId: 'other', setupHostId: 'tpl-z' });
+            aged(w, 3 * 3_600_000);
+            await w.pass.tick();
+            expect(w.templates.rows[0].state).toBe('building');
+        });
     });
 });

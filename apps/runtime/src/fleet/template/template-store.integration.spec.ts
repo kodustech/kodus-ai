@@ -167,4 +167,35 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect(await store.buildingSetupHosts()).toContain('tpl-new');
         expect(await store.buildingSetupHosts()).not.toContain('tpl-second');
     });
+
+    it('lists the building templates with how long since each was touched, and ends one as failed only while it still names that setup host', async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = 'd'.repeat(64);
+        const at = { organizationId: 'org-w', environmentId: 'env-w', poolId: 'p', fingerprint: fp };
+        await store.begin({ ...at, name: 'n', cellBase: 'v29', setupHostId: 'tpl-old' });
+        await pool.query(`UPDATE runtime.runtime_env_templates SET updated_at = now() - interval '90 minutes' WHERE org_id = 'org-w'`);
+        const [row] = (await store.building()).filter((b) => b.organizationId === 'org-w');
+        expect(row).toMatchObject({ environmentId: 'env-w', cellBase: 'v29', setupHostId: 'tpl-old' });
+        expect(row.idleMs).toBeGreaterThan(89 * 60_000);
+        expect(await store.failStale(at, 'tpl-other', 'build_timeout')).toBe(false);
+        expect((await store.find('org-w', 'env-w', 'p', fp))?.state).toBe('building');
+        expect(await store.failStale(at, 'tpl-old', 'setup_host_gone')).toBe(true);
+        expect(await store.failStale(at, 'tpl-old', 'setup_host_gone')).toBe(false);
+        expect((await store.building()).filter((b) => b.organizationId === 'org-w')).toEqual([]);
+    });
+
+    it('does not back off from a watchdog-ended build but does from an ordinary failed one, and a building row of another cell base holds nothing', async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = 'e'.repeat(64);
+        const at = { organizationId: 'org-b', environmentId: 'env-b', poolId: 'p', fingerprint: fp };
+        const recent = new Date(Date.now() - 1_800_000);
+        await store.begin({ ...at, name: 'n', cellBase: 'v29', setupHostId: 'tpl-1' });
+        expect(await store.holds({ ...at, cellBase: 'v29' }, recent)).toBe(true);
+        expect(await store.holds({ ...at, cellBase: 'v30' }, recent)).toBe(false);
+        await store.failStale(at, 'tpl-1', 'setup_host_gone');
+        expect(await store.holds({ ...at, cellBase: 'v29' }, recent)).toBe(false);
+        await store.begin({ ...at, name: 'n', cellBase: 'v29', setupHostId: 'tpl-2' });
+        await store.fail(at, 'bake_failed');
+        expect(await store.holds({ ...at, cellBase: 'v29' }, recent)).toBe(true);
+    });
 });

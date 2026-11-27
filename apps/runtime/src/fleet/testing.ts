@@ -3,6 +3,7 @@ import type { HostPool } from '@libs/runtime/fleet/pool';
 import type { Demand, FleetStore, HostFailure, HostReason, HostRow, HostState, PoolStatus, StoredPool } from './fleet-store';
 import type { HubFleetPort, PerRunHostDeps, StepRetry, TemplateResolver } from './per-run-host';
 import type { TemplateRow, TemplateStore } from './template/template-store';
+import { WATCHDOG_FAILURE_PREFIX } from './template/template-watchdog';
 
 // Test doubles of runtime-fleet: the store in memory, a hub that mints and
 // registers on cue, a step runner that records outputs like DBOS does and can
@@ -197,7 +198,7 @@ export type FleetDepsOverrides = Partial<Omit<PerRunHostDeps, 'step' | 'sleep' |
 
 /** runtime_env_templates in memory, as PgTemplateStore. */
 export class InMemoryTemplateStore implements TemplateStore {
-    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string; seq?: number }> = [];
+    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string; seq?: number; touchedAt?: number }> = [];
     private at = 0;
     private readonly readyAt = new Map<TemplateRow, number>();
 
@@ -215,9 +216,9 @@ export class InMemoryTemplateStore implements TemplateStore {
     }
     async begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        if (!r) this.rows.push({ ...t, state: 'building' });
+        if (!r) this.rows.push({ ...t, state: 'building', touchedAt: Date.now() });
         else if (r.state === 'failed' || r.state === 'replaced' || (r.state === 'ready' && r.cellBase !== t.cellBase))
-            Object.assign(r, { state: 'building', setupHostId: t.setupHostId, name: t.name, cellBase: t.cellBase, retired: r.state === 'ready' && r.name !== t.name ? r.name : r.retired });
+            Object.assign(r, { state: 'building', touchedAt: Date.now(), setupHostId: t.setupHostId, name: t.name, cellBase: t.cellBase, retired: r.state === 'ready' && r.name !== t.name ? r.name : r.retired });
         else return false;
         return true;
     }
@@ -228,6 +229,15 @@ export class InMemoryTemplateStore implements TemplateStore {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
         if (r?.state === 'building') Object.assign(r, { state: 'failed', failure: reason, failedAt: Date.now(), seq: ++this.at });
     }
+    async building() {
+        return this.rows.filter((r) => r.state === 'building').map((r) => ({ organizationId: r.organizationId, environmentId: r.environmentId, poolId: r.poolId, fingerprint: r.fingerprint, cellBase: r.cellBase, setupHostId: r.setupHostId ?? null, idleMs: Date.now() - (r.touchedAt ?? Date.now()) }));
+    }
+    async failStale(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, setupHostId: string | null, reason: string) {
+        const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
+        if (r?.state !== 'building' || (r.setupHostId ?? null) !== setupHostId) return false;
+        Object.assign(r, { state: 'failed', failure: `${WATCHDOG_FAILURE_PREFIX}${reason}`, failedAt: Date.now(), seq: ++this.at });
+        return true;
+    }
     async lastFailure(o: string, e: string, p: string, cellBase: string) {
         const rows = this.rows.filter((t) => t.organizationId === o && t.environmentId === e && t.poolId === p && t.cellBase === cellBase && t.seq !== undefined && (t.state === 'failed' || t.state === 'ready' || t.state === 'replaced'));
         rows.sort((a, b) => b.seq! - a.seq!);
@@ -235,7 +245,7 @@ export class InMemoryTemplateStore implements TemplateStore {
     }
     async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint' | 'cellBase'>, failedAfter: Date) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        return !!r && ((r.state === 'ready' && r.cellBase === t.cellBase) || r.state === 'building' || (r.state === 'failed' && (r.failedAt ?? 0) > failedAfter.getTime()));
+        return !!r && ((r.state === 'ready' && r.cellBase === t.cellBase) || (r.state === 'building' && r.cellBase === t.cellBase) || (r.state === 'failed' && !r.failure?.startsWith(WATCHDOG_FAILURE_PREFIX) && (r.failedAt ?? 0) > failedAfter.getTime()));
     }
     async promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint)!;

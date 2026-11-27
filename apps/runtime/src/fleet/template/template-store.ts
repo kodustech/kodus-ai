@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 
 import type { TemplateResolver } from '../per-run-host';
+import { WATCHDOG_FAILURE_PREFIX } from './template-watchdog';
 
 // runtime_env_templates (docs/runtime/host-providers.md §8.2): which saved
 // snapshot each environment's Run hosts start from, per pool. runtime-fleet
@@ -23,6 +24,12 @@ export interface TemplateRow {
     cellBase: string;
 }
 
+export interface BuildingTemplate extends Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint' | 'cellBase'> {
+    setupHostId: string | null;
+    /** ms since the row was last touched. */
+    idleMs: number;
+}
+
 type TemplateKey = Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>;
 
 export interface TemplateStore {
@@ -38,6 +45,13 @@ export interface TemplateStore {
     /** The setup hosts of the templates building now (recently touched): the orphan pass spares them. */
     buildingSetupHosts(): Promise<string[]>;
     fail(t: TemplateKey, reason: string): Promise<void>;
+    /** Every template building now, with how long since its row was touched: what the rebuild pass's watchdog judges. */
+    building(): Promise<BuildingTemplate[]>;
+    /**
+     * Ends the building row as failed with `reason`, only while it still names `setupHostId` (a build that took the row over since
+     * is left alone). The reason starts with WATCHDOG_FAILURE_PREFIX, so `holds` does not back off from it.
+     */
+    failStale(t: TemplateKey, setupHostId: string | null, reason: string): Promise<boolean>;
     /** Marks this template ready and every other ready one of its environment and pool replaced; the snapshots to delete (theirs, and the one this build took over). */
     promote(t: TemplateKey): Promise<string[]>;
     /**
@@ -46,7 +60,7 @@ export interface TemplateStore {
      * (build-template.ts), so the next one can start from the cell base.
      */
     lastFailure(organizationId: string, environmentId: string, poolId: string, cellBase: string): Promise<string | null>;
-    /** Whether this fingerprint needs no build now: a template ready on `cellBase` or building holds it, or its build failed after `failedAfter`. */
+    /** Whether this fingerprint needs no build now: a template ready or building on `cellBase` holds it, or its build failed after `failedAfter` (a watchdog-ended build never backs off). */
     holds(t: TemplateKey & { cellBase: string }, failedAfter: Date): Promise<boolean>;
 }
 
@@ -95,6 +109,21 @@ export class PgTemplateStore implements TemplateStore {
         await this.db.query(`UPDATE runtime.runtime_env_templates SET state = 'failed', failure = $5, updated_at = now() WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND state = 'building'`, [t.organizationId, t.environmentId, t.poolId, t.fingerprint, reason]);
     }
 
+    async building() {
+        const r = await this.db.query(
+            `SELECT org_id, environment_id, pool_id, fingerprint, cell_base, setup_host_id, (extract(epoch FROM (now() - updated_at)) * 1000)::bigint AS idle_ms FROM runtime.runtime_env_templates WHERE state = 'building'`,
+        );
+        return r.rows.map((x) => ({ organizationId: x.org_id, environmentId: x.environment_id, poolId: x.pool_id, fingerprint: x.fingerprint, cellBase: x.cell_base ?? '', setupHostId: x.setup_host_id ?? null, idleMs: Number(x.idle_ms) }));
+    }
+
+    async failStale(t: TemplateKey, setupHostId: string | null, reason: string) {
+        const r = await this.db.query(
+            `UPDATE runtime.runtime_env_templates SET state = 'failed', failure = $6, updated_at = now() WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND state = 'building' AND setup_host_id IS NOT DISTINCT FROM $5`,
+            [t.organizationId, t.environmentId, t.poolId, t.fingerprint, setupHostId, `${WATCHDOG_FAILURE_PREFIX}${reason}`],
+        );
+        return (r.rowCount ?? 0) > 0;
+    }
+
     async lastFailure(organizationId: string, environmentId: string, poolId: string, cellBase: string) {
         const r = await this.db.query(
             `SELECT state, failure FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND cell_base = $4 AND state IN ('failed', 'ready', 'replaced') ORDER BY updated_at DESC LIMIT 1`,
@@ -107,7 +136,7 @@ export class PgTemplateStore implements TemplateStore {
     async holds(t: TemplateKey & { cellBase: string }, failedAfter: Date) {
         const r = await this.db.query(
             `SELECT 1 FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4
-               AND ((state = 'ready' AND cell_base = $6) OR (state = 'building' AND updated_at > now() - interval '3 hours') OR (state = 'failed' AND updated_at > $5)) LIMIT 1`,
+               AND ((state = 'ready' AND cell_base = $6) OR (state = 'building' AND cell_base = $6 AND updated_at > now() - interval '3 hours') OR (state = 'failed' AND updated_at > $5 AND failure NOT LIKE '${WATCHDOG_FAILURE_PREFIX}%')) LIMIT 1`,
             [t.organizationId, t.environmentId, t.poolId, t.fingerprint, failedAfter, t.cellBase],
         );
         return r.rows.length > 0;
