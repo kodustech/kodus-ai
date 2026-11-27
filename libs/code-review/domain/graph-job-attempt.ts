@@ -1,5 +1,6 @@
 import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 
+export const MAX_GRAPH_INCREMENTAL_FILES = 500;
 export const AST_GRAPH_BUILD_TIMEOUT_MS = 19 * 60 * 1000;
 export const AST_GRAPH_INCREMENTAL_TIMEOUT_MS = 9 * 60 * 1000;
 

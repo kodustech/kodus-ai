@@ -1305,9 +1305,10 @@ export class E2BSandboxService implements ISandboxProvider {
         const safeRefspec = shSingleQuote(refspec);
         const safeLocalRef = shSingleQuote(localRef);
 
+        const depth = params.includeParentCommit ? 2 : 1;
         const fetchCmd = hasAuth
-            ? `git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`
-            : `git fetch --depth=1 ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`;
+            ? `git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=${depth} ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`
+            : `git fetch --depth=${depth} ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`;
 
         const cloneResult = await sandbox.commands.run(
             [

@@ -1,5 +1,15 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { JobProcessorRouterService } from '@libs/core/workflow/infrastructure/job-processor-router.service';
+import { WorkflowJobConsumer } from '@libs/core/workflow/infrastructure/workflow-job-consumer.service';
+import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import { RabbitMQErrorHandler } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { GraphIndexerService } from '../services/graph/graph-indexer.service';
+
 import { DataSource, EntitySchema } from 'typeorm';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowJobModel } from '@libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model';
@@ -58,6 +68,7 @@ const db = new DataSource({
                 errorClassification: { type: 'varchar', nullable: true },
                 lastError: { type: 'text', nullable: true },
                 completedAt: { type: 'timestamp', nullable: true },
+                workflowType: { type: 'varchar', nullable: true },
             },
         }),
     ],
@@ -83,6 +94,37 @@ async function waitForBlockedWriter() {
         await new Promise((resolve) => setTimeout(resolve, 10));
     }
     throw new Error('Expected a PostgreSQL writer to be waiting on a lock');
+}
+
+function graphConsumer(
+    jobs: WorkflowJobRepository,
+    incremental: AstGraphIncrementalJobProcessor,
+) {
+    const unused = {} as never;
+    const router = new JobProcessorRouterService(
+        jobs,
+        unused,
+        unused,
+        unused,
+        unused,
+        incremental,
+        unused,
+        unused,
+    );
+    return new WorkflowJobConsumer(
+        router,
+        {
+            claim: async () => true,
+            releaseIfHeldBy: async () => {},
+            completeIfHeldBy: async () => {},
+        } as never,
+        jobs,
+        {
+            setContext: () => {},
+            runInSpan: (_name, fn) => fn({ setAttributes: () => {} }),
+        } as never,
+        { protectTask: async () => {}, unprotectTask: async () => {} } as never,
+    );
 }
 
 function readPublishedRevision(repoId: string) {
@@ -310,9 +352,9 @@ const run =
                     {
                         incrementalUpdate: async ({ job: writing }) => {
                             if (condition === 'provider failure')
-                                throw new Error(
-                                    'ECONNRESET private-provider-query',
-                                );
+                                throw new Error('private-provider-query', {
+                                    cause: { code: 'ECONNRESET' },
+                                });
                             await rows.update(job.jobId, {
                                 status: JobStatus.PROCESSING,
                                 metadata: { attemptId: replacementId },
@@ -380,6 +422,266 @@ const run =
                 ).toEqual(['callee', 'caller']);
             },
         );
+
+        it.each(['recorded', 'held'] as const)(
+            'keeps the stored job after the router and consumer rethrow a %s error',
+            async (kind) => {
+                const rows = db.getRepository(WorkflowJobModel);
+                const jobs = new WorkflowJobRepository(rows);
+                const error =
+                    kind === 'recorded'
+                        ? new RecordedJobFailure(
+                              'Repository graph incremental update failed temporarily',
+                          )
+                        : new ClaimConflictError();
+                const stored = {
+                    status:
+                        kind === 'recorded'
+                            ? JobStatus.FAILED
+                            : JobStatus.PROCESSING,
+                    metadata: { attemptId: randomUUID() },
+                    lastError: kind === 'recorded' ? error.message : null,
+                    errorClassification:
+                        kind === 'recorded'
+                            ? ErrorClassification.RETRYABLE
+                            : null,
+                };
+                await rows.update(job.jobId, {
+                    ...stored,
+                    workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
+                });
+                const consumer = graphConsumer(jobs, {
+                    process: async () => {
+                        throw error;
+                    },
+                } as never);
+                await expect(
+                    consumer.handleAstGraphIncrementalJob(
+                        { jobId: job.jobId },
+                        {
+                            properties: {
+                                messageId: randomUUID(),
+                                headers: {},
+                            },
+                        } as never,
+                    ),
+                ).rejects.toBe(error);
+                expect(
+                    await rows.findOneOrFail({
+                        where: { uuid: job.jobId },
+                        select: {
+                            status: true,
+                            metadata: true,
+                            lastError: true,
+                            errorClassification: true,
+                        },
+                    }),
+                ).toEqual(stored);
+            },
+        );
+
+        it('requeues a conflicting merge and publishes all changes from the fresh Git checkout', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'graph-merge-'));
+            const stale = join(dir, 'first');
+            const checkout = join(dir, 'current');
+            const git = (cwd: string, ...args: string[]) =>
+                execFileSync(
+                    'git',
+                    [
+                        '-C',
+                        cwd,
+                        '-c',
+                        'user.name=Graph Test',
+                        '-c',
+                        'user.email=graph@example.org',
+                        '-c',
+                        'commit.gpgsign=false',
+                        ...args,
+                    ],
+                    { encoding: 'utf8' },
+                ).trim();
+            const commit = (file: string, value: string) => {
+                writeFileSync(join(checkout, file), value);
+                git(checkout, 'add', '--', file);
+                git(checkout, 'commit', '-qm', 'update ' + file);
+                return git(checkout, 'rev-parse', 'HEAD');
+            };
+            const symbol = (file: string, content: string) => ({
+                ...node(content),
+                file_path: file,
+                qualified_name: file + '::' + content,
+            });
+            try {
+                execFileSync('git', ['init', '-q', checkout]);
+                const base = commit('a.ts', 'a0');
+                const first = commit('a.ts', 'a1');
+                git(
+                    checkout,
+                    'worktree',
+                    'add',
+                    '-q',
+                    '--detach',
+                    stale,
+                    first,
+                );
+                const middle = commit('b.ts', 'b1');
+                const latest = commit('c.ts', 'c1');
+                await graph.fullRebuild(repoId, [symbol('a.ts', 'a0')], [], {
+                    sha: base,
+                });
+                const rows = db.getRepository(WorkflowJobModel);
+                const jobs = new WorkflowJobRepository(rows);
+                await rows.update(job.jobId, {
+                    workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
+                    status: JobStatus.PENDING,
+                    metadata: null,
+                    payload: {
+                        repositoryId: repoId,
+                        fullName: 'org/repo',
+                        defaultBranch: 'main',
+                        platform: 'GITHUB',
+                        changedFiles: ['a.ts'],
+                        newSha: first,
+                    },
+                });
+                const parsed: string[][] = [];
+                let output = '';
+                const indexer = new GraphIndexerService(graph, {
+                    install: async () => {},
+                    parseFiles: async (sandbox, files: string[]) => {
+                        parsed.push(files);
+                        output = JSON.stringify({
+                            nodes: files.map((file) =>
+                                symbol(
+                                    file,
+                                    readFileSync(
+                                        join(sandbox.repoDir, file),
+                                        'utf8',
+                                    ),
+                                ),
+                            ),
+                            edges: [],
+                        });
+                        if (sandbox.repoDir === stale)
+                            await graph.fullRebuild(
+                                repoId,
+                                [symbol('a.ts', 'a1'), symbol('b.ts', 'b1')],
+                                [],
+                                { sha: middle },
+                            );
+                    },
+                } as never);
+                const dirs = [stale, checkout];
+                const processor = new AstGraphIncrementalJobProcessor(
+                    jobs,
+                    {
+                        acquire: async () => {
+                            const repoDir = dirs.shift();
+                            return {
+                                leaseId: repoDir,
+                                sandboxId: repoDir,
+                                wasCreated: true,
+                                sandbox: {
+                                    repoDir,
+                                    run: async (command: string) => ({
+                                        stdout: execFileSync(
+                                            '/bin/sh',
+                                            ['-c', command],
+                                            { encoding: 'utf8' },
+                                        ),
+                                        exitCode: 0,
+                                    }),
+                                    readFile: async () => output,
+                                },
+                            };
+                        },
+                        release: async () => {},
+                    } as never,
+                    {
+                        getCloneParams: async () => ({
+                            url: 'https://example.org/repo',
+                        }),
+                    } as never,
+                    indexer,
+                    {
+                        findById: () =>
+                            db
+                                .getRepository(RepositoryModel)
+                                .findOneByOrFail({ uuid: repoId }),
+                    } as never,
+                    new GraphJobSandbox(),
+                );
+                const consumer = graphConsumer(jobs, processor);
+                const payload = { jobId: job.jobId };
+                const envelope = {
+                    properties: {
+                        messageId: randomUUID(),
+                        headers: { 'x-retry-count': 1 },
+                    },
+                    fields: {
+                        exchange: 'workflow.exchange',
+                        routingKey: 'workflow.jobs.org.AST_GRAPH_INCREMENTAL',
+                    },
+                    content: Buffer.from(JSON.stringify(payload)),
+                };
+                const firstDelivery = consumer.handleAstGraphIncrementalJob(
+                    payload,
+                    envelope as never,
+                );
+                await expect(firstDelivery).rejects.toBeInstanceOf(
+                    GraphBaselineChangedError,
+                );
+                const error = await firstDelivery.catch((e) => e);
+                const publish = jest.fn().mockResolvedValue(undefined);
+                const handler = new RabbitMQErrorHandler(
+                    { publish } as never,
+                    { get: () => undefined } as never,
+                );
+                await handler.handle(
+                    { ack: jest.fn() },
+                    envelope as never,
+                    error,
+                );
+                expect(publish).toHaveBeenCalledTimes(1);
+                const [exchange, routingKey, body, options] =
+                    publish.mock.calls[0];
+                expect([
+                    exchange,
+                    routingKey,
+                    options.headers['x-retry-count'],
+                ]).toEqual([
+                    'workflow.exchange.delayed',
+                    envelope.fields.routingKey,
+                    1,
+                ]);
+                const retry = JSON.parse(body.toString());
+                await consumer.handleAstGraphIncrementalJob(retry, {
+                    ...envelope,
+                    properties: options,
+                } as never);
+                expect(parsed).toEqual([['a.ts'], ['c.ts']]);
+                expect((await jobs.findOne(job.jobId)).status).toBe(
+                    JobStatus.COMPLETED,
+                );
+                expect(await readPublishedRevision(repoId)).toEqual({
+                    astGraphStatus: AstGraphStatus.READY,
+                    astGraphSha: latest,
+                    astGraphNodeCount: 3,
+                    astGraphEdgeCount: 0,
+                });
+                expect(
+                    (await graph.exportAsGraphJson(repoId)).nodes
+                        .map((n) => [n.file_path, n.name])
+                        .sort(),
+                ).toEqual([
+                    ['a.ts', 'a1'],
+                    ['b.ts', 'b1'],
+                    ['c.ts', 'c1'],
+                ]);
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
 
         it('claims only the observed attempt, keeps live work and reclaims after the deadline', async () => {
             const rows = db.getRepository(WorkflowJobModel);

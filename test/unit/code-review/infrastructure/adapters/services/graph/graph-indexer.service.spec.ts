@@ -386,6 +386,57 @@ describe('GraphIndexerService', () => {
         const changedFiles = ['src/foo.ts', 'src/bar.ts'];
         const newSha = 'new-sha-789';
 
+        it('rebuilds the checkout atomically when the prior tree cannot be compared', async () => {
+            await service.incrementalUpdate({
+                repositoryId: REPO_ID,
+                sandbox: mockSandbox,
+                expectedSha: 'prior',
+                newSha,
+                changedFiles: null,
+            });
+            expect(
+                findRunIndex(mockSandbox, (cmd) =>
+                    cmd.includes('kodus-graph parse --all'),
+                ),
+            ).toBeGreaterThanOrEqual(0);
+            const { nodes, edges } = JSON.parse(graphJson);
+            expect(mockAstGraphRepo.fullRebuild).toHaveBeenCalledWith(
+                REPO_ID,
+                nodes,
+                edges,
+                {
+                    sha: newSha,
+                    expectedSha: 'prior',
+                    signal: undefined,
+                    job: undefined,
+                },
+            );
+            expect(mockAstGraphRepo.updateBuildStatus).not.toHaveBeenCalled();
+        });
+
+        it('publishes an empty diff without invoking the parser', async () => {
+            await service.incrementalUpdate({
+                repositoryId: REPO_ID,
+                sandbox: mockSandbox,
+                expectedSha: 'prior',
+                newSha,
+                changedFiles: [],
+            });
+            expect(mockSandbox.run).not.toHaveBeenCalled();
+            expect(mockAstGraphRepo.incrementalUpdate).toHaveBeenCalledWith(
+                REPO_ID,
+                [],
+                [],
+                [],
+                {
+                    sha: newSha,
+                    expectedSha: 'prior',
+                    signal: undefined,
+                    job: undefined,
+                },
+            );
+        });
+
         it('should pass changed files to kodus-graph parse --files', async () => {
             await service.incrementalUpdate({
                 repositoryId: REPO_ID,

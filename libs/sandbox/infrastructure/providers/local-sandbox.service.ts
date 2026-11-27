@@ -239,7 +239,9 @@ export class LocalSandboxService implements ISandboxProvider {
                             '-C',
                             tempDir,
                             'fetch',
-                            '--depth=1',
+                            params.includeParentCommit
+                                ? '--depth=2'
+                                : '--depth=1',
                             url,
                             `${refspec}:${localRef}`,
                         ],

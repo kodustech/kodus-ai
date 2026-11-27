@@ -144,31 +144,54 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
             authUsername: 'x-access-token',
             branch: 'main',
             sandboxMetadata: { stage: 'graph-incremental' },
+            includeParentCommit: true,
         });
     });
 
-    it('publishes the checked-out SHA for a late merge event', async () => {
+    it('publishes every path between the baseline and a later checkout', async () => {
+        const baseline = 'a'.repeat(40);
+        const head = 'b'.repeat(40);
+        const changedFiles = ['src/a.ts', 'src/from-next-merge.ts'];
         repositoryService.findById.mockResolvedValueOnce({
             externalId: 'ext-1',
             defaultBranch: 'main',
             fullName: 'org/repo',
-            astGraphSha: 'previous',
+            astGraphSha: baseline,
         });
+        sandbox.run
+            .mockResolvedValueOnce({ stdout: head, exitCode: 0 })
+            .mockResolvedValueOnce({
+                stdout: changedFiles.join('\0') + '\0\0',
+                exitCode: 0,
+            });
         await processor.process('job-2');
-        expect(graphIndexer.incrementalUpdate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                expectedSha: 'previous',
-                newSha: 'checked-out-sha',
-                changedFiles: job.payload.changedFiles,
-            }),
-        );
+        const attemptId =
+            jobRepository.update.mock.calls[0][1].metadata.attemptId;
+        expect(graphIndexer.incrementalUpdate).toHaveBeenCalledWith({
+            repositoryId: 'repo-1',
+            sandbox,
+            job: { jobId: 'job-2', attemptId },
+            expectedSha: baseline,
+            newSha: head,
+            changedFiles,
+            signal: undefined,
+        });
         expect(jobRepository.update).toHaveBeenLastCalledWith(
             'job-2',
-            expect.objectContaining({
-                result: expect.objectContaining({ newSha: 'checked-out-sha' }),
-            }),
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: expect.any(Date),
+                currentStage: 'DONE',
+                result: {
+                    repositoryId: 'repo-1',
+                    newSha: head,
+                    changedFilesCount: 2,
+                    sandboxId: 'sbx-2',
+                    durationMs: expect.any(Number),
+                },
+            },
             JobStatus.PROCESSING,
-            expect.any(String),
+            attemptId,
         );
     });
 
@@ -198,7 +221,7 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
 
     it.each([
         [
-            'invalid parser output',
+            'invalid parser output quoting 503 timeout ECONNRESET',
             ErrorClassification.PERMANENT,
             'Repository graph incremental update failed',
         ],
@@ -211,7 +234,12 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
         'keeps provider details out of the stored and rethrown %s error',
         async (reason, classification, message) => {
             graphIndexer.incrementalUpdate.mockRejectedValueOnce(
-                new Error(`${reason}: private-provider-query`),
+                Object.assign(
+                    new Error(`${reason}: private-provider-query`),
+                    reason === 'ECONNRESET'
+                        ? { cause: { code: 'ECONNRESET' } }
+                        : {},
+                ),
             );
             const result = processor.process('job-2');
             if (classification === ErrorClassification.RETRYABLE) {
@@ -220,15 +248,23 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
             } else {
                 await result;
             }
+            const attemptId =
+                jobRepository.update.mock.calls[0][1].metadata.attemptId;
             expect(jobRepository.update).toHaveBeenLastCalledWith(
                 'job-2',
-                expect.objectContaining({
+                {
                     status: JobStatus.FAILED,
                     errorClassification: classification,
                     lastError: message,
-                }),
+                    failedAt: expect.any(Date),
+                    metadata: {
+                        attemptId,
+                        sandboxId: 'sbx-2',
+                        stage: 'FAILED',
+                    },
+                },
                 [JobStatus.PROCESSING, JobStatus.FAILED],
-                expect.any(String),
+                attemptId,
             );
         },
     );

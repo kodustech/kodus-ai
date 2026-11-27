@@ -19,6 +19,8 @@ export interface CreateSandboxParams {
      * base. Falsy → fall back to legacy clone-by-branch.
      */
     checkoutSha?: string;
+    /** Include the direct parents for graph jobs that compare the checked-out tree. */
+    includeParentCommit?: boolean;
     /**
      * CLI-only: unified diff to `git apply --3way` on top of `checkoutSha`
      * after clone. Recreates branches that aren't pushed and uncommitted

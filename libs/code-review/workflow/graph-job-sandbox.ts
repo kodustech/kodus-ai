@@ -1,6 +1,3 @@
-import { GraphBaselineChangedError } from '@libs/code-review/domain/graph-job-attempt';
-import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
@@ -62,26 +59,4 @@ export class GraphJobSandbox implements BeforeApplicationShutdown {
             });
         }
     }
-}
-
-export async function graphCheckoutSha(
-    sandbox: SandboxInstance,
-    wasCreated: boolean,
-    baseline: string | null,
-    signal?: AbortSignal,
-): Promise<string> {
-    signal?.throwIfAborted();
-    const result = await raceWithAbortSignal(
-        sandbox.run(`git -C ${shSingleQuote(sandbox.repoDir)} rev-parse HEAD`, {
-            timeoutMs: 10_000,
-            signal,
-        }),
-        signal,
-    );
-    const sha = result.stdout?.trim();
-    if (result.exitCode || !sha)
-        throw new Error('Failed to resolve HEAD sha from sandbox');
-    // Reconnecting is best-effort. A reused checkout can predate our baseline read.
-    if (!wasCreated && sha !== baseline) throw new GraphBaselineChangedError();
-    return sha;
 }

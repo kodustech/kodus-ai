@@ -30,8 +30,10 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import { classifyGraphJobError } from './graph-job-failure';
 import { claimGraphJob, updateGraphJobStage } from './graph-job-stage';
-import { GraphJobSandbox, graphCheckoutSha } from './graph-job-sandbox';
+import { GraphJobSandbox } from './graph-job-sandbox';
+import { graphCheckoutSha, graphCheckoutFiles } from './graph-checkout';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. An incremental AST update on a large changeset can legitimately
@@ -224,6 +226,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                             authToken: cloneParams.auth?.token || '',
                             authUsername: cloneParams.auth?.username,
                             branch,
+                            includeParentCommit: true,
                             platform: payload.platform as PlatformType,
                             sandboxMetadata: { stage: 'graph-incremental' },
                             organizationId:
@@ -268,13 +271,20 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                 signal,
             );
 
+            const changedFiles = await graphCheckoutFiles(
+                sandbox,
+                repoRecord.astGraphSha,
+                headSha,
+                signal,
+            );
+            const fileCount = changedFiles?.length;
             // 3. Run incremental AST graph update
             signal?.throwIfAborted();
             await raceWithAbortSignal(
                 updateGraphJobStage(this.jobRepository, attempt, 'PARSING', {
                     sandboxId,
                     newSha: headSha,
-                    changedFilesCount: payload.changedFiles.length,
+                    changedFilesCount: fileCount,
                 }),
                 signal,
             );
@@ -286,7 +296,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                     sandbox,
                     job: attempt,
                     expectedSha: repoRecord.astGraphSha ?? null,
-                    changedFiles: payload.changedFiles,
+                    changedFiles,
                     newSha: headSha,
                     signal,
                 }),
@@ -302,7 +312,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                     {
                         repositoryId: payload.repositoryId,
                         newSha: headSha,
-                        changedFilesCount: payload.changedFiles.length,
+                        changedFilesCount: fileCount,
                         sandboxId,
                         durationMs: totalMs,
                     },
@@ -312,13 +322,13 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
             );
 
             this.logger.log({
-                message: `[AST-GRAPH-INCR] Incremental update COMPLETED for ${repoLabel} in ${totalMs}ms (${payload.changedFiles.length} files)`,
+                message: `[AST-GRAPH-INCR] Incremental update COMPLETED for ${repoLabel} in ${totalMs}ms (${fileCount ?? 'all'} files)`,
                 context: AstGraphIncrementalJobProcessor.name,
                 metadata: {
                     jobId,
                     repositoryId: payload.repositoryId,
                     newSha: headSha,
-                    changedFilesCount: payload.changedFiles.length,
+                    changedFilesCount: fileCount,
                     sandboxId,
                     durationMs: totalMs,
                 },
@@ -326,7 +336,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         } catch (error) {
             if (error instanceof StaleGraphJobError) return;
             const totalMs = Date.now() - jobStart;
-            const classification = this.classifyError(error);
+            const classification = classifyGraphJobError(error);
 
             this.logger.error({
                 message: `[AST-GRAPH-INCR] Incremental update FAILED for ${repoLabel} after ${totalMs}ms`,
@@ -362,37 +372,6 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         }
     }
 
-    private classifyError(error: any): ErrorClassification {
-        if (error instanceof GraphBaselineChangedError)
-            return ErrorClassification.RETRYABLE;
-        const msg = (error?.message || '').toLowerCase();
-        const stderr = (error?.result?.stderr || '').toLowerCase();
-        const combined = `${msg} ${stderr}`;
-
-        // Transient: sandbox, network, timeout, clone auth, resource exhaustion
-        if (
-            combined.includes('timeout') ||
-            combined.includes('econnrefused') ||
-            combined.includes('econnreset') ||
-            combined.includes('enotfound') ||
-            combined.includes('epipe') ||
-            combined.includes('sandbox') ||
-            combined.includes('exit status 128') ||
-            combined.includes('could not resolve host') ||
-            combined.includes('rate limit') ||
-            combined.includes('out of memory') ||
-            combined.includes('enomem') ||
-            combined.includes('enospc') ||
-            combined.includes('503') ||
-            combined.includes('502') ||
-            combined.includes('temporarily unavailable')
-        ) {
-            return ErrorClassification.RETRYABLE;
-        }
-
-        return ErrorClassification.PERMANENT;
-    }
-
     private failureMessage(classification: ErrorClassification): string {
         return classification === ErrorClassification.RETRYABLE
             ? 'Repository graph incremental update failed temporarily'
@@ -402,7 +381,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
     async handleFailure(
         jobId: string,
         error: Error,
-        classification: ErrorClassification = this.classifyError(error),
+        classification: ErrorClassification = classifyGraphJobError(error),
         sandboxId?: string,
         attemptId?: string,
     ): Promise<void> {

@@ -30,8 +30,10 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import { classifyGraphJobError } from './graph-job-failure';
 import { claimGraphJob, updateGraphJobStage } from './graph-job-stage';
-import { GraphJobSandbox, graphCheckoutSha } from './graph-job-sandbox';
+import { GraphJobSandbox } from './graph-job-sandbox';
+import { graphCheckoutSha } from './graph-checkout';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. A full-repo AST build on a large repo can legitimately run
@@ -335,7 +337,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         } catch (error) {
             if (error instanceof StaleGraphJobError) return;
             const totalMs = Date.now() - jobStart;
-            const classification = this.classifyError(error);
+            const classification = classifyGraphJobError(error);
 
             this.logger.error({
                 message: `[AST-GRAPH-JOB] Build FAILED for ${repoLabel} after ${totalMs}ms`,
@@ -372,37 +374,6 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         }
     }
 
-    private classifyError(error: any): ErrorClassification {
-        if (error instanceof GraphBaselineChangedError)
-            return ErrorClassification.RETRYABLE;
-        const msg = (error?.message || '').toLowerCase();
-        const stderr = (error?.result?.stderr || '').toLowerCase();
-        const combined = `${msg} ${stderr}`;
-
-        // Transient: sandbox, network, timeout, clone auth, resource exhaustion
-        if (
-            combined.includes('timeout') ||
-            combined.includes('econnrefused') ||
-            combined.includes('econnreset') ||
-            combined.includes('enotfound') ||
-            combined.includes('epipe') ||
-            combined.includes('sandbox') ||
-            combined.includes('exit status 128') ||
-            combined.includes('could not resolve host') ||
-            combined.includes('rate limit') ||
-            combined.includes('out of memory') ||
-            combined.includes('enomem') ||
-            combined.includes('enospc') ||
-            combined.includes('503') ||
-            combined.includes('502') ||
-            combined.includes('temporarily unavailable')
-        ) {
-            return ErrorClassification.RETRYABLE;
-        }
-
-        return ErrorClassification.PERMANENT;
-    }
-
     private failureMessage(classification: ErrorClassification): string {
         return classification === ErrorClassification.RETRYABLE
             ? 'Repository graph build failed temporarily'
@@ -412,7 +383,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
     async handleFailure(
         jobId: string,
         error: Error,
-        classification: ErrorClassification = this.classifyError(error),
+        classification: ErrorClassification = classifyGraphJobError(error),
         sandboxId?: string,
         repositoryId?: string,
         attemptId?: string,

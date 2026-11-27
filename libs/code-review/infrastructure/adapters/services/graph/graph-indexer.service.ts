@@ -199,7 +199,7 @@ export class GraphIndexerService {
     async incrementalUpdate(params: {
         repositoryId: string;
         sandbox: SandboxInstance;
-        changedFiles: string[];
+        changedFiles: string[] | null;
         newSha: string;
         signal?: AbortSignal;
         job?: GraphJobAttempt;
@@ -209,19 +209,35 @@ export class GraphIndexerService {
         signal?.throwIfAborted();
         // Azure reports paths from the repository root with a leading slash.
         // The parser and the stored graph both use repository-relative paths.
-        const changedFiles = params.changedFiles.map((file) =>
+        const changedFiles = params.changedFiles?.map((file) =>
             posix.normalize(file).replace(/^\/+/, ''),
         );
+        const revision = {
+            sha: newSha,
+            expectedSha: params.expectedSha,
+            signal,
+            job,
+        };
+        if (changedFiles?.length === 0) {
+            await this.astGraphRepo.incrementalUpdate(
+                repositoryId,
+                [],
+                [],
+                [],
+                revision,
+            );
+            return;
+        }
         const updateStart = Date.now();
 
         this.logger.log({
-            message: `[AST-GRAPH] Starting incremental update: ${changedFiles.length} files for repo ${repositoryId}`,
+            message: `[AST-GRAPH] Starting incremental update: ${changedFiles?.length ?? 'all'} files for repo ${repositoryId}`,
             context: GraphIndexerService.name,
             metadata: {
                 repositoryId,
                 newSha,
-                changedFilesCount: changedFiles.length,
-                changedFiles: changedFiles.slice(0, 20),
+                changedFilesCount: changedFiles?.length,
+                changedFiles: changedFiles?.slice(0, 20),
             },
         });
 
@@ -236,17 +252,25 @@ export class GraphIndexerService {
 
             signal?.throwIfAborted();
             const parseStart = Date.now();
-            await this.cli.parseFiles(sandbox, changedFiles, {
-                signal,
-                outPath: GRAPH_PATH,
-            });
+            if (changedFiles) {
+                await this.cli.parseFiles(sandbox, changedFiles, {
+                    signal,
+                    outPath: GRAPH_PATH,
+                });
+            } else {
+                await this.cli.parseAll(sandbox, {
+                    signal,
+                    outPath: GRAPH_PATH,
+                    excludePatterns: DEFAULT_EXCLUDES,
+                });
+            }
 
             this.logger.log({
                 message: `[AST-GRAPH] Incremental parse completed (${Date.now() - parseStart}ms)`,
                 context: GraphIndexerService.name,
                 metadata: {
                     repositoryId,
-                    changedFilesCount: changedFiles.length,
+                    changedFilesCount: changedFiles?.length,
                 },
             });
 
@@ -258,13 +282,20 @@ export class GraphIndexerService {
 
             signal?.throwIfAborted();
             const persistStart = Date.now();
-            const counts = await this.astGraphRepo.incrementalUpdate(
-                repositoryId,
-                changedFiles,
-                nodes,
-                edges,
-                { sha: newSha, expectedSha: params.expectedSha, signal, job },
-            );
+            const counts = changedFiles
+                ? await this.astGraphRepo.incrementalUpdate(
+                      repositoryId,
+                      changedFiles,
+                      nodes,
+                      edges,
+                      revision,
+                  )
+                : await this.astGraphRepo.fullRebuild(
+                      repositoryId,
+                      nodes,
+                      edges,
+                      revision,
+                  );
 
             this.logger.log({
                 message: `[AST-GRAPH] Incremental DB persist completed (${Date.now() - persistStart}ms)`,
@@ -278,14 +309,14 @@ export class GraphIndexerService {
 
             const totalMs = Date.now() - updateStart;
             this.logger.log({
-                message: `[AST-GRAPH] Incremental update COMPLETE for repo ${repositoryId} in ${totalMs}ms — ${counts.nodeCount} nodes, ${counts.edgeCount} edges from ${changedFiles.length} files`,
+                message: `[AST-GRAPH] Incremental update COMPLETE for repo ${repositoryId} in ${totalMs}ms — ${counts.nodeCount} nodes, ${counts.edgeCount} edges from ${changedFiles?.length ?? 'all'} files`,
                 context: GraphIndexerService.name,
                 metadata: {
                     repositoryId,
                     newSha,
                     nodeCount: counts.nodeCount,
                     edgeCount: counts.edgeCount,
-                    changedFilesCount: changedFiles.length,
+                    changedFilesCount: changedFiles?.length,
                     durationMs: totalMs,
                 },
             });
@@ -299,7 +330,7 @@ export class GraphIndexerService {
                 metadata: {
                     repositoryId,
                     newSha,
-                    changedFilesCount: changedFiles.length,
+                    changedFilesCount: changedFiles?.length,
                     durationMs: totalMs,
                 },
             });

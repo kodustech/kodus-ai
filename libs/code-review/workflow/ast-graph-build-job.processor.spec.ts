@@ -177,7 +177,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
 
     it.each([
         [
-            'invalid parser output',
+            'invalid parser output quoting 503 timeout ECONNRESET',
             ErrorClassification.PERMANENT,
             'Repository graph build failed',
         ],
@@ -190,7 +190,12 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         'keeps provider details out of the stored and rethrown %s error',
         async (reason, classification, message) => {
             graphIndexer.fullBuild.mockRejectedValueOnce(
-                new Error(`${reason}: private-provider-query`),
+                Object.assign(
+                    new Error(`${reason}: private-provider-query`),
+                    reason === 'ECONNRESET'
+                        ? { cause: { code: 'ECONNRESET' } }
+                        : {},
+                ),
             );
             const result = processor.process('job-1');
             if (classification === ErrorClassification.RETRYABLE) {
@@ -199,15 +204,23 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
             } else {
                 await result;
             }
+            const attemptId =
+                jobRepository.update.mock.calls[0][1].metadata.attemptId;
             expect(jobRepository.update).toHaveBeenLastCalledWith(
                 'job-1',
-                expect.objectContaining({
+                {
                     status: JobStatus.FAILED,
                     errorClassification: classification,
                     lastError: message,
-                }),
+                    failedAt: expect.any(Date),
+                    metadata: {
+                        attemptId,
+                        sandboxId: 'sbx-1',
+                        stage: 'FAILED',
+                    },
+                },
                 [JobStatus.PROCESSING, JobStatus.FAILED],
-                expect.any(String),
+                attemptId,
             );
         },
     );

@@ -1093,7 +1093,10 @@ describe('E2B review user lockdown', () => {
         };
     };
 
-    const createWith = async (sbx: ReturnType<typeof fakeSandbox>) => {
+    const createWith = async (
+        sbx: ReturnType<typeof fakeSandbox>,
+        includeParentCommit = false,
+    ) => {
         (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
         const config = {
             get: (key: string) =>
@@ -1109,9 +1112,23 @@ describe('E2B review user lockdown', () => {
             authToken: 'tok',
             branch: 'feature',
             prNumber: 1,
+            includeParentCommit,
             platform: PlatformType.GITHUB,
         });
     };
+
+    it('fetches the parent only when the graph checkout requests it', async () => {
+        for (const includeParent of [false, true]) {
+            const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
+            await createWith(sbx, includeParent);
+            const clone = sbx.commands.run.mock.calls.find(([cmd]) =>
+                cmd.includes('git init'),
+            )[0];
+            expect(clone.match(/fetch --depth=(\d+)/)?.[1]).toBe(
+                includeParent ? '2' : '1',
+            );
+        }
+    });
 
     it('locks the review user down as root before the repository arrives', async () => {
         const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
