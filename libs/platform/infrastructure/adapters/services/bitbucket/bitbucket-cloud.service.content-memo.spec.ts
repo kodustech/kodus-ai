@@ -175,6 +175,15 @@ describe('BitbucketCloudService.getRepositoryContentFile — throwOnReadError', 
         await expect(readConfig(service, true)).resolves.toBeNull();
     });
 
+    it('answers a lasting failure as null even with the flag', async () => {
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(httpError(401)),
+        );
+
+        await expect(readConfig(service, true)).resolves.toBeNull();
+    });
+
     it('swallows the failure without the flag', async () => {
         const service = makeService(
             commitOk(),

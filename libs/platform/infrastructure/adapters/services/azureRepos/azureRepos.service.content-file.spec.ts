@@ -68,6 +68,22 @@ describe('AzureReposService.getRepositoryContentFile — throwOnReadError', () =
         expect(result?.data?.content).toBe('');
     });
 
+    it('answers an unresolvable branch (TF401175, 400) as empty content', async () => {
+        const error = Object.assign(axiosError(400), {
+            response: {
+                status: 400,
+                data: {
+                    message: 'TF401175: The version could not be resolved',
+                },
+            },
+        });
+        const service = makeService(jest.fn().mockRejectedValue(error));
+
+        const result = await readConfig(service, true);
+
+        expect(result?.data?.content).toBe('');
+    });
+
     it('swallows the failure without the flag', async () => {
         const service = makeService(
             jest.fn().mockRejectedValue(axiosError(429)),

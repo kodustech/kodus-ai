@@ -1,3 +1,4 @@
+import { isTransientProviderError } from '../transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import type {
@@ -2081,7 +2082,7 @@ export class AzureReposService implements Omit<
                     } catch (branchReadError) {
                         if (
                             params.throwOnReadError &&
-                            (branchReadError as any)?.response?.status !== 404
+                            isTransientProviderError(branchReadError)
                         ) {
                             throw branchReadError;
                         }
@@ -2143,10 +2144,7 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
-            if (
-                params.throwOnReadError &&
-                (error as any)?.response?.status !== 404
-            ) {
+            if (params.throwOnReadError && isTransientProviderError(error)) {
                 throw error;
             }
             return null;

@@ -1,3 +1,4 @@
+import { isTransientProviderError } from './transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import { assertGitServerUrlAllowed } from './git-server-url.guard';
@@ -3182,7 +3183,12 @@ export class GitlabService implements Omit<
                     }
 
                     this.logger.error(logPayload);
-                    if (params.throwOnReadError) throw attemptError;
+                    if (
+                        params.throwOnReadError &&
+                        isTransientProviderError(attemptError)
+                    ) {
+                        throw attemptError;
+                    }
                 }
             }
 
@@ -3237,15 +3243,21 @@ export class GitlabService implements Omit<
                                 this.logger.warn(logPayload);
                             } else {
                                 this.logger.error(logPayload);
-                                if (params.throwOnReadError)
+                                if (
+                                    params.throwOnReadError &&
+                                    isTransientProviderError(
+                                        defaultAttemptError,
+                                    )
+                                ) {
                                     throw defaultAttemptError;
+                                }
                             }
                         }
                     }
                 } catch (defaultBranchError) {
                     if (
                         params.throwOnReadError &&
-                        !this.isGitlabNotFoundError(defaultBranchError)
+                        isTransientProviderError(defaultBranchError)
                     ) {
                         throw defaultBranchError;
                     }
@@ -3280,7 +3292,9 @@ export class GitlabService implements Omit<
                 error,
                 metadata: { repository: params.repository, file: params.file },
             });
-            if (params.throwOnReadError) throw error;
+            if (params.throwOnReadError && isTransientProviderError(error)) {
+                throw error;
+            }
             return null;
         }
     }

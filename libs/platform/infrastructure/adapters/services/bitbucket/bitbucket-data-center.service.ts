@@ -1,3 +1,4 @@
+import { isTransientProviderError } from '../transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { assertGitServerUrlAllowed } from '../git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
@@ -3548,6 +3549,7 @@ export class BitbucketDataCenterService implements Omit<
         repository: { name: string; id: string };
         file: any;
         pullRequest: any;
+        throwOnReadError?: boolean;
     }): Promise<any | null> {
         try {
             const { organizationAndTeamData, repository, file, pullRequest } =
@@ -3590,6 +3592,9 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
+            if (params.throwOnReadError && isTransientProviderError(error)) {
+                throw error;
+            }
             return null;
         }
     }

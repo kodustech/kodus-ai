@@ -1,3 +1,4 @@
+import { isTransientProviderError } from '../transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import { assertGitServerUrlAllowed } from '../git-server-url.guard';
@@ -6072,8 +6073,11 @@ This is an experimental feature that generates committable changes. Review the d
                     });
                 }
                 if (params.throwOnReadError) {
-                    throw new Error(
-                        'GitHub rate limit open for this installation',
+                    throw Object.assign(
+                        new Error(
+                            'GitHub rate limit open for this installation',
+                        ),
+                        { status: 429 },
                     );
                 }
                 return undefined;
@@ -6182,7 +6186,12 @@ This is an experimental feature that generates committable changes. Review the d
                     error,
                     metadata: { ...params },
                 });
-                if (params.throwOnReadError) throw error;
+                if (
+                    params.throwOnReadError &&
+                    isTransientProviderError(error)
+                ) {
+                    throw error;
+                }
             }
         }
     }

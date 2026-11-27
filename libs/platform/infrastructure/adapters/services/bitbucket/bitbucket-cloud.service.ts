@@ -1,3 +1,4 @@
+import { isTransientProviderError } from '../transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { createLogger } from '@libs/core/log/logger';
 import pLimit from 'p-limit';
@@ -2693,7 +2694,9 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
-            if (params.throwOnReadError) throw error;
+            if (params.throwOnReadError && isTransientProviderError(error)) {
+                throw error;
+            }
             return null;
         }
     }

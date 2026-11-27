@@ -1,3 +1,4 @@
+import { isTransientProviderError } from './transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { assertGitServerUrlAllowed } from './git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
@@ -4020,7 +4021,9 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
-            if (params.throwOnReadError) throw error;
+            if (params.throwOnReadError && isTransientProviderError(error)) {
+                throw error;
+            }
             return null;
         }
     }
