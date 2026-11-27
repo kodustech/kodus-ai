@@ -280,3 +280,38 @@ func TestIsTestLiteral(t *testing.T) {
 		}
 	}
 }
+
+// TestDataOnlyResetRules: data-only is a reset strategy, and data.services is
+// read only with it, names between one and MaxDataServices services, none
+// twice, none the public one (the TS side: recipe-data-reset.spec.ts).
+func TestDataOnlyResetRules(t *testing.T) {
+	head := "version: 1\nservices:\n  compose: { files: [docker-compose.yml], public: web }\n  expose: [{ service: web, port: 8080, kind: http }]\ndata:\n"
+	for name, c := range map[string]struct{ data, refused string }{
+		"data-only alone":        {"  reset: data-only\n", ""},
+		"data-only and services": {"  reset: data-only\n  services: [db, cache]\n", ""},
+		"services without it":    {"  reset: snapshot\n  services: [db]\n", "data.services needs data.reset: data-only"},
+		"services and no reset":  {"  services: [db]\n", "data.services needs data.reset: data-only"},
+		"empty services":         {"  reset: data-only\n  services: []\n", "between 1 and"},
+		"a service twice":        {"  reset: data-only\n  services: [db, db]\n", "db twice"},
+		"the public service":     {"  reset: data-only\n  services: [web]\n", "is the public service"},
+		"a bad name":             {"  reset: data-only\n  services: [\"-db\"]\n", "bad service"},
+		"too many":               {"  reset: data-only\n  services: [a, b, c, d, e, f, g, h, i]\n", "between 1 and 8"},
+		"an unknown strategy":    {"  reset: restart\n", "is not recreate"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := Parse([]byte(head + c.data))
+			if c.refused == "" {
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				if got := r.ResetStrategy(); got != ResetDataOnly {
+					t.Fatalf("strategy %s", got)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.refused) {
+				t.Fatalf("got %v, want a refusal naming %q", err, c.refused)
+			}
+		})
+	}
+}

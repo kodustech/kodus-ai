@@ -461,6 +461,24 @@
             "cell": "refuse: suite.results.artifacts: at most 8 paths",
             "runo": "unvalidated",
             "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/data-only.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/data-only-services.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-data-services-without-data-only.yaml": {
+            "cell": "refuse: data.services needs data.reset: data-only",
+            "runo": "accept",
+            "why": "data.services is the cell's own key; Runo ignores keys it does not know"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-data-services-public.yaml": {
+            "cell": "refuse: is the public service",
+            "runo": "accept",
+            "why": "data.services is the cell's own key; Runo ignores keys it does not know"
         }
     }
 }

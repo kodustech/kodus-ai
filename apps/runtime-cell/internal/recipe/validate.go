@@ -20,6 +20,7 @@ const (
 	MaxProfiles     = 16
 	MaxPublic       = 16
 	MaxExposed      = 32
+	MaxDataServices = 8
 	maxHealthLen    = 512
 )
 
@@ -278,10 +279,38 @@ func checkData(r *Recipe) error {
 		}
 	}
 	switch r.Data.Reset {
-	case "", ResetRecreate, ResetReseed, ResetSnapshot:
+	case "", ResetRecreate, ResetReseed, ResetSnapshot, ResetDataOnly:
+	default:
+		return fmt.Errorf("data.reset %q is not %s, %s, %s or %s", r.Data.Reset, ResetRecreate, ResetReseed, ResetSnapshot, ResetDataOnly)
+	}
+	return checkDataServices(r)
+}
+
+// checkDataServices holds data.services to its strategy: only data-only
+// reads it, and it never names the public service (the app is what stays up).
+func checkDataServices(r *Recipe) error {
+	if r.Data.Services == nil {
 		return nil
 	}
-	return fmt.Errorf("data.reset %q is not %s, %s or %s", r.Data.Reset, ResetRecreate, ResetReseed, ResetSnapshot)
+	if r.Data.Reset != ResetDataOnly {
+		return errors.New("data.services needs data.reset: data-only")
+	}
+	if n := len(r.Data.Services); n < 1 || n > MaxDataServices {
+		return fmt.Errorf("data.services: between 1 and %d services", MaxDataServices)
+	}
+	seen := map[string]bool{}
+	for _, s := range r.Data.Services {
+		switch {
+		case !serviceName.MatchString(s):
+			return fmt.Errorf("data.services: bad service %q", s)
+		case seen[s]:
+			return fmt.Errorf("data.services: %s twice", s)
+		case slices.Contains(r.Services.Compose.Public, s):
+			return fmt.Errorf("data.services: %s is the public service", s)
+		}
+		seen[s] = true
+	}
+	return nil
 }
 
 func insideRepo(field, p string) error {

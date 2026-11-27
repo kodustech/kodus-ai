@@ -263,12 +263,21 @@
           ]
         },
         "reset": {
+          "description": "data-only: a round restores only the data services from a copy taken after the first migrated and seeded boot and keeps the app running; any failure falls back to a restart of the app, then to recreate.",
           "type": "string",
           "enum": [
             "recreate",
             "reseed",
-            "snapshot"
+            "snapshot",
+            "data-only"
           ]
+        },
+        "services": {
+          "description": "data-only: the compose services whose volumes are copied; default, every image-only non-public service with a named volume.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

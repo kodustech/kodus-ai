@@ -26,7 +26,7 @@ import { UNTRUSTED_YAML } from './yaml-limits';
 
 export const RECIPE_PATH = '.kodus/workspace.yaml';
 
-export const RECIPE_LIMITS = { composeFiles: 8, profiles: 16, public: 16, exposed: 32, healthLength: 512 } as const;
+export const RECIPE_LIMITS = { composeFiles: 8, profiles: 16, public: 16, exposed: 32, healthLength: 512, dataServices: 8 } as const;
 
 /**
  * The most a setup waits for the app (services.compose.health_timeout), in
@@ -214,7 +214,16 @@ export const RecipeSchema = z.strictObject({
         .strictObject({
             migrate: z.string().optional(),
             seed: z.union([z.string(), seedMapping]).optional().describe('A host command, or a command or SQL file run in a service.'),
-            reset: z.enum(['recreate', 'reseed', 'snapshot']).optional(),
+            reset: z
+                .enum(['recreate', 'reseed', 'snapshot', 'data-only'])
+                .optional()
+                .describe(
+                    'data-only: a round restores only the data services from a copy taken after the first migrated and seeded boot and keeps the app running; any failure falls back to a restart of the app, then to recreate.',
+                ),
+            services: z
+                .array(z.string())
+                .optional()
+                .describe('data-only: the compose services whose volumes are copied; default, every image-only non-public service with a named volume.'),
         })
         .optional(),
     files: z
@@ -251,6 +260,10 @@ export interface Recipe {
     expose: { service: string; port: number; kind: (typeof EXPOSE_KINDS)[number] }[];
     migrate?: string;
     seed?: { command?: string; service?: string; sql?: string; user?: string; database?: string };
+    /** data.reset when it is not the default (recreate); absent: recreate. */
+    reset?: 'reseed' | 'snapshot' | 'data-only';
+    /** data.services, with data.reset data-only. */
+    dataServices?: string[];
     filesCopy: string[];
     size?: RecipeSize;
     egressAllow?: string[];
@@ -518,6 +531,17 @@ function recipeRules(r: Recipe): string | undefined {
             return 'services.compose.health needs services.compose.public with an http entry in services.expose';
         }
     }
+    if (r.dataServices !== undefined) {
+        if (r.reset !== 'data-only') return 'data.services needs data.reset: data-only';
+        if (r.dataServices.length < 1 || r.dataServices.length > RECIPE_LIMITS.dataServices) return `data.services: between 1 and ${RECIPE_LIMITS.dataServices} services`;
+        const named = new Set<string>();
+        for (const s of r.dataServices) {
+            if (!NAME.test(s)) return `data.services: bad service ${JSON.stringify(s)}`;
+            if (named.has(s)) return `data.services: ${s} twice`;
+            if (r.public.includes(s)) return `data.services: ${s} is the public service`;
+            named.add(s);
+        }
+    }
     if (r.seed?.sql !== undefined && !insideRepo(r.seed.sql)) return `data.seed.sql: ${JSON.stringify(r.seed.sql)} must be a path inside the repo`;
     return undefined;
 }
@@ -642,6 +666,8 @@ export function parseRecipe(text: string): RecipeParseResult {
         expose: (d.services?.expose ?? []).map((e) => ({ service: e.service, port: e.port, kind: e.kind })),
         ...(d.data?.migrate ? { migrate: d.data.migrate } : {}),
         ...(seed ? { seed } : {}),
+        ...(d.data?.reset && d.data.reset !== 'recreate' ? { reset: d.data.reset } : {}),
+        ...(d.data?.services ? { dataServices: d.data.services } : {}),
         filesCopy: d.files?.copy ?? [],
         ...(size ? { size } : {}),
         ...(d.egress ? { egressAllow } : {}),

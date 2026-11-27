@@ -123,8 +123,14 @@ type Data struct {
 	// Reset is new: recreate (the default: down -v, up, migrate, seed,
 	// ready), reseed (seed and ready only, for a seed that cleans up after
 	// itself) or snapshot (the data volumes are copied once the first boot
-	// is ready, and every reset copies them back: no migrate, no seed).
+	// is ready, and every reset copies them back: no migrate, no seed) or
+	// data-only (the data services' volumes are copied after the first
+	// migrated and seeded boot; a reset restores only those and keeps the
+	// app running, and falls back to a restart of the app, then to recreate).
 	Reset string `yaml:"reset"`
+	// Services names the compose services data-only copies; empty: the
+	// image-only, non-public services with a named volume.
+	Services []string `yaml:"services"`
 }
 
 // Reset strategies.
@@ -132,6 +138,7 @@ const (
 	ResetRecreate = "recreate"
 	ResetReseed   = "reseed"
 	ResetSnapshot = "snapshot"
+	ResetDataOnly = "data-only"
 )
 
 // Seed is a host command (the Runo string form), or a mapping: a command
