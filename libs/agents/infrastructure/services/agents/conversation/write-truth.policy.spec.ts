@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { StepView } from '@libs/agent-harness/domain/contracts/policy.contract';
 
 import { auditWriteTools, performedWrites, type WriteToolEvent } from './conversation-tool-audit';
-import { createWriteAuthorization, requireDeclaredAction } from './write-authorization';
+import { createWriteAuthorization, REFUSAL, requireDeclaredAction } from './write-authorization';
 import { RUNTIME_NOTE_PREFIX, WriteTruthPolicy } from './write-truth.policy';
 
 const NONE = `${RUNTIME_NOTE_PREFIX} ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything — you may report an action only once its tool call has returned.`;
@@ -90,7 +90,7 @@ describe('WriteTruthPolicy', () => {
 
             const answer = await save();
 
-            expect(answer).toMatch(/^This action has NOT been performed\./);
+            expect(answer).toBe(REFUSAL);
             expect(saved).toEqual([]);
             expect(noteNow()).toBe(NONE);
         });
