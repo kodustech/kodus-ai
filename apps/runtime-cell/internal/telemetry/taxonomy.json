@@ -66,6 +66,7 @@
     "direction": "up (to the host) or down (to the machine).",
     "type": "The message type a cell nack answered.",
     "outcome": "How the operation the metric counts ended; its values are listed with the metric.",
+    "rung": "Which step of the disk relief ladder freed the bytes (fstrim, build_cache, reclaim).",
     "reason": "Why, from a closed set listed with the metric.",
     "code": "A protocol or refusal code from a closed set.",
     "op": "The background operation that failed.",
