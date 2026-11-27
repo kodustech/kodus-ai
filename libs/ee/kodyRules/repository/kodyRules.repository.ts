@@ -10,6 +10,7 @@ import { IKodyRulesRepository } from '@libs/kodyRules/domain/contracts/kodyRules
 import { KodyRulesEntity } from '@libs/kodyRules/domain/entities/kodyRules.entity';
 import {
     IKodyRule,
+    KodyRuleCompileInput,
     IKodyRules,
     KodyRulesStatus,
     IKodyRuleIndexEntry,
@@ -37,6 +38,39 @@ function ruleFieldSet(
         }
     }
     return Object.keys(setFields).length > 0 ? setFields : null;
+}
+
+// Match the same embedded rule and inputs in the write itself. Comparing
+// individual example fields ignores BSON key order while preserving array order.
+function compilerWriteFilter(
+    ruleId: string,
+    input: KodyRuleCompileInput,
+    patch: Partial<IKodyRule>,
+): Record<string, unknown> {
+    const match: Record<string, unknown> = {
+        uuid: { $eq: ruleId },
+        title: { $eq: input.title ?? null },
+        rule: { $eq: input.rule ?? null },
+    };
+    const examples = input.examples ?? [];
+    if (examples.length) {
+        match.examples = { $size: examples.length };
+        examples.forEach((example, index) => {
+            match[`examples.${index}.snippet`] = {
+                $eq: example?.snippet ?? null,
+            };
+            match[`examples.${index}.isCorrect`] = {
+                $eq: example?.isCorrect ?? null,
+            };
+        });
+    } else {
+        match['examples.0'] = { $exists: false };
+    }
+    if (patch.contextNeed !== undefined)
+        match['contextNeed.source'] = { $ne: 'author' };
+    if (patch.fileScope !== undefined)
+        match['fileScope.source'] = { $ne: 'author' };
+    return { rules: { $elemMatch: match } };
 }
 
 @Injectable()
@@ -511,11 +545,14 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         updateData: Partial<IKodyRule>,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<Partial<IKodyRule> | null> {
         const setFields = ruleFieldSet(updateData);
         const filter = {
-            'organizationId': { $eq: organizationId },
-            'rules.uuid': { $eq: ruleId },
+            organizationId: { $eq: organizationId },
+            ...(expectedInput
+                ? compilerWriteFilter(ruleId, expectedInput, updateData)
+                : { 'rules.uuid': { $eq: ruleId } }),
         };
         const projection = { rules: { $elemMatch: { uuid: { $eq: ruleId } } } };
 

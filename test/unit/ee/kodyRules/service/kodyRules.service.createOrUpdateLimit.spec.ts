@@ -641,7 +641,15 @@ describe('KodyRulesService — contextNeed persistence', () => {
         const updateRule = jest
             .fn()
             .mockImplementation((_uuid, ruleId, updateData) =>
-                Promise.resolve({ rules: [{ ...updateData, uuid: ruleId }] }),
+                Promise.resolve({
+                    rules: [
+                        {
+                            ...rules.find((r) => r.uuid === ruleId),
+                            ...updateData,
+                            uuid: ruleId,
+                        },
+                    ],
+                }),
             );
         const addRule = jest
             .fn()
@@ -696,7 +704,7 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 storedRule({ contextNeed: compilerNeed }),
             ]);
 
-            await service.createOrUpdate(
+            const saved = await service.createOrUpdate(
                 organizationAndTeamData,
                 { uuid: 'rule-1', status: KodyRulesStatus.PAUSED } as any,
                 userInfo,
@@ -704,7 +712,8 @@ describe('KodyRulesService — contextNeed persistence', () => {
 
             const update = capturedUpdate(updateRule);
             expect(update.status).toBe(KodyRulesStatus.PAUSED);
-            expect(update.contextNeed).toEqual(compilerNeed);
+            expect(capturedUpdate(updateRule).contextNeed).toBeUndefined();
+            expect(saved.contextNeed).toEqual(compilerNeed);
         });
 
         it('preserves an existing contextNeed when the rule text is edited', async () => {
@@ -715,7 +724,7 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 storedRule({ contextNeed: authorNeed }),
             ]);
 
-            await service.createOrUpdate(
+            const saved = await service.createOrUpdate(
                 organizationAndTeamData,
                 { uuid: 'rule-1', rule: 'a totally new body' } as any,
                 userInfo,
@@ -723,7 +732,8 @@ describe('KodyRulesService — contextNeed persistence', () => {
 
             const update = capturedUpdate(updateRule);
             expect(update.rule).toBe('a totally new body');
-            expect(update.contextNeed).toEqual(authorNeed);
+            expect(capturedUpdate(updateRule).contextNeed).toBeUndefined();
+            expect(saved.contextNeed).toEqual(authorNeed);
         });
 
         it('carries an author-supplied contextNeed onto a rule created in an existing document', async () => {
@@ -790,10 +800,10 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 compilerNeed,
             );
 
-            const update = capturedUpdate(updateRule);
-            expect(update.title).toBe('Original title');
-            expect(update.rule).toBe('original body text');
-            expect(update.status).toBe(KodyRulesStatus.ACTIVE);
+            expect(capturedUpdate(updateRule)).toEqual({
+                contextNeed: compilerNeed,
+                updatedAt: expect.any(Date),
+            });
         });
 
         it('passes null through so a stale need is actually cleared', async () => {
@@ -890,7 +900,7 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 storedRule({ fileScope: compilerScope }),
             ]);
 
-            await service.createOrUpdate(
+            const saved = await service.createOrUpdate(
                 organizationAndTeamData,
                 {
                     uuid: 'rule-1',
@@ -903,7 +913,8 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 userInfo,
             );
 
-            expect(capturedUpdate(updateRule).fileScope).toEqual(compilerScope);
+            expect(capturedUpdate(updateRule).fileScope).toBeUndefined();
+            expect(saved.fileScope).toEqual(compilerScope);
         });
 
         it('carries an author-supplied scope onto a rule created in an existing document', async () => {
@@ -953,7 +964,10 @@ describe('KodyRulesService — contextNeed persistence', () => {
                 compilerScope,
             );
 
-            expect(capturedUpdate(updateRule).fileScope).toEqual(compilerScope);
+            expect(capturedUpdate(updateRule)).toEqual({
+                fileScope: compilerScope,
+                updatedAt: expect.any(Date),
+            });
         });
 
         it('clears a stale scope when passed null', async () => {
@@ -1440,21 +1454,8 @@ describe('KodyRulesService.createOrUpdate stamps origin', () => {
     });
 });
 
-/**
- * Guards the core data-safety promise of every update/sync path: a partial
- * change must MERGE onto the stored rule, never replace it. `createOrUpdate`
- * (and the sync flows that call it) builds `{ ...existingRule, ...patch }`
- * before handing the rule to the repository, so any field the caller omits is
- * carried over from disk. These tests pin that merge at the service boundary —
- * i.e. they assert exactly what the service hands to `repository.updateRule` —
- * which, combined with the repository's field-level `$set` spec (per-field
- * write, undefined skipped), proves the full chain loses nothing.
- *
- * Why it matters: the previous repository write replaced the whole matched
- * array element (`rules.$`), so a partial patch — or a DTO carrying `undefined`
- * fields — silently wiped everything it didn't restate. Status toggles, IDE
- * syncs and reference updates all go through here.
- */
+// The repository applies a field-level $set. Check the rule returned by
+// each partial edit, including fields that stayed in Mongo throughout.
 describe('KodyRulesService update/sync field preservation', () => {
     const organizationAndTeamData: OrganizationAndTeamData = {
         organizationId: 'org-1',
@@ -1494,7 +1495,9 @@ describe('KodyRulesService update/sync field preservation', () => {
         const updateRule = jest
             .fn()
             .mockImplementation((_uuid, ruleId, updateData) =>
-                Promise.resolve({ rules: [{ ...updateData, uuid: ruleId }] }),
+                Promise.resolve({
+                    rules: [{ ...existingRule, ...updateData, uuid: ruleId }],
+                }),
             );
 
         // Single-rule $set; that it leaves the other fields intact is proven
@@ -1536,19 +1539,15 @@ describe('KodyRulesService update/sync field preservation', () => {
 
     const userInfo = { userId: 'u1', userEmail: 'u1@kodus.io' } as any;
 
-    // Pull the `updateData` (3rd arg) the service handed to the repository.
-    const capturedUpdate = (updateRule: jest.Mock) => updateRule.mock.calls[0][2];
-
     it('preserves every untouched field when only the status changes (pause)', async () => {
-        const { service, updateRule } = buildService();
+        const { service } = buildService();
 
-        await service.createOrUpdate(
+        const update = await service.createOrUpdate(
             organizationAndTeamData,
             { uuid: 'rule-1', status: KodyRulesStatus.PAUSED } as any,
             userInfo,
         );
 
-        const update = capturedUpdate(updateRule);
 
         // The one intended change.
         expect(update.status).toBe(KodyRulesStatus.PAUSED);
@@ -1571,15 +1570,14 @@ describe('KodyRulesService update/sync field preservation', () => {
     });
 
     it('normalizes severity to lower-case while preserving the rest', async () => {
-        const { service, updateRule } = buildService();
+        const { service } = buildService();
 
-        await service.createOrUpdate(
+        const update = await service.createOrUpdate(
             organizationAndTeamData,
             { uuid: 'rule-1', severity: 'Critical' } as any,
             userInfo,
         );
 
-        const update = capturedUpdate(updateRule);
         expect(update.severity).toBe('critical');
         // Title/body untouched.
         expect(update.title).toBe('Original title');
@@ -1587,32 +1585,30 @@ describe('KodyRulesService update/sync field preservation', () => {
     });
 
     it('keeps the stored severity when the patch omits it (no undefined clobber)', async () => {
-        const { service, updateRule } = buildService();
+        const { service } = buildService();
 
         // A patch that changes the body but says nothing about severity. The
         // `mergedSeverity ?? existingRule.severity` guard must re-apply 'high'.
-        await service.createOrUpdate(
+        const update = await service.createOrUpdate(
             organizationAndTeamData,
             { uuid: 'rule-1', rule: 'updated body' } as any,
             userInfo,
         );
 
-        const update = capturedUpdate(updateRule);
         expect(update.rule).toBe('updated body');
         expect(update.severity).toBe('high');
     });
 
     it('sync de-pin path: flipping pinnedSync keeps title/severity/inheritance', async () => {
-        const { service, updateRule } = buildService();
+        const { service } = buildService();
 
         // Mirrors kodyRulesSync.service.ts de-pin: `{ ...rule, pinnedSync: false }`.
-        await service.createOrUpdate(
+        const update = await service.createOrUpdate(
             organizationAndTeamData,
             { ...existingRule, pinnedSync: false } as any,
             userInfo,
         );
 
-        const update = capturedUpdate(updateRule);
         expect(update.pinnedSync).toBe(false);
         expect(update.title).toBe('Original title');
         expect(update.severity).toBe('high');
@@ -1621,16 +1617,15 @@ describe('KodyRulesService update/sync field preservation', () => {
     });
 
     it('sync soft-delete path: flipping status to DELETED keeps the rule body', async () => {
-        const { service, updateRule } = buildService();
+        const { service } = buildService();
 
         // Mirrors kodyRulesSync.service.ts soft-delete: `{ ...rule, status: DELETED }`.
-        await service.createOrUpdate(
+        const update = await service.createOrUpdate(
             organizationAndTeamData,
             { ...existingRule, status: KodyRulesStatus.DELETED } as any,
             userInfo,
         );
 
-        const update = capturedUpdate(updateRule);
         expect(update.status).toBe(KodyRulesStatus.DELETED);
         // Soft delete must be reversible — body + source must remain intact.
         expect(update.title).toBe('Original title');

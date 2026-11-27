@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
     forwardRef,
     Inject,
@@ -28,6 +29,11 @@ import {
     prompt_kodyMemoryResolution_user,
 } from '@libs/common/utils/prompts/kodyMemoryResolution';
 import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRulesRecommendation';
+import {
+    compileAttemptIsCurrent,
+    ruleCompileHash,
+} from '@libs/common/utils/kody-rules/compile-hash';
+import { isCosmeticRule } from '@libs/common/utils/kody-rules/is-cosmetic-rule';
 import { ProgrammingLanguage } from '@libs/core/domain/enums';
 import {
     ActionType,
@@ -65,6 +71,7 @@ import {
     FindMemoriesFilters,
     FindMemoriesResult,
     IKodyRule,
+    KodyRuleCompileInput,
     IKodyRuleContextNeed,
     KodyRuleSourceFileIssue,
     IKodyRuleFileScope,
@@ -109,6 +116,64 @@ import {
     keepCentralizedSource,
     ruleAppliesToConnection,
 } from '@libs/kodyRules/domain/utils/centralized-rule-source';
+
+// Full-form and sync saves may echo the whole rule. Write only changes so
+// background compiler records committed since the read survive the save.
+function changedRuleFields(
+    previous: Partial<IKodyRule>,
+    updated: Partial<IKodyRule>,
+    detectorPatch: Partial<Pick<IKodyRule, 'detector' | 'compileAttempt'>>,
+): Partial<IKodyRule> {
+    const fields = {
+        ...Object.fromEntries(
+            Object.entries(updated).filter(
+                ([key, value]) =>
+                    key !== 'updatedAt' &&
+                    value !== undefined &&
+                    !isDeepStrictEqual(previous[key as keyof IKodyRule], value),
+            ),
+        ),
+        ...detectorPatch,
+    };
+    // An empty patch reads the current Mongo rule without touching its timestamp.
+    return Object.keys(fields).length
+        ? { ...fields, updatedAt: updated.updatedAt }
+        : {};
+}
+
+function detectorEligibilityPatch(
+    previous: Partial<IKodyRule>,
+    patch: CreateKodyRuleDto,
+): Partial<Pick<IKodyRule, 'compileAttempt' | 'detector'>> {
+    const nextInputs = {
+        rule: patch.rule ?? previous.rule,
+        examples: patch.examples ?? previous.examples,
+    };
+    // A text or example edit disables the old plan in the same Mongo write.
+    // An older compile must not leave an active regex on the new inputs.
+    if (
+        (patch.rule !== undefined || patch.examples !== undefined) &&
+        ruleCompileHash(nextInputs) !== ruleCompileHash(previous)
+    ) {
+        return { detector: null, compileAttempt: null };
+    }
+    const title = patch.title ?? previous.title;
+    const titleChanged = title !== previous.title;
+    if (!titleChanged && !previous.detector) return {};
+    const cosmetic = isCosmeticRule({
+        title,
+        rule: patch.rule ?? previous.rule,
+    });
+    // Disarm in the same write as the title, including on a save of a legacy
+    // rule that already has a cosmetic title and an active detector.
+    if (cosmetic && previous.detector) {
+        return { compileAttempt: null, detector: null };
+    }
+    return titleChanged && cosmetic !== isCosmeticRule(previous)
+        ? { compileAttempt: null }
+        : {};
+}
+
 @Injectable()
 export class KodyRulesService implements IKodyRulesService {
     private readonly logger = createLogger(KodyRulesService.name);
@@ -601,11 +666,13 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         updateData: Partial<IKodyRule>,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<Partial<IKodyRule> | null> {
         return this.kodyRulesRepository.updateRuleFieldsByOrganization(
             organizationId,
             ruleId,
             updateData,
+            expectedInput,
         );
     }
 
@@ -887,9 +954,11 @@ export class KodyRulesService implements IKodyRulesService {
             kodyRule.severity ?? existingRule.severity
         )?.toLowerCase();
 
+        const detectorPatch = detectorEligibilityPatch(existingRule, kodyRule);
         const updatedRule = {
             ...existingRule,
             ...kodyRule,
+            ...detectorPatch,
             ...statusOverride,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
             centralizedConfig: keepCentralizedSource(
@@ -914,6 +983,22 @@ export class KodyRulesService implements IKodyRulesService {
             kodyRule.examples !== undefined &&
             JSON.stringify(kodyRule.examples) !==
                 JSON.stringify(existingRule.examples);
+        // A legacy CLI attempt can only be verified against the original key
+        // order. Translate a matching marker before the edit discards that order.
+        if (
+            examplesChanged &&
+            compileAttemptIsCurrent({
+                title: existingRule.title,
+                rule: existingRule.rule,
+                examples: existingRule.examples,
+                compileAttempt: updatedRule.compileAttempt,
+            })
+        ) {
+            updatedRule.compileAttempt = {
+                ...updatedRule.compileAttempt,
+                sourceHash: ruleCompileHash(existingRule),
+            };
+        }
         if (ruleTextChanged) {
             delete (updatedRule as Partial<IKodyRule>).summary;
             delete (updatedRule as Partial<IKodyRule>).atoms;
@@ -924,10 +1009,17 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
-            updatedRule,
+            changedRuleFields(existingRule, updatedRule, detectorPatch),
         );
 
-        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
+        if (!updatedKodyRules) {
+            throw new Error('Could not update rule');
+        }
+        const savedRule = updatedKodyRules.rules.find(
+            (rule) => rule.uuid === kodyRule.uuid,
+        );
+
+        if (ruleTextChanged || examplesChanged) {
             this.scheduleSummaryGeneration(
                 organizationAndTeamData,
                 updatedRule,
@@ -944,17 +1036,11 @@ export class KodyRulesService implements IKodyRulesService {
             repository: { id: updatedRule.repositoryId },
             directory: { id: updatedRule.directoryId },
             oldRule: existingRule,
-            newRule: updatedRule,
+            newRule: savedRule,
             ruleTitle: updatedRule.title,
         });
 
-        if (!updatedKodyRules) {
-            throw new Error('Could not update rule');
-        }
-
-        return updatedKodyRules.rules.find(
-            (rule) => rule.uuid === kodyRule.uuid,
-        );
+        return savedRule;
     }
 
     private async ensureRepositoryCodeReviewConfig(
@@ -1106,7 +1192,18 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         fields: Partial<IKodyRule>,
-    ): Promise<IKodyRule> {
+        expectedInput?: KodyRuleCompileInput,
+    ): Promise<IKodyRule | null> {
+        if (expectedInput) {
+            const saved =
+                await this.kodyRulesRepository.updateRuleFieldsByOrganization(
+                    organizationId,
+                    ruleId,
+                    fields,
+                    expectedInput,
+                );
+            return saved as IKodyRule | null;
+        }
         const updated =
             await this.kodyRulesRepository.updateRuleFieldsByOrganization(
                 organizationId,
@@ -1135,15 +1232,21 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         detector: IKodyRuleDetector | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
-        return this.updateSingleRuleFields(organizationId, ruleId, {
-            // Pass `null` through as-is: the repository skips only `undefined`,
-            // so `detector: null` writes `$set rules.$.detector = null` and
-            // clears a stale detector. `?? undefined` here would silently no-op
-            // the clear and leave the old regex firing forever.
-            detector: detector,
-            updatedAt: new Date(),
-        });
+        return this.updateSingleRuleFields(
+            organizationId,
+            ruleId,
+            {
+                // Pass `null` through as-is: the repository skips only `undefined`,
+                // so `detector: null` writes `$set rules.$.detector = null` and
+                // clears a stale detector. `?? undefined` here would silently no-op
+                // the clear and leave the old regex firing forever.
+                detector: detector,
+                updatedAt: new Date(),
+            },
+            expectedInput,
+        );
     }
 
     /**
@@ -1196,7 +1299,16 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         contextNeed: IKodyRuleContextNeed | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
+        if (expectedInput) {
+            return this.updateSingleRuleFields(
+                organizationId,
+                ruleId,
+                { contextNeed, updatedAt: new Date() },
+                expectedInput,
+            );
+        }
         const existing = await this.findByOrganizationId(organizationId);
         if (!existing) {
             throw new NotFoundException(
@@ -1216,20 +1328,12 @@ export class KodyRulesService implements IKodyRulesService {
             return existingRule as IKodyRule;
         }
 
-        const updatedRule = {
-            ...existingRule,
-            // `null` passes through as-is: updateRule skips only `undefined`,
-            // so this writes `$set rules.$.contextNeed = null` and clears a
-            // stale inference instead of silently no-op-ing the clear.
-            contextNeed: contextNeed,
+        // The compiler saves context and scope concurrently. Only $set this
+        // field so the earlier read cannot restore a stale scope.
+        const updatedKodyRules = await this.updateRule(existing.uuid, ruleId, {
+            contextNeed,
             updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
+        });
 
         if (!updatedKodyRules) {
             this.logger.error({
@@ -1258,7 +1362,16 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         fileScope: IKodyRuleFileScope | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
+        if (expectedInput) {
+            return this.updateSingleRuleFields(
+                organizationId,
+                ruleId,
+                { fileScope, updatedAt: new Date() },
+                expectedInput,
+            );
+        }
         const existing = await this.findByOrganizationId(organizationId);
         if (!existing) {
             throw new NotFoundException(
@@ -1278,20 +1391,10 @@ export class KodyRulesService implements IKodyRulesService {
             return existingRule as IKodyRule;
         }
 
-        const updatedRule = {
-            ...existingRule,
-            // `null` passes through as-is (updateRule skips only `undefined`),
-            // so an edited rule that no longer names a language gets its scope
-            // CLEARED instead of keeping a narrowing nobody can see.
-            fileScope: fileScope,
+        const updatedKodyRules = await this.updateRule(existing.uuid, ruleId, {
+            fileScope,
             updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
+        });
 
         if (!updatedKodyRules) {
             this.logger.error({
@@ -1321,11 +1424,17 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         compileAttempt: IKodyRuleCompileAttempt | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
-        return this.updateSingleRuleFields(organizationId, ruleId, {
-            compileAttempt: compileAttempt,
-            updatedAt: new Date(),
-        });
+        return this.updateSingleRuleFields(
+            organizationId,
+            ruleId,
+            {
+                compileAttempt: compileAttempt,
+                updatedAt: new Date(),
+            },
+            expectedInput,
+        );
     }
 
     async updateRuleWithLogging(
@@ -1356,9 +1465,11 @@ export class KodyRulesService implements IKodyRulesService {
             kodyRule.severity ?? existingRule.severity
         )?.toLowerCase();
 
+        const detectorPatch = detectorEligibilityPatch(existingRule, kodyRule);
         const updatedRule = {
             ...existingRule,
             ...kodyRule,
+            ...detectorPatch,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
             updatedAt: new Date(),
         };
@@ -1385,10 +1496,17 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
-            updatedRule,
+            changedRuleFields(existingRule, updatedRule, detectorPatch),
         );
 
-        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
+        if (!updatedKodyRules) {
+            throw new Error('Could not update rule');
+        }
+        const savedRule = updatedKodyRules.rules.find(
+            (rule) => rule.uuid === kodyRule.uuid,
+        );
+
+        if (ruleTextChanged || examplesChanged) {
             this.scheduleSummaryGeneration(
                 organizationAndTeamData,
                 updatedRule,
@@ -1405,17 +1523,11 @@ export class KodyRulesService implements IKodyRulesService {
             repository: { id: updatedRule.repositoryId },
             directory: { id: updatedRule.directoryId },
             oldRule: existingRule,
-            newRule: updatedRule,
+            newRule: savedRule,
             ruleTitle: updatedRule.title,
         });
 
-        if (!updatedKodyRules) {
-            throw new Error('Could not update rule');
-        }
-
-        return updatedKodyRules.rules.find(
-            (rule) => rule.uuid === kodyRule.uuid,
-        );
+        return savedRule;
     }
 
     async deleteRule(uuid: string, ruleId: string): Promise<boolean> {
