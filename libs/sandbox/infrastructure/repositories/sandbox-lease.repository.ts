@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { isGraphJobLeaseKey } from '../../domain/contracts/sandbox-lease-manager.contract';
 
 import { SANDBOX_LEASE_CLEANUP_STATUS } from './schemas/sandbox-lease.model';
 import { SandboxLeaseModel } from './schemas/sandbox-lease.model';
@@ -111,6 +112,10 @@ export class SandboxLeaseRepository {
             },
             { upsert: true, new: true },
         );
+
+        // A graph checkout belongs to a single job. A delivery rejoining a crashed
+        // holder must not extend that holder's original cleanup deadline.
+        if (isGraphJobLeaseKey(prKey)) return doc;
 
         // A joiner that needs longer (an Ultra review's Kody Rules on the
         // PR's lease) pushes the expiry out; the reaper kills by this date, in
@@ -262,8 +267,7 @@ export class SandboxLeaseRepository {
             .findOneAndDelete({ _id: prKey, sandboxId })
             .select('leaseCount')
             .lean();
-        const otherHolders =
-            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const otherHolders = (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
         const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
 
         const orgSegment = prKey.split(':')[0];
@@ -341,11 +345,7 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            | '_id'
-            | 'sandboxId'
-            | 'killAt'
-            | 'killRetryCount'
-            | 'organizationId'
+            '_id' | 'sandboxId' | 'killAt' | 'killRetryCount' | 'organizationId'
         >[]
     > {
         return this.leaseModel

@@ -80,6 +80,7 @@ describe('sandbox checkout of a repository with submodules', () => {
     let server: Server;
     let port: number;
     let serverRoot: string;
+    let expectedParent: string;
     let scratch: string;
     let sandboxService: LocalSandboxService;
     /** Every Authorization header the foreign host was offered. */
@@ -305,6 +306,9 @@ describe('sandbox checkout of a repository with submodules', () => {
             );
             await git(['-C', dir, 'add', 'app.ts']);
             await git(['-C', dir, 'commit', '-m', 'base with no submodule']);
+            expectedParent = (
+                await git(['-C', dir, 'rev-parse', 'HEAD'])
+            ).stdout.trim();
             await git(['-C', dir, 'checkout', '-q', '-b', 'main']);
             await writeFile(
                 join(dir, '.gitmodules'),
@@ -497,11 +501,8 @@ describe('sandbox checkout of a repository with submodules', () => {
             const base = (
                 await sandbox.run('git rev-parse HEAD^')
             ).stdout.trim();
-            expect(base).toMatch(/^[a-f0-9]{40}$/);
-            expect(await graphCheckoutFiles(sandbox, base, head)).toEqual([
-                '.gitmodules',
-                'packages/commons',
-            ]);
+            expect(base).toBe(expectedParent);
+            expect(await graphCheckoutFiles(sandbox, base, head)).toBeNull();
             expect(
                 await graphCheckoutFiles(sandbox, '0'.repeat(40), head),
             ).toBeNull();

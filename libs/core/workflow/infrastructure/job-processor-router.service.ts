@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Inject } from '@nestjs/common';
 import { updateActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import { jobFields } from '@libs/core/infrastructure/activity/job-fields';
@@ -9,7 +10,7 @@ import {
     AST_GRAPH_BUILD_TIMEOUT_MS,
     AST_GRAPH_INCREMENTAL_TIMEOUT_MS,
 } from '@libs/code-review/domain/graph-job-attempt';
-import { runWithTimeout } from './run-with-timeout';
+import { runWithTimeout, WorkflowJobTimeoutError } from './run-with-timeout';
 import { IJobProcessorRouter } from '@libs/core/workflow/domain/contracts/job-processor-router.contract';
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
 import {
@@ -75,18 +76,27 @@ export class JobProcessorRouterService
 
         const processor = this.getProcessor(job.workflowType);
         const timeoutMs = this.getProcessTimeoutMs(job.workflowType);
+        const timeoutMessage = `Workflow job ${jobId} timeout after ${timeoutMs}ms`;
+        const graphAttempt =
+            job.workflowType === WorkflowType.AST_GRAPH_BUILD ||
+            job.workflowType === WorkflowType.AST_GRAPH_INCREMENTAL
+                ? randomUUID()
+                : undefined;
 
         try {
             return await runWithTimeout(
-                (timeoutSignal) =>
-                    processor.process(
-                        jobId,
-                        signal
-                            ? AbortSignal.any([timeoutSignal, signal])
-                            : timeoutSignal,
-                    ),
+                (timeoutSignal) => {
+                    const jobSignal = signal
+                        ? AbortSignal.any([timeoutSignal, signal])
+                        : timeoutSignal;
+                    return graphAttempt
+                        ? processor.process(jobId, jobSignal, graphAttempt)
+                        : processor.process(jobId, jobSignal);
+                },
                 timeoutMs,
-                `Workflow job ${jobId} timeout after ${timeoutMs}ms`,
+                graphAttempt
+                    ? new WorkflowJobTimeoutError(timeoutMessage)
+                    : timeoutMessage,
             );
         } catch (error) {
             if (
@@ -95,6 +105,33 @@ export class JobProcessorRouterService
                 error instanceof RecordedJobFailure
             ) {
                 throw error;
+            }
+
+            if (graphAttempt && error instanceof WorkflowJobTimeoutError) {
+                const failed = await this.jobRepository.update(
+                    jobId,
+                    {
+                        status: JobStatus.FAILED,
+                        completedAt: new Date(),
+                        currentStage: 'FAILED',
+                        errorClassification: ErrorClassification.RETRYABLE,
+                        lastError: error.message,
+                    },
+                    [JobStatus.PROCESSING, JobStatus.FAILED],
+                    graphAttempt,
+                );
+                if (failed === null) {
+                    const current = await this.jobRepository.findOne(jobId);
+                    if (
+                        current?.status === JobStatus.COMPLETED ||
+                        current?.status === JobStatus.CANCELLED ||
+                        (current?.status === JobStatus.PROCESSING &&
+                            current.metadata?.attemptId !== graphAttempt)
+                    )
+                        return;
+                }
+                // The queue still redelivers a timed-out attempt without writing over another owner.
+                throw new RecordedJobFailure(error.message);
             }
 
             const isTimeout = error.message?.includes('timeout after');

@@ -137,6 +137,8 @@ export class GraphIndexerService {
                     AstGraphStatus.FAILED,
                     revision,
                 );
+                if (job)
+                    throw new Error('Graph build produced no indexed nodes');
                 return;
             }
 

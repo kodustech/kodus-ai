@@ -33,6 +33,9 @@ export async function claimGraphJob(
             {
                 status: JobStatus.PROCESSING,
                 startedAt: new Date(),
+                completedAt: null,
+                lastError: null,
+                errorClassification: null,
                 currentStage: 'VALIDATING',
                 metadata: { attemptId: attempt.attemptId, stage: 'VALIDATING' },
             },

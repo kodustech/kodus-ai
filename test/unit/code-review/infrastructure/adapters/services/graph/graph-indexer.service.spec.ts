@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { classifyGraphJobError } from '@libs/code-review/workflow/graph-job-failure';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { GraphIndexerService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-indexer.service';
 import { KodusGraphCli } from '@libs/code-review/infrastructure/adapters/services/graph/kodus-graph-cli';
 import { AstGraphRepository } from '@libs/code-review/infrastructure/adapters/repositories/astGraph.repository';
@@ -327,6 +329,37 @@ describe('GraphIndexerService', () => {
 
             expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
         });
+
+        it.each(['returned', 'thrown'])(
+            'keeps %s CLI install exit status retryable for graph jobs',
+            async (mode) => {
+                const result = {
+                    stdout: '',
+                    stderr: 'installer disconnected',
+                    exitCode: 1,
+                };
+                mockSandbox.run.mockResolvedValueOnce({
+                    stdout: '',
+                    stderr: '',
+                    exitCode: 0,
+                });
+                if (mode === 'returned')
+                    mockSandbox.run.mockResolvedValueOnce(result);
+                else
+                    mockSandbox.run.mockRejectedValueOnce(
+                        Object.assign(new Error('command failed'), result),
+                    );
+                const error = await new KodusGraphCli()
+                    .install(mockSandbox)
+                    .catch((e) => e);
+                expect(error).toMatchObject({
+                    sandboxSetup: { operation: 'graph-install', exitCode: 1 },
+                });
+                expect(classifyGraphJobError(error)).toBe(
+                    ErrorClassification.RETRYABLE,
+                );
+            },
+        );
 
         it('should mark status as FAILED on install error', async () => {
             // which-check returns 0 (empty), install returns 1

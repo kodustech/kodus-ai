@@ -1,7 +1,11 @@
 export const JOB_PROCESSOR_SERVICE_TOKEN = Symbol.for('JobProcessorService');
 
 export interface IJobProcessorService {
-    process(jobId: string, signal?: AbortSignal): Promise<void>;
+    process(
+        jobId: string,
+        signal?: AbortSignal,
+        attemptId?: string,
+    ): Promise<void>;
 
     handleFailure(jobId: string, error: Error): Promise<void>;
 

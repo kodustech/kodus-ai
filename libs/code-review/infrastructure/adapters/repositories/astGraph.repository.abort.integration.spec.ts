@@ -1,5 +1,17 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
+import { createConnection } from 'mongoose';
+import { Sandbox } from 'e2b';
+import { PlatformType } from '@libs/core/domain/enums';
+import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+import {
+    SandboxLeaseModel,
+    SandboxLeaseSchema,
+} from '@libs/sandbox/infrastructure/repositories/schemas/sandbox-lease.model';
+import { SandboxLeaseManager } from '@libs/sandbox/infrastructure/services/sandbox-lease-manager.service';
+import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services/sandbox-lease-reaper.service';
+import { resolveMongoTestGate } from '../../../../../test/integration/mongo-test-uri';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,12 +27,15 @@ import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowJobModel } from '@libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model';
 import { WorkflowJobRepository } from '@libs/core/workflow/infrastructure/repositories/workflow-job.repository';
 import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { graphCheckoutFiles } from '@libs/code-review/workflow/graph-checkout';
+import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-build-job.processor';
 import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
 import { GraphJobSandbox } from '@libs/code-review/workflow/graph-job-sandbox';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
 import { claimGraphJob } from '@libs/code-review/workflow/graph-job-stage';
 import {
+    AST_GRAPH_INCREMENTAL_TIMEOUT_MS,
     GraphBaselineChangedError,
     StaleGraphJobError,
 } from '@libs/code-review/domain/graph-job-attempt';
@@ -99,24 +114,28 @@ async function waitForBlockedWriter() {
 function graphConsumer(
     jobs: WorkflowJobRepository,
     incremental: AstGraphIncrementalJobProcessor,
+    deadlineRouter?: JobProcessorRouterService,
 ) {
     const unused = {} as never;
-    const router = new JobProcessorRouterService(
-        jobs,
-        unused,
-        unused,
-        unused,
-        unused,
-        incremental,
-        unused,
-        unused,
-    );
+    const router =
+        deadlineRouter ??
+        new JobProcessorRouterService(
+            jobs,
+            unused,
+            unused,
+            unused,
+            unused,
+            incremental,
+            unused,
+            unused,
+        );
     return new WorkflowJobConsumer(
         router,
         {
             claim: async () => true,
             releaseIfHeldBy: async () => {},
             completeIfHeldBy: async () => {},
+            releaseAllByInstance: async () => 0,
         } as never,
         jobs,
         {
@@ -223,6 +242,599 @@ const run =
                 astGraphEdgeCount: 1,
             });
         });
+
+        it('advances the empty-diff SHA and retains every stored node, edge and count', async () => {
+            const before = await graph.exportAsGraphJson(repoId);
+            const indexer = new GraphIndexerService(graph, {} as never);
+            await indexer.incrementalUpdate({
+                repositoryId: repoId,
+                sandbox: {} as never,
+                changedFiles: [],
+                expectedSha: 'old',
+                newSha: 'identical-tree',
+                job,
+            });
+            const after = await graph.exportAsGraphJson(repoId);
+            expect(after.nodes).toEqual(before.nodes);
+            expect(after.edges).toEqual(before.edges);
+            expect(await readPublishedRevision(repoId)).toEqual({
+                astGraphStatus: AstGraphStatus.READY,
+                astGraphSha: 'identical-tree',
+                astGraphNodeCount: 2,
+                astGraphEdgeCount: 1,
+            });
+        });
+
+        it('removes persisted submodule descendants and edges after a gitlink deletion', async () => {
+            const dir = mkdtempSync(join(tmpdir(), 'graph-gitlink-'));
+            const git = (...args: string[]) =>
+                execFileSync(
+                    'git',
+                    [
+                        '-C',
+                        dir,
+                        '-c',
+                        'user.name=Graph Test',
+                        '-c',
+                        'user.email=graph@example.org',
+                        '-c',
+                        'commit.gpgsign=false',
+                        ...args,
+                    ],
+                    { encoding: 'utf8' },
+                ).trim();
+            try {
+                git('init', '-q');
+                git(
+                    'commit',
+                    '-q',
+                    '--allow-empty',
+                    '-m',
+                    'object for gitlink',
+                );
+                const component = git('rev-parse', 'HEAD');
+                git(
+                    'update-index',
+                    '--add',
+                    '--cacheinfo',
+                    `160000,${component},pkg/lib`,
+                );
+                git('commit', '-qm', 'tracked component');
+                const base = git('rev-parse', 'HEAD');
+                git('rm', '-q', '--cached', 'pkg/lib');
+                git('commit', '-qm', 'removed component');
+                git('config', 'diff.ignoreSubmodules', 'all');
+                const head = git('rev-parse', 'HEAD');
+                const descendant = {
+                    ...node('removed'),
+                    file_path: 'pkg/lib/old.ts',
+                    qualified_name: 'pkg/lib/old.ts::removed',
+                };
+                const edge = {
+                    ...oldEdges[0],
+                    target_qualified: descendant.qualified_name,
+                };
+                await graph.fullRebuild(
+                    repoId,
+                    [oldNodes[0], descendant],
+                    [edge],
+                    { sha: base },
+                );
+                const sandbox = {
+                    repoDir: dir,
+                    run: async (command: string) => ({
+                        stdout: execFileSync('/bin/sh', ['-c', command], {
+                            encoding: 'utf8',
+                        }),
+                        exitCode: 0,
+                    }),
+                    readFile: async () =>
+                        JSON.stringify({ nodes: [oldNodes[0]], edges: [] }),
+                } as never;
+                const changedFiles = await graphCheckoutFiles(
+                    sandbox,
+                    base,
+                    head,
+                );
+                const indexer = new GraphIndexerService(graph, {
+                    install: async () => {},
+                    parseAll: async () => {},
+                    parseFiles: async () => {},
+                } as never);
+                await indexer.incrementalUpdate({
+                    repositoryId: repoId,
+                    sandbox,
+                    changedFiles,
+                    newSha: head,
+                    expectedSha: base,
+                    job,
+                });
+                const stored = await graph.exportAsGraphJson(repoId);
+                expect(stored.nodes.map((n) => [n.file_path, n.name])).toEqual([
+                    ['src/a.ts', 'caller'],
+                ]);
+                expect(stored.edges).toEqual([]);
+                expect(await readPublishedRevision(repoId)).toEqual({
+                    astGraphStatus: AstGraphStatus.READY,
+                    astGraphSha: head,
+                    astGraphNodeCount: 1,
+                    astGraphEdgeCount: 0,
+                });
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        });
+
+        it('persists a terminal timestamp for a zero-node full build and clears it when reclaimed', async () => {
+            const rows = db.getRepository(WorkflowJobModel);
+            const jobs = new WorkflowJobRepository(rows);
+            await rows.update(job.jobId, {
+                status: JobStatus.PENDING,
+                metadata: null,
+                completedAt: null,
+                lastError: null,
+                workflowType: WorkflowType.AST_GRAPH_BUILD,
+                payload: {
+                    repositoryId: repoId,
+                    fullName: 'org/repo',
+                    defaultBranch: 'main',
+                    platform: 'GITHUB',
+                },
+            });
+            const sandbox = {
+                repoDir: '/repo',
+                run: async () => ({ stdout: 'empty-tree', exitCode: 0 }),
+                readFile: async () => JSON.stringify({ nodes: [], edges: [] }),
+            };
+            const indexer = new GraphIndexerService(graph, {
+                install: async () => {},
+                parseAll: async () => ({ stderr: '' }),
+            } as never);
+            const processor = new AstGraphBuildJobProcessor(
+                jobs,
+                {
+                    acquire: async () => ({
+                        leaseId: 'lease',
+                        sandboxId: 'sandbox',
+                        wasCreated: true,
+                        sandbox,
+                    }),
+                    release: async () => {},
+                } as never,
+                {
+                    getCloneParams: async () => ({
+                        url: 'https://example.org/repo',
+                    }),
+                } as never,
+                indexer,
+                {
+                    findById: () =>
+                        db
+                            .getRepository(RepositoryModel)
+                            .findOneByOrFail({ uuid: repoId }),
+                } as never,
+                new GraphJobSandbox(),
+            );
+            await processor.process(job.jobId);
+            const failed = await jobs.findOne(job.jobId);
+            expect(failed.status).toBe(JobStatus.FAILED);
+            expect(failed.currentStage).toBe('FAILED');
+            expect(failed.completedAt).toBeInstanceOf(Date);
+            expect(failed.lastError).toBe('Repository graph build failed');
+            expect(await readPublishedRevision(repoId)).toEqual({
+                astGraphStatus: AstGraphStatus.FAILED,
+                astGraphSha: 'old',
+                astGraphNodeCount: 2,
+                astGraphEdgeCount: 1,
+            });
+            expect(
+                await claimGraphJob(
+                    jobs,
+                    failed,
+                    { jobId: job.jobId, attemptId: randomUUID() },
+                    60000,
+                ),
+            ).toBe(true);
+            expect(
+                await rows.findOneOrFail({
+                    where: { uuid: job.jobId },
+                    select: {
+                        status: true,
+                        completedAt: true,
+                        lastError: true,
+                        errorClassification: true,
+                    },
+                }),
+            ).toEqual({
+                status: JobStatus.PROCESSING,
+                completedAt: null,
+                lastError: null,
+                errorClassification: null,
+            });
+        });
+
+        it.each([JobStatus.COMPLETED, JobStatus.PROCESSING])(
+            'an expired graph deadline preserves a %s row owned at completion',
+            async (finalStatus) => {
+                const rows = db.getRepository(WorkflowJobModel);
+                const jobs = new WorkflowJobRepository(rows);
+                const later = randomUUID();
+                await rows.update(job.jobId, {
+                    workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
+                    status: JobStatus.PENDING,
+                    metadata: null,
+                    completedAt: null,
+                    lastError: null,
+                });
+                const committed = latch();
+                const finished = new Date('2026-01-01T00:00:00.000Z');
+                const unused = {} as never;
+                const router = new JobProcessorRouterService(
+                    jobs,
+                    unused,
+                    unused,
+                    unused,
+                    unused,
+                    {
+                        process: async (
+                            _jobId: string,
+                            _signal: AbortSignal,
+                            attemptId: string,
+                        ) => {
+                            await rows.update(job.jobId, {
+                                status: finalStatus,
+                                metadata: {
+                                    attemptId:
+                                        finalStatus === JobStatus.COMPLETED
+                                            ? attemptId
+                                            : later,
+                                },
+                                completedAt:
+                                    finalStatus === JobStatus.COMPLETED
+                                        ? finished
+                                        : null,
+                            });
+                            committed.open();
+                            await new Promise(() => {});
+                        },
+                    } as never,
+                    unused,
+                    unused,
+                );
+                const nativeTimer = global.setTimeout;
+                const timer = jest
+                    .spyOn(global, 'setTimeout')
+                    .mockImplementation(((
+                        handler: (...values: unknown[]) => void,
+                        ms: number,
+                        ...args: unknown[]
+                    ) =>
+                        ms === AST_GRAPH_INCREMENTAL_TIMEOUT_MS
+                            ? nativeTimer(() => {
+                                  void committed.waiting.then(() =>
+                                      handler(...args),
+                                  );
+                              }, 0)
+                            : nativeTimer(
+                                  handler,
+                                  ms,
+                                  ...args,
+                              )) as typeof setTimeout);
+                const consumer = graphConsumer(jobs, unused, router);
+                try {
+                    await consumer.handleAstGraphIncrementalJob(
+                        { jobId: job.jobId },
+                        {
+                            properties: {
+                                messageId: randomUUID(),
+                                headers: {},
+                            },
+                        } as never,
+                    );
+                } finally {
+                    timer.mockRestore();
+                }
+                const stored = await jobs.findOne(job.jobId);
+                expect(stored.status).toBe(finalStatus);
+                expect(stored.lastError).toBeNull();
+                if (finalStatus === JobStatus.COMPLETED)
+                    expect(stored.completedAt).toEqual(finished);
+                else expect(stored.metadata.attemptId).toBe(later);
+            },
+        );
+
+        const mongo = resolveMongoTestGate('graph_recovery');
+        (mongo.shouldSkip ? it.skip : it).each([
+            AstGraphBuildJobProcessor,
+            AstGraphIncrementalJobProcessor,
+        ])(
+            '%p publishes the graph and reaps the abandoned sandbox after a worker dies holding its lease',
+            async (Processor) => {
+                const orgId = randomUUID(),
+                    staleId = randomUUID(),
+                    freshId = randomUUID();
+                const mongoConnection = await createConnection(mongo.mongoUri, {
+                    dbName: 'graph_crash_' + orgId.replace(/-/g, ''),
+                }).asPromise();
+                try {
+                    const leaseRepo = new SandboxLeaseRepository(
+                        mongoConnection.model(
+                            SandboxLeaseModel.name,
+                            SandboxLeaseSchema,
+                        ),
+                    );
+                    const prKey = `${orgId}:${repoId}:graph:${job.jobId}`;
+                    const config = new ConfigService({
+                        API_E2B_KEY: 'fixture-api-key',
+                    });
+                    const cli = {
+                        install: async () => {},
+                        parseAll: async () => ({ stderr: '' }),
+                    };
+                    const fresh = {
+                        type: 'e2b',
+                        repoDir: '/repo',
+                        remoteCommands: {},
+                        sandboxId: freshId,
+                        run: async () => ({
+                            stdout: 'fresh-head',
+                            exitCode: 0,
+                        }),
+                        readFile: async () =>
+                            JSON.stringify({
+                                nodes: [node('recovered')],
+                                edges: [],
+                            }),
+                        cleanup: async () => {},
+                    };
+                    const provider = {
+                        isAvailable: () => true,
+                        createSandboxWithRepo: jest
+                            .fn()
+                            .mockResolvedValueOnce({
+                                ...fresh,
+                                sandboxId: staleId,
+                            })
+                            .mockResolvedValueOnce(fresh),
+                    };
+                    const deadWorker = new SandboxLeaseManager(
+                        provider as never,
+                        leaseRepo,
+                        config,
+                    );
+                    await deadWorker.acquire(
+                        prKey,
+                        'graph-build',
+                        2 * 60 * 60 * 1000,
+                        {
+                            cloneUrl: 'https://example.org/repo',
+                            authToken: '',
+                            branch: 'main',
+                            platform: PlatformType.GITHUB,
+                        },
+                    );
+                    expect(
+                        (await leaseRepo.findByPrKey(prKey)).leaseCount,
+                    ).toBe(1);
+                    // This process never calls release or any shutdown hook.
+                    const rows = db.getRepository(WorkflowJobModel);
+                    const jobs = new WorkflowJobRepository(rows);
+                    const full = Processor === AstGraphBuildJobProcessor;
+                    await rows.update(job.jobId, {
+                        status: JobStatus.PROCESSING,
+                        startedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+                        metadata: { attemptId: randomUUID() },
+                        workflowType: full
+                            ? WorkflowType.AST_GRAPH_BUILD
+                            : WorkflowType.AST_GRAPH_INCREMENTAL,
+                        payload: {
+                            repositoryId: repoId,
+                            fullName: 'org/repo',
+                            defaultBranch: 'main',
+                            changedFiles: ['src/a.ts'],
+                            newSha: 'fresh-head',
+                            platform: 'GITHUB',
+                            organizationAndTeamData: { organizationId: orgId },
+                        },
+                    });
+                    if (full)
+                        await db.getRepository(RepositoryModel).update(repoId, {
+                            astGraphStatus: AstGraphStatus.BUILDING,
+                        });
+                    (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+                        sandboxId: staleId,
+                        commands: {
+                            run: async () => ({
+                                stdout: 'dead-head',
+                                exitCode: 0,
+                            }),
+                        },
+                    });
+                    const retry = new Processor(
+                        jobs,
+                        new SandboxLeaseManager(
+                            provider as never,
+                            leaseRepo,
+                            config,
+                        ),
+                        {
+                            getCloneParams: async () => ({
+                                url: 'https://example.org/repo',
+                            }),
+                        } as never,
+                        new GraphIndexerService(graph, cli as never),
+                        {
+                            findById: () =>
+                                db
+                                    .getRepository(RepositoryModel)
+                                    .findOneByOrFail({ uuid: repoId }),
+                        } as never,
+                        new GraphJobSandbox(),
+                    );
+                    await retry.process(job.jobId);
+                    expect((await jobs.findOne(job.jobId)).status).toBe(
+                        JobStatus.COMPLETED,
+                    );
+                    expect(await readPublishedRevision(repoId)).toEqual({
+                        astGraphStatus: AstGraphStatus.READY,
+                        astGraphSha: 'fresh-head',
+                        astGraphNodeCount: 1,
+                        astGraphEdgeCount: 0,
+                    });
+                    expect(
+                        (await graph.exportAsGraphJson(repoId)).nodes.map(
+                            (n) => n.name,
+                        ),
+                    ).toEqual(['recovered']);
+                    expect(
+                        provider.createSandboxWithRepo,
+                    ).toHaveBeenCalledTimes(2);
+                    const retiredKey = `${orgId}:retired:${staleId}`;
+                    expect(
+                        (
+                            await leaseRepo.findByPrKey(retiredKey)
+                        ).killAt.getTime(),
+                    ).toBeLessThanOrEqual(Date.now());
+                    const reaper = new SandboxLeaseReaperService(
+                        leaseRepo,
+                        {
+                            acquire: async () => ({ release: async () => {} }),
+                            release: async () => {},
+                        } as never,
+                        config,
+                    );
+                    await reaper.killIdleSandboxes();
+                    expect(Sandbox.kill).toHaveBeenCalledWith(staleId, {
+                        apiKey: 'fixture-api-key',
+                    });
+                    expect(await leaseRepo.findByPrKey(retiredKey)).toBeNull();
+                    expect(await leaseRepo.findByPrKey(prKey)).toBeNull();
+                } finally {
+                    await mongoConnection.dropDatabase();
+                    await mongoConnection.close();
+                }
+            },
+        );
+
+        it.each([AstGraphBuildJobProcessor, AstGraphIncrementalJobProcessor])(
+            '%p hands a shutdown-interrupted delivery to another worker',
+            async (Processor) => {
+                const full = Processor === AstGraphBuildJobProcessor;
+                const rows = db.getRepository(WorkflowJobModel);
+                const jobs = new WorkflowJobRepository(rows);
+                const payload = {
+                    repositoryId: repoId,
+                    fullName: 'org/repo',
+                    defaultBranch: 'main',
+                    changedFiles: ['src/a.ts'],
+                    newSha: 'tip',
+                    platform: 'GITHUB',
+                };
+                await rows.update(job.jobId, {
+                    status: JobStatus.PENDING,
+                    metadata: null,
+                    lastError: null,
+                    workflowType: full
+                        ? WorkflowType.AST_GRAPH_BUILD
+                        : WorkflowType.AST_GRAPH_INCREMENTAL,
+                    payload,
+                });
+                const status = full
+                    ? AstGraphStatus.BUILDING
+                    : AstGraphStatus.READY;
+                await db
+                    .getRepository(RepositoryModel)
+                    .update(repoId, { astGraphStatus: status });
+                const entered = latch(),
+                    released = jest.fn().mockResolvedValue(undefined);
+                const parser = async () => {
+                    entered.open();
+                    await new Promise<void>(() => {});
+                };
+                const processor = new Processor(
+                    jobs,
+                    {
+                        acquire: async () => ({
+                            leaseId: 'ours',
+                            wasCreated: true,
+                            sandboxId: 'active',
+                            sandbox: {
+                                repoDir: '/repo',
+                                run: async () => ({
+                                    stdout: 'tip',
+                                    exitCode: 0,
+                                }),
+                            },
+                        }),
+                        release: released,
+                    } as never,
+                    {
+                        getCloneParams: async () => ({
+                            url: 'https://example.org/repo',
+                        }),
+                    } as never,
+                    {
+                        fullBuild: parser,
+                        incrementalUpdate: parser,
+                        failBuildForAttempt:
+                            graph.failBuildForAttempt.bind(graph),
+                    } as never,
+                    {
+                        findById: () =>
+                            db
+                                .getRepository(RepositoryModel)
+                                .findOneByOrFail({ uuid: repoId }),
+                    } as never,
+                    new GraphJobSandbox(),
+                );
+                const unused = {} as never;
+                const router = new JobProcessorRouterService(
+                    jobs,
+                    unused,
+                    unused,
+                    unused,
+                    processor as AstGraphBuildJobProcessor,
+                    processor as AstGraphIncrementalJobProcessor,
+                    unused,
+                    unused,
+                );
+                const consumer = graphConsumer(jobs, unused, router);
+                const handle = (
+                    full
+                        ? consumer.handleAstGraphBuildJob
+                        : consumer.handleAstGraphIncrementalJob
+                ).bind(consumer);
+                const delivery = handle({ jobId: job.jobId }, {
+                    properties: { messageId: randomUUID(), headers: {} },
+                } as never);
+                await entered.waiting;
+                const shutdown = consumer.beforeApplicationShutdown('SIGTERM');
+                await expect(delivery).rejects.toMatchObject({
+                    returnToQueue: true,
+                });
+                await shutdown;
+                expect(released.mock.calls).toEqual([['ours', { idleMs: 0 }]]);
+                const interrupted = await jobs.findOne(job.jobId);
+                expect(interrupted.status).toBe(JobStatus.FAILED);
+                expect(interrupted.errorClassification).toBe(
+                    ErrorClassification.RETRYABLE,
+                );
+                expect(await readPublishedRevision(repoId)).toEqual({
+                    astGraphStatus: status,
+                    astGraphSha: 'old',
+                    astGraphNodeCount: 2,
+                    astGraphEdgeCount: 1,
+                });
+                expect(
+                    await claimGraphJob(
+                        jobs,
+                        interrupted,
+                        { jobId: job.jobId, attemptId: randomUUID() },
+                        60000,
+                    ),
+                ).toBe(true);
+            },
+        );
 
         it('serializes disjoint updates before they count the published rows', async () => {
             const entered = latch(),

@@ -2,6 +2,7 @@ import { createLogger } from '@libs/core/log/logger';
 import {
     AcquireResult,
     assertValidPrKey,
+    isGraphJobLeaseKey,
     ISandboxLeaseManager,
     SandboxCircuitOpenError,
     DEFAULT_CAPACITY_WAIT_MS,
@@ -1227,6 +1228,24 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         throw lastErr;
+    }
+
+    /** Only the recovered graph job can own this job-specific checkout. */
+    async retireSingleUseCheckout(
+        prKey: string,
+        sandboxId: string,
+    ): Promise<void> {
+        if (!isGraphJobLeaseKey(prKey))
+            throw new Error(
+                'Only a single-use graph checkout can be retired immediately',
+            );
+        const now = new Date();
+        // Detach this sandbox ID before a fresh checkout can occupy the key.
+        // A dead worker's count must not postpone the retired sandbox's kill.
+        await this.leaseRepo.retire(prKey, sandboxId, {
+            idleKillAt: now,
+            busyKillAt: now,
+        });
     }
 
     /**

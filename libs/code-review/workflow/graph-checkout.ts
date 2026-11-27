@@ -42,7 +42,7 @@ export async function graphCheckoutFiles(
     const git = `git -C ${shSingleQuote(sandbox.repoDir)}`;
     // The sandbox fetches the parent at clone time. A more distant base can be outside its shallow history.
     // The empty final record is present only after Git emitted the complete path list.
-    const diff = `${git} diff --no-ext-diff --no-textconv --no-renames --name-only -z ${baseline} ${shSingleQuote(head)} --`;
+    const diff = `${git} diff --no-ext-diff --no-textconv --no-renames --ignore-submodules=none --raw -z ${baseline} ${shSingleQuote(head)} --`;
     const result = await raceWithAbortSignal(
         sandbox.run(
             `if ${diff}; then printf '\\0'; else printf unavailable; fi`,
@@ -54,6 +54,19 @@ export async function graphCheckoutFiles(
     const records = result.stdout.slice(0, -1);
     if (!records) return [];
     if (!records.endsWith('\0')) return null;
-    const paths = records.slice(0, -1).split('\0');
-    return paths.length <= MAX_GRAPH_INCREMENTAL_FILES ? paths : null;
+    const fields = records.slice(0, -1).split('\0');
+    if (fields.length % 2 || fields.length > 2 * MAX_GRAPH_INCREMENTAL_FILES)
+        return null;
+    const paths: string[] = [];
+    for (let i = 0; i < fields.length; i += 2) {
+        const header = /^:([0-7]{6}) ([0-7]{6}) [\da-f]+ [\da-f]+ [ADMT]$/.exec(
+            fields[i],
+        );
+        if (!header || !fields[i + 1]) return null;
+        const [, oldMode, newMode] = header;
+        // A gitlink names one directory, while the graph stores files beneath it.
+        if (oldMode === '160000' || newMode === '160000') return null;
+        paths.push(fields[i + 1]);
+    }
+    return paths;
 }

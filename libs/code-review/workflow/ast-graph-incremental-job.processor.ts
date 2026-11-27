@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
     AST_GRAPH_INCREMENTAL_TIMEOUT_MS,
     GraphBaselineChangedError,
+    GraphWorkerShutdownError,
     GraphJobAttempt,
     StaleGraphJobError,
 } from '@libs/code-review/domain/graph-job-attempt';
@@ -29,11 +30,12 @@ import {
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { WorkflowJobTimeoutError } from '@libs/core/workflow/infrastructure/run-with-timeout';
 import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
 import { classifyGraphJobError } from './graph-job-failure';
 import { claimGraphJob, updateGraphJobStage } from './graph-job-stage';
 import { GraphJobSandbox } from './graph-job-sandbox';
-import { graphCheckoutSha, graphCheckoutFiles } from './graph-checkout';
+import { graphCheckoutFiles } from './graph-checkout';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. An incremental AST update on a large changeset can legitimately
@@ -72,7 +74,11 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         private readonly graphSandbox: GraphJobSandbox,
     ) {}
 
-    async process(jobId: string, signal?: AbortSignal): Promise<void> {
+    async process(
+        jobId: string,
+        signal?: AbortSignal,
+        attemptId: string = randomUUID(),
+    ): Promise<void> {
         const jobStart = Date.now();
         const job = await this.jobRepository.findOne(jobId);
 
@@ -81,6 +87,8 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         }
 
         if (signal?.aborted) {
+            if (signal.reason instanceof GraphWorkerShutdownError)
+                throw signal.reason;
             throw new Error(`Job ${jobId} aborted before start`);
         }
 
@@ -102,7 +110,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
             },
         });
 
-        const attempt: GraphJobAttempt = { jobId, attemptId: randomUUID() };
+        const attempt: GraphJobAttempt = { jobId, attemptId };
         if (
             !(await claimGraphJob(
                 this.jobRepository,
@@ -215,7 +223,7 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            lease = await this.graphSandbox.acquire(
+            const checkout = await this.graphSandbox.acquireCheckout(
                 () =>
                     this.leaseManager.acquire(
                         prKey,
@@ -237,8 +245,11 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                     ),
                 signal,
                 releaseSandbox,
+                repoRecord.astGraphSha,
+                (id) => this.leaseManager.retireSingleUseCheckout(prKey, id),
             );
-            const { sandbox } = lease;
+            lease = checkout;
+            const { sandbox, headSha } = checkout;
             sandboxId = lease.sandboxId;
 
             signal?.throwIfAborted();
@@ -263,13 +274,6 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                 context: AstGraphIncrementalJobProcessor.name,
                 metadata: { jobId, sandboxId },
             });
-
-            const headSha = await graphCheckoutSha(
-                sandbox,
-                lease.wasCreated,
-                repoRecord.astGraphSha,
-                signal,
-            );
 
             const changedFiles = await graphCheckoutFiles(
                 sandbox,
@@ -333,8 +337,14 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                     durationMs: totalMs,
                 },
             });
-        } catch (error) {
-            if (error instanceof StaleGraphJobError) return;
+        } catch (caught) {
+            if (caught instanceof StaleGraphJobError) return;
+            const reason = signal?.reason;
+            const error =
+                reason instanceof GraphWorkerShutdownError ||
+                reason instanceof WorkflowJobTimeoutError
+                    ? reason
+                    : caught;
             const totalMs = Date.now() - jobStart;
             const classification = classifyGraphJobError(error);
 
@@ -361,7 +371,11 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                 attempt.attemptId,
             );
 
-            if (error instanceof GraphBaselineChangedError) throw error;
+            if (
+                error instanceof GraphBaselineChangedError ||
+                error instanceof GraphWorkerShutdownError
+            )
+                throw error;
             if (classification === ErrorClassification.RETRYABLE) {
                 throw new RecordedJobFailure(
                     this.failureMessage(classification),
@@ -391,7 +405,8 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
                 status: JobStatus.FAILED,
                 errorClassification: classification,
                 lastError: this.failureMessage(classification),
-                failedAt: new Date(),
+                completedAt: new Date(),
+                currentStage: 'FAILED',
                 metadata: { attemptId, sandboxId, stage: 'FAILED' },
             },
             [JobStatus.PROCESSING, JobStatus.FAILED],

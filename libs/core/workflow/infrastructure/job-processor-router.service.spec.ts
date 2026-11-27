@@ -30,6 +30,7 @@ describe('runWithTimeout (router core)', () => {
 
         await expect(racing).rejects.toThrow('timeout after 6300000ms');
         expect(capturedSignal?.aborted).toBe(true);
+        expect(capturedSignal?.reason.name).toBe('AbortError');
     });
 
     it('returns the work result without aborting when it finishes in time', async () => {

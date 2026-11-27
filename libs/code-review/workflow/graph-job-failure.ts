@@ -1,5 +1,9 @@
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
-import { GraphBaselineChangedError } from '@libs/code-review/domain/graph-job-attempt';
+import {
+    GraphBaselineChangedError,
+    GraphCheckoutRecoveryError,
+    GraphWorkerShutdownError,
+} from '@libs/code-review/domain/graph-job-attempt';
 
 const retryableCodes = new Set([
     'ECONNREFUSED',
@@ -17,6 +21,7 @@ const retryableCodes = new Set([
 ]);
 const retryableNames = new Set([
     'TimeoutError',
+    'WorkflowJobTimeoutError',
     'NotEnoughSpaceError',
     'SandboxNotFoundError',
     'SandboxWaitAbortedError',
@@ -34,14 +39,20 @@ interface GraphErrorFields {
     statusCode?: number;
     response?: { status?: number; statusCode?: number };
     cause?: unknown;
+    sandboxSetup?: { operation?: string; exitCode?: number };
 }
 
 export function classifyGraphJobError(error: unknown): ErrorClassification {
     const seen = new Set<unknown>();
+    let retryable = false;
     while (error && typeof error === 'object' && !seen.has(error)) {
         seen.add(error);
-        if (error instanceof GraphBaselineChangedError)
-            return ErrorClassification.RETRYABLE;
+        if (
+            error instanceof GraphBaselineChangedError ||
+            error instanceof GraphWorkerShutdownError ||
+            error instanceof GraphCheckoutRecoveryError
+        )
+            retryable = true;
         const fields = error as GraphErrorFields;
         const status =
             fields.status ??
@@ -53,13 +64,22 @@ export function classifyGraphJobError(error: unknown): ErrorClassification {
                 ? ErrorClassification.RETRYABLE
                 : ErrorClassification.PERMANENT;
         }
+        const setup = fields.sandboxSetup;
         if (
             retryableCodes.has(fields.code) ||
-            retryableNames.has(fields.name)
+            retryableNames.has(fields.name) ||
+            ((setup?.operation === 'git-fetch' ||
+                setup?.operation === 'graph-install') &&
+                typeof setup.exitCode === 'number' &&
+                setup.exitCode !== 0 &&
+                setup.exitCode !== 126 &&
+                setup.exitCode !== 127)
         ) {
-            return ErrorClassification.RETRYABLE;
+            retryable = true;
         }
         error = fields.cause;
     }
-    return ErrorClassification.PERMANENT;
+    return retryable
+        ? ErrorClassification.RETRYABLE
+        : ErrorClassification.PERMANENT;
 }

@@ -14,6 +14,7 @@ import {
     SandboxInstance,
     SandboxRunOptions,
     SandboxRunResult,
+    sandboxSetupFailure,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
@@ -41,6 +42,7 @@ import type {
 import {
     fetchSubmodules,
     isContainedRelativePath,
+    scopedAuthHeaderConfigKey,
     SubmoduleGitHost,
 } from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
@@ -376,6 +378,19 @@ function resolvePrRefspec(
     }
 }
 
+function gitAuthEnvironment(cloneUrl: string, header: string) {
+    const key = header && scopedAuthHeaderConfigKey(cloneUrl);
+    return key
+        ? {
+              envs: {
+                  GIT_CONFIG_COUNT: '1',
+                  GIT_CONFIG_KEY_0: key,
+                  GIT_CONFIG_VALUE_0: header,
+              },
+          }
+        : {};
+}
+
 /** Standalone so it can be shared with `syncE2BSandboxRepo` — see
  *  `resolvePrRefspec` above for the same reasoning. */
 function buildGitAuthHeader(
@@ -563,9 +578,7 @@ export async function syncE2BSandboxRepo(
     const safeCloneUrl = shSingleQuote(cloneUrl);
     const safeRefspec = shSingleQuote(refspec);
 
-    const fetchCmd = hasAuth
-        ? `git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`
-        : `git fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`;
+    const fetchCmd = `git fetch --depth=1 ${safeCloneUrl} ${safeRefspec}`;
 
     // `git checkout -f` only overwrites TRACKED files — a file the previous
     // round's agent left in the working tree (scratch output, an untracked
@@ -583,7 +596,7 @@ export async function syncE2BSandboxRepo(
             ].join(' && '),
             {
                 timeoutMs,
-                ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
+                ...gitAuthEnvironment(cloneUrl, authHeader),
             },
         );
     } catch (err) {
@@ -1003,15 +1016,7 @@ export class E2BSandboxService implements ISandboxProvider {
     async createSandboxWithRepo(
         params: CreateSandboxParams,
     ): Promise<SandboxInstance> {
-        const {
-            cloneUrl,
-            authToken,
-            authUsername,
-            branch,
-            prNumber,
-            platform,
-            baseBranch,
-        } = params;
+        const { cloneUrl, authToken, branch, prNumber, platform } = params;
         const apiKey = this.configService.get<string>('API_E2B_KEY');
 
         if (!apiKey) {
@@ -1306,28 +1311,35 @@ export class E2BSandboxService implements ISandboxProvider {
         const safeLocalRef = shSingleQuote(localRef);
 
         const depth = params.includeParentCommit ? 2 : 1;
-        const fetchCmd = hasAuth
-            ? `git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=${depth} ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`
-            : `git fetch --depth=${depth} ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`;
+        const fetchCmd = `git fetch --depth=${depth} ${safeCloneUrl} ${safeRefspec}:${safeLocalRef}`;
 
-        const cloneResult = await sandbox.commands.run(
-            [
-                `git init ${REPO_DIR}`,
-                `cd ${REPO_DIR}`,
-                // Fetch using token from env var via git credential header (never touches disk/process args)
-                fetchCmd,
-                `git checkout ${safeLocalRef}`,
-                // Set a dummy remote for any tools that expect "origin" to exist
-                `git remote add origin ${safeCloneUrl}`,
-                // Block any push from the sandbox
-                `git remote set-url --push origin no-push-allowed`,
-            ].join(' && '),
-            {
-                timeoutMs: TIMEOUTS.CLONE_MS,
-                ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
-            },
-        );
-
+        const cloneResult = await sandbox.commands
+            .run(
+                [
+                    `git init ${REPO_DIR}`,
+                    `cd ${REPO_DIR}`,
+                    // Fetch using token from env var via git credential header (never touches disk/process args)
+                    fetchCmd,
+                    `git checkout ${safeLocalRef}`,
+                    // Set a dummy remote for any tools that expect "origin" to exist
+                    `git remote add origin ${safeCloneUrl}`,
+                    // Block any push from the sandbox
+                    `git remote set-url --push origin no-push-allowed`,
+                ].join(' && '),
+                {
+                    timeoutMs: TIMEOUTS.CLONE_MS,
+                    ...gitAuthEnvironment(cloneUrl, authHeader),
+                },
+            )
+            .catch((error) => {
+                if (error instanceof CommandExitError)
+                    throw sandboxSetupFailure(
+                        error,
+                        'git-fetch',
+                        error.exitCode,
+                    );
+                throw error;
+            });
         this.logger.log({
             message: `[DEBUG] Git clone finished: exitCode=${cloneResult.exitCode} stdout=${(cloneResult.stdout || '').length}chars stderr=${(cloneResult.stderr || '').length}chars`,
             context: E2BSandboxService.name,
@@ -1339,11 +1351,15 @@ export class E2BSandboxService implements ISandboxProvider {
         });
 
         if (cloneResult.exitCode !== 0) {
-            throw new Error(
-                `Git clone failed in E2B sandbox (exit code ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`.slice(
-                    0,
-                    500,
+            throw sandboxSetupFailure(
+                new Error(
+                    `Git clone failed in E2B sandbox (exit code ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`.slice(
+                        0,
+                        500,
+                    ),
                 ),
+                'git-fetch',
+                cloneResult.exitCode,
             );
         }
 
@@ -1470,14 +1486,12 @@ export class E2BSandboxService implements ISandboxProvider {
         const safeBaseBranch = shSingleQuote(baseBranch);
         const safeCloneUrl = shSingleQuote(cloneUrl);
 
-        const baseCmd = hasAuth
-            ? `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 ${safeCloneUrl} refs/heads/${safeBaseBranch}:refs/remotes/origin/${safeBaseBranch}`
-            : `cd ${REPO_DIR} && git fetch --depth=1 ${safeCloneUrl} refs/heads/${safeBaseBranch}:refs/remotes/origin/${safeBaseBranch}`;
+        const baseCmd = `cd ${REPO_DIR} && git fetch --depth=1 ${safeCloneUrl} refs/heads/${safeBaseBranch}:refs/remotes/origin/${safeBaseBranch}`;
 
         try {
             const result = await sandbox.commands.run(baseCmd, {
                 timeoutMs: TIMEOUTS.CLONE_MS,
-                ...(hasAuth && { envs: { GIT_AUTH_HEADER: authHeader } }),
+                ...gitAuthEnvironment(cloneUrl, authHeader),
             });
 
             if (result.exitCode === 0) {

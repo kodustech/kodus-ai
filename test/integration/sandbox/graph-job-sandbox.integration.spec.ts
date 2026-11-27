@@ -2,10 +2,12 @@ jest.unmock('@libs/core/log/logger');
 
 import { randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
+import { PlatformType } from '@libs/core/domain/enums';
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { Connection, createConnection } from 'mongoose';
 import pino from 'pino';
+import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services/sandbox-lease-reaper.service';
 import { GraphJobSandbox } from '@libs/code-review/workflow/graph-job-sandbox';
 import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-build-job.processor';
 import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
@@ -79,7 +81,9 @@ const repositoryId = randomUUID();
         jest.spyOn(pino, 'transport').mockReturnValue(
             new PassThrough().resume() as never,
         );
-        connection = await createConnection(mongoUri).asPromise();
+        connection = await createConnection(mongoUri, {
+            dbName: 'graph_sandbox_' + organizationId.replace(/-/g, ''),
+        }).asPromise();
         leases = new SandboxLeaseRepository(
             connection.model(SandboxLeaseModel.name, SandboxLeaseSchema),
         );
@@ -101,7 +105,10 @@ const repositoryId = randomUUID();
             .deleteMany({ organizationId });
     });
     afterAll(async () => {
-        await connection?.close();
+        if (connection) {
+            await connection.dropDatabase();
+            await connection.close();
+        }
     });
 
     function graphJob(
@@ -123,6 +130,103 @@ const repositoryId = randomUUID();
             run: (signal?: AbortSignal) => processor.process(jobId, signal),
         };
     }
+
+    it.each([AstGraphBuildJobProcessor, AstGraphIncrementalJobProcessor])(
+        '%p recovers the abandoned checkout after a release loses its Mongo write',
+        async (Processor) => {
+            const { prKey, run } = graphJob(Processor);
+            const abandonedId = randomUUID();
+            const deadWorker = new SandboxLeaseManager(
+                provider as never,
+                leases,
+                new ConfigService({ API_E2B_KEY: 'test-key' }),
+            );
+            provider.createSandboxWithRepo.mockResolvedValueOnce({
+                ...sandbox,
+                sandboxId: abandonedId,
+            });
+            const grant = await deadWorker.acquire(
+                prKey,
+                'graph-build',
+                2 * 60 * 60 * 1000,
+                {
+                    cloneUrl: 'https://example.org/repo.git',
+                    authToken: '',
+                    branch: 'main',
+                    platform: PlatformType.GITHUB,
+                },
+            );
+            expect(grant.sandboxId).toBe(abandonedId);
+            expect((await leases.findByPrKey(prKey)).leaseCount).toBe(1);
+            const lostWrite = jest
+                .spyOn(leases, 'decrementLease')
+                .mockRejectedValueOnce(new Error('Mongo unavailable'));
+            await expect(
+                deadWorker.release(grant.leaseId, { idleMs: 0 }),
+            ).rejects.toThrow('Mongo unavailable');
+            lostWrite.mockRestore();
+            expect((await leases.findByPrKey(prKey)).leaseCount).toBe(1);
+            provider.createSandboxWithRepo.mockClear();
+            (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+                sandboxId: abandonedId,
+                commands: {
+                    run: async () => ({ stdout: 'old-checkout', exitCode: 0 }),
+                },
+            });
+            await run();
+            expect(await leases.findByPrKey(prKey)).toBeNull();
+            const retired = await leases.findByPrKey(
+                `${organizationId}:retired:${abandonedId}`,
+            );
+            expect(retired?.sandboxId).toBe(abandonedId);
+            expect(retired?.killAt).toBeInstanceOf(Date);
+            const reaper = new SandboxLeaseReaperService(
+                leases,
+                {
+                    acquire: async () => ({ release: async () => {} }),
+                    release: async () => {},
+                } as never,
+                new ConfigService({ API_E2B_KEY: 'test-key' }),
+            );
+            await reaper.killIdleSandboxes();
+            expect(Sandbox.kill).toHaveBeenCalledWith(abandonedId, {
+                apiKey: 'test-key',
+            });
+            expect(
+                await leases.findByPrKey(
+                    `${organizationId}:retired:${abandonedId}`,
+                ),
+            ).toBeNull();
+            const index =
+                Processor === AstGraphBuildJobProcessor
+                    ? indexer.fullBuild
+                    : indexer.incrementalUpdate;
+            expect(index).toHaveBeenCalledTimes(1);
+            expect(index.mock.calls[0][0].sandbox.sandboxId).toBe(
+                sandbox.sandboxId,
+            );
+            expect(provider.createSandboxWithRepo).toHaveBeenCalledTimes(1);
+            expect(jobs.update.mock.calls.at(-1)[1].status).toBe(
+                JobStatus.COMPLETED,
+            );
+            expect(await leases.findByPrKey(prKey)).toBeNull();
+        },
+    );
+
+    it('keeps the original expiry across joins while a dead graph holder remains', async () => {
+        const { prKey } = graphJob(AstGraphBuildJobProcessor);
+        const original = await leases.upsertAcquire(prKey, 60000);
+        await leases.updateReady(prKey, 'stale');
+        for (let i = 0; i < 3; i++) {
+            const joined = await leases.upsertAcquire(
+                prKey,
+                2 * 60 * 60 * 1000,
+            );
+            expect(joined.leaseCount).toBe(2);
+            expect(joined.expiresAt).toEqual(original.expiresAt);
+            await leases.decrementLease(prKey);
+        }
+    });
 
     it('an aborted same-job retry leaves cleanup without acquiring the next sandbox', async () => {
         const { prKey, run } = graphJob(AstGraphIncrementalJobProcessor);

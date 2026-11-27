@@ -1,9 +1,6 @@
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
-import {
-    GraphBaselineChangedError,
-    StaleGraphJobError,
-} from '@libs/code-review/domain/graph-job-attempt';
+import { StaleGraphJobError } from '@libs/code-review/domain/graph-job-attempt';
 import { GraphJobSandbox } from './graph-job-sandbox';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -51,6 +48,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         }),
         release: jest.fn(),
         invalidate: jest.fn(),
+        retireSingleUseCheckout: jest.fn(),
     };
 
     const codeManagementService = {
@@ -212,7 +210,8 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
                     status: JobStatus.FAILED,
                     errorClassification: classification,
                     lastError: message,
-                    failedAt: expect.any(Date),
+                    completedAt: expect.any(Date),
+                    currentStage: 'FAILED',
                     metadata: {
                         attemptId,
                         sandboxId: 'sbx-1',
@@ -225,21 +224,40 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         },
     );
 
-    it('retries a reused checkout whose refresh did not reach the stored revision', async () => {
+    it('replaces a stale joined checkout within the same delivery', async () => {
         leaseManager.acquire.mockResolvedValueOnce({
             sandbox,
             leaseId: 'reused',
             sandboxId: 'existing',
             wasCreated: false,
         });
-        await expect(processor.process('job-1')).rejects.toBeInstanceOf(
-            GraphBaselineChangedError,
+        await processor.process('job-1');
+        expect(leaseManager.retireSingleUseCheckout).toHaveBeenCalledWith(
+            'org-uuid:repo-1:graph:job-1',
+            'existing',
         );
+        expect(leaseManager.release.mock.calls.map(([id]) => id)).toEqual([
+            'reused',
+            'lease-1',
+        ]);
+        expect(graphIndexer.fullBuild).toHaveBeenCalledTimes(1);
+    });
+
+    it('bounds stale checkout replacements per delivery', async () => {
+        const joined = {
+            sandbox,
+            leaseId: 'reused',
+            sandboxId: 'existing',
+            wasCreated: false,
+        };
+        leaseManager.acquire
+            .mockResolvedValueOnce(joined)
+            .mockResolvedValueOnce(joined);
+        await expect(processor.process('job-1')).rejects.toBeInstanceOf(
+            RecordedJobFailure,
+        );
+        expect(leaseManager.acquire).toHaveBeenCalledTimes(2);
         expect(graphIndexer.fullBuild).not.toHaveBeenCalled();
-        expect(graphIndexer.failBuildForAttempt).not.toHaveBeenCalled();
-        expect(leaseManager.release).toHaveBeenCalledWith('reused', {
-            idleMs: 0,
-        });
     });
 
     // The build runs clone + many /contents reads + indexing, any of which

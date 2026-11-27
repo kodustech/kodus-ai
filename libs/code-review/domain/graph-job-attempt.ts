@@ -20,3 +20,18 @@ export class GraphBaselineChangedError extends ClaimConflictError {
         super('Graph baseline changed. Retrying with a fresh checkout');
     }
 }
+
+export class GraphCheckoutRecoveryError extends Error {
+    constructor(options?: ErrorOptions) {
+        super('Could not acquire a fresh graph checkout', options);
+    }
+}
+
+/** The graph consumer has stopped accepting work. Hand this delivery to another worker. */
+export class GraphWorkerShutdownError extends ClaimConflictError {
+    constructor() {
+        super('Graph worker is shutting down', undefined, {
+            returnToQueue: true,
+        });
+    }
+}

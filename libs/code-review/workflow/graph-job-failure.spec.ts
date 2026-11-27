@@ -3,6 +3,26 @@ import { classifyGraphJobError } from './graph-job-failure';
 
 it.each([
     [
+        { code: 'ENOTFOUND', cause: { response: { status: 400 } } },
+        ErrorClassification.PERMANENT,
+    ],
+    [
+        {
+            sandboxSetup: { operation: 'git-fetch', exitCode: 128 },
+            cause: { statusCode: 403 },
+        },
+        ErrorClassification.PERMANENT,
+    ],
+    [
+        { sandboxSetup: { operation: 'graph-install', exitCode: 1 } },
+        ErrorClassification.RETRYABLE,
+    ],
+    [
+        { sandboxSetup: { operation: 'graph-install', exitCode: 127 } },
+        ErrorClassification.PERMANENT,
+    ],
+
+    [
         new Error('parser quoted HTTP 503, timeout and ECONNRESET'),
         ErrorClassification.PERMANENT,
     ],

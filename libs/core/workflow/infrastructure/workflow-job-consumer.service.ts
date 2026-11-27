@@ -1,4 +1,5 @@
 import * as os from 'os';
+import { GraphWorkerShutdownError } from '@libs/code-review/domain/graph-job-attempt';
 import {
     activitySnapshot,
     runActivity,
@@ -70,7 +71,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
 
     constructor(
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
-        private readonly jobProcessor: IJobProcessorService,
+        protected readonly jobProcessor: IJobProcessorService,
         @Inject(INBOX_MESSAGE_REPOSITORY_TOKEN)
         protected readonly inboxRepository: IInboxMessageRepository,
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
@@ -529,6 +530,28 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
 /** The code-review worker's queues. */
 @Injectable()
 export class WorkflowJobConsumer extends WorkflowJobConsumerBase {
+    private readonly graphShutdown = new AbortController();
+
+    protected abortInFlightWork(): void {
+        this.graphShutdown.abort(new GraphWorkerShutdownError());
+    }
+
+    protected async executeJob(
+        jobId: string,
+        queueName: string,
+        messageId: string,
+        consumerId: string,
+    ): Promise<void> {
+        if (
+            queueName === 'workflow.jobs.ast_graph_build.queue' ||
+            queueName === 'workflow.jobs.ast_graph_incremental.queue'
+        ) {
+            this.graphShutdown.signal.throwIfAborted();
+            return this.jobProcessor.process(jobId, this.graphShutdown.signal);
+        }
+        return super.executeJob(jobId, queueName, messageId, consumerId);
+    }
+
     /**
      * Webhook-processing jobs
      * Delayed exchange bindings are created by RabbitMQDLQInitializer.

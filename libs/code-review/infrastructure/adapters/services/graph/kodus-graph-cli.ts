@@ -1,6 +1,9 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    SandboxInstance,
+    sandboxSetupFailure,
+} from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { shSingleQuote } from '../shell-quote';
 
 export const KODUS_GRAPH_VERSION: string = '0.3.0';
@@ -67,15 +70,35 @@ export class KodusGraphCli {
                       `bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION} 2>&1`,
                   ].join(' && ');
 
-        const result = await sandbox.run(installCmd, {
-            timeoutMs: KODUS_GRAPH_TIMEOUTS.install,
-            signal,
-        });
+        const result = await sandbox
+            .run(installCmd, {
+                timeoutMs: KODUS_GRAPH_TIMEOUTS.install,
+                signal,
+            })
+            .catch((error) => {
+                signal?.throwIfAborted();
+                if (
+                    error instanceof Error &&
+                    'exitCode' in error &&
+                    typeof error.exitCode === 'number'
+                ) {
+                    throw sandboxSetupFailure(
+                        error,
+                        'graph-install',
+                        error.exitCode,
+                    );
+                }
+                throw error;
+            });
 
         signal?.throwIfAborted();
         if (result.exitCode !== 0) {
-            throw new Error(
-                `kodus-graph install failed (exit=${result.exitCode}): ${(result.stderr || result.stdout || '').slice(0, 500)}`,
+            throw sandboxSetupFailure(
+                new Error(
+                    `kodus-graph install failed (exit=${result.exitCode}): ${(result.stderr || result.stdout || '').slice(0, 500)}`,
+                ),
+                'graph-install',
+                result.exitCode,
             );
         }
     }

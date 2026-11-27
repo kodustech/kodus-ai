@@ -8,7 +8,10 @@ jest.mock('e2b', () => {
     class CommandExitError extends Error {
         stdout: string;
         stderr: string;
-        exitCode: number;
+        private readonly code: number;
+        get exitCode() {
+            return this.code;
+        }
         constructor(o: {
             stdout: string;
             stderr: string;
@@ -18,13 +21,15 @@ jest.mock('e2b', () => {
             super(o.error ?? 'command exited non-zero');
             this.stdout = o.stdout;
             this.stderr = o.stderr;
-            this.exitCode = o.exitCode;
+            this.code = o.exitCode;
         }
     }
     return { CommandExitError, Sandbox: class {} };
 });
 
 import { CommandExitError, Sandbox } from 'e2b';
+import { classifyGraphJobError } from '@libs/code-review/workflow/graph-job-failure';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 
 import {
     E2BSandboxService,
@@ -701,6 +706,69 @@ describe('E2BSandboxService.getPrRefspec', () => {
 // syncE2BSandboxRepo — the reconnect-path fix (#1313 e2e validation):
 // bring a REUSED sandbox's checkout up to date with the current commit.
 // ---------------------------------------------------------------------------
+describe('E2B repository provisioning', () => {
+    const service = new E2BSandboxService({ get: () => undefined } as never);
+    const params: CreateSandboxParams = {
+        cloneUrl: 'https://github.com/org/repo',
+        authToken: 'fixture-token',
+        branch: 'topic',
+        baseBranch: 'main',
+        platform: PlatformType.GITHUB,
+    };
+    it('passes the scoped Git header through the environment for initial and base fetches', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        const sdk = { commands: { run } } as never;
+        await service['cloneRepository'](sdk, params);
+        await expect(service['fetchBaseBranch'](sdk, params)).resolves.toBe(
+            'main',
+        );
+        const fetches = run.mock.calls.filter(([cmd]) =>
+            cmd.includes('git fetch'),
+        );
+        expect(fetches).toHaveLength(2);
+        for (const [command, opts] of fetches) {
+            expect(command).not.toMatch(
+                /GIT_AUTH_HEADER|GIT_CONFIG_VALUE|extraHeader|fixture-token|Authorization:/i,
+            );
+            expect(opts.envs).toEqual({
+                GIT_CONFIG_COUNT: '1',
+                GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
+                GIT_CONFIG_VALUE_0:
+                    'Authorization: Basic ' +
+                    Buffer.from('x-access-token:fixture-token').toString(
+                        'base64',
+                    ),
+            });
+        }
+    });
+    it.each(['returned', 'thrown'])(
+        'keeps %s clone exit status retryable for graph jobs',
+        async (mode) => {
+            const result = {
+                stdout: '',
+                stderr: 'fetch disconnected',
+                exitCode: 128,
+                error: '',
+            };
+            const run = jest.fn();
+            if (mode === 'returned') run.mockResolvedValue(result);
+            else run.mockRejectedValue(new CommandExitError(result));
+            const error = await service['cloneRepository'](
+                { commands: { run } } as never,
+                params,
+            ).catch((e) => e);
+            expect(error).toMatchObject({
+                sandboxSetup: { operation: 'git-fetch', exitCode: 128 },
+            });
+            expect(classifyGraphJobError(error)).toBe(
+                ErrorClassification.RETRYABLE,
+            );
+        },
+    );
+});
+
 describe('syncE2BSandboxRepo', () => {
     const makeSandbox = (run: jest.Mock) => ({ commands: { run } }) as any;
     const baseParams: CreateSandboxParams = {
@@ -729,9 +797,9 @@ describe('syncE2BSandboxRepo', () => {
         expect(run.mock.calls[0][0]).toContain('git checkout -f FETCH_HEAD');
         const [command, opts] = run.mock.calls[0];
         expect(command).toBe(
-            `cd ${REPO_DIR} && git -c http.extraHeader="$GIT_AUTH_HEADER" fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
+            `cd ${REPO_DIR} && git fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
         );
-        expect(opts.envs.GIT_AUTH_HEADER).toBe(
+        expect(opts.envs.GIT_CONFIG_VALUE_0).toBe(
             `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
         );
     });

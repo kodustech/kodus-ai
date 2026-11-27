@@ -45,6 +45,16 @@ export interface SandboxRunOptions {
     asRoot?: boolean;
 }
 
+export function sandboxSetupFailure(
+    error: Error,
+    operation: 'git-fetch' | 'graph-install',
+    exitCode: number,
+): Error {
+    // E2B exposes exitCode through a read-only getter. Preserve the SDK error
+    // for callers that inspect stderr or route it by class.
+    return Object.assign(error, { sandboxSetup: { operation, exitCode } });
+}
+
 export interface SandboxRunResult {
     stdout: string;
     stderr?: string;
