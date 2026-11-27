@@ -143,6 +143,55 @@ describe('extractDiffHunks', () => {
         ]);
     });
 
+    it('trusts the --- and +++ lines over the header cuts', () => {
+        // The header names one file and the header lines name another: the
+        // section belongs to the file the ---/+++ pair writes, so a cut from
+        // the header must not serve these hunks under an unrelated path.
+        const deceptive = [
+            'diff --git a/fixtures b/package-lock.json b/fixtures b/package-lock.json',
+            'index 1..2 100644',
+            '--- a/src/real.ts',
+            '+++ b/src/real.ts',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(
+            extractDiffHunks(deceptive, [
+                'fixtures b/package-lock.json',
+                'src/real.ts',
+            ]),
+        ).toEqual([
+            {
+                path: 'src/real.ts',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+        expect(
+            extractDiffHunks(deceptive, ['fixtures b/package-lock.json']),
+        ).toEqual([]);
+    });
+
+    it('answers a quoted rename only under its new path', () => {
+        // The hunks of a renamed file belong to that file; the old name is
+        // not a file the caller can have hunks for.
+        const rename = [
+            'diff --git "a/caf\\303\\251.ts" "b/moved.ts"',
+            'similarity index 90%',
+            'rename from caf\\303\\251.ts',
+            'rename to moved.ts',
+            '--- "a/caf\\303\\251.ts"',
+            '+++ "b/moved.ts"',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(extractDiffHunks(rename, ['moved.ts'])).toHaveLength(1);
+        expect(extractDiffHunks(rename, ['caf\u00e9.ts'])).toEqual([]);
+    });
+
     it('returns nothing rather than throwing on empty input', () => {
         expect(extractDiffHunks('', ['a.ts'])).toEqual([]);
         expect(extractDiffHunks(diff, [])).toEqual([]);
