@@ -345,7 +345,7 @@ describe("why these specs", () => {
     it("lists, per changed file, the specs it reaches", () => {
         expect(whySpecs(run())).toEqual({
             title: "Why these 9 specs",
-            summary: "coverage map · 2 changed files",
+            summary: "picked from 2 changed files",
             rows: [
                 {
                     file: "src/routes/cart.js",
@@ -353,7 +353,7 @@ describe("why these specs", () => {
                 },
                 { file: "src/lib/price.js", specs: "catalog.spec.ts" },
             ],
-            note: "The whole suite runs instead when a lockfile, manifest or config changes, when the map is missing or stale, or after the shadow check found a miss.",
+            note: "Usually Kody runs only the specs a change can affect, from what full runs on main taught it about which code each spec exercises. It runs every spec when dependencies or test configuration change, when it has not learned that yet, or right after it caught a spec it should have run.",
         });
     });
 

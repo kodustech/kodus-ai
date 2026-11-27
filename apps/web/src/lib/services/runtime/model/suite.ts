@@ -23,20 +23,20 @@ const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 export const FULL_REASON_TEXT: Record<string, string> = {
     manifest: "a dependency manifest changed",
     lockfile: "a lockfile changed",
-    config: "a runner, build or compose configuration changed",
+    config: "a test runner, build or compose configuration changed",
     shared_routing: "shared routing or setup code changed",
     uncovered_file:
-        "a changed file is covered by no spec, so nothing is skipped on a guess",
-    map_missing: "no coverage map is stored for this environment yet",
+        "a changed file is exercised by no spec, so Kody runs every spec rather than guess",
+    map_missing: "Kody has not yet learned which code each spec exercises, so it cannot pick only the specs this change affects",
     changes_unknown: "the files this pull request changes could not be read",
-    map_stale: "the stored coverage map is too old to trust",
-    map_digest: "the suite changed since the coverage map was made",
+    map_stale: "what Kody learned about which code each spec exercises is too old to trust",
+    map_digest: "the suite changed since Kody last learned which code each spec exercises",
     noise_file: "a changed file is exercised by most specs",
     ready_for_review: "the pull request is ready for review",
     baseline: "this is the baseline on main",
-    shadow: "this is a shadow run that checks the selection",
+    shadow: "this run double-checks the specs Kody picks",
     selection_miss:
-        "the shadow check found a failure the selection had skipped, so the whole suite runs for a while",
+        "a recent double-check caught a failing spec Kody had skipped, so every spec runs for a while",
     selection_off: "spec selection is off for this environment",
 };
 
@@ -240,7 +240,7 @@ export const artifactLabel = (name: string): string => {
 };
 
 const WHY_NOTE =
-    "The whole suite runs instead when a lockfile, manifest or config changes, when the map is missing or stale, or after the shadow check found a miss.";
+    "Usually Kody runs only the specs a change can affect, from what full runs on main taught it about which code each spec exercises. It runs every spec when dependencies or test configuration change, when it has not learned that yet, or right after it caught a spec it should have run.";
 
 export type WhySpecs = {
     title: string;
@@ -276,7 +276,7 @@ export const whySpecs = (run: RuntimeSuiteRun): WhySpecs => {
         };
     return {
         title,
-        summary: `coverage map · ${plural(rows.length, "changed file")}`,
+        summary: `picked from ${plural(rows.length, "changed file")}`,
         rows,
         note: WHY_NOTE,
     };

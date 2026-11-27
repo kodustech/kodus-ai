@@ -151,9 +151,10 @@ const Switches = ({
                         Run only the specs the change reaches
                     </Label>
                     <p className="text-text-secondary max-w-xl text-xs">
-                        Uses the coverage map of main. Some selected pull
-                        requests also run the whole suite in the background to
-                        check the selection.
+                        Kody learns from full runs on main which code each spec
+                        exercises, and runs only the specs a change can affect.
+                        Now and then it runs every spec in the background to
+                        check it did not skip one it should have run.
                     </p>
                 </div>
                 <Switch
