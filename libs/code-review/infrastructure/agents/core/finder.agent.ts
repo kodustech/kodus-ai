@@ -1020,17 +1020,25 @@ export async function runFinderWithVerify(
         // passes whose output that error discards.
         if (finderState.status === 'error') {
             lensStop.abort();
+            // The review throws the error away, but not every caller does: the
+            // security scan keeps what a failed run still salvaged. Extraction
+            // stays for it; the recall passes (extra model calls) do not.
+            const base = await extractFindingsWithRecovery(
+                finderState,
+                params.recoverProse,
+                { ...params.telemetryMetadata, modelId: params.modelId },
+            );
             return {
                 finderState,
                 baseStat: passStatOf(finderState, {
                     label: 'generalist-base',
-                    added: 0,
+                    added: base.suggestions?.length ?? 0,
                     ms: Date.now() - baseT0,
                     startMs: 0,
                     startEpochMs: baseT0,
                 }),
                 recall: {
-                    findings: { reasoning: '', suggestions: [] },
+                    findings: base,
                     usage: ZERO_VERIFY_USAGE,
                     passStats: [],
                     states: [],
@@ -1081,15 +1089,25 @@ export async function runFinderWithVerify(
         );
         return { finderState, baseStat, recall };
     })().catch(stopLenses);
-    // An aborted lens may reject; the abort is the expected path here.
-    const lensResult = lenses ? await lenses.catch(() => null) : null;
+    // An aborted lens may reject; the abort is the expected path here. Any
+    // other rejection is a lens that failed (provider, lost lease, rate
+    // limit) and must not read as "the lens found nothing".
+    const lensResult = lenses
+        ? await lenses.catch((error) => {
+              if (lensStop.signal.aborted) {
+                  return null;
+              }
+              throw error;
+          })
+        : null;
     const reasoning = recall.findings.reasoning;
-    const suggestions = lensResult
-        ? mergeSuggestions(recall.findings, {
-              reasoning: '',
-              suggestions: lensResult.suggestions,
-          }).suggestions
-        : recall.findings.suggestions;
+    const suggestions =
+        lensResult && finderState.status !== 'error'
+            ? mergeSuggestions(recall.findings, {
+                  reasoning: '',
+                  suggestions: lensResult.suggestions,
+              }).suggestions
+            : recall.findings.suggestions;
     const recallUsage = lensResult
         ? sumVerifyUsage(recall.usage, lensResult.usage)
         : recall.usage;
@@ -1099,6 +1117,29 @@ export async function runFinderWithVerify(
         ...recall.passStats,
         ...(lensResult?.passStats ?? []),
     ];
+
+    if (finderState.status === 'error') {
+        // The generalist failed: a verdict on any finding is work the caller
+        // throws away with the error, so verify never runs. A caller that
+        // keeps the partial result still gets what the failed run salvaged.
+        return {
+            reasoning,
+            kept: suggestions,
+            keptEvidence: suggestions.map(() => buildToolEvidenceSummary([])),
+            keptParseMode: suggestions.map(
+                () => 'default-keep' as VerdictParseMode,
+            ),
+            droppedByVerify: [],
+            unverified: [],
+            droppedByQuoteCheck: [],
+            finderState,
+            recallStates,
+            verifyUsage: ZERO_VERIFY_USAGE,
+            recallUsage,
+            passStats,
+            ...(lensResult && { lensOutcomes: lensResult.outcomes }),
+        };
+    }
 
     if (suggestions.length === 0) {
         return {
