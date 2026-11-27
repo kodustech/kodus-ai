@@ -26,7 +26,7 @@ import { UNTRUSTED_YAML } from './yaml-limits';
 
 export const RECIPE_PATH = '.kodus/workspace.yaml';
 
-export const RECIPE_LIMITS = { composeFiles: 8, profiles: 16, public: 16, exposed: 32, healthLength: 512, dataServices: 8 } as const;
+export const RECIPE_LIMITS = { composeFiles: 8, profiles: 16, public: 16, exposed: 32, healthLength: 512, dataServices: 8, inPlacePostgres: 8, inPlaceDatabases: 8, inPlaceDatabaseName: 50 } as const;
 
 /**
  * The most a setup waits for the app (services.compose.health_timeout), in
@@ -224,6 +224,20 @@ export const RecipeSchema = z.strictObject({
                 .array(z.string())
                 .optional()
                 .describe('data-only: the compose services whose volumes are copied; default, every image-only non-public service with a named volume.'),
+            in_place: z
+                .strictObject({
+                    off: z.boolean().optional().describe('true: a data-only reset stays on the volume restore.'),
+                    postgres: z
+                        .array(z.strictObject({ service: z.string(), databases: z.array(z.string()).optional() }))
+                        .optional()
+                        .describe('Postgres services (and the databases the app uses) when the image or the compose environment does not say; the cell finds Postgres by image.'),
+                    firebase: z
+                        .strictObject({ service: z.string(), import_dir: z.string(), project: z.string().optional() })
+                        .optional()
+                        .describe('The Firebase emulators: the service that runs them and the directory its command passes to --import. Exported after the first seeded boot, imported again on a reset.'),
+                })
+                .optional()
+                .describe('data-only: faster resets in place (a Postgres template copy, a Firebase emulator import) tried before the volume restore.'),
         })
         .optional(),
     files: z
@@ -264,6 +278,8 @@ export interface Recipe {
     reset?: 'reseed' | 'snapshot' | 'data-only';
     /** data.services, with data.reset data-only. */
     dataServices?: string[];
+    /** data.in_place, with data.reset data-only; absent when the recipe sets none. */
+    inPlace?: RecipeInPlace;
     filesCopy: string[];
     size?: RecipeSize;
     egressAllow?: string[];
@@ -280,6 +296,13 @@ export interface Recipe {
      * as if they were absent, so the setup says so. Absent when there is none.
      */
     unapplied?: string[];
+}
+
+/** data.in_place resolved: the hints for the in-place paths of a data-only reset. */
+export interface RecipeInPlace {
+    off?: true;
+    postgres?: { service: string; databases: string[] }[];
+    firebase?: { service: string; importDir: string; project?: string };
 }
 
 /** The suite block resolved: durations in seconds, defaults filled. */
@@ -542,7 +565,40 @@ function recipeRules(r: Recipe): string | undefined {
             named.add(s);
         }
     }
+    const inPlaceRefused = inPlaceRules(r);
+    if (inPlaceRefused) return inPlaceRefused;
     if (r.seed?.sql !== undefined && !insideRepo(r.seed.sql)) return `data.seed.sql: ${JSON.stringify(r.seed.sql)} must be a path inside the repo`;
+    return undefined;
+}
+
+const IN_PLACE_DATABASE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const IN_PLACE_DIR = /^\/[A-Za-z0-9._/-]+$/;
+const IN_PLACE_PROJECT = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+/** data.in_place: the cell's rules (checkInPlace in internal/recipe/validate.go), word for word. */
+function inPlaceRules(r: Recipe): string | undefined {
+    const ip = r.inPlace;
+    if (!ip) return undefined;
+    if (r.reset !== 'data-only') return 'data.in_place needs data.reset: data-only';
+    const postgres = ip.postgres ?? [];
+    if (postgres.length > RECIPE_LIMITS.inPlacePostgres) return `data.in_place.postgres: at most ${RECIPE_LIMITS.inPlacePostgres} services`;
+    const seen = new Set<string>();
+    for (const p of postgres) {
+        if (!NAME.test(p.service)) return `data.in_place.postgres: bad service ${JSON.stringify(p.service)}`;
+        if (seen.has(p.service)) return `data.in_place.postgres: ${p.service} twice`;
+        if (r.public.includes(p.service)) return `data.in_place.postgres: ${p.service} is the public service`;
+        if (p.databases.length > RECIPE_LIMITS.inPlaceDatabases) return `data.in_place.postgres: ${p.service} names more than ${RECIPE_LIMITS.inPlaceDatabases} databases`;
+        seen.add(p.service);
+        for (const db of p.databases)
+            if (!IN_PLACE_DATABASE.test(db) || db.length > RECIPE_LIMITS.inPlaceDatabaseName) return `data.in_place.postgres: bad database ${JSON.stringify(db)}`;
+    }
+    const f = ip.firebase;
+    if (f) {
+        if (!NAME.test(f.service)) return `data.in_place.firebase: bad service ${JSON.stringify(f.service)}`;
+        if (!IN_PLACE_DIR.test(f.importDir) || f.importDir.includes('..')) return `data.in_place.firebase.import_dir: ${JSON.stringify(f.importDir)} must be an absolute path inside the service`;
+        if (f.project !== undefined && f.project !== '' && !IN_PLACE_PROJECT.test(f.project)) return `data.in_place.firebase.project: bad project ${JSON.stringify(f.project)}`;
+        if (r.dataServices?.includes(f.service)) return `data.in_place.firebase: ${f.service} is a data service; the emulators are part of the app`;
+    }
     return undefined;
 }
 
@@ -653,6 +709,17 @@ export function parseRecipe(text: string): RecipeParseResult {
         const refused = suiteRules(suite);
         if (refused) return fail(refused);
     }
+    const ipRaw = d.data?.in_place;
+    const inPlace: RecipeInPlace | undefined =
+        ipRaw && (ipRaw.off || ipRaw.postgres?.length || ipRaw.firebase)
+            ? {
+                  ...(ipRaw.off ? { off: true as const } : {}),
+                  ...(ipRaw.postgres?.length ? { postgres: ipRaw.postgres.map((p) => ({ service: p.service, databases: p.databases ?? [] })) } : {}),
+                  ...(ipRaw.firebase
+                      ? { firebase: { service: ipRaw.firebase.service, importDir: ipRaw.firebase.import_dir, ...(ipRaw.firebase.project ? { project: ipRaw.firebase.project } : {}) } }
+                      : {}),
+              }
+            : undefined;
     const recipe: Recipe = {
         version: 1,
         ...(d.validate !== undefined ? { validate: d.validate } : {}),
@@ -668,6 +735,7 @@ export function parseRecipe(text: string): RecipeParseResult {
         ...(seed ? { seed } : {}),
         ...(d.data?.reset && d.data.reset !== 'recreate' ? { reset: d.data.reset } : {}),
         ...(d.data?.services ? { dataServices: d.data.services } : {}),
+        ...(inPlace ? { inPlace } : {}),
         filesCopy: d.files?.copy ?? [],
         ...(size ? { size } : {}),
         ...(d.egress ? { egressAllow } : {}),

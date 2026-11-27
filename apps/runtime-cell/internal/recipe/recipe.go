@@ -131,6 +131,35 @@ type Data struct {
 	// Services names the compose services data-only copies; empty: the
 	// image-only, non-public services with a named volume.
 	Services []string `yaml:"services"`
+	// InPlace tunes the faster in-place paths of a data-only reset (a
+	// Postgres template copy, a Firebase emulator import); it is only a hint,
+	// the cell detects Postgres by image and falls back to the volume restore.
+	InPlace InPlace `yaml:"in_place"`
+}
+
+// InPlace is data.in_place.
+type InPlace struct {
+	// Off keeps the data-only reset on the volume restore.
+	Off bool `yaml:"off"`
+	// Postgres names the Postgres services (and the databases the app uses
+	// in each) when the image or the compose environment does not say.
+	Postgres []InPlacePostgres `yaml:"postgres"`
+	// Firebase declares the Firebase emulators: the service that runs them
+	// and the directory its command imports (--import) at start.
+	Firebase *InPlaceFirebase `yaml:"firebase"`
+}
+
+// InPlacePostgres is one data.in_place.postgres entry.
+type InPlacePostgres struct {
+	Service   string   `yaml:"service"`
+	Databases []string `yaml:"databases"`
+}
+
+// InPlaceFirebase is data.in_place.firebase.
+type InPlaceFirebase struct {
+	Service   string `yaml:"service"`
+	ImportDir string `yaml:"import_dir"`
+	Project   string `yaml:"project"`
 }
 
 // Reset strategies.

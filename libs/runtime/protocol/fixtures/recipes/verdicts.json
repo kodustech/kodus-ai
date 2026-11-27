@@ -479,6 +479,20 @@
             "cell": "refuse: is the public service",
             "runo": "accept",
             "why": "data.services is the cell's own key; Runo ignores keys it does not know"
+        },
+        "libs/runtime/protocol/fixtures/recipes/data-only-in-place.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-in-place-without-data-only.yaml": {
+            "cell": "refuse: data.in_place needs data.reset: data-only",
+            "runo": "accept",
+            "why": "data.in_place is the cell's own key; Runo ignores keys it does not know"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-in-place-bad-database.yaml": {
+            "cell": "refuse: bad database",
+            "runo": "accept",
+            "why": "data.in_place is the cell's own key; Runo ignores keys it does not know"
         }
     }
 }

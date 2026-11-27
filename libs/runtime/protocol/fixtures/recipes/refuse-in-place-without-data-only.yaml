@@ -1,0 +1,12 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: web
+  expose:
+    - { service: web, port: 8080, kind: http }
+data:
+  reset: snapshot
+  in_place:
+    postgres:
+      - { service: db }

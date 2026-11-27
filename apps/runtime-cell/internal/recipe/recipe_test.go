@@ -315,3 +315,35 @@ func TestDataOnlyResetRules(t *testing.T) {
 		})
 	}
 }
+
+// TestInPlaceRules: data.in_place is read only with data-only, names Postgres
+// services and databases that are safe to put in a command, and an emulator
+// directory that is an absolute path (the TS side: recipe-data-reset.spec.ts).
+func TestInPlaceRules(t *testing.T) {
+	head := "version: 1\nservices:\n  compose: { files: [docker-compose.yml], public: web }\n  expose: [{ service: web, port: 8080, kind: http }]\ndata:\n"
+	for name, c := range map[string]struct{ data, refused string }{
+		"a postgres hint":           {"  reset: data-only\n  in_place:\n    postgres: [{ service: db, databases: [shop] }]\n", ""},
+		"the emulators":             {"  reset: data-only\n  in_place:\n    firebase: { service: emu, import_dir: /seed/fb, project: demo-x }\n", ""},
+		"off":                       {"  reset: data-only\n  in_place: { off: true }\n", ""},
+		"without data-only":         {"  reset: snapshot\n  in_place: { off: true }\n", "data.in_place needs data.reset: data-only"},
+		"a database with a quote":   {"  reset: data-only\n  in_place:\n    postgres: [{ service: db, databases: [\"a;b\"] }]\n", "bad database"},
+		"a database too long":       {"  reset: data-only\n  in_place:\n    postgres: [{ service: db, databases: [" + strings.Repeat("a", 51) + "] }]\n", "bad database"},
+		"a service twice":           {"  reset: data-only\n  in_place:\n    postgres: [{ service: db }, { service: db }]\n", "db twice"},
+		"the public service":        {"  reset: data-only\n  in_place:\n    postgres: [{ service: web }]\n", "is the public service"},
+		"a relative import dir":     {"  reset: data-only\n  in_place:\n    firebase: { service: emu, import_dir: seed }\n", "absolute path"},
+		"an import dir that climbs": {"  reset: data-only\n  in_place:\n    firebase: { service: emu, import_dir: /a/../b }\n", "absolute path"},
+		"a bad project":             {"  reset: data-only\n  in_place:\n    firebase: { service: emu, import_dir: /s, project: \"X Y\" }\n", "bad project"},
+		"emulators as data":         {"  reset: data-only\n  services: [emu]\n  in_place:\n    firebase: { service: emu, import_dir: /s }\n", "part of the app"},
+		"an unknown key":            {"  reset: data-only\n  in_place: { postgres: [{ service: db, dbs: [a] }] }\n", "dbs"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse([]byte(head + c.data))
+			switch {
+			case c.refused == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case c.refused != "" && (err == nil || !strings.Contains(err.Error(), c.refused)):
+				t.Fatalf("got %v, want a refusal with %q", err, c.refused)
+			}
+		})
+	}
+}

@@ -278,6 +278,59 @@
           "items": {
             "type": "string"
           }
+        },
+        "in_place": {
+          "description": "data-only: faster resets in place (a Postgres template copy, a Firebase emulator import) tried before the volume restore.",
+          "type": "object",
+          "properties": {
+            "off": {
+              "description": "true: a data-only reset stays on the volume restore.",
+              "type": "boolean"
+            },
+            "postgres": {
+              "description": "Postgres services (and the databases the app uses) when the image or the compose environment does not say; the cell finds Postgres by image.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "service": {
+                    "type": "string"
+                  },
+                  "databases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "service"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "firebase": {
+              "description": "The Firebase emulators: the service that runs them and the directory its command passes to --import. Exported after the first seeded boot, imported again on a reset.",
+              "type": "object",
+              "properties": {
+                "service": {
+                  "type": "string"
+                },
+                "import_dir": {
+                  "type": "string"
+                },
+                "project": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "service",
+                "import_dir"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

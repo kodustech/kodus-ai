@@ -283,7 +283,72 @@ func checkData(r *Recipe) error {
 	default:
 		return fmt.Errorf("data.reset %q is not %s, %s, %s or %s", r.Data.Reset, ResetRecreate, ResetReseed, ResetSnapshot, ResetDataOnly)
 	}
-	return checkDataServices(r)
+	if err := checkDataServices(r); err != nil {
+		return err
+	}
+	return checkInPlace(r)
+}
+
+// MaxInPlacePostgres and MaxInPlaceDatabases bound data.in_place.postgres.
+const (
+	MaxInPlacePostgres  = 8
+	MaxInPlaceDatabases = 8
+	// maxInPlaceDatabaseName leaves room for the suffix of the golden copy
+	// (_kodus_golden, 13 bytes) under Postgres' 63-byte identifier limit.
+	maxInPlaceDatabaseName = 50
+)
+
+var (
+	inPlaceDatabase = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	inPlaceDir      = regexp.MustCompile(`^/[A-Za-z0-9._/-]+$`)
+	inPlaceProject  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+)
+
+// checkInPlace holds data.in_place to data-only (the only strategy that
+// reads it) and to values that are safe to put in a command.
+func checkInPlace(r *Recipe) error {
+	ip := r.Data.InPlace
+	if !ip.Off && len(ip.Postgres) == 0 && ip.Firebase == nil {
+		return nil
+	}
+	if r.Data.Reset != ResetDataOnly {
+		return errors.New("data.in_place needs data.reset: data-only")
+	}
+	if len(ip.Postgres) > MaxInPlacePostgres {
+		return fmt.Errorf("data.in_place.postgres: at most %d services", MaxInPlacePostgres)
+	}
+	seen := map[string]bool{}
+	for _, p := range ip.Postgres {
+		switch {
+		case !serviceName.MatchString(p.Service):
+			return fmt.Errorf("data.in_place.postgres: bad service %q", p.Service)
+		case seen[p.Service]:
+			return fmt.Errorf("data.in_place.postgres: %s twice", p.Service)
+		case slices.Contains(r.Services.Compose.Public, p.Service):
+			return fmt.Errorf("data.in_place.postgres: %s is the public service", p.Service)
+		case len(p.Databases) > MaxInPlaceDatabases:
+			return fmt.Errorf("data.in_place.postgres: %s names more than %d databases", p.Service, MaxInPlaceDatabases)
+		}
+		seen[p.Service] = true
+		for _, db := range p.Databases {
+			if !inPlaceDatabase.MatchString(db) || len(db) > maxInPlaceDatabaseName {
+				return fmt.Errorf("data.in_place.postgres: bad database %q", db)
+			}
+		}
+	}
+	if f := ip.Firebase; f != nil {
+		switch {
+		case !serviceName.MatchString(f.Service):
+			return fmt.Errorf("data.in_place.firebase: bad service %q", f.Service)
+		case !inPlaceDir.MatchString(f.ImportDir) || strings.Contains(f.ImportDir, ".."):
+			return fmt.Errorf("data.in_place.firebase.import_dir: %q must be an absolute path inside the service", f.ImportDir)
+		case f.Project != "" && !inPlaceProject.MatchString(f.Project):
+			return fmt.Errorf("data.in_place.firebase.project: bad project %q", f.Project)
+		case slices.Contains(r.Data.Services, f.Service):
+			return fmt.Errorf("data.in_place.firebase: %s is a data service; the emulators are part of the app", f.Service)
+		}
+	}
+	return nil
 }
 
 // checkDataServices holds data.services to its strategy: only data-only
