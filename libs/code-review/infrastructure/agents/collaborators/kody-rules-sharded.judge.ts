@@ -596,6 +596,8 @@ export interface ShardPromptCacheStats {
     /** Leaders whose siblings started at the model's answer, before the
      *  leader's own follow-up work (evidence checks) ended. */
     leadersReleasedAtAnswer: number;
+    /** Leaders that failed and passed the lead to their next sibling. */
+    leaderHandovers: number;
 }
 
 export interface ShardedJudgeResult {
@@ -1272,17 +1274,22 @@ const isPrLevel = (r: Partial<IKodyRule>) =>
  *
  * A free worker takes, in order: a sibling whose leader has answered, then a
  * group's leader (largest group first). Failing both, it waits for a running
- * leader to answer, at most `waitMs` from when it went idle, and only then
+ * leader to finish, at most `waitMs` from when it went idle, and only then
  * sends a sibling whose leader is still running. A leader answers when `fn`
- * calls `answered`, or when `fn` ends. `fn` learns whether the job can use
- * the cache: a leader writes it, a sibling after its leader reads it, an
- * early sibling can do neither.
+ * calls `answered`, or when `fn` ends without calling `failed`; a leader that
+ * failed wrote nothing, so its next sibling becomes the leader. `fn` learns
+ * whether the job can use the cache: a leader writes it, a sibling after its
+ * leader reads it, an early sibling can do neither.
  */
 async function runLeaderFirst<T, R>(
     groups: T[][],
     limit: number,
     waitMs: number,
-    fn: (item: T, cacheable: boolean, answered: () => void) => Promise<R>,
+    fn: (
+        item: T,
+        cacheable: boolean,
+        signal: { answered: () => void; failed: () => void },
+    ) => Promise<R>,
 ): Promise<{
     results: Map<T, R>;
     siblingsAfterLeader: number;
@@ -1290,14 +1297,15 @@ async function runLeaderFirst<T, R>(
     idleWaits: number;
     idleWaitMs: number;
     leadersReleasedAtAnswer: number;
+    leaderHandovers: number;
 }> {
     const ordered = groups
         .map((items, order) => ({ items, order }))
         .sort((a, b) => b.items.length - a.items.length || a.order - b.order)
         .map(({ items }) => ({
             items,
-            next: 1,
-            leaderStarted: false,
+            next: 0,
+            leaderRunning: false,
             leaderDone: false,
         }));
     type Group = (typeof ordered)[number];
@@ -1307,16 +1315,27 @@ async function runLeaderFirst<T, R>(
     let idleWaits = 0;
     let idleWaitMs = 0;
     let leadersReleasedAtAnswer = 0;
+    let leaderHandovers = 0;
 
-    // Wakes every waiting worker when any leader answers.
+    // Wakes every waiting worker when a leader answers or fails.
     let wake: () => void = () => undefined;
-    let answeredSignal = new Promise<void>((r) => (wake = r));
+    let leaderSignal = new Promise<void>((r) => (wake = r));
+    const signalWaiters = () => {
+        const woken = wake;
+        leaderSignal = new Promise<void>((r) => (wake = r));
+        woken();
+    };
     const release = (group: Group) => {
         if (group.leaderDone) return;
         group.leaderDone = true;
-        const woken = wake;
-        answeredSignal = new Promise<void>((r) => (wake = r));
-        woken();
+        group.leaderRunning = false;
+        signalWaiters();
+    };
+    const handOver = (group: Group) => {
+        if (group.leaderDone) return;
+        group.leaderRunning = false;
+        if (group.next < group.items.length) leaderHandovers++;
+        signalWaiters();
     };
 
     const WAIT = Symbol('wait');
@@ -1343,11 +1362,13 @@ async function runLeaderFirst<T, R>(
                 cacheable: true,
             };
         }
-        const leader = ordered.find((g) => !g.leaderStarted);
+        const leader = ordered.find(
+            (g) => !g.leaderDone && !g.leaderRunning && g.next < g.items.length,
+        );
         if (leader) {
-            leader.leaderStarted = true;
+            leader.leaderRunning = true;
             return {
-                item: leader.items[0],
+                item: leader.items[leader.next++],
                 group: leader,
                 leader: true,
                 cacheable: true,
@@ -1365,10 +1386,10 @@ async function runLeaderFirst<T, R>(
         };
     };
 
-    const waitForAnswer = async (ms: number) => {
+    const waitForLeader = async (ms: number) => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         await Promise.race([
-            answeredSignal,
+            leaderSignal,
             new Promise<void>((r) => (timer = setTimeout(r, ms))),
         ]);
         clearTimeout(timer);
@@ -1392,7 +1413,7 @@ async function runLeaderFirst<T, R>(
                             idleSince = now;
                             idleWaits++;
                         }
-                        await waitForAnswer(waitMs - (now - idleSince));
+                        await waitForLeader(waitMs - (now - idleSince));
                         continue;
                     }
                     if (idleSince !== undefined) {
@@ -1401,19 +1422,28 @@ async function runLeaderFirst<T, R>(
                     }
                     if (!job) break;
                     let finished = false;
+                    let failed = false;
                     try {
                         results.set(
                             job.item,
-                            await fn(job.item, job.cacheable, () => {
-                                if (!job.leader || finished) return;
-                                if (!job.group.leaderDone)
-                                    leadersReleasedAtAnswer++;
-                                release(job.group);
+                            await fn(job.item, job.cacheable, {
+                                answered: () => {
+                                    if (!job.leader || finished) return;
+                                    if (!job.group.leaderDone)
+                                        leadersReleasedAtAnswer++;
+                                    release(job.group);
+                                },
+                                failed: () => {
+                                    failed = true;
+                                },
                             }),
                         );
                     } finally {
                         finished = true;
-                        if (job.leader) release(job.group);
+                        if (job.leader) {
+                            if (failed) handOver(job.group);
+                            else release(job.group);
+                        }
                     }
                 }
             },
@@ -1426,6 +1456,7 @@ async function runLeaderFirst<T, R>(
         idleWaits,
         idleWaitMs,
         leadersReleasedAtAnswer,
+        leaderHandovers,
     };
 }
 
@@ -1776,7 +1807,7 @@ export async function judgeKodyRulesSharded(
         groups,
         concurrency,
         input.leaderWaitMs ?? SHARD_LEADER_WAIT_MS_DEFAULT,
-        async (shard, cacheable, answered) => {
+        async (shard, cacheable, signal) => {
             const { file, applicable } = shard;
             shardsRun++;
             await awaitRefusalVerdict();
@@ -1799,7 +1830,7 @@ export async function judgeKodyRulesSharded(
                     verifyRepositoryFacts: shard.verifyRepositoryFacts,
                     cachePrefixes:
                         cacheable && shared.has(shard) ? shard.prefixes : [],
-                    onAnswered: answered,
+                    onAnswered: signal.answered,
                 });
                 call = judged;
                 inFlight.add(judged);
@@ -1842,6 +1873,8 @@ export async function judgeKodyRulesSharded(
                 }));
             } catch (err) {
                 shardsErrored++;
+                // Nothing was cached: the next sibling takes the lead.
+                signal.failed();
                 stopAfterTerminal(err);
                 logger?.warn({
                     message: `[kody-rules-shard] file shard failed for ${file.filename} (${applicable.length} rule(s)) — degrading to zero findings: ${err instanceof Error ? err.message : String(err)}`,
@@ -1870,6 +1903,7 @@ export async function judgeKodyRulesSharded(
         idleWaits: scheduled.idleWaits,
         idleWaitMs: scheduled.idleWaitMs,
         leadersReleasedAtAnswer: scheduled.leadersReleasedAtAnswer,
+        leaderHandovers: scheduled.leaderHandovers,
     };
 
     // ── PR-scope shard: one call over the whole PR ──────────────────────────

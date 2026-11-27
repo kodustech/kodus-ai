@@ -344,10 +344,10 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         user,
                         runName: 'kodus-rules-review-agent.shard',
                         // Shards with the same rules open with the same text;
-                        // marking it lets the provider serve it from cache. A
-                        // shard with nothing to mark still declares a cache, so
-                        // a slot's automatic one never writes its unique turn.
-                        promptCache: { userPrefixes: cachePrefixes ?? [] },
+                        // marking it lets the provider serve it from cache.
+                        ...(cachePrefixes?.length
+                            ? { promptCache: { userPrefixes: cachePrefixes } }
+                            : {}),
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
                         attrs: {
@@ -355,10 +355,12 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             agentName: this.getIdentity().name,
                             ...(filename ? { file: filename } : {}),
                         },
-                    }).finally(() => {
+                    }).then((answer) => {
                         // Siblings can read this shard's cache from here on,
                         // while its findings' evidence is still being checked.
+                        // A call that failed cached nothing to read.
                         onAnswered?.();
+                        return answer;
                     });
                     const candidates = parsed?.violations ?? [];
                     const evidenceDeadline = Date.now() + 180_000;

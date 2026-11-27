@@ -1141,9 +1141,9 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             'Kody Rules could not be evaluated: all 12 rule check(s) failed to run. Your Kody Rules were not applied to this PR.',
         );
 
-        // The leader runs alone, then the four shards it released at once
-        // (concurrency 4) fail; the other seven are skipped instead of called.
-        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(5);
+        // The leader fails, then the sibling it handed the lead to: two refusals
+        // in a row, and the other ten are skipped instead of called.
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(2);
         const refusals = warnSpy.mock.calls.filter(
             (c) =>
                 (c[0] as any)?.message ===
@@ -1606,12 +1606,12 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         });
     });
 
-    it('declares a cache with nothing to mark on a shard that shares no head, so no automatic cache rides along', async () => {
+    it('declares nothing for a shard with nothing to mark', async () => {
         const runJudge = await captureRunJudge('anthropic');
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
-        await invoke(runJudge);
+        await invoke(runJudge, { cachePrefixes: [] });
         const call = mockRunStructuredReviewCall.mock.calls[0][0];
-        expect(call.promptCache).toEqual({ userPrefixes: [] });
+        expect(call.promptCache).toBeUndefined();
     });
 
     it("tells the judge the model answered before it checks the findings' evidence", async () => {
@@ -1647,12 +1647,12 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         expect(order).toEqual(['answered', 'evidence']);
     });
 
-    it('tells the judge the model answered when the call failed', async () => {
+    it('does not tell the judge the model answered when the call failed: nothing was cached', async () => {
         const runJudge = await captureRunJudge('anthropic');
         mockRunStructuredReviewCall.mockRejectedValueOnce(new Error('boom'));
         const onAnswered = jest.fn();
         await expect(invoke(runJudge, { onAnswered })).rejects.toThrow('boom');
-        expect(onAnswered).toHaveBeenCalledTimes(1);
+        expect(onAnswered).not.toHaveBeenCalled();
     });
 
     it('logs how the shards were grouped for the prompt cache, with the org and PR', async () => {
@@ -1668,6 +1668,7 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
             idleWaits: 1,
             idleWaitMs: 800,
             leadersReleasedAtAnswer: 1,
+            leaderHandovers: 0,
         };
         mockJudge.mockImplementationOnce(async () => ({
             violations: [],

@@ -216,6 +216,7 @@ describe('judgeKodyRulesSharded — shared prompt prefix', () => {
             idleWaits: 0,
             idleWaitMs: 0,
             leadersReleasedAtAnswer: 0,
+            leaderHandovers: 0,
         });
     });
 });
@@ -409,6 +410,37 @@ describe('judgeKodyRulesSharded — leader-first scheduling with a bounded wait'
         expect(callFor(j.calls, 'b.ts').cachePrefixes).toEqual([]);
         await j.finishAll();
         await done;
+    });
+
+    it('hands the lead to the next sibling when the leader fails, and the others keep waiting', async () => {
+        const j = controlledJudge();
+        const done = judgeKodyRulesSharded({
+            changedFiles: [
+                file('a.ts'),
+                file('b.ts'),
+                file('c.ts'),
+                file('d.ts'),
+            ],
+            rules: RULES,
+            runJudge: j.run,
+            concurrency: 3,
+            leaderWaitMs: 60_000,
+        } as any);
+        await new Promise((r) => setImmediate(r));
+        expect(j.started).toEqual(['a.ts']);
+        await j.fail('a.ts');
+        // a.ts wrote nothing: b.ts takes the lead alone, marked, to write it
+        expect(j.started).toEqual(['a.ts', 'b.ts']);
+        const head = callFor(j.calls, 'b.ts').cachePrefixes;
+        expect(head).toHaveLength(1);
+        await j.finish('b.ts');
+        expect(j.started).toEqual(['a.ts', 'b.ts', 'c.ts', 'd.ts']);
+        expect(callFor(j.calls, 'c.ts').cachePrefixes).toEqual(head);
+        expect(callFor(j.calls, 'd.ts').cachePrefixes).toEqual(head);
+        await j.finishAll();
+        const res = await done;
+        expect(res.promptCacheStats.leaderHandovers).toBe(1);
+        expect(res.shardsErrored).toBe(1);
     });
 
     it('marks the siblings of a leader that failed, so one of them writes the head', async () => {

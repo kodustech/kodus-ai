@@ -309,8 +309,8 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
             concurrency: 4,
         });
 
-        // At most the leader, then the four siblings it released at once.
-        expect(runJudge.mock.calls.length).toBeLessThanOrEqual(5);
+        // The leader, then the sibling it handed the lead to: two refusals in a row.
+        expect(runJudge).toHaveBeenCalledTimes(2);
         expect(res.shardsErrored).toBe(files.length);
         expect(res.providerRefusal).toBe('AUTH_INVALID');
     });
