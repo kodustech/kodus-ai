@@ -1,6 +1,6 @@
 import { createPublicKey, generateKeyPairSync, verify } from 'crypto';
 
-import { ImageStoreConfigSchema } from './image-store';
+import { ImageStoreConfigSchema, planGrant } from './image-store';
 import { IMAGE_STORE_TOKEN_ISSUER, libtrustKeyId, OciRegistryImageStore } from './image-store-oci';
 import { describeImageStoreConformance } from './testing';
 
@@ -55,5 +55,24 @@ describe('the oci-registry token', () => {
     it('refuses a key that is not EC P-256, so a wrong key fails at boot and not at the first claim', () => {
         const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
         expect(() => new OciRegistryImageStore(rsa)).toThrow(/P-256/);
+    });
+});
+
+describe('the build cache token', () => {
+    const ORG = 'org-1';
+    // What the registry would let each claim do on the cache repository, read from the signed token.
+    const cacheActions = async (boundKey: string, side: 'base' | 'pr' | 'setup') => {
+        const repos = planGrant({ organizationId: ORG, environmentId: 'env-1', boundKey, side, sha: 'abc' }, 'p') ?? [];
+        const g = await new OciRegistryImageStore(pem).grant(config, { claimId: 'c', organizationId: ORG, repos, ttlSeconds: 600 }, now);
+        return decode(g.token).payload.access.filter((a: { name: string }) => a.name.endsWith('/cache')).flatMap((a: { actions: string[] }) => a.actions);
+    };
+
+    // Behavior: only a default-branch setup gets a token that can push the cache; a PR side reads it, and others never see it.
+    it('lets only a default-branch setup push the cache, a PR side pull it, and a shard or template not touch it', async () => {
+        expect(await cacheActions(`setup:${ORG}/h`, 'base')).toEqual(['pull', 'push']);
+        expect(await cacheActions(`setup:${ORG}/h`, 'pr')).toEqual(['pull']);
+        expect(await cacheActions(`run:${ORG}/r`, 'pr')).toEqual(['pull']);
+        expect(await cacheActions(`suite:${ORG}/s/0`, 'pr')).toEqual([]);
+        expect(await cacheActions(`template:${ORG}/e`, 'base')).toEqual([]);
     });
 });

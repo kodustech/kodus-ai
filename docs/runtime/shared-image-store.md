@@ -306,7 +306,7 @@ failure at grant, push or pull leaves today's cold build; the token is in memory
 
 **TODO, next pass**
 
-- Step 3: the cell reads `main` and `cache` with the grant and drops `-gvisor-build-cache-remote-auth-file`; hello feature for old hubs is in.
+- Step 3, built on `kr/cache-grant` (`cache_grant.go`): a claim whose grant has `cache` scope reads main's BuildKit cache and, for a seeding setup with the push right, writes it, as `--import-cache`/`--export-cache type=registry` (tag per service, `ignore-error`). The token reaches BuildKit through a docker config (`registrytoken`) beside the build's output, rewritten on `claim.renew`, removed when the build ends; a PR side never exports. The pool's `imageStore` decides; `-gvisor-build-cache-remote` stays as a local override and as the basic-auth path for other registries. `build.timing` carries `cacheImportMs`, `cacheExportMs`, `layersCached`, `layersTotal`, `layerHitRate`. Unverified live: that BuildKit's client takes `registrytoken` from the config and re-reads it after a renewal; that the builder's network reaches the registry. Template and main-image reads (`main` scope) are not part of this step.
 - Step 6: the template reuses the setup's image (`template:` claim gets `sharedImages`).
 - Step 7: GC of `pr-*` (6 h after the run, 48 h hard; `runtime_pr_images.expires_at` is set, nothing sweeps rows or images yet),
   per-org quota, `org.purge` of the registry prefix (the two tables are already purged with the org), `usage`/`gc`/`purge` on the port.
