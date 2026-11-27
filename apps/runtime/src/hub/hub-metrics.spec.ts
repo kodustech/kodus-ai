@@ -100,4 +100,18 @@ describe('HubMetrics', () => {
         expect(await value('runtime.cell.heartbeat_age', 'kodus')).toBe(70_000);
         expect(await value('runtime.cell.sessions', 'customer')).toBe(1);
     });
+
+    // docs/runtime/shared-image-store.md section 9: pull against build time per shard, and the hit rate.
+    it('says what a shard spent getting its PR image: the pull time when it pulled, the build time when it built, and how it got it', async () => {
+        const { m, collect } = await harness();
+        m.imageStoreShard({ offered: true, phases: [{ name: 'pull pr image', ms: 4_000 }], buildMs: 1_000 });
+        m.imageStoreShard({ offered: true, phases: [{ name: 'build', ms: 9 }], buildMs: 600_000 });
+        m.imageStoreShard({ offered: false, phases: undefined, buildMs: 500_000 });
+        const time = (await collect('runtime.image_store.shard_time'))!;
+        const byKind = Object.fromEntries(time.dataPoints.map((p) => [p.attributes.kind as string, (p.value as { sum: number }).sum]));
+        expect(byKind).toEqual({ pull: 4_000, build: 1_100_000 });
+        const shards = (await collect('runtime.image_store.shard'))!;
+        const byOutcome = Object.fromEntries(shards.dataPoints.map((p) => [p.attributes.outcome as string, p.value]));
+        expect(byOutcome).toEqual({ pulled: 1, built_after_ask: 1, built_no_image: 1 });
+    });
 });

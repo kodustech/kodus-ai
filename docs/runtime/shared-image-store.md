@@ -1,6 +1,6 @@
 # Shared image store: build once, share (2026-11-27)
 
-Status: design, no code. Written from the code of the Runtime branch at `31d0ba55a`. A line marked "unverified" was not
+Status: design, first pass built on `kr/image-store` (section 12 says what, and what is left). Written from the code of the Runtime branch at `31d0ba55a`. A line marked "unverified" was not
 measured or not read to the end. Terms: [glossary.md](glossary.md). Related: [e2e-suites.md](e2e-suites.md),
 [host-providers.md](host-providers.md), [build-cache.md](build-cache.md), [shared-baked-environments.md](shared-baked-environments.md),
 [incremental-pr-side.md](incremental-pr-side.md), [persistent-state.md](persistent-state.md).
@@ -239,3 +239,82 @@ rebuild time down from 1h17 to the pull plus seed (target under 15 min, unverifi
    registry check a denylist (more moving parts)?
 6. Cypress shards that wait for the digest: start hosts with the build (idle host-min, about 3 min each) or after the push (slower)?
 7. Fork PRs: push and share their images within the PR as designed, or build per shard as today?
+
+## 11. Deploy notes for the registry machine (not created by this pass)
+
+The `oci-registry` provider talks to a CNCF distribution registry (`registry:2`) that trusts the hub's public key. Nothing here
+creates a machine; it is what the infra repository applies on the long-lived boat machine.
+
+1. **Signing key (hub).** `openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out image-store-signing.key`.
+   It must be EC P-256 (the hub refuses another type at boot). The hub reads it from the file `RUNTIME_IMAGE_STORE_SIGNING_KEY`
+   names, never from an inline value. Without it a pool whose store is `oci-registry` gets no grant and builds as before.
+2. **Certificate (registry).** `openssl req -new -x509 -key image-store-signing.key -subj /CN=kodus-runtime-hub -days 3650 -out hub-image-store.pem`.
+   Only this public certificate goes to the registry machine.
+3. **Registry config** (`/etc/docker/registry/config.yml`):
+   ```yaml
+   version: 0.1
+   storage:
+     filesystem: { rootdirectory: /var/lib/registry }
+     delete: { enabled: true }          # the GC of step 7 deletes by digest
+   http:
+     addr: :5000
+     tls: { certificate: /etc/registry/tls.crt, key: /etc/registry/tls.key }
+   auth:
+     token:
+       realm: https://hub.invalid/unused   # required by the schema; cells hold a token already and never ask a realm
+       service: kodus-image-store          # = the pool's imageStore.service
+       issuer: kodus-runtime-hub           # fixed by the hub (IMAGE_STORE_TOKEN_ISSUER)
+       rootcertbundle: /etc/registry/hub-image-store.pem
+   ```
+   The registry looks the token's `kid` up among the keys of `rootcertbundle`. The hub computes it as distribution does (libtrust:
+   SHA-256 of the SPKI DER, 30 bytes, base32, 12 groups of 4). **Unverified against a real registry**: the first deploy must
+   push one image with a hub-minted token before anything else.
+4. **Pool file** (applied with `runtime-fleet apply`, next to the boat pool; no host drifts because the block is not in the spec hash):
+   ```yaml
+   imageStore:
+     provider: oci-registry
+     endpoint: https://<store host on boat>
+     prefix: kodus-ci
+     service: kodus-image-store
+     tokenTtlSeconds: 600
+   ```
+5. **TLS trust.** The cell's registry client trusts the system roots only. Until the client learns the hub CA, the store's
+   certificate for step 3 must chain to a public root (or the cell image must carry the CA). TODO in section 12.
+6. **Disk.** One machine, local disk, no replication; size and encryption at rest are open question 1. Losing it costs one cold
+   build per environment.
+
+## 12. First pass: built, changed, left
+
+Branch `kr/image-store`. Built: rollout steps 2 (hub), 4, 5 and 8 (metrics), the port and its config, the `oci-registry` provider, and the
+cell's PR push and pull. Step 1 (the machine) is section 11; steps 3 (drop the auth file), 6 and 7 are below.
+
+**What the design said and the code does differently**
+
+| Design | Built | Why |
+|---|---|---|
+| `grant({org, env, scope, mode, claimId, ttl})` | `grant(config, {claimId, organizationId, repos, ttlSeconds}, now)`; the hub computes `repos` with `planGrant` | The scope rule is the same for every provider; a provider only mints. `usage`, `gc` and `purge` are not on the port yet |
+| `runtime_pr_images` row per fingerprint | One row per org, environment and PR sha, `images` jsonb of `{fingerprint, digest, bytes, pushMs}`, state `pending/ready/failed` | The row is `pending` before any fingerprint is known |
+| Shard waits at most 3 min after the builder ends | It waits while the builder's claim is live, until the row is ready or failed, a builder that left the live states fails the row, or `RUNTIME_PR_IMAGE_WAIT_SECONDS` (1800) passes. The wait runs before the claim is admitted | A builder that dies through a path that never tells the service (a revocation, a lease sweep) is caught by reading its claim |
+| Renewed "through the heartbeat" | Inside `claim.renew` (`imageStoreGrant`), the Run owner's lease renewal | That is the heartbeat the hub already drives per claim; the cell's own heartbeat is not claim-scoped |
+| Grants for every claim kind | Minted for every kind (`planGrant`); the cell uses only `pr` this pass | Main and cache reads and the auth file are step 3 |
+| `image.pushed {digest}` | `image.pushed {status, images[], reason?}`, feature `imageStore` (accepted by the hub) | One frame per claim, many service images |
+| (not in the design) | A release waits up to 3 min for the PR push to report (`Config.StorePushWait`) | The push reads the claim's built images, which a release removes |
+
+**Behavior that holds, each with a test:** a grant never widens past the bound key; a PR claim writes only its own `pr-<sha>`; a store
+failure at grant, push or pull leaves today's cold build; the token is in memory only, formatted as `[redacted]`, never in a builder;
+`planGrant` and the Go cell hash repository names the same (golden values in `image-store.spec.ts`).
+
+**TODO, next pass**
+
+- Step 3: the cell reads `main` and `cache` with the grant and drops `-gvisor-build-cache-remote-auth-file`; hello feature for old hubs is in.
+- Step 6: the template reuses the setup's image (`template:` claim gets `sharedImages`).
+- Step 7: GC of `pr-*` (6 h after the run, 48 h hard; `runtime_pr_images.expires_at` is set, nothing sweeps rows or images yet),
+  per-org quota, `org.purge` of the registry prefix (the two tables are already purged with the org), `usage`/`gc`/`purge` on the port.
+- Fork PR policy (open question 7): today a fork PR's image is pushed and shared as designed in section 4.
+- CI mode: a dedicated build claim when there is no Run; today only the Run's PR side builds and pushes. Open question 3 (is the Run's
+  image the suite's) decides whether Run mode needs its own build claim too.
+- The cell trusts system roots only (section 11, step 5). The libtrust key id is unverified against a real registry.
+- `RUNTIME_RELEASE_VERSION` bump (section 8 release note) and the report line in the product for "prepared once and reused".
+- Measure on one large monorepo (section 9): `runtime_image_store_shard_total` (pulled over all outcomes is the hit rate),
+  `runtime_image_store_shard_time` (kind pull against build), `runtime_claim_boot_phase{phase=build, consumer=suite}`, and the machine minutes per claim.
+

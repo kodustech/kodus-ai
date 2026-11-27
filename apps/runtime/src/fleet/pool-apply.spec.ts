@@ -31,6 +31,20 @@ describe('resolving pool files', () => {
         expect(p.specHash).toBe(poolSpecHash(p.pool));
     });
 
+    // docs/runtime/shared-image-store.md section 3: the pool names its store, and swapping the provider is a config change only.
+    it("a pool names its image store in its own file, stored with the pool, and the store never makes a host stale", () => {
+        const withStore = resolvePoolDocuments(docs(boatClass, boatPool({ imageStore: { provider: 'oci-registry', endpoint: 'https://store.example' } })), { allowFake: false });
+        const without = resolvePoolDocuments(docs(boatClass, boatPool()), { allowFake: false });
+        if (withStore.ok === false || without.ok === false) throw new Error('the files did not resolve');
+        expect(withStore.pools[0].pool.imageStore).toMatchObject({ provider: 'oci-registry', endpoint: 'https://store.example', prefix: 'kodus-ci' });
+        expect(withStore.pools[0].specHash).toBe(without.pools[0].specHash);
+    });
+
+    it('refuses a pool whose image store is plain HTTP on a real host, so a customer image never crosses the wire in clear', () => {
+        const r = resolvePoolDocuments(docs(boatClass, boatPool({ imageStore: { provider: 'oci-registry', endpoint: 'http://store.example' } })), { allowFake: false });
+        expect(r.ok).toBe(false);
+    });
+
     it('refuses the whole file and names every problem: a class nobody defines, a field the schema does not know, a provider with no adapter, two pools with one id', () => {
         const r = resolvePoolDocuments(
             docs(

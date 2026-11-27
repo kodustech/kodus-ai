@@ -51,6 +51,8 @@ export const ORGANIZATION_PURGE_TABLES: ReadonlyArray<readonly [table: string, c
     ['runtime_runs', 'organization_id'],
     ['runtime_sandbox_audit', 'org_id'],
     ['runtime_shared_images', 'org_id'],
+    ['runtime_image_store_grants', 'org_id'],
+    ['runtime_pr_images', 'org_id'],
     ['runtime_snapshot_cells', 'org_id'],
     ['runtime_stability', 'org_id'],
     ['runtime_steps_index', 'org_id'],

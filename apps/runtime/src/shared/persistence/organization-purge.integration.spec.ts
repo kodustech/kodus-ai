@@ -18,6 +18,7 @@ const PINNED: Record<string, Record<string, unknown>> = {
     runtime_cell_sessions: { owner: 'customer' },
     runtime_cells: { owner: 'customer' },
     runtime_stops: { scope: 'org' },
+    runtime_pr_images: { state: 'ready' },
     runtime_pr_run_generations: { generation: 1 },
     runtime_sandbox_audit: { outcome: 'ok' },
     runtime_preview_audit: { action: 'started' },
