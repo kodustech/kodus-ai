@@ -174,6 +174,38 @@ describe('decisionDivergence', () => {
         ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
     });
 
+    // A refused write tells the agent to switch to `offer`; that retraction
+    // is the flow working, not a declared action left undone.
+    it('does not flag an act the agent retracted with offer or answer', () => {
+        expect(
+            decisionDivergence(
+                [
+                    act('KODUS_CREATE_MEMORY'),
+                    { intent: 'offer', tool: 'KODUS_CREATE_MEMORY' },
+                ],
+                [],
+                readOnly,
+            ),
+        ).toBeUndefined();
+        expect(
+            decisionDivergence(
+                [act('KODUS_CREATE_MEMORY'), { intent: 'answer' }],
+                [],
+                readOnly,
+            ),
+        ).toBeUndefined();
+    });
+
+    it('flags a write act made again after a retraction', () => {
+        expect(
+            decisionDivergence(
+                [act('exec'), { intent: 'answer' }, act('KODUS_CREATE_MEMORY')],
+                [],
+                readOnly,
+            ),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
+    });
+
     it('still flags an act on a tool name the run does not know', () => {
         expect(
             decisionDivergence([act('KODUS_CREATE_MEMORYY')], [], readOnly),

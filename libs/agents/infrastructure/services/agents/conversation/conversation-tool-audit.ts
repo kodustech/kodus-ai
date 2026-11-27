@@ -110,10 +110,11 @@ export function auditWriteTools(
  * attempted and refused or thrown: the tool already reported that, and the
  * agent saw the error.
  *
- * Every `act` of the run counts, not just the last: a later `act` replaces the
- * write an earlier one authorized (`grant` keeps one tool), so `act` on a
- * write followed by `act` on `exec` is exactly the run that leaves the write
- * undone. An `act` naming a tool that only reads (the sandbox `exec`, `grep`)
+ * The trailing run of `act` decisions counts, not just the last one: a later
+ * `act` replaces the write an earlier one authorized (`grant` keeps one tool),
+ * so `act` on a write followed by `act` on `exec` is exactly the run that
+ * leaves the write undone. An `act` followed by `offer` or `answer` was
+ * retracted and does not count. An `act` naming a tool that only reads (the sandbox `exec`, `grep`)
  * is not compared on its own: no write was ever going to run for it. A name
  * the run does not know is compared, so a write declared under a wrong name
  * stays visible.
@@ -129,7 +130,11 @@ export function decisionDivergence(
     isReadOnlyTool: (name: string) => boolean,
 ): DecisionDivergence | undefined {
     const performed = performedWrites(writes);
-    const acts = decisions.filter((d) => d.intent === 'act');
+    // The acts the run ended on. An act the agent then retracted (`offer`
+    // or `answer` after it, which is what a refused write is told to do)
+    // is not compared.
+    const lastOther = decisions.findLastIndex((d) => d.intent !== 'act');
+    const acts = decisions.slice(lastOther + 1);
 
     if (acts.length > 0 && performed.length === 0) {
         if (writes.length > 0) {
