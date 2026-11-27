@@ -31,6 +31,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
         let connection: Connection;
         let model: Model<KodyRulesModel>;
         let repository: KodyRulesRepository;
+        let rules: KodyRulesService;
         let cli: CliKodyRulesController;
         let compile: jest.SpiedFunction<
             KodyRuleDetectorCompilerService['compileAndSave']
@@ -44,7 +45,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 .asPromise();
             model = connection.model(KodyRulesModel.name, KodyRulesSchema);
             repository = new KodyRulesRepository(model, undefined);
-            const rules = new KodyRulesService(
+            rules = new KodyRulesService(
                 repository,
                 new EventEmitter2(),
                 undefined,
@@ -152,14 +153,13 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             const edited = (
                 await repository.findByOrganizationId(organizationId)
             ).rules;
-            runModel.mockClear();
-            for (const id of ids) {
-                await patch(id, { rule });
-            }
             expect(editCalls).toBe(ids.length);
-            expect(runModel).not.toHaveBeenCalled();
             for (const saved of edited) {
                 expect(saved).toMatchObject({
+                    compileAttempt: {
+                        outcome: 'declined',
+                        sourceHash: ruleCompileHash({ rule }),
+                    },
                     contextNeed: {
                         need: 'full-file',
                         sourceHash: ruleContextNeedHash({ rule }),
@@ -167,6 +167,153 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                     fileScope: { extensions: ['.ts', '.js'] },
                 });
             }
+
+            runModel.mockClear();
+            for (const id of ids) {
+                await patch(id, { rule });
+            }
+            expect(runModel).not.toHaveBeenCalled();
+            const reloaded = (
+                await repository.findByOrganizationId(organizationId)
+            ).rules;
+            const records = ({
+                uuid,
+                compileAttempt,
+                contextNeed,
+                fileScope,
+            }: Partial<IKodyRule>) => ({
+                uuid,
+                compileAttempt,
+                contextNeed,
+                fileScope,
+            });
+            expect(reloaded.map(records)).toEqual(edited.map(records));
+        });
+
+        it('preserves a context write that lands between the file scope read and write', async () => {
+            const uuid = randomUUID();
+            const rule = 'Check enrollment before recording a grade.';
+            const contextNeed = {
+                need: 'full-file',
+                source: 'compiler',
+                sourceHash: ruleContextNeedHash({ rule }),
+                inferredAt: new Date(),
+            } as const;
+            const fileScope = {
+                extensions: ['.ts'],
+                source: 'compiler' as const,
+                sourceHash: 'current',
+                inferredAt: new Date(),
+            };
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        rule,
+                        contextNeed: {
+                            ...contextNeed,
+                            need: 'diff-only',
+                            sourceHash: 'stale',
+                        },
+                    },
+                ],
+            });
+
+            // The scope writer has already read the old need. Let the context
+            // writer finish its real Mongo write before that scope write lands.
+            const write = repository.updateRule.bind(repository);
+            const interleaved = jest
+                .spyOn(repository, 'updateRule')
+                .mockImplementationOnce(async (...args) => {
+                    await rules.updateRuleContextNeed(
+                        organizationId,
+                        uuid,
+                        contextNeed,
+                    );
+                    return write(...args);
+                });
+            try {
+                await rules.updateRuleFileScope(
+                    organizationId,
+                    uuid,
+                    fileScope,
+                );
+            } finally {
+                interleaved.mockRestore();
+            }
+            expect(
+                await repository.findById(uuid, organizationId),
+            ).toMatchObject({ contextNeed, fileScope });
+        });
+
+        it('disarms a detector on a cosmetic title edit and keeps ordinary renames free', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the logger instead of console.log.';
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        rule,
+                        title: 'Use the logger',
+                        examples,
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console\\.log\\(',
+            });
+            await patch(uuid, { rule, examples });
+            const compiled = await repository.findById(uuid, organizationId);
+            expect(compiled.detector?.pattern).toBe('console\\.log\\(');
+            runModel.mockClear();
+
+            await patch(uuid, { title: 'Logger policy', rule });
+            expect(
+                await repository.findById(uuid, organizationId),
+            ).toMatchObject({
+                detector: compiled.detector,
+                compileAttempt: compiled.compileAttempt,
+            });
+            await patch(uuid, { title: 'Semicolons' });
+            expect(
+                await repository.findById(uuid, organizationId),
+            ).toMatchObject({
+                detector: null,
+                compileAttempt: {
+                    outcome: 'declined',
+                    declineReason: 'cosmetic',
+                },
+            });
+            expect(runModel).not.toHaveBeenCalled();
+
+            await patch(uuid, { title: 'Logger policy' });
+            expect(runModel).toHaveBeenCalledTimes(1);
+            expect(
+                (await repository.findById(uuid, organizationId)).detector
+                    ?.pattern,
+            ).toBe(compiled.detector.pattern);
+
+            // Older saves could leave an active regex under a cosmetic title.
+            await repository.updateRuleFieldsByOrganization(
+                organizationId,
+                uuid,
+                { title: 'Semicolons' },
+            );
+            runModel.mockClear();
+            await patch(uuid, { rule });
+            expect(
+                (await repository.findById(uuid, organizationId)).detector,
+            ).toBeNull();
+            expect(runModel).not.toHaveBeenCalled();
         });
 
         it('preserves the detector and attempt when a CLI patch omits examples and recompiles an explicit clear', async () => {
@@ -232,7 +379,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 examples,
             });
 
-            await patch(uuid, { rule, examples: [] });
+            await patch(uuid, { examples: [] });
             expect(runModel).toHaveBeenCalledTimes(1);
             expect(
                 await repository.findById(uuid, organizationId),

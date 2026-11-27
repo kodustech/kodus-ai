@@ -227,6 +227,8 @@ describe('CreateOrUpdateKodyRulesUseCase — detector compile on save', () => {
         const contextNeed = { need: 'none', promptVersion: 1 };
         const stored = {
             uuid: 'rule-1',
+            rule: 'r',
+            repositoryId: 'repo-1',
             detector: undefined,
             compileAttempt,
             contextNeed,

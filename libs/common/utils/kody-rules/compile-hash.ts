@@ -16,7 +16,8 @@ function hashCompileInput(
 }
 
 /**
- * The fingerprint of everything the detector compiler's DECISION depends on.
+ * The compiler's fingerprint for rule text and examples. A rename that
+ * changes cosmetic eligibility invalidates the stored attempt on save.
  *
  * Why this exists (and why it is not just the rule text): the nightly sweep
  * decided what to compile by asking "does this rule have a detector yet?", and

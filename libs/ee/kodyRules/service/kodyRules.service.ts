@@ -32,6 +32,7 @@ import {
     compileAttemptIsCurrent,
     ruleCompileHash,
 } from '@libs/common/utils/kody-rules/compile-hash';
+import { isCosmeticRule } from '@libs/common/utils/kody-rules/is-cosmetic-rule';
 import { ProgrammingLanguage } from '@libs/core/domain/enums';
 import {
     ActionType,
@@ -108,6 +109,27 @@ import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+
+function detectorEligibilityPatch(
+    previous: Partial<IKodyRule>,
+    patch: CreateKodyRuleDto,
+): Partial<Pick<IKodyRule, 'compileAttempt' | 'detector'>> {
+    const title = patch.title ?? previous.title;
+    const titleChanged = title !== previous.title;
+    if (!titleChanged && !previous.detector) return {};
+    const cosmetic = isCosmeticRule({
+        title,
+        rule: patch.rule ?? previous.rule,
+    });
+    // Disarm in the same write as the title, including on a save of a legacy
+    // rule that already has a cosmetic title and an active detector.
+    if (cosmetic && previous.detector) {
+        return { compileAttempt: null, detector: null };
+    }
+    return titleChanged && cosmetic !== isCosmeticRule(previous)
+        ? { compileAttempt: null }
+        : {};
+}
 
 @Injectable()
 export class KodyRulesService implements IKodyRulesService {
@@ -890,6 +912,7 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedRule = {
             ...existingRule,
             ...kodyRule,
+            ...detectorEligibilityPatch(existingRule, kodyRule),
             ...statusOverride,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
             updatedAt: new Date(),
@@ -1352,6 +1375,7 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedRule = {
             ...existingRule,
             ...kodyRule,
+            ...detectorEligibilityPatch(existingRule, kodyRule),
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
             updatedAt: new Date(),
         };

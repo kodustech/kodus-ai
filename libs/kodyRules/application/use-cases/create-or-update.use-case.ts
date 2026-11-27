@@ -201,12 +201,31 @@ export class CreateOrUpdateKodyRulesUseCase {
                         },
                     });
                 });
+            } else {
+                this.logger.warn({
+                    message:
+                        'Reference detection skipped - missing required fields',
+                    context: CreateOrUpdateKodyRulesUseCase.name,
+                    metadata: {
+                        ruleId: result.uuid,
+                        hasRepositoryId: !!kodyRule.repositoryId,
+                        hasRuleText: !!kodyRule.rule,
+                        repositoryId: kodyRule.repositoryId,
+                        organizationAndTeamData,
+                    },
+                });
+            }
 
-                // T0 (#1449): compile a deterministic detector for mechanical
-                // rules so review checks them in pure code. Fire-and-forget,
-                // gated — a rule only gets a detector if it passes the compile
-                // gate; otherwise it stays semantic. Never blocks the save.
-                // A partial PATCH can omit examples that still gate the detector.
+            // Compile from the saved rule when a PATCH supplies a compile input.
+            // Reference detection above needs the incoming repository and rule text.
+            if (
+                result.uuid &&
+                result.repositoryId &&
+                result.rule &&
+                (kodyRule.rule !== undefined ||
+                    kodyRule.title !== undefined ||
+                    kodyRule.examples !== undefined)
+            ) {
                 this.detectorCompiler
                     .compileAndSave(
                         organizationAndTeamData,
@@ -221,19 +240,6 @@ export class CreateOrUpdateKodyRulesUseCase {
                             metadata: { ruleId: result.uuid },
                         });
                     });
-            } else {
-                this.logger.warn({
-                    message:
-                        'Reference detection skipped - missing required fields',
-                    context: CreateOrUpdateKodyRulesUseCase.name,
-                    metadata: {
-                        ruleId: result.uuid,
-                        hasRepositoryId: !!kodyRule.repositoryId,
-                        hasRuleText: !!kodyRule.rule,
-                        repositoryId: kodyRule.repositoryId,
-                        organizationAndTeamData,
-                    },
-                });
             }
 
             return result;
