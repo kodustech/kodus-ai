@@ -14,6 +14,7 @@ jest.mock('bitbucket', () => ({
                 if (auth.password === PAT) {
                     throw Object.assign(new Error('Unauthorized'), {
                         status: 401,
+                        request: { url: '/user' },
                     });
                 }
                 return { data: { username: 'acme' } };
@@ -29,25 +30,30 @@ const ORG = { organizationId: 'org-1', teamId: 't1' };
  * A refused link is logged, and the request it logs carries the user's
  * personal access token: every provider logs named fields only.
  */
-const loggedFor = (error: jest.Mock) =>
-    JSON.stringify(error.mock.calls.map(([e]) => e.metadata));
+const loggedFor = (...loggers: jest.Mock[]) =>
+    JSON.stringify(
+        loggers.flatMap((l) => l.mock.calls.map(([e]) => e.metadata)),
+    );
 
 const service = (Service: any) => {
     const svc: any = Object.create(Service.prototype);
     const error = jest.fn();
-    svc.logger = { error, warn: jest.fn(), log: jest.fn(), debug: jest.fn() };
-    return { svc, error };
+    const warn = jest.fn();
+    svc.logger = { error, warn, log: jest.fn(), debug: jest.fn() };
+    return { svc, error, warn };
 };
 
 describe.each([
     ['Bitbucket Cloud', BitbucketCloudService],
     ['Azure Repos', AzureReposService],
 ])('%s createAuthIntegration', (_name, Service: any) => {
-    it('logs a refused token without it, and passes the request on', async () => {
-        const { svc, error } = service(Service);
+    it('passes the token on and leaves the refusal to the link, which logs it', async () => {
+        const { svc, error, warn } = service(Service);
         // Refuses only the PAT under test, as the provider would.
         svc.authenticateWithToken = jest.fn(async (p: { token: string }) => {
-            if (p.token === PAT) throw new Error('provider refused the token');
+            if (p.token === PAT) {
+                throw new BadRequestException('provider refused the token');
+            }
             return { success: true };
         });
 
@@ -66,18 +72,14 @@ describe.each([
                 organizationAndTeamData: ORG,
             }),
         );
-        expect(error).toHaveBeenCalled();
-        expect(loggedFor(error)).not.toContain(PAT);
-        expect(error.mock.calls[0][0].metadata).toMatchObject({
-            organizationAndTeamData: ORG,
-            authMode: 'token',
-        });
+        expect(error).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
     });
 });
 
-describe('authenticateWithToken logs a refused token without it', () => {
+describe('authenticateWithToken logs a refused token as a warning, without it', () => {
     it('Bitbucket Cloud', async () => {
-        const { svc, error } = service(BitbucketCloudService);
+        const { svc, error, warn } = service(BitbucketCloudService);
 
         await expect(
             svc.authenticateWithToken({
@@ -87,15 +89,18 @@ describe('authenticateWithToken logs a refused token without it', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
 
-        expect(error).toHaveBeenCalled();
-        expect(loggedFor(error)).not.toContain(PAT);
+        expect(error).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(loggedFor(error, warn)).not.toContain(PAT);
     });
 
     it('Azure Repos', async () => {
-        const { svc, error } = service(AzureReposService);
-        svc.checkRepositoryPermissions = jest
-            .fn()
-            .mockRejectedValue(new Error('TF400813: not authorized'));
+        const { svc, error, warn } = service(AzureReposService);
+        svc.checkRepositoryPermissions = jest.fn().mockRejectedValue(
+            Object.assign(new Error('TF400813: not authorized'), {
+                response: { status: 401 },
+            }),
+        );
 
         await expect(
             svc.authenticateWithToken({
@@ -105,18 +110,19 @@ describe('authenticateWithToken logs a refused token without it', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
 
-        expect(error).toHaveBeenCalled();
-        expect(loggedFor(error)).not.toContain(PAT);
+        expect(error).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(loggedFor(error, warn)).not.toContain(PAT);
     });
 
     it('Bitbucket Data Center', async () => {
-        const { svc, error } = service(BitbucketDataCenterService);
+        const { svc, error, warn } = service(BitbucketDataCenterService);
         svc.getAxiosInstance = jest.fn(() => ({
-            get: jest
-                .fn()
-                .mockRejectedValue(
-                    Object.assign(new Error('Unauthorized'), { status: 401 }),
-                ),
+            get: jest.fn().mockRejectedValue(
+                Object.assign(new Error('Unauthorized'), {
+                    response: { status: 401 },
+                }),
+            ),
         }));
 
         await expect(
@@ -127,8 +133,9 @@ describe('authenticateWithToken logs a refused token without it', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
 
-        expect(error).toHaveBeenCalled();
-        expect(loggedFor(error)).not.toContain(PAT);
+        expect(error).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(loggedFor(error, warn)).not.toContain(PAT);
     });
 
     it('GitLab (repository check after the OAuth link)', async () => {
