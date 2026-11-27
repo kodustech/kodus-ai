@@ -101,6 +101,7 @@ export interface ICommentManagerService {
         /** Agent named on lastReviewError, when the failure was attributed. */
         reviewErrorAgentName?: string,
         extraLine?: string,
+        prLevelCommentResults?: Array<CommentResult>,
     ): Promise<void>;
 
     updateSummarizationInPR(

@@ -136,6 +136,44 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         expect(args[15]).toEqual(reviewWarnings);
     });
 
+    // QA M11 on #2671: a rename-only PR has its findings at PR level and no
+    // line comment. Both updateOverallComment call sites passed no PR-level
+    // results, so the summary said "No issues were found" under them.
+    it.each([
+        ['the end-review template branch', {}],
+        [
+            'the default summary branch',
+            {
+                pullRequestMessagesConfig: {
+                    startReviewMessage: {
+                        status: PullRequestMessageStatus.ACTIVE,
+                        content: 'Review started',
+                    },
+                    endReviewMessage: undefined,
+                },
+            },
+        ],
+    ])(
+        'forwards context.prLevelCommentResults to updateOverallComment on %s',
+        async (_, over) => {
+            const { stage, commentManagerService } = makeStage();
+            const prLevelCommentResults = [
+                { comment: { type: 'pr_level' }, deliveryStatus: 'sent' },
+            ];
+            const context = baseContext({
+                ...over,
+                lineComments: [],
+                prLevelCommentResults,
+            });
+
+            await (stage as any).executeStage(context);
+
+            const args =
+                commentManagerService.updateOverallComment.mock.calls[0];
+            expect(args[19]).toEqual(prLevelCommentResults);
+        },
+    );
+
     // The stage forwards the warnings from THREE call sites, one per message
     // configuration. Severing all three left the suite green in Verifier round
     // 2, so each branch gets its own guard: covering one would leave the other
@@ -858,7 +896,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
 
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args.at(-1)).toBe(
+        expect(args[18]).toBe(
             '> Ultra review: `openai:b` failed, and the fallback `openai:f` took its place.',
         );
     });
@@ -900,7 +938,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         await stage.execute(context(undefined, undefined));
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
         expect(
-            commentManagerService.updateOverallComment.mock.calls[0].at(-1),
+            commentManagerService.updateOverallComment.mock.calls[0][18],
         ).toBeUndefined();
     });
 

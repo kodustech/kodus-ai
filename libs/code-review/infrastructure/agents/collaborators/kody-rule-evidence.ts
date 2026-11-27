@@ -198,8 +198,14 @@ export function kodyRuleEvidenceVerifier(
             Math.max(1, Math.min(90_000, deadline - Date.now()));
         const rule = ruleForCandidate(violation, shard);
         if (!rule) return 'unknown_rule' as const;
+        // A file shard sees the PR title and description too, and a rule
+        // about them can be scoped to files (#2420: "Write a clear, scoped PR
+        // title"). A candidate there that cites no line makes no claim about
+        // code, so the metadata may support it; one that cites a line has to
+        // be shown in the code it cites.
         const metadataAllowed =
-            shard.filename === null && !violation.needsRepositoryEvidence;
+            !violation.needsRepositoryEvidence &&
+            (shard.filename === null || !violation.relevantLinesStart);
         if (!repoAvailable && !metadataAllowed)
             return 'sandbox_unavailable' as const;
         // The description the shard read: the whole of it for a PR-level

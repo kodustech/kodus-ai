@@ -1312,6 +1312,12 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewErrorAgentName?: string,
         /** A line the review adds at the end (an Ultra review's fallback). */
         extraLine?: string,
+        /**
+         * The PR-level comments the review posted. A PR whose only findings
+         * are PR-level (a rename-only PR) has no line comment, and without
+         * these the summary called it clean.
+         */
+        prLevelCommentResults?: Array<CommentResult>,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1321,10 +1327,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Same when no comment could be posted: a template written for a
             // finished review would hide that the findings never reached it.
             const nothingDelivered =
-                countUndeliveredComments(codeSuggestions) > 0 &&
-                !codeSuggestions?.some(
-                    (c) => c?.deliveryStatus === DeliveryStatus.SENT,
-                );
+                countUndeliveredComments(
+                    codeSuggestions,
+                    prLevelCommentResults,
+                ) > 0 &&
+                ![
+                    ...(codeSuggestions ?? []),
+                    ...(prLevelCommentResults ?? []),
+                ].some((c) => c?.deliveryStatus === DeliveryStatus.SENT);
             let commentBody =
                 reviewFailed || nothingDelivered ? undefined : finalCommentBody;
 
@@ -1335,7 +1345,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     platformType,
                     codeSuggestions,
                     codeReviewConfig,
-                    undefined,
+                    prLevelCommentResults,
                     reviewFailed,
                     reviewErrorMessage,
                     reviewHasPartialErrors,
@@ -3091,7 +3101,13 @@ ${reviewOptions}
                             },
                             deliveryStatus: DeliveryStatus.SENT,
                             codeReviewFeedbackData: {
-                                commentId: createdComment.id,
+                                // Azure numbers comments within a thread, so
+                                // every new thread's comment is 1; the thread
+                                // id is what tells two PR-level comments apart,
+                                // and what its line comments store too.
+                                commentId:
+                                    createdComment.threadId ??
+                                    createdComment.id,
                                 pullRequestReviewId: null, // PR-level comments do not have review ID
                                 suggestionId: suggestion.id,
                             },

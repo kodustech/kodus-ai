@@ -74,6 +74,8 @@ Web ホストを開いてアカウントを作成し、**AI providers** でモ�
 
 TLS が必須の外部 PostgreSQL を使う場合は、`global.config.API_DATABASE_DISABLE_SSL` を `"false"` に設定します。
 
+PostgreSQL を PgBouncer 越しに使う場合や、`operator` モードで CloudNativePG の `Pooler` を使う場合は、[コネクションプーラー越しの PostgreSQL](/ja/how_to_deploy/deploy_kodus/postgres_pooler) を参照してください。
+
 ## OpenShift
 
 OpenShift では、リポジトリのチェックアウトにある `values-openshift.yaml` オーバーレイが必要です。

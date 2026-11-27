@@ -1,3 +1,35 @@
+import { createHash } from 'crypto';
+import { ruleCompileHash } from './compile-hash';
+
+describe('ruleCompileHash', () => {
+    const rule = 'Use the logger';
+    const bad = { snippet: 'console.log(x)', isCorrect: false };
+    const good = { snippet: 'logger.info(x)', isCorrect: true };
+
+    it('gives CLI and web examples the same hash as a stored web compile attempt', () => {
+        const web = [bad, good];
+        const cli = web.map(({ snippet, isCorrect }) => ({
+            isCorrect,
+            snippet,
+        }));
+        const stored = createHash('sha256')
+            .update(`${rule} ${JSON.stringify(web)}`)
+            .digest('hex');
+
+        expect(ruleCompileHash({ rule, examples: web })).toBe(stored);
+        expect(ruleCompileHash({ rule, examples: cli })).toBe(stored);
+    });
+
+    it.each([
+        ['snippet', [{ ...bad, snippet: 'console.warn(x)' }, good]],
+        ['label', [{ ...bad, isCorrect: true }, good]],
+        ['example order', [good, bad]],
+    ] as const)('changes when the %s changes', (_name, examples) => {
+        expect(ruleCompileHash({ rule, examples: [...examples] })).not.toBe(
+            ruleCompileHash({ rule, examples: [bad, good] }),
+        );
+    });
+});
 
 /**
  * The gate that decides whether an EXISTING rule is ever re-classified.

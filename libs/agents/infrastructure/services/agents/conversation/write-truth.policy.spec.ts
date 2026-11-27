@@ -1,68 +1,119 @@
+import { tool, type Tool } from 'ai';
+import { z } from 'zod';
+
 import type { StepView } from '@libs/agent-harness/domain/contracts/policy.contract';
 
-import { WriteTruthPolicy } from './write-truth.policy';
+import { auditWriteTools, performedWrites, type WriteToolEvent } from './conversation-tool-audit';
+import { createWriteAuthorization, requireDeclaredAction } from './write-authorization';
+import { RUNTIME_NOTE_PREFIX, WriteTruthPolicy } from './write-truth.policy';
 
-const view = (toolCalls: Array<{ name: string }>): StepView =>
+const NONE = `${RUNTIME_NOTE_PREFIX} ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything — you may report an action only once its tool call has returned.`;
+const performed = (names: string) =>
+    `${RUNTIME_NOTE_PREFIX} ACTIONS PERFORMED THIS TURN: ${names}. Report these and nothing else — do not describe any other action as done.`;
+
+// The steps list every call the model made, refused ones included; the note
+// must not read them.
+const view = (names: string[]): StepView =>
     ({
         runId: 'r',
         agentId: 'conversation',
         stepNumber: 1,
         maxSteps: 12,
-        steps: toolCalls.length
-            ? [
-                  {
-                      index: 0,
-                      message: {
-                          role: 'assistant',
-                          content: '',
-                          toolCalls: toolCalls.map((t, i) => ({
-                              id: `c${i}`,
-                              name: t.name,
-                              input: {},
-                          })),
-                      },
-                  },
-              ]
-            : [],
+        steps: [
+            {
+                index: 0,
+                message: {
+                    role: 'assistant',
+                    content: '',
+                    toolCalls: names.map((name, i) => ({ id: `c${i}`, name, input: {} })),
+                },
+            },
+        ],
         messages: [],
         activeTools: [],
     }) as StepView;
 
+const note = (done: string[], called: string[] = done) =>
+    new WriteTruthPolicy(() => done).prepareStep(view(called))?.injectNote?.content;
+
 describe('WriteTruthPolicy', () => {
-    const policy = new WriteTruthPolicy(
-        (name) =>
-            name.startsWith('KODUS_CREATE') || name.startsWith('KODUS_UPDATE'),
-    );
-
     it('tells the model it has done nothing when no write ran', () => {
-        const note = policy.prepareStep(view([]))?.injectNote?.content ?? '';
-
-        expect(note).toMatch(/none/i);
-        expect(note).toMatch(/do not say you saved/i);
+        expect(note([])).toBe(NONE);
     });
 
-    it('constrains the claim without nudging the model to act', () => {
-        const note = policy.prepareStep(view([]))?.injectNote?.content ?? '';
-
-        expect(note).toMatch(/only once its tool call has returned/i);
-        // Whether to act is the prompt's rule, not this note's business —
-        // encouraging it here made the agent write without being asked.
-        expect(note).not.toMatch(/call the tool now/i);
+    it('names the writes that did run, once each', () => {
+        expect(note(['KODUS_CREATE_MEMORY', 'KODUS_CREATE_MEMORY'])).toBe(
+            performed('KODUS_CREATE_MEMORY'),
+        );
     });
 
-    it('names the writes that did run', () => {
-        const note =
-            policy.prepareStep(view([{ name: 'KODUS_CREATE_MEMORY' }]))
-                ?.injectNote?.content ?? '';
-
-        expect(note).toContain('KODUS_CREATE_MEMORY');
+    it('does not report a write the steps list but that never ran', () => {
+        expect(note([], ['kodus_save_memory'])).toBe(NONE);
     });
 
-    it('ignores read tools when deciding what was done', () => {
-        const note =
-            policy.prepareStep(view([{ name: 'KODUS_FIND_MEMORIES' }]))
-                ?.injectNote?.content ?? '';
+    // Kimi K2.7 told the developer "Done! I've saved that as a memory" after
+    // the gate refused the save. Wired as the conversation agent wires it.
+    describe('through the write gate and the audit', () => {
+        function wire(fail = false) {
+            const saved: unknown[] = [];
+            const writes: WriteToolEvent[] = [];
+            const authorization = createWriteAuthorization();
+            const tools: Record<string, Tool> = requireDeclaredAction(
+                auditWriteTools(
+                    {
+                        kodus_save_memory: tool({
+                            description: 'save',
+                            inputSchema: z.object({ text: z.string() }),
+                            execute: async (args) => {
+                                if (fail) throw new Error('store down');
+                                saved.push(args);
+                                return 'saved';
+                            },
+                        }),
+                    },
+                    { kodus_save_memory: {} },
+                    (event) => writes.push(event),
+                ),
+                (name) => name === 'kodus_save_memory',
+                authorization,
+            );
+            const policy = new WriteTruthPolicy(() => performedWrites(writes));
+            const save = () =>
+                (tools.kodus_save_memory.execute as any)({ text: 'use pnpm' }, {});
+            const noteNow = () =>
+                policy.prepareStep(view(['kodus_save_memory']))?.injectNote?.content;
+            return { authorization, save, noteNow, saved };
+        }
 
-        expect(note).toMatch(/none/i);
+        it('reports nothing after a refused write', async () => {
+            const { save, noteNow, saved } = wire();
+
+            const answer = await save();
+
+            // Spelled out here, not read from the constant: an empty or
+            // softened refusal must fail this test.
+            expect(answer).toBe(
+                "This action has NOT been performed. Before changing anything you must call kodusDecideAction with intent 'act', naming this tool and quoting the words the developer used to instruct it. If they did not instruct it, do not act — call kodusDecideAction with intent 'offer' and offer it to them instead.",
+            );
+            expect(saved).toEqual([]);
+            expect(noteNow()).toBe(NONE);
+        });
+
+        it('reports the write once it was authorized and returned', async () => {
+            const { authorization, save, noteNow, saved } = wire();
+            authorization.grant('kodus_save_memory');
+
+            expect(await save()).toBe('saved');
+            expect(saved).toEqual([{ text: 'use pnpm' }]);
+            expect(noteNow()).toBe(performed('kodus_save_memory'));
+        });
+
+        it('reports nothing for a write that threw', async () => {
+            const { authorization, save, noteNow } = wire(true);
+            authorization.grant('kodus_save_memory');
+
+            await expect(save()).rejects.toThrow('store down');
+            expect(noteNow()).toBe(NONE);
+        });
     });
 });

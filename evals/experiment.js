@@ -221,6 +221,25 @@ const STEP_EVALS = {
             },
         ],
     },
+    'repeat-check': {
+        // A PR's check only when it touches the gate itself (#2676): the files
+        // below, not every file the review loads, so an engine change elsewhere
+        // does not pay for it. 14 full reviews per side and run.
+        smoke: [],
+        files: [
+            'libs/code-review/infrastructure/agents/engine/repeat-check.ts',
+            'libs/code-review/infrastructure/adapters/services/pr-decision-store.service.ts',
+            'libs/code-review/domain/contracts/pr-decision-store.contract.ts',
+            'libs/common/utils/codeManagement/answered-review-threads.ts',
+        ],
+        primary: {
+            id: 'review-rounds',
+            label: 'Reversals and answered points held, guards posted',
+            run: ['evals/review-rounds/run.js', '--byok-reasoning=medium', '--judge=gemini-3-flash-preview', '--concurrency=6'],
+            question: 'Does a later round hold back the reversal of an applied suggestion and a point already answered in its thread, while still posting a real consequence or security hole?',
+        },
+        guards: [],
+    },
     heavy: {
         // On demand only, never a PR's check: every case is a full heavy review
         // (the generalist and nine lenses), about twice a normal review.
@@ -494,7 +513,7 @@ function summaryMarkdown(x, { pct, pp }) {
 function affectedSteps(changed, filesOf, steps = STEP_EVALS) {
     const prod = new Set(changed.filter((f) => /^(libs|apps|packages)\//.test(f)));
     return Object.entries(steps)
-        .filter(([, plan]) => (plan.smoke || []).some((name) => filesOf(name).some((f) => prod.has(f))))
+        .filter(([, plan]) => (plan.files || []).some((f) => prod.has(f)) || (plan.smoke || []).some((name) => filesOf(name).some((f) => prod.has(f))))
         .map(([step]) => step);
 }
 

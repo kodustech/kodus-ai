@@ -21,6 +21,18 @@ import type { WriteAuthorization } from './write-authorization';
 
 export const CONVERSATION_DECISION_TOOL = 'kodusDecideAction';
 
+/** Decisions a run records before the tool tells the agent to answer instead. */
+export const MAX_DECISIONS = 2;
+
+/**
+ * The decision tool's answer past MAX_DECISIONS. The decision is still
+ * recorded, and an `act` still authorizes its write: a model that named the
+ * tool wrong twice and right the third time must be able to save what the
+ * developer asked for.
+ */
+export const DECISION_LIMIT_NOTE =
+    'Decision noted. Do not call kodusDecideAction again this turn: carry out what you decided with the tool it names, or write your reply to the developer now.';
+
 export type ConversationIntent = 'answer' | 'offer' | 'act';
 
 export interface ConversationDecision {
@@ -37,6 +49,7 @@ const INTENTS: readonly ConversationIntent[] = ['answer', 'offer', 'act'];
 export function buildDecisionTool(
     onDecision?: (decision: ConversationDecision) => void,
 ): Record<string, Tool> {
+    let recorded = 0;
     return {
         [CONVERSATION_DECISION_TOOL]: tool({
             description:
@@ -75,8 +88,13 @@ export function buildDecisionTool(
                 const decision = parse(input);
                 if (decision) {
                     onDecision?.(decision);
+                    recorded++;
                 }
-                return 'noted';
+                // Some models record a decision on every step and never
+                // answer. The answer says so: removing the tool instead would
+                // change the request's tool list, and Anthropic then rejects
+                // every earlier thinking block (#2731).
+                return recorded > MAX_DECISIONS ? DECISION_LIMIT_NOTE : 'noted';
             },
         }),
     };
@@ -103,6 +121,26 @@ export function readDecision(
     return decision;
 }
 
+/**
+ * Decisions the agent recorded since it last used any other tool. A step that
+ * reads, writes or is refused a write is the agent working, and a decision
+ * after it is a new one; the loop this counts is decisions with nothing in
+ * between (12 steps of `kodusDecideAction` alone, Nov 2026). A malformed call
+ * recorded nothing.
+ */
+export function decisionsSinceOtherWork(steps: readonly RunStep[]): number {
+    let count = 0;
+    for (const step of steps) {
+        const calls = step.message?.toolCalls ?? [];
+        if (calls.some((call) => call.name !== CONVERSATION_DECISION_TOOL)) {
+            count = 0;
+            continue;
+        }
+        count += calls.filter((call) => parse(call.input)).length;
+    }
+    return count;
+}
+
 function parse(input: unknown): ConversationDecision | undefined {
     let raw = input;
 
@@ -125,7 +163,12 @@ function parse(input: unknown): ConversationDecision | undefined {
 
     return {
         intent: value.intent as ConversationIntent,
-        ...(typeof value.tool === 'string' ? { tool: value.tool } : {}),
+        // OpenAI models (gpt-luna) often name the tool with the internal
+        // `functions.` namespace; the tool itself has no prefix, and the
+        // write it declared was never authorized.
+        ...(typeof value.tool === 'string'
+            ? { tool: value.tool.replace(/^functions\./, '') }
+            : {}),
         ...(typeof value.authorizingQuote === 'string'
             ? { authorizingQuote: value.authorizingQuote }
             : {}),

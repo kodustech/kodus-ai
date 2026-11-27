@@ -3,6 +3,7 @@ import type {
     PullRequestFile,
     PullRequestSuggestion,
 } from "@services/pull-requests";
+
 import type { DiffFile, PrInfo, ReviewIssue } from "./types";
 
 function statusOf(raw: string | undefined): DiffFile["status"] {
@@ -48,9 +49,16 @@ function buildFullPatch(file: PullRequestFile): string {
 export function adaptForTryDiffViewer({
     patchFiles,
     suggestions,
+    prLevelSuggestions = [],
 }: {
     patchFiles: PullRequestFile[];
     suggestions: PullRequestSuggestion[];
+    /**
+     * Findings posted as PR comments, not on a line (a renamed file with no
+     * hunk has no line to post on). They carry no file; leaving them out made
+     * a PR whose findings were all PR-level read "Nothing to flag".
+     */
+    prLevelSuggestions?: PullRequestSuggestion[];
 }): {
     files: DiffFile[];
     rawDiff: string;
@@ -73,33 +81,41 @@ export function adaptForTryDiffViewer({
 
     const rawDiff = withPatch.map(buildFullPatch).join("\n");
 
-    const issues: ReviewIssue[] = suggestions
-        .filter((s) => !!s.filePath)
-        .map((s) => {
-            // The card body prefers the full suggestion content; fall back
-            // to the one-sentence summary so the card never renders empty.
-            const message =
-                s.suggestionContent?.trim() ||
-                s.oneSentenceSummary?.trim() ||
-                "";
+    const toIssue = (s: PullRequestSuggestion, file: string): ReviewIssue => {
+        // The card body prefers the full suggestion content; fall back
+        // to the one-sentence summary so the card never renders empty.
+        const message =
+            s.suggestionContent?.trim() || s.oneSentenceSummary?.trim() || "";
 
-            // The "Suggested fix" block (and "Copy fix") shows improvedCode
-            // only. A suggestion downgraded to a plain comment has none, and
-            // existingCode is the code being flagged: offering it as the fix
-            // would hand the bug back to whoever copies it.
-            const suggestion = s.improvedCode?.trim() || undefined;
+        // The "Suggested fix" block (and "Copy fix") shows improvedCode
+        // only. A suggestion downgraded to a plain comment has none, and
+        // existingCode is the code being flagged: offering it as the fix
+        // would hand the bug back to whoever copies it.
+        const suggestion = s.improvedCode?.trim() || undefined;
 
-            return {
-                id: s.id,
-                file: s.filePath as string,
-                line: s.relevantLinesStart ?? 0,
-                endLine: s.relevantLinesEnd,
-                severity: s.severity ?? "info",
-                category: s.label,
-                message,
-                suggestion,
-            };
-        });
+        return {
+            id: s.id,
+            file,
+            line: file ? (s.relevantLinesStart ?? 0) : 0,
+            endLine: file ? s.relevantLinesEnd : undefined,
+            severity: s.severity ?? "info",
+            category: s.label,
+            message,
+            suggestion,
+        };
+    };
+
+    const issues: ReviewIssue[] = [
+        ...suggestions
+            .filter((s) => !!s.filePath)
+            .map((s) => toIssue(s, s.filePath as string)),
+        // The Business Logic validation comment is stored PR-level too, as a
+        // pass or a gap, and only on its first post: it is a status report
+        // with its own PR comment, not a finding, and the record goes stale.
+        ...prLevelSuggestions
+            .filter((s) => s.label !== "business_logic")
+            .map((s) => toIssue(s, "")),
+    ];
 
     return { files, rawDiff, issues };
 }
@@ -115,9 +131,7 @@ export function buildPrInfo({
 }): PrInfo | undefined {
     if (!prUrl) return undefined;
     const full = repositoryName ?? "";
-    const [owner, repo] = full.includes("/")
-        ? full.split("/")
-        : ["", full];
+    const [owner, repo] = full.includes("/") ? full.split("/") : ["", full];
     return {
         owner,
         repo,

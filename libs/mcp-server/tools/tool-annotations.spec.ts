@@ -19,7 +19,7 @@ import { PROACTIVE_HINT_META_KEY } from '../types/mcp-tool.interface';
 const stub = () => ({}) as never;
 
 const ALL_TOOLS = [
-    ...new KodyRulesTools(stub(), stub(), stub()).getAllTools(),
+    ...new KodyRulesTools(stub(), stub(), stub(), stub()).getAllTools(),
     ...new KodyIssuesTools(stub(), stub()).getAllTools(),
     ...new CodeManagementTools(stub()).getAllTools(),
     ...new KodusIssuesTools(stub()).getAllTools(),

@@ -1,0 +1,116 @@
+diff --git a/libs/common/utils/webhooks/webhook-source-host.spec.ts b/libs/common/utils/webhooks/webhook-source-host.spec.ts
+index 80ae9ba4d..5313c4078 100644
+--- a/libs/common/utils/webhooks/webhook-source-host.spec.ts
++++ b/libs/common/utils/webhooks/webhook-source-host.spec.ts
+@@ -30,6 +30,12 @@ describe('normalizeHost', () => {
+         );
+     });
+ 
++    it('reads the host of an SSH remote', () => {
++        expect(normalizeHost('git@GitLab-B.example:acme/api.git')).toBe(
++            'gitlab-b.example',
++        );
++    });
++
+     it('is undefined for an empty value', () => {
+         expect(normalizeHost(undefined)).toBeUndefined();
+         expect(normalizeHost('  ')).toBeUndefined();
+@@ -157,22 +163,22 @@ describe('gitlabWebhookSource', () => {
+             gitlabWebhookSource({
+                 project: {
+                     id: 9,
+-                    path_with_namespace: 'managerium/mgm-api',
++                    path_with_namespace: 'globex/billing-api',
+                     git_http_url:
+-                        'https://GitLab-B.example/managerium/mgm-api.git',
+-                    web_url: 'https://gitlab-b.example/managerium/mgm-api',
++                        'https://GitLab-B.example/globex/billing-api.git',
++                    web_url: 'https://gitlab-b.example/globex/billing-api',
+                 },
+             }),
+         ).toEqual({
+             host: 'gitlab-b.example',
+-            repositoryFullName: 'managerium/mgm-api',
++            repositoryFullName: 'globex/billing-api',
+         });
+     });
+ });
+ 
+ describe('instanceConfigsForWebhook on GitLab', () => {
+-    // GitLab numbers projects per instance: project 9 is web-apps/elfood on
+-    // gitlab-a.example and managerium/mgm-api on gitlab-b.example. GitLab
++    // GitLab numbers projects per instance: project 9 is acme/web-shop on
++    // gitlab-a.example and globex/billing-api on gitlab-b.example. GitLab
+     // configs list each project with its http_url; an OAuth integration may
+     // store no host.
+     const listed = (
+@@ -187,17 +193,17 @@ describe('instanceConfigsForWebhook on GitLab', () => {
+     });
+     const a = listed(
+         'a',
+-        'https://gitlab-a.example/web-apps/elfood.git',
+-        'web-apps/elfood',
++        'https://gitlab-a.example/acme/web-shop.git',
++        'acme/web-shop',
+     );
+     const b = listed(
+         'b',
+-        'https://gitlab-b.example/managerium/mgm-api.git',
+-        'managerium/mgm-api',
++        'https://gitlab-b.example/globex/billing-api.git',
++        'globex/billing-api',
+     );
+     const fromB = {
+         host: 'gitlab-b.example',
+-        repositoryFullName: 'managerium/mgm-api',
++        repositoryFullName: 'globex/billing-api',
+         repositoryId: 9,
+     };
+ 
+@@ -212,8 +218,8 @@ describe('instanceConfigsForWebhook on GitLab', () => {
+     it('keeps every organization connected to the same project on that server', () => {
+         const alsoB = listed(
+             'b2',
+-            'https://gitlab-b.example/managerium/mgm-api.git',
+-            'managerium/mgm-api',
++            'https://gitlab-b.example/globex/billing-api.git',
++            'globex/billing-api',
+         );
+         expect(instanceConfigsForWebhook([a, b, alsoB], fromB)).toEqual([
+             b,
+@@ -221,12 +227,33 @@ describe('instanceConfigsForWebhook on GitLab', () => {
+         ]);
+     });
+ 
+-    it('refuses a config that stores no host when another candidate is on a known server', () => {
++    it('never keeps a config listed on another server, even with the same path', () => {
++        const samePathOnA = listed(
++            'a',
++            'https://gitlab-a.example/globex/billing-api.git',
++            'globex/billing-api',
++        );
++        expect(instanceConfigsForWebhook([samePathOnA], fromB)).toEqual([]);
++    });
++
++    it('keeps by path a config that lists no URL, whatever the address Kodus reaches it at', () => {
++        const internal = {
++            ...listed('b', '', 'globex/billing-api', 'http://10.0.0.5:8080'),
++            configValue: [{ id: '9', name: 'globex/billing-api' }],
++        };
++        expect(instanceConfigsForWebhook([a, internal], fromB)).toEqual([
++            internal,
++        ]);
++    });
++
++    it('keeps a config that stores no host beside a candidate on another server', () => {
+         const unknown = {
+             ...listed('legacy', '', 'legacy/app'),
+             configValue: [{ id: '9', name: 'legacy/app' }],
+         };
+-        expect(instanceConfigsForWebhook([unknown, a], fromB)).toEqual([]);
++        expect(instanceConfigsForWebhook([unknown, a], fromB)).toEqual([
++            unknown,
++        ]);
+     });
+ 
+     it('keeps the candidates when none stores any host (legacy data)', () => {

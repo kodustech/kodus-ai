@@ -65,6 +65,8 @@ export interface ICodeBaseConfigService {
         directoryId?: string;
         defaultBranch?: string;
         removeProperties?: boolean;
+        /** A non-boolean `conversation.implicitReplies` was dropped. */
+        onRejectedImplicitReplies?: () => void;
     }): Promise<KodusConfigFile | undefined>;
 
     getE2BIpAddress(): Promise<string | null>;
