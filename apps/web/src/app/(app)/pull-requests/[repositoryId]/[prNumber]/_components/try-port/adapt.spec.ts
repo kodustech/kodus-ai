@@ -215,6 +215,26 @@ describe("adaptForTryDiffViewer", () => {
     });
 });
 
+describe("adaptForTryDiffViewer — Business Logic record", () => {
+    it("leaves the Business Logic validation comment out of the findings", () => {
+        const { issues } = adaptForTryDiffViewer({
+            patchFiles: [],
+            suggestions: [],
+            prLevelSuggestions: [
+                {
+                    id: "bl",
+                    suggestionContent: "Requirements met.",
+                    label: "business_logic",
+                    severity: "low",
+                    deliveryStatus: "sent",
+                } as PullRequestSuggestion,
+            ],
+        });
+
+        expect(issues).toEqual([]);
+    });
+});
+
 describe("buildHeaderPrInfo", () => {
     it("splits owner/repo, sums +/-, counts files and maps author/branches", () => {
         const pr = buildHeaderPrInfo({

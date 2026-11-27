@@ -109,7 +109,12 @@ export function adaptForTryDiffViewer({
         ...suggestions
             .filter((s) => !!s.filePath)
             .map((s) => toIssue(s, s.filePath as string)),
-        ...prLevelSuggestions.map((s) => toIssue(s, "")),
+        // The Business Logic validation comment is stored PR-level too, as a
+        // pass or a gap, and only on its first post: it is a status report
+        // with its own PR comment, not a finding, and the record goes stale.
+        ...prLevelSuggestions
+            .filter((s) => s.label !== "business_logic")
+            .map((s) => toIssue(s, "")),
     ];
 
     return { files, rawDiff, issues };
