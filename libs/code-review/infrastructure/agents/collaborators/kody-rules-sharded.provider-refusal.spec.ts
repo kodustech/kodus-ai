@@ -1,4 +1,6 @@
-import { APICallError } from 'ai';
+import { APICallError, NoObjectGeneratedError, TypeValidationError } from 'ai';
+
+import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import {
     judgeKodyRulesSharded,
@@ -156,5 +158,145 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
         expect(res.shardsRun).toBe(20);
         expect(res.shardsErrored).toBe(15);
         expect(res.providerRefusal).toBe('QUOTA_EXCEEDED');
+    });
+
+    // A reply that fails the wire schema twice throws with no HTTP status, and
+    // its cause carries the model's own review. Its words are not the
+    // provider's: "billing" and "does not exist" here are about the code.
+    it('does not read a reply that failed the schema as a refusal', async () => {
+        const offSchema = () =>
+            new NoObjectGeneratedError({
+                message: 'No object generated: response did not match schema.',
+                text: '{}',
+                cause: new TypeValidationError({
+                    value: {
+                        violations: [
+                            {
+                                ruleId: 1,
+                                explanation:
+                                    'Calls legacyBilling.charge(), which does not exist after this PR',
+                            },
+                        ],
+                    },
+                    cause: new Error('Invalid input'),
+                }),
+                response: {} as any,
+                usage: {} as any,
+                finishReason: 'stop',
+            });
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                throw offSchema();
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(files.length);
+        expect(res.providerRefusal).toBeUndefined();
+    });
+
+    it('does not stop for requests refused on their content', async () => {
+        // OpenRouter answers a moderation flag with a 403.
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                throw refusal(
+                    403,
+                    'Your chosen model requires moderation and your input was flagged for "violence"',
+                );
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(files.length);
+        expect(res.providerRefusal).toBeUndefined();
+    });
+
+    // Shards run four at a time and land in any order: two refusals can come
+    // back while two earlier requests are still on their way to succeeding.
+    it('waits for the requests in flight before it calls two refusals a stop', async () => {
+        let call = 0;
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                call++;
+                if (call === 1 || call === 2) {
+                    await new Promise((r) => setTimeout(r, 20));
+                    return [];
+                }
+                if (call === 3 || call === 4) throw refusal(403, 'Forbidden');
+                return [];
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 4,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(files.length);
+        expect(res.shardsErrored).toBe(2);
+        expect(res.providerRefusal).toBeUndefined();
+    });
+
+    it('stops once the requests in flight were refused too', async () => {
+        let call = 0;
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                call++;
+                if (call <= 2) await new Promise((r) => setTimeout(r, 20));
+                throw refusal(401, 'Incorrect API key provided');
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 4,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(4);
+        expect(res.shardsRun).toBe(files.length);
+        expect(res.shardsErrored).toBe(files.length);
+        expect(res.providerRefusal).toBe('AUTH_INVALID');
+    });
+
+    it('skips the PR-scope shard when the last file shards were refused', async () => {
+        let call = 0;
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                call++;
+                if (call === 1) return [];
+                throw refusal(401, 'Incorrect API key provided');
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files.slice(0, 3),
+            rules: [
+                ...rules,
+                { uuid: 'r2', rule: 'Describe the PR.', scope: KodyRulesScope.PULL_REQUEST },
+            ] as any[],
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(3);
+        expect(res.shardsRun).toBe(4);
+        expect(res.shardsErrored).toBe(3);
+        expect(res.providerRefusal).toBe('AUTH_INVALID');
     });
 });
