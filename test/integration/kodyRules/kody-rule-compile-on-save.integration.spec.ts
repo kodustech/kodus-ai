@@ -10,7 +10,11 @@ import { KodyRulesRepository } from '@libs/ee/kodyRules/repository/kodyRules.rep
 import { KodyRuleDetectorCompilerService } from '@libs/ee/kodyRules/service/kody-rule-detector-compiler.service';
 import { KodyRulesService } from '@libs/ee/kodyRules/service/kodyRules.service';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
-import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { BackfillRuleDetectorsUseCase } from '@libs/kodyRules/application/use-cases/backfill-rule-detectors.use-case';
+import {
+    IKodyRule,
+    KodyRulesStatus,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import {
     KodyRulesModel,
     KodyRulesSchema,
@@ -117,6 +121,300 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             // The compiler runs in the background. Wait for its writes before the next save.
             await Promise.all(compile.mock.results.map(({ value }) => value));
         }
+
+        it('keeps legacy cosmetic declines semantic unless the model explicitly clears the cosmetic flag', async () => {
+            const examples = [
+                { snippet: 'run()', isCorrect: false },
+                { snippet: 'run();', isCorrect: true },
+            ];
+            const phrasings = [
+                'Semicolons are required at the end of every statement in JS',
+                'Use 2-space indentation.',
+                'Avoid multiple blank lines',
+                'Always terminate statements with semicolons.',
+                'No semicolons in Ruby',
+                'Ruby code should not have semicolons at the end of lines.',
+                "Ruby doesn't need semicolons",
+                'Semicolons are not required in Ruby',
+            ];
+            const substantive =
+                'Use parameterized queries even when inputs contain single quotes.';
+            const fixtures = [...phrasings, substantive].map((rule) => ({
+                uuid: randomUUID(),
+                title: 'Team policy',
+                repositoryId,
+                rule,
+                examples,
+                status: KodyRulesStatus.ACTIVE,
+                compileAttempt: {
+                    outcome: 'declined' as const,
+                    declineReason: 'cosmetic',
+                    sourceHash: ruleCompileHash({ rule, examples }),
+                },
+                contextNeed: {
+                    source: 'author' as const,
+                    need: 'diff-only' as const,
+                },
+            }));
+            await model.create({ organizationId, rules: fixtures });
+            runModel.mockImplementation(async ({ user }) => ({
+                mechanical: true,
+                pattern: 'run\\(\\)$',
+                ...(user.includes(substantive) && { cosmetic: false }),
+            }));
+            const sweep = new BackfillRuleDetectorsUseCase(rules, compiler);
+            await sweep.execute({ organizationId });
+            const saved = (
+                await repository.findByOrganizationId(organizationId)
+            ).rules;
+            expect(
+                runModel.mock.calls.every(([prompt]) =>
+                    prompt.user.includes('"cosmetic": false'),
+                ),
+            ).toBe(true);
+            const armed = saved.filter((r) => r.detector).map((r) => r.rule);
+            expect(armed).toStrictEqual([substantive]);
+            for (const r of saved.filter((r) => r.rule !== substantive)) {
+                expect(r.compileAttempt.declineReason).toBe('cosmetic');
+                expect(r.compileAttempt.cosmeticSource).toBe('model');
+            }
+            runModel.mockClear();
+            expect((await sweep.execute({ organizationId })).processed).toBe(0);
+            expect(runModel).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            'Avoid unnecessary semicolons.',
+            'Avoid trailing whitespace!!',
+        ])(
+            'disarms a settled cosmetic detector during the next nightly sweep: %s',
+            async (rule) => {
+                const uuid = randomUUID();
+                await model.create({
+                    organizationId,
+                    rules: [
+                        {
+                            uuid,
+                            repositoryId,
+                            title: 'Formatting policy',
+                            rule,
+                            status: KodyRulesStatus.ACTIVE,
+                            detector: { type: 'regex', pattern: ';' },
+                            compileAttempt: {
+                                outcome: 'compiled',
+                                sourceHash: ruleCompileHash({ rule }),
+                            },
+                            contextNeed: {
+                                source: 'compiler',
+                                need: 'full-file',
+                                sourceHash: ruleContextNeedHash({ rule }),
+                            },
+                        },
+                    ],
+                });
+                const sweep = new BackfillRuleDetectorsUseCase(rules, compiler);
+                expect(
+                    (await sweep.execute({ organizationId })).disabledCosmetic,
+                ).toBe(1);
+                const saved = await repository.findById(uuid, organizationId);
+                expect(saved.detector).toBeNull();
+                expect(saved.compileAttempt.cosmeticSource).toBe('gate');
+                expect(
+                    (await sweep.execute({ organizationId })).processed,
+                ).toBe(0);
+                expect(runModel).not.toHaveBeenCalled();
+            },
+        );
+
+        it('preserves an in-flight compile when a severity save straddles its writes', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the logger.';
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        rule,
+                        examples,
+                        title: 'Logger',
+                        detector: null,
+                        compileAttempt: null,
+                        contextNeed: null,
+                        fileScope: null,
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console\\.log',
+                contextNeed: 'full-file',
+                extensions: ['.ts'],
+            });
+            const before = await repository.findById(uuid, organizationId);
+            const write = repository.updateRule.bind(repository);
+            const interleave = jest
+                .spyOn(repository, 'updateRule')
+                .mockImplementationOnce(async (...args) => {
+                    await compiler.compileAndSave(
+                        { organizationId },
+                        uuid,
+                        before,
+                    );
+                    return write(...args);
+                });
+            try {
+                await patch(uuid, { severity: 'high' });
+            } finally {
+                interleave.mockRestore();
+            }
+            const after = await repository.findById(uuid, organizationId);
+            expect(after.severity).toBe('high');
+            expect(after.detector?.pattern).toBe('console\\.log');
+            expect(after.compileAttempt?.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            expect(after.contextNeed?.need).toBe('full-file');
+            expect(after.fileScope?.extensions).toStrictEqual(['.ts']);
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+
+        it('compares ordered example values on a guarded write and preserves an author override', async () => {
+            const uuid = randomUUID();
+            const title = 'Policy';
+            const rule = 'Prefer bound values.';
+            const examples = [
+                { isCorrect: false, snippet: 'bad()' },
+                { isCorrect: true, snippet: 'good()' },
+            ];
+            const author = {
+                need: 'full-file' as const,
+                source: 'author' as const,
+                sourceHash: 'author',
+                inferredAt: new Date(),
+            };
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title,
+                        rule,
+                        examples,
+                        contextNeed: author,
+                    },
+                ],
+            });
+            const snapshot = {
+                title,
+                rule,
+                examples: examples.map(({ snippet, isCorrect }) => ({
+                    snippet,
+                    isCorrect,
+                })),
+            };
+            const detector = { type: 'regex' as const, pattern: 'bad' };
+            expect(
+                (
+                    await rules.updateRuleDetector(
+                        organizationId,
+                        uuid,
+                        detector,
+                        snapshot,
+                    )
+                )?.detector,
+            ).toStrictEqual(detector);
+            expect(
+                await rules.updateRuleDetector(organizationId, uuid, null, {
+                    ...snapshot,
+                    examples: [...snapshot.examples].reverse(),
+                }),
+            ).toBeNull();
+            await rules.updateRuleContextNeed(
+                organizationId,
+                uuid,
+                { ...author, source: 'compiler', need: 'diff-only' },
+                snapshot,
+            );
+            const saved = await repository.findById(uuid, organizationId);
+            expect(saved.detector).toStrictEqual(detector);
+            expect(saved.contextNeed).toStrictEqual(author);
+        });
+
+        it('rejects an older compiler result that finishes after a second text edit', async () => {
+            const uuid = randomUUID();
+            const examples = [
+                { snippet: 'forbiddenA();forbiddenB()', isCorrect: false },
+                { snippet: 'allowed()', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Policy',
+                        rule: 'Initial policy',
+                        examples,
+                    },
+                ],
+            });
+            let started: () => void;
+            const firstStarted = new Promise<void>((resolve) => {
+                started = resolve;
+            });
+            let release: (output: unknown) => void;
+            const slow = new Promise((resolve) => {
+                release = resolve;
+            });
+            runModel
+                .mockImplementationOnce(() => {
+                    started();
+                    return slow;
+                })
+                .mockResolvedValueOnce({
+                    mechanical: true,
+                    pattern: 'forbiddenB',
+                    contextNeed: 'sibling-file',
+                    extensions: ['.ts'],
+                });
+            compile.mockClear();
+            await cli.updateKodyRule(
+                { repositoryId, rule: 'Reject forbiddenA.' },
+                uuid,
+                'kodus_test',
+            );
+            const first = compile.mock.results[0].value;
+            await firstStarted;
+            const rule = 'Reject forbiddenB.';
+            try {
+                await patch(uuid, { rule });
+            } finally {
+                release({
+                    mechanical: true,
+                    pattern: 'forbiddenA',
+                    contextNeed: 'full-file',
+                    extensions: ['.rb'],
+                });
+                await first;
+            }
+            const latest = await repository.findById(uuid, organizationId);
+            expect(latest.rule).toBe(rule);
+            expect(latest.detector?.pattern).toBe('forbiddenB');
+            expect(latest.compileAttempt?.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            expect(latest.contextNeed?.need).toBe('sibling-file');
+            expect(latest.fileScope?.extensions).toStrictEqual(['.ts']);
+            runModel.mockClear();
+            await patch(uuid, { rule });
+            expect(runModel).not.toHaveBeenCalled();
+        });
 
         it('settles both compiler records after an edit and spends zero calls on ten unchanged saves', async () => {
             const ids = Array.from({ length: 10 }, () => randomUUID());
@@ -455,7 +753,11 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             },
             {
                 title: 'Bind translation parameters',
-                output: { mechanical: true, pattern: 'rawValue' },
+                output: {
+                    mechanical: true,
+                    cosmetic: false,
+                    pattern: 'rawValue',
+                },
                 outcome: 'compiled',
                 source: undefined,
             },

@@ -367,6 +367,10 @@ export interface IKodyRuleFileScope {
     model?: string;
 }
 
+export type KodyRuleCompileInput = Partial<
+    Pick<IKodyRule, 'title' | 'rule' | 'examples'>
+>;
+
 /**
  * A record that the compiler RAN, independent of what it concluded.
  *

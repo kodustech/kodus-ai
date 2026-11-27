@@ -34,6 +34,7 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { extensionScopeAppliesToFile } from '@libs/common/utils/kody-rules/file-patterns';
 import { isCosmeticRule } from '@libs/common/utils/kody-rules/is-cosmetic-rule';
+import { wasDeclinedByLegacyCosmeticGate } from '@libs/common/utils/kody-rules/compile-hash';
 import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 import { createLogger } from '@libs/core/log/logger';
 
@@ -145,6 +146,11 @@ export function buildCompilerUserPrompt(rule: Partial<IKodyRule>): string {
         ``,
         `Compile this rule or decline. Return ONLY the JSON.`,
     );
+    if (wasDeclinedByLegacyCosmeticGate(rule)) {
+        parts.push(
+            'This rule was previously declined as formatting. Include "cosmetic": true for formatting or "cosmetic": false for a substantive rule.',
+        );
+    }
     return parts.join('\n');
 }
 
@@ -322,11 +328,16 @@ export async function compileRuleDetector(
     }
 
     const out = await runCompiler(rule);
-    if (out?.cosmetic === true) {
+    // A weak model can omit cosmetic on mechanical answers. An unchanged
+    // legacy decline needs an explicit non-cosmetic verdict before arming.
+    if (
+        out?.cosmetic === true ||
+        (out?.cosmetic !== false && wasDeclinedByLegacyCosmeticGate(rule))
+    ) {
         return {
             detector: null,
             declineReason: 'cosmetic',
-            cosmeticSource: 'model',
+            ...(out && { cosmeticSource: 'model' as const }),
         };
     }
     if (!out || out.mechanical !== true || !out.pattern) {

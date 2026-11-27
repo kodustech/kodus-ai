@@ -34,7 +34,7 @@ function hasFormattingSubject(text?: string): boolean {
     // doesn't establish the rule's subject. Defer ambiguous prose to the model.
     const instruction = (text ?? '')
         .trim()
-        .split(/(?:[;!?]|(?<!\bvs)\.)(?=\s|$)|\r?\n/i, 1)[0];
+        .split(/(?:[;!?]|(?<!\bvs)\.)+(?=\s|$)|\r?\n/i, 1)[0];
     const subject = instruction
         .trim()
         .replace(FORMATTING_DIRECTIVE, '')

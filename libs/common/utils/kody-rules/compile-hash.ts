@@ -5,6 +5,7 @@ import { isCosmeticRule } from './is-cosmetic-rule';
 type CompileInput = { rule?: string; examples?: unknown[] };
 type AttemptedRule = CompileInput & {
     title?: string;
+    detector?: unknown;
     compileAttempt?: Partial<IKodyRuleCompileAttempt>;
 };
 
@@ -53,6 +54,23 @@ export function ruleCompileHash(rule: CompileInput): string {
     return hashCompileInput(rule, ['snippet', 'isCorrect']);
 }
 
+function attemptMatchesInput(rule: AttemptedRule): boolean {
+    const stored = rule?.compileAttempt?.sourceHash;
+    // Older CLI attempts used the field order persisted on that rule.
+    return (
+        !!stored &&
+        (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
+    );
+}
+
+export function wasDeclinedByLegacyCosmeticGate(rule: AttemptedRule): boolean {
+    return (
+        rule.compileAttempt?.declineReason === 'cosmetic' &&
+        !rule.compileAttempt.cosmeticSource &&
+        attemptMatchesInput(rule)
+    );
+}
+
 /**
  * True when the compiler already ran on exactly this rule text and examples, so
  * running it again can only spend a model call to reach the same conclusion.
@@ -61,12 +79,10 @@ export function ruleCompileHash(rule: CompileInput): string {
  * service), so a transient failure never freezes a rule out of compilation.
  */
 export function compileAttemptIsCurrent(rule: AttemptedRule): boolean {
-    const stored = rule?.compileAttempt?.sourceHash;
-    // Older CLI attempts used the field order persisted on that rule.
     return (
-        !!stored &&
-        !needsCosmeticRecheck(rule) &&
-        (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
+        attemptMatchesInput(rule) &&
+        !(rule.detector && isCosmeticRule(rule)) &&
+        !needsCosmeticRecheck(rule)
     );
 }
 

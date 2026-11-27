@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
     forwardRef,
     Inject,
@@ -70,6 +71,7 @@ import {
     FindMemoriesFilters,
     FindMemoriesResult,
     IKodyRule,
+    KodyRuleCompileInput,
     IKodyRuleContextNeed,
     KodyRuleSourceFileIssue,
     IKodyRuleFileScope,
@@ -110,10 +112,36 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 
+// Full-form and sync saves may echo the whole rule. Write only changes so
+// background compiler records committed since the read survive the save.
+function changedRuleFields(
+    previous: Partial<IKodyRule>,
+    updated: Partial<IKodyRule>,
+): Partial<IKodyRule> {
+    return Object.fromEntries(
+        Object.entries(updated).filter(
+            ([key, value]) =>
+                !isDeepStrictEqual(previous[key as keyof IKodyRule], value),
+        ),
+    );
+}
+
 function detectorEligibilityPatch(
     previous: Partial<IKodyRule>,
     patch: CreateKodyRuleDto,
 ): Partial<Pick<IKodyRule, 'compileAttempt' | 'detector'>> {
+    const nextInputs = {
+        rule: patch.rule ?? previous.rule,
+        examples: patch.examples ?? previous.examples,
+    };
+    // A text or example edit disables the old plan in the same Mongo write.
+    // An older compile must not leave an active regex on the new inputs.
+    if (
+        (patch.rule !== undefined || patch.examples !== undefined) &&
+        ruleCompileHash(nextInputs) !== ruleCompileHash(previous)
+    ) {
+        return { detector: null, compileAttempt: null };
+    }
     const title = patch.title ?? previous.title;
     const titleChanged = title !== previous.title;
     if (!titleChanged && !previous.detector) return {};
@@ -623,11 +651,13 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         updateData: Partial<IKodyRule>,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<Partial<IKodyRule> | null> {
         return this.kodyRulesRepository.updateRuleFieldsByOrganization(
             organizationId,
             ruleId,
             updateData,
+            expectedInput,
         );
     }
 
@@ -909,10 +939,11 @@ export class KodyRulesService implements IKodyRulesService {
             kodyRule.severity ?? existingRule.severity
         )?.toLowerCase();
 
+        const detectorPatch = detectorEligibilityPatch(existingRule, kodyRule);
         const updatedRule = {
             ...existingRule,
             ...kodyRule,
-            ...detectorEligibilityPatch(existingRule, kodyRule),
+            ...detectorPatch,
             ...statusOverride,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
             updatedAt: new Date(),
@@ -959,7 +990,10 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
-            updatedRule,
+            {
+                ...changedRuleFields(existingRule, updatedRule),
+                ...detectorPatch,
+            },
         );
 
         if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
@@ -1141,7 +1175,18 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         fields: Partial<IKodyRule>,
-    ): Promise<IKodyRule> {
+        expectedInput?: KodyRuleCompileInput,
+    ): Promise<IKodyRule | null> {
+        if (expectedInput) {
+            const saved =
+                await this.kodyRulesRepository.updateRuleFieldsByOrganization(
+                    organizationId,
+                    ruleId,
+                    fields,
+                    expectedInput,
+                );
+            return saved as IKodyRule | null;
+        }
         const updated =
             await this.kodyRulesRepository.updateRuleFieldsByOrganization(
                 organizationId,
@@ -1170,15 +1215,21 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         detector: IKodyRuleDetector | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
-        return this.updateSingleRuleFields(organizationId, ruleId, {
-            // Pass `null` through as-is: the repository skips only `undefined`,
-            // so `detector: null` writes `$set rules.$.detector = null` and
-            // clears a stale detector. `?? undefined` here would silently no-op
-            // the clear and leave the old regex firing forever.
-            detector: detector,
-            updatedAt: new Date(),
-        });
+        return this.updateSingleRuleFields(
+            organizationId,
+            ruleId,
+            {
+                // Pass `null` through as-is: the repository skips only `undefined`,
+                // so `detector: null` writes `$set rules.$.detector = null` and
+                // clears a stale detector. `?? undefined` here would silently no-op
+                // the clear and leave the old regex firing forever.
+                detector: detector,
+                updatedAt: new Date(),
+            },
+            expectedInput,
+        );
     }
 
     /**
@@ -1231,7 +1282,16 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         contextNeed: IKodyRuleContextNeed | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
+        if (expectedInput) {
+            return this.updateSingleRuleFields(
+                organizationId,
+                ruleId,
+                { contextNeed, updatedAt: new Date() },
+                expectedInput,
+            );
+        }
         const existing = await this.findByOrganizationId(organizationId);
         if (!existing) {
             throw new NotFoundException(
@@ -1285,7 +1345,16 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         fileScope: IKodyRuleFileScope | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
+        if (expectedInput) {
+            return this.updateSingleRuleFields(
+                organizationId,
+                ruleId,
+                { fileScope, updatedAt: new Date() },
+                expectedInput,
+            );
+        }
         const existing = await this.findByOrganizationId(organizationId);
         if (!existing) {
             throw new NotFoundException(
@@ -1338,11 +1407,17 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
         ruleId: string,
         compileAttempt: IKodyRuleCompileAttempt | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null> {
-        return this.updateSingleRuleFields(organizationId, ruleId, {
-            compileAttempt: compileAttempt,
-            updatedAt: new Date(),
-        });
+        return this.updateSingleRuleFields(
+            organizationId,
+            ruleId,
+            {
+                compileAttempt: compileAttempt,
+                updatedAt: new Date(),
+            },
+            expectedInput,
+        );
     }
 
     async updateRuleWithLogging(
@@ -1373,10 +1448,11 @@ export class KodyRulesService implements IKodyRulesService {
             kodyRule.severity ?? existingRule.severity
         )?.toLowerCase();
 
+        const detectorPatch = detectorEligibilityPatch(existingRule, kodyRule);
         const updatedRule = {
             ...existingRule,
             ...kodyRule,
-            ...detectorEligibilityPatch(existingRule, kodyRule),
+            ...detectorPatch,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
             updatedAt: new Date(),
         };
@@ -1403,7 +1479,10 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
-            updatedRule,
+            {
+                ...changedRuleFields(existingRule, updatedRule),
+                ...detectorPatch,
+            },
         );
 
         if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {

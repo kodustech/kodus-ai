@@ -192,11 +192,14 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
             }
 
             if (detector) {
-                await this.kodyRulesService.updateRuleDetector(
+                const saved = await this.kodyRulesService.updateRuleDetector(
                     orgId,
                     ruleUuid,
                     detector,
+                    rule,
                 );
+                if (saved === null)
+                    return { compiled: false, declineReason: 'rule-changed' };
                 this.logger.log({
                     message: `Compiled T0 detector for rule ${ruleUuid}`,
                     context: KodyRuleDetectorCompilerService.name,
@@ -227,6 +230,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                     orgId,
                     ruleUuid,
                     null,
+                    rule,
                 );
             }
             this.logger.log({
@@ -302,6 +306,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                     inferredAt: new Date(),
                     model,
                 },
+                rule,
             );
             return {
                 need: saved?.contextNeed?.need ?? need,
@@ -368,6 +373,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                           model,
                       }
                     : null,
+                rule,
             );
         } catch (error) {
             this.logger.warn({
@@ -418,6 +424,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                         cosmeticSource: attempt.cosmeticSource,
                     }),
                 },
+                rule,
             );
         } catch (error) {
             this.logger.warn({
