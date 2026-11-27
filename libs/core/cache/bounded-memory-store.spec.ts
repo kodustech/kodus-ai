@@ -77,7 +77,7 @@ describe('BoundedMemoryStore', () => {
     // validate-prerequisites dedupes the "review skipped (no license)" notice
     // at one per author per day through this cache. Evicted along with the
     // file contents, the author got it again every few hours.
-    it('keeps a small flag for its TTL while large values pour through', async () => {
+    it('keeps a small flag while large values pour through', async () => {
         const store = new BoundedMemoryStore(bounds);
         const cache = createCache({ stores: [new Keyv({ store })] });
         await cache.set('notif-rate:review_skipped_no_license:org:author', true, 86_400_000);
@@ -109,5 +109,34 @@ describe('BoundedMemoryStore', () => {
         store.set('b', 'v');
 
         expect([...store.keys()]).toEqual(['a', 'b']);
+    });
+
+    it('holds maxChars even when small values alone pass it', () => {
+        const store = new BoundedMemoryStore({ ...bounds, maxChars: 2_000 });
+        for (let i = 0; i < 5; i++) store.set(`flag-${i}`, 'x'.repeat(900));
+
+        expect([...store.keys()]).toEqual(['flag-3', 'flag-4']);
+        expect(store.heldChars).toBe(1_800);
+    });
+
+    it('evicts the large value nobody read, not the one just read', () => {
+        const store = new BoundedMemoryStore({ ...bounds, maxChars: 2 * SMALL_ENTRY_CHARS });
+        store.set('big-1', 'x'.repeat(SMALL_ENTRY_CHARS));
+        store.set('big-2', 'x'.repeat(SMALL_ENTRY_CHARS));
+        store.get('big-1');
+        store.set('big-3', 'x'.repeat(SMALL_ENTRY_CHARS));
+
+        expect([...store.keys()].sort()).toEqual(['big-1', 'big-3']);
+    });
+
+    it('forgets a large key once it is replaced by a small value', () => {
+        const store = new BoundedMemoryStore({ ...bounds, maxChars: 2 * SMALL_ENTRY_CHARS });
+        store.set('k', 'x'.repeat(SMALL_ENTRY_CHARS));
+        store.set('k', 'v');
+        store.set('big-1', 'x'.repeat(SMALL_ENTRY_CHARS));
+        store.set('big-2', 'x'.repeat(SMALL_ENTRY_CHARS));
+
+        // Over budget by one character: a large value goes, not the small `k`.
+        expect([...store.keys()]).toEqual(['k', 'big-2']);
     });
 });

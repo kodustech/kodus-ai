@@ -19,8 +19,11 @@
  * The character budget evicts only large values. The same cache holds small
  * flags that must last their TTL, such as the once-a-day "review skipped (no
  * license)" notice dedupe: evicted with the file contents, the author got the
- * notice again every few hours. Small entries leave by the entry cap alone,
- * which bounds them at maxEntries × SMALL_ENTRY_CHARS.
+ * notice again every few hours. Small entries leave by the entry cap, and by
+ * size only once no large value is left; with the global bounds that never
+ * happens (50k × 1,024 is 51M of 256M characters), but `maxChars` holds
+ * either way. Large keys keep their own order, so the size budget never walks
+ * past the small ones.
  */
 
 /** Values below this size are evicted only by the entry cap, not by size. */
@@ -34,6 +37,8 @@ export interface BoundedMemoryStoreOptions {
 
 export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
     private chars = 0;
+    /** Keys of values of at least SMALL_ENTRY_CHARS, least recently used first. */
+    private readonly large = new Set<string>();
 
     constructor(private readonly opts: BoundedMemoryStoreOptions) {
         super();
@@ -55,11 +60,21 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         if (size > this.opts.maxEntryChars) return this;
         super.set(key, value);
         this.chars += size;
-        for (const [oldest, held] of this.entries()) {
-            const overEntries = this.size > this.opts.maxEntries;
-            if (!overEntries && this.chars <= this.opts.maxChars) break;
+        if (size >= SMALL_ENTRY_CHARS) this.large.add(key);
+        // The size budget takes large values first.
+        for (const oldest of this.large) {
+            if (this.chars <= this.opts.maxChars) break;
             if (oldest === key) continue;
-            if (!overEntries && sizeOf(held) < SMALL_ENTRY_CHARS) continue;
+            this.delete(oldest);
+        }
+        // The entry cap, and the size budget if small values alone pass it.
+        for (const oldest of this.keys()) {
+            if (
+                this.size <= this.opts.maxEntries &&
+                this.chars <= this.opts.maxChars
+            )
+                break;
+            if (oldest === key) continue;
             this.delete(oldest);
         }
         return this;
@@ -76,6 +91,7 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         if (value !== undefined) {
             super.delete(key);
             super.set(key, value);
+            if (this.large.delete(key)) this.large.add(key);
         }
         return value;
     }
@@ -83,11 +99,13 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
     override delete(key: string): boolean {
         if (!super.has(key)) return false;
         this.chars -= sizeOf(super.get(key) as V);
+        this.large.delete(key);
         return super.delete(key);
     }
 
     override clear(): void {
         super.clear();
+        this.large.clear();
         this.chars = 0;
     }
 }
