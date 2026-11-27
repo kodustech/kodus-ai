@@ -150,11 +150,12 @@ export function select(i: SelectInput): Selection {
 
     // Specs that always run, whatever the diff reaches: nothing on main proves them safe to skip, or the recipe says so.
     const passed = i.passedOnMain ? new Set(i.passedOnMain) : undefined;
-    if (passed && all.length > 0 && all.every((s) => !passed.has(s))) return full(all, 'no_main_pass', 'no spec has a recorded pass on main yet');
     const unproven = passed ? all.filter((s) => !passed.has(s)) : [];
     const pinned = all.filter((s) => isUnskippable(s, i.unskippable));
     const always = new Set([...unproven, ...pinned]);
     const guarded = (base: Extract<Selection, { mode: 'selected' }>): Selection => {
+        // After the map's own checks: with no spec proven on main nothing can be skipped, so the whole suite, whatever the map says.
+        if (passed && all.length > 0 && unproven.length === all.length) return full(all, 'no_main_pass', 'no spec has a recorded pass on main yet');
         const specs = all.filter((s) => always.has(s) || base.specs.includes(s));
         const added = specs.length - base.specs.length;
         if (added === 0) return base;

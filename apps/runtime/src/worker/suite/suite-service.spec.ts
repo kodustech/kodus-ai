@@ -37,7 +37,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
 
 const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
 
-function world(over: { recipe?: string | null; files?: Array<{ path: string; content: string }>; machineSize?: { memoryMb: number; cpus: number }; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
+function world(over: { recipe?: string | null; files?: Array<{ path: string; content: string }>; machineSize?: { memoryMb: number; cpus: number }; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; baselines?: InMemorySuiteBaselines; diffSince?: SuiteServiceDeps['diffSince']; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
     const published: string[] = [];
     const finishedStates: string[] = [];
     const clock = new SuiteClock();
@@ -62,7 +62,9 @@ function world(over: { recipe?: string | null; files?: Array<{ path: string; con
     };
     const exec2 = async (c: string, r: ExecRequest) => (r.stepId.endsWith('-list') ? { stepId: r.stepId, exitCode: 0, stdout: listing, stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const } : cell.exec(c, r));
     const runs = new InMemorySuiteRuns(clock);
-    const baselines = new InMemorySuiteBaselines();
+    const baselines = over.baselines ?? new InMemorySuiteBaselines();
+    // A map is recorded by a baseline of main, in which every spec passed: the guard of selection (a spec with no pass on main always runs) finds them.
+    if (over.map && !over.baselines) void baselines.record({ organizationId: ORG, environmentId: ENV, mainSha: over.map.mainSha, suiteDigest: over.map.suiteDigest, status: 'complete', specs: Object.fromEntries(Object.keys(over.map.specs).map((p) => [p, { status: 'passed' as const, durationMs: 1 }])), finishedAt: new Date(0) });
     const demand = new FakeSuiteDemand(clock);
     const deps: SuiteServiceDeps = {
         setups: { get: async () => (over.setupMissing ? null : ({ environmentId: ENV, organizationId: ORG, imageId: 'img-1', expose: [], recipe: { path: '.kodus/workspace.yaml', sha: MAIN, state: over.recipe === null ? 'absent' : 'found', content: over.recipe ?? RECIPE, digest: 'rd-1', ...(over.files ? { files: over.files } : {}) }, ...(over.machineSize ? { machineSize: over.machineSize } : {}) } as never)) },
@@ -79,6 +81,7 @@ function world(over: { recipe?: string | null; files?: Array<{ path: string; con
         templates: { hasReady: async () => over.ready ?? true },
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
+        ...(over.diffSince ? { diffSince: over.diffSince } : {}),
         ...(over.maps ? { maps: over.maps } : over.map ? { maps: { newest: async () => over.map, record: async () => ({ stored: true }) } } : {}),
         ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void (published.push(`finished:${r.status}:${s.cwd}`), 'state' in r && finishedStates.push(r.state)), cancelled: async () => void published.push('cancelled') } } : {}),
     };
@@ -304,6 +307,54 @@ describe('running a suite as a workflow', () => {
             expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2, reachedBy: { 'src/x.ts': ['cypress/e2e/a.cy.ts'] } });
         });
 
+        // Behavior: a spec that never passed on main is not skipped just because the change does not reach it.
+        it('runs a spec with no recorded pass on main even when the change does not reach it', async () => {
+            const map = mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] });
+            const w = world({ map });
+            await w.baselines.record({ organizationId: ORG, environmentId: ENV, mainSha: map.mainSha, suiteDigest: map.suiteDigest, status: 'incomplete', specs: {}, finishedAt: new Date(0) });
+            const failing = new InMemorySuiteBaselines();
+            await failing.record({ organizationId: ORG, environmentId: ENV, mainSha: map.mainSha, suiteDigest: map.suiteDigest, status: 'complete', specs: { 'cypress/e2e/a.cy.ts': { status: 'passed', durationMs: 1 }, 'cypress/e2e/b.cy.ts': { status: 'failed', durationMs: 1 } }, finishedAt: new Date(0) });
+            const w2 = world({ map, baselines: failing });
+            await w2.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect(w2.cell.starts.flatMap((x) => x.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+        });
+
+        // Behavior: with no spec passing on main at all, nothing is proven skippable: the whole suite, and the reason says so.
+        it('runs the whole suite, with its reason, when no spec has a recorded pass on main', async () => {
+            const map = mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] });
+            const w = world({ map, baselines: new InMemorySuiteBaselines() });
+            await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'no_main_pass', total: 2 });
+        });
+
+        // Behavior: the recipe's unskippable list and full_run_files reach the selection.
+        it('runs an unskippable spec of the recipe, and the whole suite when the diff passes full_run_files', async () => {
+            const map = mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] });
+            const w = world({ recipe: `${RECIPE}  unskippable: ["cypress/e2e/b.*"]\n  full_run_files: 3\n`, map });
+            await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect(w.cell.starts.flatMap((x) => x.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+            const wide = world({ recipe: `${RECIPE}  full_run_files: 2\n`, map });
+            await wide.service.run(request({ changedFiles: ['src/x.ts', 'src/a.ts', 'src/b.ts'] }), passthrough);
+            expect((await wide.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'huge_diff', total: 2 });
+        });
+
+        // Behavior: when the merge base has no map, the diff is taken from the map's own main commit, so a file main changed since selects its specs.
+        it('diffs against the last green main commit when the merge base has no map', async () => {
+            const GREEN = 'd'.repeat(40);
+            const map = { ...mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }), mainSha: GREEN };
+            const asked: Array<{ base: string; head: string }> = [];
+            const w = world({ map, diffSince: async (r) => (asked.push({ base: r.base, head: r.head }), ['src/x.ts', 'src/y.ts']) });
+            await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect(asked).toEqual([{ base: GREEN, head: PR }]);
+            expect(w.cell.starts.flatMap((x) => x.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+            // Without a way to read that diff, or when it fails, nothing changed: a map of a commit main's history cannot place is stale.
+            for (const diffSince of [undefined, async () => undefined, async () => { throw new Error('compare failed'); }]) {
+                const w2 = world({ map, ...(diffSince ? { diffSince } : {}) });
+                await w2.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+                expect((await w2.runs.get(ORG, 'sr-1'))?.selection).toMatchObject({ mode: 'full', reason: 'map_stale' });
+            }
+        });
+
         it('a change that reaches no spec ends the run green without a shard host, and says none ran', async () => {
             const w = world({ recipe: `${RECIPE}  ignore: ["docs/**"]\n`, map: mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }) });
             const out = await w.service.run(request({ changedFiles: ['docs/a.md'] }), passthrough);
@@ -395,7 +446,7 @@ describe('running a suite as a workflow', () => {
             await base.service.run(request({ suiteRunId: 'sr-b', key: 'sr-b', mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined }), passthrough);
             expect(base.cell.starts.map((x) => x.specs.length)).toEqual([1, 1]);
             expect((await maps.newest(ORG, ENV))?.specs).toEqual({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] });
-            const pr = world({ maps, specs: covers });
+            const pr = world({ maps, baselines: base.baselines, specs: covers });
             await pr.service.run(request({ changedFiles: ['src/y.ts'] }), passthrough);
             expect(pr.cell.starts.flatMap((x) => x.specs)).toEqual(['cypress/e2e/b.cy.ts']);
             expect(pr.cell.starts.some((x) => 'NODE_V8_COVERAGE' in x.env)).toBe(false);

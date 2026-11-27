@@ -3,7 +3,7 @@ import { type Claim, type RecipeForClaim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
-import { BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, diffReach, type DiffReach, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
+import { BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, diffReach, type DiffReach, diffBaseFor, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import type { CoverageMapRecord } from './coverage-collector';
@@ -79,6 +79,11 @@ export interface SuiteServiceDeps {
      * one. Absent: a baseline collects no coverage and every PR run is the whole suite with the reason `map_missing`.
      */
     maps?: { record(m: CoverageMapRecord): Promise<{ stored: boolean }>; newest(organizationId: string, environmentId: string): Promise<StoredCoverageMap | undefined> };
+    /**
+     * The files that changed between two commits of the repository (the PR's diff, but from the last green main commit instead of the
+     * merge base). Used when the merge base has no coverage map: `undefined` (or absent) keeps the merge-base diff the product sent.
+     */
+    diffSince?(req: { organizationId: string; environmentId: string; repositoryId: string; base: string; head: string }): Promise<readonly string[] | undefined>;
     headroom?(): Promise<number>;
     /** The baseline request a baseline run answers: marked started once the workflow holds it, so the product does not issue it again. */
     baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
@@ -264,7 +269,8 @@ export class SuiteService {
         if (cmd.mode === 'shadow') return planSuiteRun({ allSpecs: all, suiteDigest: digest, mergeBase: cmd.mergeBase!, prSha: cmd.prSha!, forceFull: 'shadow' });
         if (cmd.mode === 'baseline') return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport, reach: undefined as DiffReach | undefined };
         const stored = await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
-        const map = stored ? this.mapInputOf(stored, cmd) : undefined;
+        const widened = await this.diffFromMap(cmd, stored);
+        const map = stored ? this.mapInputOf(stored, cmd, widened !== undefined) : undefined;
         if (cmd.specs) {
             // A retry runs the specs it names, but is judged on the same diff as the run it retries.
             const reach = diffReach({ allSpecs: all, suiteDigest: digest, mergeBase: cmd.mergeBase!, prSha: cmd.prSha!, ...(cmd.changedFiles ? { changed: cmd.changedFiles } : {}), ...(map ? { map } : {}), ignore: s.suite.ignore, ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}) });
@@ -274,6 +280,7 @@ export class SuiteService {
         const previous = this.previousOf(cmd, prev);
         // The brake of the shadow check: off, or the whole suite after a miss; the whole suite is then the plan whatever the map says.
         const brake = await this.brakeOf(cmd, prev, first);
+        const passedOnMain = await this.passedOnMain(cmd, digest, stored?.mainSha);
         return planSuiteRun({
             ...(brake ? { forceFull: brake } : {}),
             allSpecs: all,
@@ -281,6 +288,10 @@ export class SuiteService {
             mergeBase: cmd.mergeBase!,
             prSha: cmd.prSha!,
             ...(cmd.changedFiles ? { changed: cmd.changedFiles } : {}),
+            ...(widened ? { selectionChanged: widened } : {}),
+            ...(passedOnMain ? { passedOnMain } : {}),
+            unskippable: s.suite.unskippable,
+            ...(s.suite.fullRunFiles !== undefined ? { fullRunFiles: s.suite.fullRunFiles } : {}),
             ...(cmd.deltaFiles ? { deltaFiles: cmd.deltaFiles } : {}),
             ...(previous ? { previous } : {}),
             ...(map ? { map } : {}),
@@ -299,9 +310,32 @@ export class SuiteService {
      * The stored map as selection reads it (D12). How far behind main it is comes from the history the run is judged on: the map's
      * commit is main's head (the template's sha) or the merge base; any other commit cannot be placed, and an unplaced map is stale.
      */
-    private mapInputOf(m: StoredCoverageMap, cmd: RuntimeSuiteRequested): CoverageMapInput {
+    private mapInputOf(m: StoredCoverageMap, cmd: RuntimeSuiteRequested, diffedFromMap = false): CoverageMapInput {
         const at = mainHistoryOf(cmd).indexOf(m.mainSha);
-        return { suiteDigest: m.suiteDigest, commitsBehindMain: at >= 0 ? at : MAP_MAX_COMMITS_BEHIND + 1, ageMs: Math.max(0, this.d.clock.now() - m.finishedAt.getTime()), specs: m.specs };
+        // A diff taken from the map's own commit already holds everything main changed since: the map is not behind it.
+        return { suiteDigest: m.suiteDigest, commitsBehindMain: diffedFromMap ? 0 : at >= 0 ? at : MAP_MAX_COMMITS_BEHIND + 1, ageMs: Math.max(0, this.d.clock.now() - m.finishedAt.getTime()), specs: m.specs };
+    }
+
+    /**
+     * The diff from the last green main commit (the newest coverage map's), when the merge base has no map and the host can read it;
+     * undefined keeps the merge-base diff the product sent.
+     */
+    private async diffFromMap(cmd: RuntimeSuiteRequested, stored: StoredCoverageMap | undefined): Promise<readonly string[] | undefined> {
+        if (!stored || !this.d.diffSince || !cmd.mergeBase || !cmd.prSha || !cmd.changedFiles) return undefined;
+        const base = diffBaseFor(cmd.mergeBase, stored.mainSha);
+        if (base === cmd.mergeBase) return undefined;
+        return this.d.diffSince({ organizationId: cmd.organizationId, environmentId: cmd.environmentId, repositoryId: cmd.repositoryId, base, head: cmd.prSha }).catch(() => undefined);
+    }
+
+    /**
+     * The specs that passed in the nearest complete baseline of main for this suite (main's head, the merge base, or the commit of the
+     * coverage map the run selects with): a spec outside it is never skipped. Empty when no baseline is found (nothing is proven);
+     * undefined when no baseline store is wired (the guard is off).
+     */
+    private async passedOnMain(cmd: RuntimeSuiteRequested, digest: string, mapSha: string | undefined): Promise<ReadonlySet<string> | undefined> {
+        if (!this.d.baselines) return undefined;
+        const b = await this.d.baselines.findAmong(cmd.organizationId, cmd.environmentId, digest, [...mainHistoryOf(cmd), ...(mapSha ? [mapSha] : [])]);
+        return new Set(Object.entries(b?.specs ?? {}).filter(([, r]) => r.status === 'passed').map(([spec]) => spec));
     }
 
     private async previousRunOf(cmd: RuntimeSuiteRequested) {

@@ -265,7 +265,23 @@ map per environment plus the one before.
 4. **any changed source file that no spec covers in the map and that has no covering importer** (unknown means run
    all, never none), except files proven non-runtime by pattern (docs, `*.md`, tests of other layers, assets the app
    does not bundle), listed in the recipe's `suite.ignore`;
-5. the map is missing, older than `N` main commits (D12), or has another `suiteDigest`.
+5. the map is missing, older than `N` main commits (D12), or has another `suiteDigest`;
+6. the diff is huge: more than `suite.full_run_files` changed files that `suite.ignore` does not cover (default 300,
+   reason `huge_diff`);
+7. no spec has a recorded pass on main (the nearest complete baseline of main's head, the merge base or the map's commit,
+   reason `no_main_pass`).
+
+**Specs that always run.** Beside what the map selects, a run adds every spec with no recorded pass on main (a new spec,
+or one that failed in that baseline: nothing shows a skip is safe) and every spec `suite.unskippable` names, as a glob of
+the spec path or as `@tag`, which matches a whole part of the path (`login.smoke.cy.ts` and `smoke/login.cy.ts` are
+`@smoke`). The check's text says how many were added and why. The reach of the diff that classifies a red spec
+(9.3) does not grow with them: they run, they are not "reached by the change".
+
+**The diff when the merge base has no map.** The map belongs to the last green main commit that recorded one. When the
+merge base is another commit, selection reads `diff(thatCommit, prSha)` (`diffBaseFor`) when the worker's `diffSince` can
+produce it, so what main changed in between selects its specs too, and the map is not counted as behind. Without
+`diffSince` or when it fails, selection reads the merge-base diff and the freshness rules above apply as before. The
+reach used for classification stays the pull request's own diff. `diffSince` has no production implementation yet.
 
 The full suite always runs on main (baseline), and a PR run is also forced full when the PR turns ready for review (D13),
 so a draft that iterated on selections still gets one full pass before a human merges. The check says why:

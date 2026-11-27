@@ -38,6 +38,10 @@ export const FULL_REASON_TEXT: Record<string, string> = {
     selection_miss:
         "a recent double-check caught a failing spec Kody had skipped, so every spec runs for a while",
     selection_off: "spec selection is off for this environment",
+    huge_diff:
+        "this pull request changes too many files for Kody to trust what it learned about which code each spec exercises",
+    no_main_pass:
+        "Kody has not yet seen these specs pass on main, so it cannot tell which ones are safe to skip",
 };
 
 const reasonText = (reason: string | undefined) =>

@@ -16,6 +16,10 @@ export interface ResolvedSuite {
     specsGlob: string;
     /** `suite.ignore`: files that never select specs. */
     ignore: readonly string[];
+    /** `suite.unskippable`: spec globs or @tags that always run. */
+    unskippable: readonly string[];
+    /** `suite.full_run_files`: more changed files than this is the whole suite; absent: the selection's default. */
+    fullRunFiles?: number;
     /** False: no run on main (a repository whose suite only runs in CI mode). */
     baseline: boolean;
 }
@@ -42,6 +46,8 @@ export function suiteConfigOf(recipe: Pick<Recipe, 'suite'>, opts: { origin?: Se
         },
         specsGlob: s.specs,
         ignore: s.ignore,
+        unskippable: s.unskippable,
+        ...(s.fullRunFiles !== undefined ? { fullRunFiles: s.fullRunFiles } : {}),
         baseline: s.baseline,
     };
 }

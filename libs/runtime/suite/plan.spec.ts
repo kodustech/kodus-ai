@@ -142,3 +142,35 @@ describe('the specs the diff reaches (diff reach)', () => {
         expect(planSuiteRun(input({ map: m, forceFull: 'shadow' })).reach).toBeUndefined();
     });
 });
+
+describe('the guards on the request path', () => {
+    const m = map({ 'a.cy.ts': ['src/x.ts'], 'b.cy.ts': ['src/y.ts'], 'c.cy.ts': ['src/z.ts'] });
+
+    // Behavior: the specs the guards add run, but the diff's reach (what decides whether a red spec is a regression) does not grow with them.
+    it('adds the unproven and unskippable specs to what runs, and leaves the reach of the diff alone', () => {
+        const p = planSuiteRun(input({ map: m, passedOnMain: ['a.cy.ts', 'b.cy.ts'], unskippable: ['b.cy.ts'] }));
+        expect(p.specs).toEqual(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']);
+        expect(p.selection).toMatchObject({ mode: 'selected', selected: 3, total: 3 });
+        expect(p.reach).toEqual({ specs: ['a.cy.ts'] });
+    });
+
+    // Behavior: a re-push with the same new commits still runs the specs with no pass on main.
+    it('keeps the guards on a re-push', () => {
+        const p = planSuiteRun(input({ map: m, passedOnMain: ['a.cy.ts', 'b.cy.ts'], previous: { prSha: 'q'.repeat(40), mergeBase: 'm'.repeat(40), mode: 'selected', green: true, failures: [] }, deltaFiles: ['src/y.ts'] }));
+        expect(p.specs).toEqual(['b.cy.ts', 'c.cy.ts']);
+    });
+
+    // Behavior: a diff past full_run_files is the whole suite, and every spec is reached by it.
+    it('a huge diff runs the whole suite and reaches every spec', () => {
+        const p = planSuiteRun(input({ map: m, changed: ['src/x.ts', 'src/y.ts', 'src/z.ts'], fullRunFiles: 2 }));
+        expect(p.selection).toEqual({ mode: 'full', reason: 'huge_diff', total: 3 });
+        expect(p.reach).toEqual({ specs: ALL });
+    });
+
+    // Behavior: selection reads the diff from the last green main commit when the worker gave one, while the reach keeps the PR's own diff.
+    it('selects over the wider diff and reaches over the pull request diff', () => {
+        const p = planSuiteRun(input({ map: m, changed: ['src/x.ts'], selectionChanged: ['src/x.ts', 'src/y.ts'] }));
+        expect(p.specs).toEqual(['a.cy.ts', 'b.cy.ts']);
+        expect(p.reach).toEqual({ specs: ['a.cy.ts'] });
+    });
+});

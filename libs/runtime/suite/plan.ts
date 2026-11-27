@@ -14,6 +14,11 @@ export interface SuitePlanInput {
     prSha: string;
     /** `diff(mergeBase, prSha)`; absent: the product could not give it (unknown, never "nothing changed"). */
     changed?: readonly string[];
+    /**
+     * `diff(lastGreenMain, prSha)` when the merge base has no coverage map (`diffBaseFor`): what selection reads instead of `changed`,
+     * so what main changed since the map is in it. `diffReach` keeps `changed`: it asks what the pull request itself reaches.
+     */
+    selectionChanged?: readonly string[];
     /** `diff(previous.prSha, prSha)` for a re-push; absent: unknown. */
     deltaFiles?: readonly string[];
     /** The earlier run of this PR, for the re-push rule. */
@@ -112,7 +117,7 @@ function planSpecs(i: SuitePlanInput): SuitePlan {
             if (s.mode === 'full') reason = s.reason;
             return s;
         };
-        const r = planRepush({ previous: i.previous, mergeBase: i.mergeBase, prSha: i.prSha, allSpecs: all, delta: () => seen(selectOver(i.deltaFiles)), fromMergeBase: () => seen(selectOver(i.changed)) });
+        const r = planRepush({ previous: i.previous, mergeBase: i.mergeBase, prSha: i.prSha, allSpecs: all, delta: () => seen(selectOver(i.deltaFiles)), fromMergeBase: () => seen(selectOver(i.selectionChanged ?? i.changed)) });
         return {
             specs: r.specs,
             failedBefore: r.failedBefore,
@@ -121,7 +126,7 @@ function planSpecs(i: SuitePlanInput): SuitePlan {
             text: r.text,
         };
     }
-    const s = selectOver(i.changed);
+    const s = selectOver(i.selectionChanged ?? i.changed);
     if (s.mode === 'full') return { specs: all, failedBefore: [], diffCoverage: {}, selection: { mode: 'full', reason: s.reason, total }, text: s.text };
     return { specs: s.specs, failedBefore: [], diffCoverage: s.diffCoverage, selection: s.specs.length ? { mode: 'selected', selected: s.specs.length, total, reachedBy: s.reachedBy } : { mode: 'none', total }, text: s.text };
 }
