@@ -269,3 +269,42 @@ describe('carryOver when the task changed', () => {
         ).toBeUndefined();
     });
 });
+
+describe('taskTextHash and artifact fences', () => {
+    const task = (description: string) => ({
+        tracker: 'github',
+        id: '#1',
+        title: 'T',
+        description,
+    });
+    const fenced = (name: string, line: string) =>
+        `Body.\n\n<artifact_data_${name}>\n> ${line}\n</artifact_data_${name}>`;
+
+    it('hashes the same issue the same way whatever the fence names', () => {
+        expect(
+            taskTextHash(task(fenced('aaaaaaaaaaaaaaaa', 'Returns 422.'))),
+        ).toBe(taskTextHash(task(fenced('bbbbbbbbbbbbbbbb', 'Returns 422.'))));
+    });
+
+    it('hashes content that differs inside an artifact_data token differently', () => {
+        expect(
+            taskTextHash(
+                task(
+                    fenced(
+                        'aaaaaaaaaaaaaaaa',
+                        'See artifact_data_1111111111111111',
+                    ),
+                ),
+            ),
+        ).not.toBe(
+            taskTextHash(
+                task(
+                    fenced(
+                        'aaaaaaaaaaaaaaaa',
+                        'See artifact_data_2222222222222222',
+                    ),
+                ),
+            ),
+        );
+    });
+});

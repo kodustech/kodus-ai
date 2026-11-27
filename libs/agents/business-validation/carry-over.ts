@@ -196,10 +196,11 @@ export function taskTextHash(task: Task): string | undefined {
         .update(
             JSON.stringify([
                 task.title ?? '',
-                // The fence name of an artifact block is random per read.
+                // Only the fence delimiter lines carry the random name; content lines
+                // are always quoted, so they never match.
                 (task.description ?? '').replace(
-                    /artifact_data_[0-9a-f]{16}/g,
-                    'artifact_data',
+                    /^<(\/?)artifact_data_[0-9a-f]{16}>$/gm,
+                    '<$1artifact_data>',
                 ),
                 task.fields ?? {},
             ]),
