@@ -184,31 +184,6 @@ const (
 // minServiceMemMB is the least memory a service gets of a shared MemLimit.
 const minServiceMemMB = 64
 
-// serviceMem is the mem_limit each of n services gets: MemLimit, or with
-// MemShared its n-th share in whole MiB, refused under minServiceMemMB.
-func (o Options) serviceMem(n int) (string, error) {
-	if o.MemLimit == "" || !o.MemShared || n <= 1 {
-		return o.MemLimit, nil
-	}
-	total, err := memBytes(o.MemLimit)
-	if err != nil {
-		return "", fmt.Errorf("sandbox: memory limit %q: %w", o.MemLimit, err)
-	}
-	each := total / int64(n) >> 20
-	if each < minServiceMemMB {
-		return "", &RefusedError{Violations: []Violation{{"services", fmt.Sprintf("%d services share the claim's %s, under %dm each: ask the claim a larger size", n, o.MemLimit, minServiceMemMB)}}}
-	}
-	return strconv.FormatInt(each, 10) + "m", nil
-}
-
-// startedServices counts the services compose starts on the cell: the cell
-// activates no profile, so a service with one never starts (compose config
-// leaves it out), and it takes no share of the claim's memory. Should one
-// start anyway, VerifyCanonical refuses the sum of the shares.
-func startedServices(services map[string]any) int {
-	return len(startedNames(services))
-}
-
 // startedNames are the services compose starts on the cell, sorted: the
 // ones compose config lists, so the ones VerifyCanonical gives addresses to.
 // A service behind a profile gets no address and no name in extra_hosts.
@@ -303,7 +278,7 @@ var serviceKeys = map[string]bool{
 	"env_file": true, "ports": true, "expose": true, "depends_on": true, "healthcheck": true,
 	"volumes": true, "working_dir": true, "user": true, "restart": true, "labels": true,
 	"tmpfs": true, "init": true, "stop_signal": true, "stop_grace_period": true, "deploy": true,
-	"mem_limit": true, "cpus": true, "hostname": true, "platform": true, "profiles": true,
+	"mem_limit": true, "mem_reservation": true, "cpus": true, "hostname": true, "platform": true, "profiles": true,
 	"cap_drop": true, "read_only": true, "shm_size": true, "ulimits": true, "logging": true,
 	"networks": true, "pull_policy": true,
 }
@@ -363,9 +338,8 @@ var loggingOptions = map[string]bool{"max-size": true, "max-file": true, "compre
 type checker struct {
 	// addrs are the services' fixed addresses (Options.Subnet).
 	addrs map[string]netip.Addr
-	// memEach is each service's mem_limit (Options.MemLimit, or its share
-	// with MemShared).
-	memEach string
+	// mem is each service's memory (planMemory).
+	mem memPlan
 	// memSum is what VerifyCanonical read the services' limits add up to.
 	memSum int64
 	o      Options
@@ -426,7 +400,7 @@ func Apply(raw []byte, o Options) ([]byte, error) {
 		return nil, err
 	}
 	c.addrs = addrs
-	if c.memEach, err = o.serviceMem(startedServices(services)); err != nil {
+	if c.mem, err = o.planMemory(services); err != nil {
 		return nil, err
 	}
 	for _, name := range sortedKeys(services) {
@@ -960,8 +934,13 @@ func (c *checker) rewriteService(name string, svc map[string]any) {
 	}
 	delete(svc, "ports") // the observer reaches services on the claim network
 	delete(svc, "deploy")
-	if c.memEach != "" {
-		svc["mem_limit"] = c.memEach
+	if l, ok := c.mem.limit[name]; ok {
+		svc["mem_limit"] = mib(l)
+	} else if o.MemLimit != "" {
+		svc["mem_limit"] = o.MemLimit
+	}
+	if r, ok := c.mem.reserve[name]; ok {
+		svc["mem_reservation"] = mib(r)
 	}
 	if o.CPUs != "" {
 		svc["cpus"] = o.CPUs

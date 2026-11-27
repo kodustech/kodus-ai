@@ -35,7 +35,7 @@ services:
       - type: tmpfs
         target: /tmp
     depends_on: [db]
-    mem_limit: 500g
+    mem_limit: 1g
     labels:
       team: web
   db:
@@ -66,7 +66,7 @@ func TestApplyGoodCompose(t *testing.T) {
 	_ = yaml.Unmarshal(out, &doc)
 	for name, s := range doc["services"].(map[string]any) {
 		svc := s.(map[string]any)
-		if svc["runtime"] != "runsc" || svc["pids_limit"] != 2048 || svc["mem_limit"] != "4g" || svc["cpus"] != "2" {
+		if svc["runtime"] != "runsc" || svc["pids_limit"] != 2048 || svc["mem_limit"] != map[string]string{"api": "1024m", "db": "4g"}[name] || svc["cpus"] != "2" {
 			t.Fatalf("%s: %v", name, svc)
 		}
 		if so := svc["security_opt"].([]any); len(so) != 1 || so[0] != "no-new-privileges:true" {

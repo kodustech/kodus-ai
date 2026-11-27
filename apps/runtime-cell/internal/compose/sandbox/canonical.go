@@ -307,10 +307,8 @@ func (c *checker) verifyLimits(path string, svc map[string]any) {
 			c.add(path+".mem_limit", "the cell's memory limit does not parse: "+err.Error())
 		case gerr != nil || got <= 0:
 			c.add(path+".mem_limit", fmt.Sprintf("%v, not the cell's", svc["mem_limit"]))
-		case c.o.MemShared && got > want:
+		case got > want:
 			c.add(path+".mem_limit", fmt.Sprintf("%v, over the claim's %s", svc["mem_limit"], c.o.MemLimit))
-		case !c.o.MemShared && got != want:
-			c.add(path+".mem_limit", fmt.Sprintf("%v, not %s", svc["mem_limit"], c.o.MemLimit))
 		}
 		c.memSum += got
 	}

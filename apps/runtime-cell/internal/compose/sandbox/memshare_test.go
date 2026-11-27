@@ -28,8 +28,8 @@ func TestServicesShareTheClaimsMemoryWithNoAggregateParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"a", "b", "d"} {
-		if got := doc["services"].(map[string]any)[name].(map[string]any)["mem_limit"]; got != "1365m" {
-			t.Errorf("%s: mem_limit %v, want a third of 4g (the profiled services never start)", name, got)
+		if got := doc["services"].(map[string]any)[name].(map[string]any)["mem_limit"]; got != "1228m" {
+			t.Errorf("%s: mem_limit %v, want a third of 4g less the sandbox's headroom (the profiled services never start)", name, got)
 		}
 	}
 	o.MemLimit = "150m"
