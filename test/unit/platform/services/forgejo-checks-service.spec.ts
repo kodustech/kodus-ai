@@ -19,6 +19,7 @@ jest.mock('@llamaduck/forgejo-ts', () => ({
 }));
 
 import { repoCreateStatus } from '@llamaduck/forgejo-ts';
+import { createClient } from '@llamaduck/forgejo-ts/client';
 
 const mockRepoCreateStatus = repoCreateStatus as jest.Mock;
 
@@ -52,7 +53,7 @@ describe('ForgejoChecksService', () => {
         service = new ForgejoChecksService({
             getAuthDetails: mockGetAuthDetails,
             createForgejoClient: mockCreateForgejoClient,
-        } as unknown as Parameters<typeof ForgejoChecksService>[0]);
+        } as unknown as ConstructorParameters<typeof ForgejoChecksService>[0]);
     });
 
     describe('createCheckRun', () => {
@@ -81,7 +82,8 @@ describe('ForgejoChecksService', () => {
                         state: 'pending',
                         context: 'Kodus Code Review',
                         description: 'Code Review In Progress',
-                        target_url: 'https://git.example.com/myorg/myrepo/commit/abc123def456',
+                        target_url:
+                            'https://git.example.com/myorg/myrepo/commit/abc123def456',
                     }),
                 }),
             );
@@ -159,7 +161,8 @@ describe('ForgejoChecksService', () => {
                         state: 'success',
                         context: 'Kodus Code Review',
                         description: 'Code Review Complete',
-                        target_url: 'https://git.example.com/myorg/myrepo/commit/abc123def456',
+                        target_url:
+                            'https://git.example.com/myorg/myrepo/commit/abc123def456',
                     }),
                 }),
             );
@@ -180,7 +183,8 @@ describe('ForgejoChecksService', () => {
                     body: expect.objectContaining({
                         state: 'failure',
                         description: 'Code Review Failed',
-                        target_url: 'https://git.example.com/myorg/myrepo/commit/abc123',
+                        target_url:
+                            'https://git.example.com/myorg/myrepo/commit/abc123',
                     }),
                 }),
             );
@@ -201,6 +205,26 @@ describe('ForgejoChecksService', () => {
                     body: expect.objectContaining({
                         state: 'warning',
                         description: 'Code Review Completed with Warnings',
+                    }),
+                }),
+            );
+        });
+
+        it('posts a skipped review as success with the skipped description', async () => {
+            const result = await service.updateCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                checkRunId: 'sha:abc123',
+                status: CheckStatus.COMPLETED,
+                conclusion: CheckConclusion.SKIPPED,
+            });
+
+            expect(result).toBe(true);
+            expect(mockRepoCreateStatus).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.objectContaining({
+                        state: 'success',
+                        description: 'Code Review Skipped',
                     }),
                 }),
             );
@@ -252,8 +276,19 @@ describe('ForgejoChecksService', () => {
             expect(result).toBe(false);
         });
 
-        it('should return false on API error', async () => {
-            mockRepoCreateStatus.mockRejectedValue(new Error('Network error'));
+        it('returns false when the Forgejo SDK cannot post the status', async () => {
+            mockRepoCreateStatus.mockImplementationOnce(
+                jest.requireActual('@llamaduck/forgejo-ts').repoCreateStatus,
+            );
+            const transport = jest
+                .fn()
+                .mockRejectedValue(new Error('Network error'));
+            mockCreateForgejoClient.mockReturnValue(
+                createClient({
+                    baseURL: mockAuthDetail.host,
+                    adapter: transport,
+                }),
+            );
 
             const result = await service.updateCheckRun({
                 organizationAndTeamData: mockOrganizationAndTeamData,
@@ -263,6 +298,7 @@ describe('ForgejoChecksService', () => {
                 conclusion: CheckConclusion.SUCCESS,
             });
 
+            expect(transport).toHaveBeenCalledTimes(1);
             expect(result).toBe(false);
         });
     });

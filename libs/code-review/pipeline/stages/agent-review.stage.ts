@@ -1445,12 +1445,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             });
 
-            // Classify agent failures so the pipeline's final conclusion
-            // reflects them. Core agents (bug / security / performance /
-            // generalist) are the primary output — losing one of them is a
-            // critical error and should red-flag the check. Kody-rules is
-            // auxiliary: the review still has value from the core agents,
-            // so its failure is partial (maps to NEUTRAL on GitHub).
+            // Core agents supply the main review. Failures in Kody Rules
+            // and custom agents are always partial.
             const CRITICAL_AGENTS = CATEGORY_AGENTS;
             const generalistCompletion = categoryAgentsCompletion(
                 result,
@@ -1465,6 +1461,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             );
 
             const failures = result.failures ?? [];
+            const criticalFailures: typeof failures = [];
 
             // Classify against the provider that ANSWERED, not the one
             // resolved before the run. The friendly sentence names the
@@ -1478,12 +1475,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(f.error) ??
                 classifyLLMError(f.error, resolvedProvider(context, f.error));
 
+            // A clean agent can return no findings. Kody Rules can also
+            // return an empty result without taking a turn if no rule applies.
+            const anotherAgentReviewed =
+                result.suggestions.length > 0 ||
+                result.agentResults?.some((agent) => agent.turnsUsed > 0);
+
             for (const failure of failures) {
-                // A custom agent is auxiliary, like kody-rules: its failure
-                // leaves the review partial, not failed.
-                const severity = CRITICAL_AGENTS.has(failure.agentName)
-                    ? 'critical'
-                    : 'partial';
+                const errorCategory = classifyFailure(failure).category;
+                const orgOwnedKey = usesOrgOwnedKey(context, failure.error);
+                // A sibling's review still counts when the org's credits run out.
+                const partialQuotaFailure =
+                    anotherAgentReviewed &&
+                    errorCategory === LlmErrorCategory.QUOTA_EXCEEDED &&
+                    orgOwnedKey;
+                const severity =
+                    CRITICAL_AGENTS.has(failure.agentName) &&
+                    !partialQuotaFailure
+                        ? 'critical'
+                        : 'partial';
+                if (severity === 'critical') {
+                    criticalFailures.push(failure);
+                }
 
                 context = this.updateContext(context, (draft) => {
                     if (!draft.errors) {
@@ -1498,11 +1511,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
-                            errorCategory: classifyFailure(failure).category,
-                            orgOwnedKey: usesOrgOwnedKey(
-                                context,
-                                failure.error,
-                            ),
+                            errorCategory,
+                            orgOwnedKey,
                             prNumber,
                         },
                     });
@@ -1586,9 +1596,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // UNKNOWN) classification wins; fall back to any critical, then
             // any failure.
             if (failures.length > 0) {
-                const criticalFailures = failures.filter((f) =>
-                    CRITICAL_AGENTS.has(f.agentName),
-                );
                 const ranked = (
                     criticalFailures.length > 0 ? criticalFailures : failures
                 ).slice();

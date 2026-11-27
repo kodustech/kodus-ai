@@ -35,7 +35,9 @@ const conclusionStateMap: Record<CheckConclusion, string> = {
     [CheckConclusion.SUCCESS]: 'success',
     [CheckConclusion.FAILURE]: 'failure',
     [CheckConclusion.NEUTRAL]: 'warning',
-    [CheckConclusion.SKIPPED]: 'warning',
+    // A required status must pass for Forgejo to allow the merge.
+    // The commit status description still explains the skip.
+    [CheckConclusion.SKIPPED]: 'success',
 };
 
 @Injectable()
@@ -163,6 +165,7 @@ export class ForgejoChecksService implements IChecksAdapter {
 
             await repoCreateStatus({
                 client,
+                throwOnError: true,
                 path: {
                     owner: repository.owner,
                     repo: repository.name,
