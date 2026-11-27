@@ -702,11 +702,12 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
             'doc-1',
             'pending-request-1',
             expect.objectContaining({
-                title: 'Prefer strict typing',
-                rule: 'Use explicit types on exported functions and public APIs',
                 status: KodyRulesStatus.ACTIVE,
             }),
         );
+        const patch = repositoryMock.updateRule.mock.calls[0][2];
+        expect(patch).not.toHaveProperty('title');
+        expect(patch).not.toHaveProperty('rule');
         expect(result).toEqual(
             expect.objectContaining({
                 uuid: 'pending-request-1',

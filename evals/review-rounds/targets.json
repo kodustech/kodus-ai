@@ -11,6 +11,7 @@
         "claude-sonnet-5-5: 3 local runs on a725253d6 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): every measured claim right, but 1, 4 and 2 of 26 cases did not measure, over the 5% a run may leave out: the repeat check (code-review-repeat-check) and a Kody Rules shard answered with no valid structured object on this model ([structured-output] reroute-json produced no valid object), each run on P40. No floor until that is fixed: the weekly run reports it as not measured.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 32/35 and 36/36, mean 0.958. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.89.",
         "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route) (set nightly, judge gemini-3-flash-preview, --byok-reasoning=none): 32/36 and 32/36, mean 0.889. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 36, rounded down: 0.78.",
+        "controlled / full: the #2676 reversal and answered-point cases with their guards, for evals/experiment.js --step=repeat-check (controlled: did it break anything?; full: is it better?).",
         "RATCHET: when a PR moves this on purpose, recalibrate here with two runs as evidence."
     ],
     "sets": {
@@ -18,6 +19,8 @@
         "applied-advice": ["R2", "R8", "R18", "R19", "R1", "R7", "R12", "R13"],
         "repeat-boundaries": ["B1", "B2", "B3"],
         "hallucinations-2528": ["H1", "H2", "H3", "H4"],
+        "controlled": ["K2", "R20-reversal-of-applied-host-filter", "R20-check-timeout", "R21-reraise-after-reply", "R22-cross-file-reversal", "R22-check-timeout", "R23-kodus2663-round2", "R24-kodus2667-unanswered", "R25-kody-conceded", "R25-will-fix-later", "R26-security-hole-from-applied", "R27-answered-point-moved-file", "R2", "R8", "R11"],
+        "full": ["K2", "R20-reversal-of-applied-host-filter", "R20-check-timeout", "R21-reraise-after-reply", "R22-cross-file-reversal", "R22-check-timeout", "R23-kodus2663-round2", "R24-kodus2667-unanswered", "R25-kody-conceded", "R25-will-fix-later", "R26-security-hole-from-applied", "R27-answered-point-moved-file", "R2", "R8", "R11", "R20-heavy", "R21-heavy", "R21-check-parse-error", "R23-kodus2663-round2-heavy", "R24-kodus2667-round2", "R24-kodus2667-round2-heavy", "R3", "R12"],
         "nightly": [
             "K4",
             "R1",

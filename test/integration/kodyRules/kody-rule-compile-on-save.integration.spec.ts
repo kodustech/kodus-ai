@@ -1,0 +1,1130 @@
+import { createHash, randomUUID } from 'crypto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import mongoose, { Connection, Model } from 'mongoose';
+import { CliKodyRulesController } from '../../../apps/api/src/controllers/cli/cli-kody-rules.controller';
+import {
+    ruleCompileHash,
+    ruleContextNeedHash,
+} from '@libs/common/utils/kody-rules/compile-hash';
+import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
+import { KodyRulesRepository } from '@libs/ee/kodyRules/repository/kodyRules.repository';
+import { KodyRuleDetectorCompilerService } from '@libs/ee/kodyRules/service/kody-rule-detector-compiler.service';
+import { KodyRulesService } from '@libs/ee/kodyRules/service/kodyRules.service';
+import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
+import { BackfillRuleDetectorsUseCase } from '@libs/kodyRules/application/use-cases/backfill-rule-detectors.use-case';
+import {
+    IKodyRule,
+    KodyRulesStatus,
+    KodyRulesType,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    KodyRulesModel,
+    KodyRulesSchema,
+} from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
+import { LLM } from '@libs/llm/llm';
+import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
+import { TEAM_CLI_KEY_CAPABILITIES } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
+import { resolveMongoTestGate } from '../mongo-test-uri';
+
+jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
+const runModel = LLM.run as jest.Mock;
+const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
+
+(gate.shouldSkip ? describe.skip : describe)(
+    'Kody Rule compile on save (real Mongo)',
+    () => {
+        const organizationId = randomUUID();
+        const repositoryId = 'repo-1';
+        let connection: Connection;
+        let model: Model<KodyRulesModel>;
+        let repository: KodyRulesRepository;
+        let rules: KodyRulesService;
+        let compiler: KodyRuleDetectorCompilerService;
+        let cli: CliKodyRulesController;
+        let mcp: KodyRulesTools;
+        let schedule: jest.SpiedFunction<
+            CreateOrUpdateKodyRulesUseCase['scheduleDetectorCompile']
+        >;
+        let compile: jest.SpiedFunction<
+            KodyRuleDetectorCompilerService['compileAndSave']
+        >;
+
+        beforeAll(async () => {
+            connection = await mongoose
+                .createConnection(gate.mongoUri, {
+                    serverSelectionTimeoutMS: 3000,
+                })
+                .asPromise();
+            model = connection.model(KodyRulesModel.name, KodyRulesSchema);
+            repository = new KodyRulesRepository(model, undefined);
+            rules = new KodyRulesService(
+                repository,
+                new EventEmitter2(),
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+            );
+            compiler = new KodyRuleDetectorCompilerService(
+                { resolveTaskSlot: jest.fn() } as any,
+                undefined,
+                rules,
+            );
+            compile = jest.spyOn(compiler, 'compileAndSave');
+            const save = new CreateOrUpdateKodyRulesUseCase(
+                rules,
+                undefined,
+                undefined,
+                undefined,
+                { getCentralizedRepositoryIfEnabled: jest.fn() } as any,
+                undefined,
+                compiler,
+                { kodyRuleChanged: jest.fn() } as any,
+            );
+            schedule = jest.spyOn(save, 'scheduleDetectorCompile');
+            // Exercise direct saves with centralized routing and reference detection disabled.
+            jest.spyOn(
+                save as any,
+                'createCentralizedMutationIfEnabled',
+            ).mockResolvedValue(null);
+            jest.spyOn(
+                save as any,
+                'detectAndSaveReferencesAsync',
+            ).mockResolvedValue(undefined);
+            mcp = new KodyRulesTools(
+                rules,
+                {
+                    resolveDirectoryGroupFolderName: async () => undefined,
+                    createMutationPullRequestIfEnabled: async () => ({
+                        mode: 'direct',
+                    }),
+                } as any,
+                undefined,
+                save,
+            );
+            cli = new CliKodyRulesController(
+                {
+                    validateKey: async () => ({
+                        team: { uuid: 'team-1' },
+                        organization: { uuid: organizationId },
+                        config: {
+                            capabilities: [
+                                TEAM_CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE,
+                            ],
+                        },
+                    }),
+                } as any,
+                save,
+                undefined,
+            );
+        }, 30_000);
+
+        afterEach(async () => {
+            await model?.deleteMany({ organizationId });
+            runModel.mockReset();
+        });
+
+        afterAll(() => connection?.close());
+
+        async function patch(uuid: string, fields: Partial<IKodyRule>) {
+            compile.mockClear();
+            await cli.updateKodyRule(
+                { repositoryId, ...fields },
+                uuid,
+                'kodus_test',
+            );
+            // The compiler runs in the background. Wait for its writes before the next save.
+            await Promise.all(compile.mock.results.map(({ value }) => value));
+        }
+
+        async function mcpPatch(uuid: string, kodyRule: Partial<IKodyRule>) {
+            compile.mockClear();
+            schedule.mockClear();
+            await mcp
+                .updateKodyRule()
+                .execute({ organizationId, ruleId: uuid, kodyRule }, undefined);
+            await Promise.all(schedule.mock.results.map(({ value }) => value));
+        }
+
+        it('recompiles a partial MCP edit from the saved examples before the next sweep', async () => {
+            const uuid = randomUUID();
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Logging',
+                        rule: 'Use the logger.',
+                        status: KodyRulesStatus.ACTIVE,
+                        detector: { type: 'regex', pattern: 'old' },
+                        examples,
+                    },
+                ],
+            });
+            const rule = 'Use the application logger.';
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console[.]log',
+            });
+            await mcpPatch(uuid, { rule });
+            const saved = await repository.findById(uuid, organizationId);
+            expect(saved.detector?.pattern).toBe('console[.]log');
+            expect(saved.compileAttempt?.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            expect(runModel).toHaveBeenCalledTimes(1);
+
+            await mcpPatch(uuid, { severity: 'low' });
+            expect(compile).not.toHaveBeenCalled();
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+
+        it('preserves a compile completed after the MCP lookup during a metadata edit', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the application logger.';
+            const examples = [{ snippet: 'console.log(x)', isCorrect: false }];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Logging',
+                        rule,
+                        examples,
+                        status: KodyRulesStatus.ACTIVE,
+                        detector: null,
+                        compileAttempt: null,
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console[.]log',
+            });
+            const lookup = jest
+                .spyOn(rules, 'findById')
+                .mockImplementationOnce(async (id, org) => {
+                    const before = await repository.findById(id, org);
+                    await compiler.compileAndSave(
+                        { organizationId },
+                        uuid,
+                        before,
+                    );
+                    return before;
+                });
+            try {
+                await mcpPatch(uuid, { severity: 'low' });
+                const saved = await repository.findById(uuid, organizationId);
+                expect(saved.detector?.pattern).toBe('console[.]log');
+                expect(saved.compileAttempt?.sourceHash).toBe(
+                    ruleCompileHash({ rule, examples }),
+                );
+                expect(compile).toHaveBeenCalledTimes(1);
+                expect(runModel).toHaveBeenCalledTimes(1);
+            } finally {
+                lookup.mockRestore();
+            }
+        });
+
+        it.each(['createOrUpdate', 'updateRuleWithLogging'] as const)(
+            '%s reads back an undefined-only patch without a Mongo write',
+            async (method) => {
+                const input = {
+                    uuid: randomUUID(),
+                    type: KodyRulesType.STANDARD,
+                    title: 'Logger',
+                    rule: 'Use the application logger.',
+                    severity: KodyRuleSeverity.LOW,
+                    examples: [],
+                    repositoryId,
+                };
+                const updatedAt = new Date('2026-10-01T00:00:00Z');
+                await model.create({
+                    organizationId,
+                    rules: [{ ...input, path: '*.ts', updatedAt }],
+                });
+                const update = jest.spyOn(model, 'findOneAndUpdate');
+                try {
+                    for (let i = 0; i < 2; i++) {
+                        const saved = await rules[method](
+                            { organizationId },
+                            { ...input, path: undefined },
+                            { userId: 'sync', userEmail: 'sync@example.com' },
+                        );
+                        expect(saved.path).toBe('*.ts');
+                        expect(saved.updatedAt).toEqual(updatedAt);
+                    }
+                    expect(update).not.toHaveBeenCalled();
+                } finally {
+                    update.mockRestore();
+                }
+            },
+        );
+
+        it('keeps legacy cosmetic declines semantic unless the model explicitly clears the cosmetic flag', async () => {
+            const examples = [
+                { snippet: 'run()', isCorrect: false },
+                { snippet: 'run();', isCorrect: true },
+            ];
+            const phrasings = [
+                'Semicolons are required at the end of every statement in JS',
+                'Use 2-space indentation.',
+                'Avoid multiple blank lines',
+                'Always terminate statements with semicolons.',
+                'No semicolons in Ruby',
+                'Ruby code should not have semicolons at the end of lines.',
+                "Ruby doesn't need semicolons",
+                'Semicolons are not required in Ruby',
+            ];
+            const substantive =
+                'Use parameterized queries even when inputs contain single quotes.';
+            const fixtures = [...phrasings, substantive].map((rule) => ({
+                uuid: randomUUID(),
+                title: 'Team policy',
+                repositoryId,
+                rule,
+                examples,
+                status: KodyRulesStatus.ACTIVE,
+                compileAttempt: {
+                    outcome: 'declined' as const,
+                    declineReason: 'cosmetic',
+                    sourceHash: ruleCompileHash({ rule, examples }),
+                },
+                contextNeed: {
+                    source: 'author' as const,
+                    need: 'diff-only' as const,
+                },
+            }));
+            await model.create({ organizationId, rules: fixtures });
+            runModel.mockImplementation(async ({ user }) => ({
+                mechanical: true,
+                pattern: 'run\\(\\)$',
+                ...(user.includes(substantive) && { cosmetic: false }),
+            }));
+            const sweep = new BackfillRuleDetectorsUseCase(rules, compiler);
+            await sweep.execute({ organizationId });
+            const saved = (
+                await repository.findByOrganizationId(organizationId)
+            ).rules;
+            expect(runModel).toHaveBeenCalledTimes(fixtures.length);
+            for (const [{ user }] of runModel.mock.calls) {
+                expect(user.split('\n').at(-1)).toBe(
+                    'This rule was previously declined as formatting. Include "cosmetic": true for formatting or "cosmetic": false for a substantive rule.',
+                );
+            }
+            runModel.mockClear();
+            expect((await sweep.execute({ organizationId })).processed).toBe(0);
+            expect(runModel).not.toHaveBeenCalled();
+            const armed = saved.filter((r) => r.detector).map((r) => r.rule);
+            expect(armed).toStrictEqual([substantive]);
+            for (const r of saved.filter((r) => r.rule !== substantive)) {
+                expect(r.compileAttempt.declineReason).toBe('cosmetic');
+                expect(r.compileAttempt.cosmeticSource).toBe('model');
+            }
+        });
+
+        it.each([
+            'Avoid unnecessary semicolons.',
+            'Avoid trailing whitespace!!',
+        ])(
+            'disarms a settled cosmetic detector during the next nightly sweep: %s',
+            async (rule) => {
+                const uuid = randomUUID();
+                await model.create({
+                    organizationId,
+                    rules: [
+                        {
+                            uuid,
+                            repositoryId,
+                            title: 'Formatting policy',
+                            rule,
+                            status: KodyRulesStatus.ACTIVE,
+                            detector: { type: 'regex', pattern: ';' },
+                            compileAttempt: {
+                                outcome: 'compiled',
+                                sourceHash: ruleCompileHash({ rule }),
+                            },
+                            contextNeed: {
+                                source: 'compiler',
+                                need: 'full-file',
+                                sourceHash: ruleContextNeedHash({ rule }),
+                            },
+                        },
+                    ],
+                });
+                const sweep = new BackfillRuleDetectorsUseCase(rules, compiler);
+                expect(
+                    (await sweep.execute({ organizationId })).disabledCosmetic,
+                ).toBe(1);
+                const saved = await repository.findById(uuid, organizationId);
+                expect(saved.detector).toBeNull();
+                expect(saved.compileAttempt.cosmeticSource).toBe('gate');
+                expect(
+                    (await sweep.execute({ organizationId })).processed,
+                ).toBe(0);
+                expect(runModel).not.toHaveBeenCalled();
+            },
+        );
+
+        it('preserves an in-flight compile when a severity save straddles its writes', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the logger.';
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        rule,
+                        examples,
+                        title: 'Logger',
+                        detector: null,
+                        compileAttempt: null,
+                        contextNeed: null,
+                        fileScope: null,
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console\\.log',
+                contextNeed: 'full-file',
+                extensions: ['.ts'],
+            });
+            const before = await repository.findById(uuid, organizationId);
+            const write = repository.updateRule.bind(repository);
+            const interleave = jest
+                .spyOn(repository, 'updateRule')
+                .mockImplementationOnce(async (...args) => {
+                    await compiler.compileAndSave(
+                        { organizationId },
+                        uuid,
+                        before,
+                    );
+                    return write(...args);
+                });
+            try {
+                await patch(uuid, { severity: 'high' });
+            } finally {
+                interleave.mockRestore();
+            }
+            const after = await repository.findById(uuid, organizationId);
+            expect(after.severity).toBe('high');
+            expect(after.detector?.pattern).toBe('console\\.log');
+            expect(after.compileAttempt?.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            expect(after.contextNeed?.need).toBe('full-file');
+            expect(after.fileScope?.extensions).toStrictEqual(['.ts']);
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+
+        it('compares ordered example values on a guarded write and preserves an author override', async () => {
+            const uuid = randomUUID();
+            const title = 'Policy';
+            const rule = 'Prefer bound values.';
+            const examples = [
+                { isCorrect: false, snippet: 'bad()' },
+                { isCorrect: true, snippet: 'good()' },
+            ];
+            const author = {
+                need: 'full-file' as const,
+                source: 'author' as const,
+                sourceHash: 'author',
+                inferredAt: new Date(),
+            };
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title,
+                        rule,
+                        examples,
+                        contextNeed: author,
+                    },
+                ],
+            });
+            const snapshot = {
+                title,
+                rule,
+                examples: examples.map(({ snippet, isCorrect }) => ({
+                    snippet,
+                    isCorrect,
+                })),
+            };
+            const detector = { type: 'regex' as const, pattern: 'bad' };
+            expect(
+                (
+                    await rules.updateRuleDetector(
+                        organizationId,
+                        uuid,
+                        detector,
+                        snapshot,
+                    )
+                )?.detector,
+            ).toStrictEqual(detector);
+            expect(
+                await rules.updateRuleDetector(organizationId, uuid, null, {
+                    ...snapshot,
+                    examples: [...snapshot.examples].reverse(),
+                }),
+            ).toBeNull();
+            await rules.updateRuleContextNeed(
+                organizationId,
+                uuid,
+                { ...author, source: 'compiler', need: 'diff-only' },
+                snapshot,
+            );
+            const saved = await repository.findById(uuid, organizationId);
+            expect(saved.detector).toStrictEqual(detector);
+            expect(saved.contextNeed).toStrictEqual(author);
+        });
+
+        it('rejects an older compiler result that finishes after a second text edit', async () => {
+            const uuid = randomUUID();
+            const examples = [
+                { snippet: 'forbiddenA();forbiddenB()', isCorrect: false },
+                { snippet: 'allowed()', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Policy',
+                        rule: 'Initial policy',
+                        examples,
+                    },
+                ],
+            });
+            let started: () => void;
+            const firstStarted = new Promise<void>((resolve) => {
+                started = resolve;
+            });
+            let release: (output: unknown) => void;
+            const slow = new Promise((resolve) => {
+                release = resolve;
+            });
+            runModel
+                .mockImplementationOnce(() => {
+                    started();
+                    return slow;
+                })
+                .mockResolvedValueOnce({
+                    mechanical: true,
+                    pattern: 'forbiddenB',
+                    contextNeed: 'sibling-file',
+                    extensions: ['.ts'],
+                });
+            compile.mockClear();
+            await cli.updateKodyRule(
+                { repositoryId, rule: 'Reject forbiddenA.' },
+                uuid,
+                'kodus_test',
+            );
+            await firstStarted;
+            const first = compile.mock.results[0].value;
+            const rule = 'Reject forbiddenB.';
+            try {
+                await patch(uuid, { rule });
+            } finally {
+                release({
+                    mechanical: true,
+                    pattern: 'forbiddenA',
+                    contextNeed: 'full-file',
+                    extensions: ['.rb'],
+                });
+                await first;
+            }
+            const latest = await repository.findById(uuid, organizationId);
+            expect(latest.rule).toBe(rule);
+            expect(latest.detector?.pattern).toBe('forbiddenB');
+            expect(latest.compileAttempt?.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            expect(latest.contextNeed?.need).toBe('sibling-file');
+            expect(latest.fileScope?.extensions).toStrictEqual(['.ts']);
+            runModel.mockClear();
+            await patch(uuid, { rule });
+            expect(runModel).not.toHaveBeenCalled();
+        });
+
+        it('settles both compiler records after an edit and spends zero calls on ten unchanged saves', async () => {
+            const ids = Array.from({ length: 10 }, () => randomUUID());
+            await model.create({
+                organizationId,
+                rules: ids.map((uuid) => ({
+                    uuid,
+                    repositoryId,
+                    rule: 'Old body',
+                    title: 'Enrollment',
+                    contextNeed: {
+                        need: 'diff-only',
+                        source: 'compiler',
+                        sourceHash: 'old',
+                    },
+                    fileScope: {
+                        extensions: ['.rb'],
+                        source: 'compiler',
+                        sourceHash: 'old',
+                    },
+                })),
+            });
+            const rule =
+                'Check enrollment before recording a grade in TypeScript.';
+            runModel.mockResolvedValue({
+                mechanical: false,
+                contextNeed: 'full-file',
+                extensions: ['.ts', '.js'],
+            });
+
+            for (const id of ids) {
+                await patch(id, { rule });
+            }
+            const editCalls = runModel.mock.calls.length;
+            const edited = (
+                await repository.findByOrganizationId(organizationId)
+            ).rules;
+            expect(editCalls).toBe(ids.length);
+            for (const saved of edited) {
+                expect(saved.compileAttempt).toStrictEqual({
+                    outcome: 'declined',
+                    declineReason: 'not-mechanical',
+                    sourceHash: ruleCompileHash({ rule }),
+                    model: 'system',
+                    attemptedAt: expect.any(Date),
+                });
+                expect(saved.contextNeed).toStrictEqual({
+                    need: 'full-file',
+                    sourceHash: ruleContextNeedHash({ rule }),
+                    source: 'compiler',
+                    model: 'system',
+                    inferredAt: expect.any(Date),
+                });
+                expect(saved.fileScope).toStrictEqual({
+                    extensions: ['.ts', '.js'],
+                    sourceHash: createHash('sha256').update(rule).digest('hex'),
+                    source: 'compiler',
+                    model: 'system',
+                    inferredAt: expect.any(Date),
+                });
+            }
+
+            runModel.mockClear();
+            for (const id of ids) {
+                await patch(id, { rule });
+            }
+            expect(runModel).not.toHaveBeenCalled();
+            const reloaded = (
+                await repository.findByOrganizationId(organizationId)
+            ).rules;
+            const records = ({
+                uuid,
+                compileAttempt,
+                contextNeed,
+                fileScope,
+            }: Partial<IKodyRule>) => ({
+                uuid,
+                compileAttempt,
+                contextNeed,
+                fileScope,
+            });
+            expect(reloaded.map(records)).toEqual(edited.map(records));
+        });
+
+        it('preserves a context write that lands between the file scope read and write', async () => {
+            const uuid = randomUUID();
+            const rule = 'Check enrollment before recording a grade.';
+            const contextNeed = {
+                need: 'full-file',
+                source: 'compiler',
+                sourceHash: ruleContextNeedHash({ rule }),
+                inferredAt: new Date(),
+            } as const;
+            const fileScope = {
+                extensions: ['.ts'],
+                source: 'compiler' as const,
+                sourceHash: 'current',
+                inferredAt: new Date(),
+            };
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        rule,
+                        contextNeed: {
+                            ...contextNeed,
+                            need: 'diff-only',
+                            sourceHash: 'stale',
+                        },
+                    },
+                ],
+            });
+
+            // The scope writer has already read the old need. Let the context
+            // writer finish its real Mongo write before that scope write lands.
+            const write = repository.updateRule.bind(repository);
+            const interleaved = jest
+                .spyOn(repository, 'updateRule')
+                .mockImplementationOnce(async (...args) => {
+                    await rules.updateRuleContextNeed(
+                        organizationId,
+                        uuid,
+                        contextNeed,
+                    );
+                    return write(...args);
+                });
+            try {
+                await rules.updateRuleFileScope(
+                    organizationId,
+                    uuid,
+                    fileScope,
+                );
+            } finally {
+                interleaved.mockRestore();
+            }
+            const saved = await repository.findById(uuid, organizationId);
+            expect(saved.contextNeed).toEqual(contextNeed);
+            expect(saved.fileScope).toEqual(fileScope);
+        });
+
+        it('disarms a detector on a cosmetic title edit and keeps ordinary renames free', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the logger instead of console.log.';
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        rule,
+                        title: 'Use the logger',
+                        examples,
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console\\.log\\(',
+            });
+            await patch(uuid, { rule, examples });
+            const compiled = await repository.findById(uuid, organizationId);
+            expect(compiled.detector?.pattern).toBe('console\\.log\\(');
+            runModel.mockClear();
+
+            await patch(uuid, {
+                title: 'Log messages containing single quotes',
+                rule,
+            });
+            const renamed = await repository.findById(uuid, organizationId);
+            expect(renamed.detector).toEqual(compiled.detector);
+            expect(renamed.compileAttempt).toStrictEqual(
+                compiled.compileAttempt,
+            );
+            await patch(uuid, { title: 'Semicolons' });
+            const cosmetic = await repository.findById(uuid, organizationId);
+            expect(cosmetic.detector).toBeNull();
+            expect(cosmetic.compileAttempt).toStrictEqual({
+                outcome: 'declined',
+                declineReason: 'cosmetic',
+                cosmeticSource: 'gate',
+                sourceHash: ruleCompileHash({ rule, examples }),
+                model: 'system',
+                attemptedAt: expect.any(Date),
+            });
+            expect(runModel).not.toHaveBeenCalled();
+
+            await patch(uuid, { title: 'Logger policy' });
+            expect(runModel).toHaveBeenCalledTimes(1);
+            expect(
+                (await repository.findById(uuid, organizationId)).detector
+                    ?.pattern,
+            ).toBe(compiled.detector.pattern);
+
+            // Older saves could leave an active regex under a cosmetic title.
+            await repository.updateRuleFieldsByOrganization(
+                organizationId,
+                uuid,
+                { title: 'Semicolons' },
+            );
+            runModel.mockClear();
+            await patch(uuid, { rule });
+            expect(
+                (await repository.findById(uuid, organizationId)).detector,
+            ).toBeNull();
+            expect(runModel).not.toHaveBeenCalled();
+        });
+
+        it('classifies a cosmetic rename with missing context once and retries an empty response', async () => {
+            const uuid = randomUUID();
+            const rule = 'Check the policy against the full file.';
+            await model.create({
+                organizationId,
+                rules: [{ uuid, repositoryId, title: 'Review policy', rule }],
+            });
+            runModel.mockResolvedValueOnce(null).mockResolvedValueOnce({
+                mechanical: true,
+                pattern: 'policy',
+                contextNeed: 'full-file',
+                extensions: ['.ts'],
+            });
+
+            await patch(uuid, { title: 'Semicolons' });
+            const empty = await repository.findById(uuid, organizationId);
+            expect(empty.contextNeed).toBeUndefined();
+            expect(empty.compileAttempt).toBeNull();
+            await patch(uuid, { rule });
+            const classified = await repository.findById(uuid, organizationId);
+            expect(classified.contextNeed).toEqual({
+                need: 'full-file',
+                source: 'compiler',
+                sourceHash: ruleContextNeedHash({ rule }),
+                inferredAt: expect.any(Date),
+                model: 'system',
+            });
+            expect(classified.fileScope?.extensions).toEqual(['.ts']);
+            expect(classified.detector).toBeUndefined();
+            expect(classified.compileAttempt.declineReason).toBe('cosmetic');
+
+            await patch(uuid, { rule });
+            const repeated = await repository.findById(uuid, organizationId);
+            expect(repeated.compileAttempt).toEqual(classified.compileAttempt);
+            expect(repeated.contextNeed).toEqual(classified.contextNeed);
+            expect(repeated.fileScope).toEqual(classified.fileScope);
+            expect(runModel).toHaveBeenCalledTimes(2);
+        });
+
+        it('rechecks a legacy cosmetic decline once and reuses a model-confirmed decline', async () => {
+            const uuid = randomUUID();
+            const rule =
+                'Use double quotes in all translation catalog entries.';
+            const sourceHash = ruleCompileHash({ rule });
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Translation catalog',
+                        rule,
+                        compileAttempt: {
+                            outcome: 'declined',
+                            declineReason: 'cosmetic',
+                            sourceHash,
+                        },
+                        contextNeed: {
+                            need: 'diff-only',
+                            source: 'compiler',
+                            sourceHash: ruleContextNeedHash({ rule }),
+                        },
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: false,
+                cosmetic: true,
+                contextNeed: 'full-file',
+            });
+            await patch(uuid, { rule });
+            const rechecked = await repository.findById(uuid, organizationId);
+            expect(rechecked.compileAttempt.cosmeticSource).toBe('model');
+            expect(rechecked.contextNeed.need).toBe('full-file');
+            await patch(uuid, { rule });
+            expect(
+                (await repository.findById(uuid, organizationId))
+                    .compileAttempt,
+            ).toEqual(rechecked.compileAttempt);
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+
+        it('disarms a stored cosmetic detector when its context classification fails', async () => {
+            const uuid = randomUUID();
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Semicolons',
+                        rule: 'Avoid unnecessary semicolons.',
+                        detector: { type: 'regex', pattern: ';' },
+                    },
+                ],
+            });
+            runModel.mockRejectedValueOnce(new Error('provider unavailable'));
+            const stored = await repository.findById(uuid, organizationId);
+            const result = await compiler.compileAndSave(
+                { organizationId },
+                uuid,
+                stored,
+            );
+            const reloaded = await repository.findById(uuid, organizationId);
+            expect(result.declineReason).toBe('cosmetic');
+            expect(reloaded.detector).toBeNull();
+            expect(reloaded.contextNeed).toBeUndefined();
+            expect(reloaded.compileAttempt).toBeUndefined();
+        });
+
+        it.each([
+            {
+                title: 'Semicolons',
+                output: { mechanical: false },
+                outcome: 'declined',
+                source: 'gate',
+            },
+            {
+                title: 'Translation catalog',
+                output: { mechanical: false, cosmetic: true },
+                outcome: 'declined',
+                source: 'model',
+            },
+            {
+                title: 'Bind translation parameters',
+                output: {
+                    mechanical: true,
+                    cosmetic: false,
+                    pattern: 'rawValue',
+                },
+                outcome: 'compiled',
+                source: undefined,
+            },
+        ])(
+            'retries the legacy context write for $title before marking it current',
+            async ({ title, output, outcome, source }) => {
+                const uuid = randomUUID();
+                const rule =
+                    'Use double quotes in all translation catalog entries.';
+                const examples = [
+                    { snippet: 'rawValue()', isCorrect: false },
+                    { snippet: 'boundValue()', isCorrect: true },
+                ];
+                const legacyAttempt = {
+                    outcome: 'declined',
+                    declineReason: 'cosmetic',
+                    sourceHash: ruleCompileHash({ rule, examples }),
+                } as const;
+                await model.create({
+                    organizationId,
+                    rules: [
+                        {
+                            uuid,
+                            repositoryId,
+                            rule,
+                            title,
+                            examples,
+                            compileAttempt: legacyAttempt,
+                            contextNeed: {
+                                need: 'diff-only',
+                                source: 'compiler',
+                                sourceHash: ruleContextNeedHash({ rule }),
+                            },
+                        },
+                    ],
+                });
+                runModel.mockResolvedValue({
+                    ...output,
+                    contextNeed: 'full-file',
+                });
+                const contextWrite = jest.spyOn(rules, 'updateRuleContextNeed');
+                if (source === 'model') {
+                    contextWrite.mockResolvedValueOnce(null);
+                } else {
+                    contextWrite.mockRejectedValueOnce(
+                        new Error('write failed'),
+                    );
+                }
+                try {
+                    await patch(uuid, { rule });
+                    expect(contextWrite).toHaveBeenCalledTimes(1);
+                    const failed = await repository.findById(
+                        uuid,
+                        organizationId,
+                    );
+                    expect(failed.compileAttempt).toStrictEqual(legacyAttempt);
+                    expect(failed.contextNeed.need).toBe('diff-only');
+
+                    await patch(uuid, { rule });
+                    const retried = await repository.findById(
+                        uuid,
+                        organizationId,
+                    );
+                    expect(retried.contextNeed.need).toBe('full-file');
+                    expect(retried.compileAttempt.outcome).toBe(outcome);
+                    expect(retried.compileAttempt.cosmeticSource).toBe(source);
+                    await patch(uuid, { rule });
+                    const repeated = await repository.findById(
+                        uuid,
+                        organizationId,
+                    );
+                    expect(repeated.contextNeed).toStrictEqual(
+                        retried.contextNeed,
+                    );
+                    expect(repeated.compileAttempt).toStrictEqual(
+                        retried.compileAttempt,
+                    );
+                    expect(contextWrite).toHaveBeenCalledTimes(2);
+                    expect(runModel).toHaveBeenCalledTimes(2);
+                } finally {
+                    contextWrite.mockRestore();
+                }
+            },
+        );
+
+        it('preserves the detector and attempt when a CLI patch omits examples and recompiles an explicit clear', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the logger instead of console.log.';
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Use the logger',
+                        rule,
+                        examples,
+                        // A prior partial PATCH compiled with no examples.
+                        detector: null,
+                        contextNeed: {
+                            source: 'compiler',
+                            need: 'diff-only',
+                            sourceHash: ruleContextNeedHash({ rule }),
+                        },
+                        compileAttempt: {
+                            sourceHash: ruleCompileHash({ rule }),
+                            outcome: 'declined',
+                            declineReason: 'no-usable-examples',
+                        },
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console\\.log\\(',
+            });
+            await patch(uuid, { rule, examples });
+            const compiled = await repository.findById(uuid, organizationId);
+            expect(runModel).toHaveBeenCalledTimes(1);
+            expect(compiled.detector?.pattern).toBe('console\\.log\\(');
+            expect(compiled.compileAttempt.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            runModel.mockClear();
+
+            await patch(uuid, { rule });
+            const afterPatch = await repository.findById(uuid, organizationId);
+            const patchCalls = runModel.mock.calls.length;
+            runModel.mockClear();
+            await patch(uuid, { rule, examples });
+            expect({
+                patchCalls,
+                repeatCalls: runModel.mock.calls.length,
+                detector: afterPatch.detector,
+                compileAttempt: afterPatch.compileAttempt,
+                examples: afterPatch.examples,
+            }).toEqual({
+                patchCalls: 0,
+                repeatCalls: 0,
+                detector: compiled.detector,
+                compileAttempt: compiled.compileAttempt,
+                examples,
+            });
+
+            await patch(uuid, { examples: [] });
+            expect(runModel).toHaveBeenCalledTimes(1);
+            const cleared = await repository.findById(uuid, organizationId);
+            expect(cleared.examples).toEqual([]);
+            expect(cleared.detector).toBeNull();
+            expect(cleared.compileAttempt).toStrictEqual({
+                outcome: 'declined',
+                declineReason: 'no-usable-examples',
+                sourceHash: ruleCompileHash({ rule, examples: [] }),
+                model: 'system',
+                attemptedAt: expect.any(Date),
+            });
+        });
+
+        it('reuses a legacy attempt across CLI and web key orders until an example changes', async () => {
+            const uuid = randomUUID();
+            const rule = 'Check enrollment before recording a grade.';
+            const cliExamples = [
+                { isCorrect: false, snippet: 'recordGrade()' },
+                { snippet: 'checkEnrollment()', isCorrect: true },
+            ];
+            const webExamples = cliExamples.map(({ snippet, isCorrect }) => ({
+                snippet,
+                isCorrect,
+            }));
+            const legacyHash = createHash('sha256')
+                .update(`${rule} ${JSON.stringify(cliExamples)}`)
+                .digest('hex');
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Enrollment',
+                        rule,
+                        examples: cliExamples,
+                        contextNeed: {
+                            need: 'full-file',
+                            source: 'compiler',
+                            sourceHash: ruleContextNeedHash({ rule }),
+                        },
+                        compileAttempt: {
+                            sourceHash: legacyHash,
+                            outcome: 'declined',
+                        },
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({ mechanical: false });
+
+            for (const examples of [
+                cliExamples,
+                webExamples,
+                cliExamples,
+                webExamples,
+            ]) {
+                await patch(uuid, { rule, examples });
+            }
+            expect(runModel).not.toHaveBeenCalled();
+
+            await patch(uuid, {
+                rule,
+                examples: [
+                    { ...webExamples[0], snippet: 'saveGrade()' },
+                    webExamples[1],
+                ],
+            });
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+    },
+);

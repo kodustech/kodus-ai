@@ -1,0 +1,24 @@
+diff --git a/apps/web/src/features/ee/byok/_components/routing/routing-state.spec.ts b/apps/web/src/features/ee/byok/_components/routing/routing-state.spec.ts
+index 391b034d5..9ba73fadd 100644
+--- a/apps/web/src/features/ee/byok/_components/routing/routing-state.spec.ts
++++ b/apps/web/src/features/ee/byok/_components/routing/routing-state.spec.ts
+@@ -49,4 +49,19 @@ describe("routingModelLabels", () => {
+         expect(labels.get("a")).toBe("GPT 4o (openai/gpt-4o)");
+         expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
+     });
++
++    it("names the same id on another connection by connection when its label carries an id", () => {
++        const gateway = {
++            credentialId: "gw",
++            providerId: "openai_compatible",
++        } as const;
++        const labels = routingModelLabels([
++            slot("a", "gpt-4o", gateway),
++            slot("b", "azure/gpt-4o", gateway),
++            slot("c", "gpt-4o", { credentialId: "oa", providerId: "openai" }),
++        ]);
++        expect(labels.get("a")).toBe("GPT 4o (gpt-4o) · OpenAI-compatible");
++        expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
++        expect(labels.get("c")).toBe("GPT 4o (gpt-4o) · OpenAI");
++    });
+ });

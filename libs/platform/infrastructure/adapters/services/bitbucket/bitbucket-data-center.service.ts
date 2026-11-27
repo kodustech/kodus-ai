@@ -1,8 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
-import {
-    assertGitServerUrlAllowed,
-    gitServerRefusal,
-} from '../git-server-url.guard';
+import { assertGitServerUrlAllowed } from '../git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import {
     isFileMatchingGlob,
@@ -10,12 +7,7 @@ import {
 } from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
-import {
-    BadRequestException,
-    Inject,
-    Injectable,
-    InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import pLimit from 'p-limit';
@@ -75,6 +67,7 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -92,6 +85,10 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 const FILES_PAGE_SIZE = 1000;
 const MAX_FILE_PAGES = 200;
@@ -264,9 +261,20 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
+            // Test the connection with the endpoint the setup reads next: a
+            // token that may list repositories is what Kodus needs, and asking
+            // /projects first refused tokens that can read repos but not
+            // administer projects.
             const repos = await axiosClient.get('/repos?limit=1');
+
+            // A 200 is not proof that Bitbucket answered: an SSO login page
+            // also answers 200, with HTML in the body. Only the paginated
+            // shape the repository picker reads proves the token works, and an
+            // empty page is a valid answer.
             if (repos.status !== 200 || !Array.isArray(repos.data?.values)) {
-                throw new Error('Invalid Bitbucket repository page.');
+                throw new BadRequestException(
+                    'Bitbucket Data Center failed to validate the provided token.',
+                );
             }
 
             // Bitbucket identifies the authenticated principal in X-AUSERID.
@@ -295,40 +303,32 @@ export class BitbucketDataCenterService implements Omit<
                     ![200, 201].includes(identity.status) ||
                     !Array.isArray(identity.data?.values)
                 ) {
-                    throw new Error(
+                    throw new BadRequestException(
                         'Bitbucket Data Center failed to validate the provided token.',
                     );
                 }
             }
+
+            await this.addAccessToken(organizationAndTeamData, authDetails);
         } catch (err) {
-            this.logger.error({
-                message: 'Error authenticating with Data Center token',
+            const linkError = toIntegrationLinkError(
+                err,
+                'Bitbucket Data Center',
+            );
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Bitbucket Data Center',
                 context: BitbucketDataCenterService.name,
-                // Axios errors carry the request headers and upstream body.
+                err,
+                linkError,
+                // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData,
-                    httpStatus: axios.isAxiosError(err)
-                        ? err.response?.status
-                        : undefined,
+                    host,
                 },
             });
-            // A refused address is not a bad token: say which it was.
-            throw (
-                gitServerRefusal(err) ??
-                new BadRequestException(
-                    'Error authenticating with Bitbucket Data Center.',
-                )
-            );
+            throw linkError;
         }
 
-        try {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } catch {
-            // A database error can carry bound credential values.
-            throw new InternalServerErrorException(
-                'Could not save the Bitbucket Data Center connection.',
-            );
-        }
         return { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
     }
 
@@ -2830,6 +2830,107 @@ export class BitbucketDataCenterService implements Omit<
                 message: `Error getting review comments for PR #${params.prNumber} in Data Center`,
                 context: BitbucketDataCenterService.name,
                 error,
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const authDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const repoConfig = await this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            );
+            if (!authDetails || !repoConfig) return null;
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+
+            // A partial read still marks what it saw: an answered mark is
+            // never wrong, and what it missed stays as loaded.
+            const { values } = await this.readAllPages(
+                axiosClient,
+                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/activities`,
+            );
+
+            // Data Center nests a thread's replies under the root comment, a
+            // reply to a reply under its parent, and may also add each reply
+            // as its own activity, which names its parent.
+            const descendants = (comment: any): any[] =>
+                (comment?.comments ?? []).flatMap((reply: any) => [
+                    reply,
+                    ...descendants(reply),
+                ]);
+            const added = values
+                .filter(
+                    (activity: any) =>
+                        activity?.action === 'COMMENTED' &&
+                        activity?.commentAction === 'ADDED' &&
+                        activity?.comment,
+                )
+                .map((activity: any) => activity.comment);
+
+            const parentOf = new Map<string, string>();
+            added.forEach((comment: any) => {
+                if (comment?.parent?.id != null)
+                    parentOf.set(String(comment.id), String(comment.parent.id));
+                descendants(comment).forEach((reply: any) =>
+                    parentOf.set(
+                        String(reply.id),
+                        String(reply?.parent?.id ?? comment.id),
+                    ),
+                );
+            });
+            const rootOf = (id: string) => {
+                const seen = new Set<string>();
+                while (parentOf.has(id) && !seen.has(id)) {
+                    seen.add(id);
+                    id = parentOf.get(id);
+                }
+                return id;
+            };
+
+            const replies = new Map<string, Map<string, any>>();
+            const addReply = (reply: any) => {
+                const root = rootOf(String(reply.id));
+                if (root === String(reply.id)) return;
+                if (!replies.has(root)) replies.set(root, new Map());
+                replies.get(root).set(String(reply.id), reply);
+            };
+            added.forEach((comment: any) => {
+                addReply(comment);
+                descendants(comment).forEach(addReply);
+            });
+
+            return answeredThreadRootIds(
+                added
+                    .filter((comment: any) => comment?.parent?.id == null)
+                    .map((comment: any) => ({
+                        rootIds: [comment.id],
+                        replies: [
+                            ...(replies.get(String(comment.id))?.values() ??
+                                []),
+                        ].map((reply) => ({ body: reply?.text })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
             });
             return null;
         }

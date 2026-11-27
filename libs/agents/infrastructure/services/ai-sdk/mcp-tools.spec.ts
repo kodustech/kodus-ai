@@ -46,7 +46,7 @@ const stub = () => ({}) as never;
 
 const logger = createLogger('mcp-tools.spec');
 
-const kodyRulesTools = new KodyRulesTools(stub(), stub(), stub());
+const kodyRulesTools = new KodyRulesTools(stub(), stub(), stub(), stub());
 const kodyIssuesTools = new KodyIssuesTools(stub(), stub());
 
 // Every tool the server declares as offerable: a hint, and not destructive.

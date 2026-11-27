@@ -1059,7 +1059,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     }
 
     /**
-     * The organization/team pair reaches the exporter in one of two shapes.
+     * The organization/team pair reaches the exporter in several shapes.
      * `SimpleLogger` flattens the log call's `metadata` into the processor
      * context, so a service that logs `metadata: { params }` arrives here as
      * `{ params }`; other callers set the pair at the top level. Reading only
@@ -1067,17 +1067,34 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      * rows, including the ~28,600 Bitbucket Cloud and Azure Repos rows that
      * carried it inside `params` (#2639).
      *
-     * The shallowest shape wins, so an explicit pair is never overridden by a
-     * payload.
+     * `params` and `payload` carry the pair either nested as
+     * `organizationAndTeamData` or flat: the Kody Learning cron logs
+     * `params: { organizationId, teamId }` and the feedback sync logs
+     * `payload: { organizationId, teamId }`.
+     *
+     * The shallowest shape that names an organization wins, so an explicit
+     * pair is never overridden by a payload, and a partial or empty pair
+     * does not hide a full one further down.
      */
     private organizationAndTeamDataOf(context?: LogContext): any {
+        const ctx = context as any;
         const candidates = [
-            (context as any)?.organizationAndTeamData,
-            (context as any)?.params?.organizationAndTeamData,
+            ctx?.organizationAndTeamData,
+            ctx?.params?.organizationAndTeamData,
+            ctx?.params,
+            ctx?.payload?.organizationAndTeamData,
+            ctx?.payload,
         ];
+        const carries = (candidate: any, key: string): boolean =>
+            !!candidate &&
+            typeof candidate === 'object' &&
+            typeof candidate[key] === 'string' &&
+            candidate[key].length > 0;
 
-        return candidates.find(
-            (candidate) => candidate && typeof candidate === 'object',
+        return (
+            candidates.find((candidate) =>
+                carries(candidate, 'organizationId'),
+            ) ?? candidates.find((candidate) => carries(candidate, 'teamId'))
         );
     }
 

@@ -1,6 +1,7 @@
 import { KodyRulesEntity } from '../entities/kodyRules.entity';
 import {
     IKodyRule,
+    KodyRuleCompileInput,
     IKodyRuleIndexEntry,
     IKodyRules,
     KodyRulesStatus,
@@ -103,6 +104,7 @@ export interface IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         updateData: Partial<IKodyRule>,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<Partial<IKodyRule> | null>;
     /** Whether the organization has a Kody Rules document at all. */
     existsForOrganization(organizationId: string): Promise<boolean>;

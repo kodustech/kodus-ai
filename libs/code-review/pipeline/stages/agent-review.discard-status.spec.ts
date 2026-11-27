@@ -63,7 +63,8 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // 11: anchoring drops a finding on a file the PR does not change (#1821).
         // 12: label normalization drops a category the team turned off (#1821).
         // 13: the repeat check withheld a possible repost without a verdict.
-        expect(discardBlocks()).toHaveLength(14);
+        // 15: the repeat check discards a reversal of an earlier comment (#2676).
+        expect(discardBlocks()).toHaveLength(15);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(

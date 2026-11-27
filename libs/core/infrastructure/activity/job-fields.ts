@@ -9,11 +9,23 @@ export interface JobFields {
     repository?: string;
     prNumber?: number;
     platform?: string;
+    /**
+     * The PR's size as the provider reported it in the webhook body. Only
+     * GitHub sends it there; the worker's memory line uses it to tell what a
+     * review of a given size holds.
+     */
+    changedFiles?: number;
+    changedLines?: number;
 }
 
 const num = (v: unknown): number | undefined => {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+// A size can be 0 (a PR with no changed lines), unlike an id.
+const count = (v: unknown): number | undefined => {
+    const n = typeof v === 'number' ? v : Number.NaN;
+    return Number.isInteger(n) && n >= 0 ? n : undefined;
 };
 const str = (v: unknown): string | undefined =>
     typeof v === 'string' && v ? v.slice(0, 200) : undefined;
@@ -32,6 +44,8 @@ export function jobFields(job: {
     ) ?? p) as any;
     const repo =
         p.repository ?? w.repository ?? w.project ?? w.resource?.repository;
+    const additions = count(w.pull_request?.additions);
+    const deletions = count(w.pull_request?.deletions);
     return {
         organizationId:
             str(job.organizationAndTeamData?.organizationId) ??
@@ -55,5 +69,11 @@ export function jobFields(job: {
             num(w.pullrequest?.id) ??
             num(w.resource?.pullRequestId),
         platform: str(p.platformType) ?? str(p.platform),
+        changedFiles: count(w.pull_request?.changed_files),
+        // Both or nothing: one count alone would under-report the PR.
+        changedLines:
+            additions === undefined || deletions === undefined
+                ? undefined
+                : additions + deletions,
     };
 }

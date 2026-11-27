@@ -1309,6 +1309,12 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
         /** A line the review adds at the end (an Ultra review's fallback). */
         extraLine?: string,
+        /**
+         * The PR-level comments the review posted. A PR whose only findings
+         * are PR-level (a rename-only PR) has no line comment, and without
+         * these the summary called it clean.
+         */
+        prLevelCommentResults?: Array<CommentResult>,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1318,10 +1324,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Same when no comment could be posted: a template written for a
             // finished review would hide that the findings never reached it.
             const nothingDelivered =
-                countUndeliveredComments(codeSuggestions) > 0 &&
-                !codeSuggestions?.some(
-                    (c) => c?.deliveryStatus === DeliveryStatus.SENT,
-                );
+                countUndeliveredComments(
+                    codeSuggestions,
+                    prLevelCommentResults,
+                ) > 0 &&
+                ![
+                    ...(codeSuggestions ?? []),
+                    ...(prLevelCommentResults ?? []),
+                ].some((c) => c?.deliveryStatus === DeliveryStatus.SENT);
             let commentBody =
                 reviewFailed || nothingDelivered ? undefined : finalCommentBody;
 
@@ -1332,7 +1342,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     platformType,
                     codeSuggestions,
                     codeReviewConfig,
-                    undefined,
+                    prLevelCommentResults,
                     reviewFailed,
                     reviewErrorMessage,
                     reviewHasPartialErrors,

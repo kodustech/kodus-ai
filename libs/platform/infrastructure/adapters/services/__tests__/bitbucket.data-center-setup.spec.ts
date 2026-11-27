@@ -444,15 +444,16 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
                 token: 'test-secret',
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
-        expect(svc.logger.error.mock.calls).toStrictEqual([
-            [
-                {
-                    message: 'Error authenticating with Data Center token',
-                    context: BitbucketDataCenterService.name,
-                    metadata: { organizationAndTeamData: ORG, httpStatus: 401 },
-                },
-            ],
-        ]);
+        expect(svc.logger.error).not.toHaveBeenCalled();
+        expect(svc.logger.warn.mock.calls).toHaveLength(1);
+        const logged = JSON.stringify(svc.logger.warn.mock.calls);
+        expect(logged).not.toContain('test-secret');
+        expect(logged).not.toContain('private upstream response');
+        expect(svc.logger.warn.mock.calls[0][0].metadata).toEqual({
+            organizationAndTeamData: ORG,
+            host: HOST,
+            reason: expect.stringContaining('(401)'),
+        });
     });
 
     it('probes the repository list the setup reads next, not the project list', async () => {

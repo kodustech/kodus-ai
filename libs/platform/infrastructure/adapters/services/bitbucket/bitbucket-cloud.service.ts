@@ -127,6 +127,7 @@ import {
 } from '../code-management-defaults.constants';
 import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
 import { attachRepliesToComments } from './bitbucket-comment-threads';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -139,6 +140,10 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 /** Bound on the pages `readAllPages` follows before calling a read incomplete. */
 const MAX_PAGES = 200;
@@ -3353,7 +3358,7 @@ export class BitbucketCloudService implements Omit<
                 status?: CreateAuthIntegrationStatus;
             } = { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
             if (params && params?.authMode === AuthMode.OAUTH) {
-                throw new Error(
+                throw new BadRequestException(
                     'Authenticating on Bitbucket via OAuth not implemented',
                 );
             } else if (
@@ -3372,14 +3377,14 @@ export class BitbucketCloudService implements Omit<
                 // Basic is how a Data Center host authenticates (#2570): there
                 // is nothing here to check it against, and the initial success
                 // above would report a connection that was never made.
-                throw new Error(
+                throw new BadRequestException(
                     'Bitbucket Cloud authenticates with a token, not a username and password',
                 );
             } else {
                 // Token auth with no token, or no auth mode at all: neither
                 // branch above ran, so nothing was authenticated and the
                 // initial success is not a connection (#2570).
-                throw new Error(
+                throw new BadRequestException(
                     'A token is required to connect Bitbucket Cloud',
                 );
             }
@@ -3390,19 +3395,9 @@ export class BitbucketCloudService implements Omit<
 
             return res;
         } catch (err) {
-            this.logger.error({
-                message: 'Error to create auth integration',
-                context: BitbucketCloudService.name,
-                serviceName: 'BitbucketCloudService createAuthIntegration',
-                error: err,
-                // Named fields only: params carries the PAT.
-                metadata: {
-                    organizationAndTeamData: params?.organizationAndTeamData,
-                    authMode: params?.authMode,
-                    host: params?.host,
-                },
-            });
-            throw new BadRequestException(err);
+            // authenticateWithToken logged its own failure; the exception
+            // filter logs this answer.
+            throw toIntegrationLinkError(err, 'Bitbucket Cloud');
         }
     }
 
@@ -4257,7 +4252,9 @@ export class BitbucketCloudService implements Omit<
                 testResponse.status === 401 ||
                 !testResponse.data
             ) {
-                throw new Error('Bitbucket failed to validate the PAT.');
+                throw new BadRequestException(
+                    'Bitbucket failed to validate the PAT.',
+                );
             }
 
             const checkRepos = await this.checkRepositoryPermissions({
@@ -4298,20 +4295,19 @@ export class BitbucketCloudService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            this.logger.error({
-                message: 'Error to authenticate with token',
+            const linkError = toIntegrationLinkError(err, 'Bitbucket Cloud');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Bitbucket Cloud',
                 context: BitbucketCloudService.name,
-                serviceName: 'BitbucketCloudService authenticateWithToken',
-                error: err,
+                err,
+                linkError,
                 // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData: params?.organizationAndTeamData,
                     host: params?.host,
                 },
             });
-            throw new BadRequestException(
-                'Error authenticating with Bitbucket PAT.',
-            );
+            throw linkError;
         }
     }
 
@@ -5169,6 +5165,66 @@ export class BitbucketCloudService implements Omit<
                 error: error,
                 metadata: {
                     params,
+                },
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!bitbucketAuthDetail) return null;
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+            if (!workspace) return null;
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            const comments = await bitbucketAPI.pullrequests
+                .listComments({
+                    repo_slug: `{${repository.id}}`,
+                    workspace: `{${workspace}}`,
+                    pull_request_id: prNumber,
+                    // Bitbucket's largest page: half the requests on a long PR.
+                    pagelen: 100,
+                })
+                .then((res) => this.getPaginatedResults(bitbucketAPI, res));
+
+            // Inline and PR-level findings alike are saved under the root
+            // comment's id; a reply under Kody's prompt reply still counts.
+            return answeredThreadRootIds(
+                attachRepliesToComments(comments as any[])
+                    .filter((comment) => !comment?.parent)
+                    .map((comment) => ({
+                        rootIds: [comment.id],
+                        replies: comment.replies
+                            .filter((reply: any) => reply?.deleted !== true)
+                            .map((reply: any) => ({
+                                body: reply?.content?.raw,
+                            })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: BitbucketCloudService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
                 },
             });
             return null;
