@@ -179,7 +179,13 @@ export const suiteFacts = (run: RuntimeSuiteRun): SuiteFact[] => {
                   value: `${minutes(run.machine.firstPassMs + run.machine.rerunMs)} min`,
                   hint: `First pass ${minutes(run.machine.firstPassMs)} · re-runs ${minutes(run.machine.rerunMs)}`,
               }
-            : {
+            : run.state === "requested" || run.state === "running"
+              ? {
+                    label: "Machine time",
+                    value: "Measured when the suite ends",
+                    hint: "The suite is still running",
+                }
+              : {
                   label: "Machine time",
                   value: "Not recorded",
                   hint: "This run was stored before machine time was measured",

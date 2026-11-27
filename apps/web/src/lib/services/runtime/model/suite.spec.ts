@@ -270,6 +270,16 @@ describe("the four key facts", () => {
             hint: "This run was stored before machine time was measured",
         });
     });
+
+    // A run still in flight has no machine time yet; saying it was stored before measuring would be false.
+    it("says the machine time is measured when the suite ends while the run is still going", () => {
+        for (const state of ["requested", "running"] as const)
+            expect(suiteFacts(run({ state, machine: undefined }))[3]).toEqual({
+                label: "Machine time",
+                value: "Measured when the suite ends",
+                hint: "The suite is still running",
+            });
+    });
 });
 
 describe("the failed tests", () => {
