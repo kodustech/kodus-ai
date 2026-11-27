@@ -74,7 +74,9 @@ function locationsOf(s) {
     const own = { file: normalizePath(s.relevantFile), line: s.relevantLinesStart };
     const others = (s.kodyRuleOtherLocations || []).map((loc) => {
         const m = String(loc).match(/^(.*):(\d+|\?)-(\d+|\?)$/);
-        return m ? { file: normalizePath(m[1]), line: m[2] === '?' ? NaN : Number(m[2]) } : null;
+        // A line-less finding merged across files names the others bare (#2420).
+        if (!m) return { file: normalizePath(String(loc)), line: NaN };
+        return { file: normalizePath(m[1]), line: m[2] === '?' ? NaN : Number(m[2]) };
     });
     return [own, ...others].filter((x) => x && x.file);
 }
