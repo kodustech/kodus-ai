@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository, EntityManager } from 'typeorm';
+import {
+    FindOptionsWhere,
+    Repository,
+    EntityManager,
+    In,
+    JsonContains,
+} from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -157,7 +163,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
     async update(
         id: string,
         data: Partial<IWorkflowJob>,
-        expectedStatus?: JobStatus,
+        expectedStatus?: JobStatus | JobStatus[],
+        expectedAttemptId?: string,
     ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
@@ -203,10 +210,23 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             if (data.payload !== undefined) updateData.payload = patch.payload;
 
             // A graph job can time out while its final UPDATE is in flight.
-            await this.repository.update(
-                { uuid: id, ...(expectedStatus && { status: expectedStatus }) },
+            const result = await this.repository.update(
+                {
+                    uuid: id,
+                    ...(expectedStatus && {
+                        status: Array.isArray(expectedStatus)
+                            ? In(expectedStatus)
+                            : expectedStatus,
+                    }),
+                    ...(expectedAttemptId && {
+                        metadata: JsonContains({
+                            attemptId: expectedAttemptId,
+                        }),
+                    }),
+                },
                 updateData,
             );
+            if (expectedStatus && result?.affected === 0) return null;
 
             return await this.findOne(id);
         } catch (error) {

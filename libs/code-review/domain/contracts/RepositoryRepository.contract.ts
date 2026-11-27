@@ -29,6 +29,7 @@ export interface IRepositoryRepository {
             sha?: string;
             nodeCount?: number;
             edgeCount?: number;
+            expectedStatuses?: AstGraphStatus[];
         },
     ): Promise<void>;
 }

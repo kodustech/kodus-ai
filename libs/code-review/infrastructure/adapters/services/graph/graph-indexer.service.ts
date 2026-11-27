@@ -1,10 +1,11 @@
-import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
-    IRepositoryService,
-    REPOSITORY_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/RepositoryService.contract';
+    GraphJobAttempt,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
+import { createLogger } from '@libs/core/log/logger';
+import { Injectable } from '@nestjs/common';
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { posix } from 'node:path';
 import { AstGraphRepository } from '../../repositories/astGraph.repository';
 import { AstGraphStatus } from '../../repositories/schemas/repository.model';
 import { KodusGraphCli } from './kodus-graph-cli';
@@ -49,8 +50,6 @@ export class GraphIndexerService {
 
     constructor(
         private readonly astGraphRepo: AstGraphRepository,
-        @Inject(REPOSITORY_SERVICE_TOKEN)
-        private readonly repositoryService: IRepositoryService,
         private readonly cli: KodusGraphCli,
     ) {}
 
@@ -62,8 +61,9 @@ export class GraphIndexerService {
         sandbox: SandboxInstance;
         headSha: string;
         signal?: AbortSignal;
+        job?: GraphJobAttempt;
     }): Promise<void> {
-        const { repositoryId, sandbox, headSha, signal } = params;
+        const { repositoryId, sandbox, headSha, signal, job } = params;
         signal?.throwIfAborted();
         const buildStart = Date.now();
 
@@ -73,14 +73,16 @@ export class GraphIndexerService {
             metadata: { repositoryId, headSha },
         });
 
-        await this.repositoryService.updateGraphStatus(
+        await this.astGraphRepo.updateBuildStatus(
             repositoryId,
             AstGraphStatus.BUILDING,
+            job,
+            signal,
         );
 
         try {
             const installStart = Date.now();
-            await this.cli.install(sandbox);
+            await this.cli.install(sandbox, signal);
             this.logger.log({
                 message: `[AST-GRAPH] kodus-graph installed (${Date.now() - installStart}ms)`,
                 context: GraphIndexerService.name,
@@ -92,6 +94,7 @@ export class GraphIndexerService {
             const { stderr: parseStderr } = await this.cli.parseAll(sandbox, {
                 outPath: GRAPH_PATH,
                 excludePatterns: DEFAULT_EXCLUDES,
+                signal,
             });
 
             this.logger.log({
@@ -116,9 +119,11 @@ export class GraphIndexerService {
                     context: GraphIndexerService.name,
                     metadata: { repositoryId, headSha },
                 });
-                await this.repositoryService.updateGraphStatus(
+                await this.astGraphRepo.updateBuildStatus(
                     repositoryId,
                     AstGraphStatus.FAILED,
+                    job,
+                    signal,
                 );
                 return;
             }
@@ -128,7 +133,7 @@ export class GraphIndexerService {
                 repositoryId,
                 nodes,
                 edges,
-                { sha: headSha, signal },
+                { sha: headSha, signal, job },
             );
 
             this.logger.log({
@@ -154,13 +159,18 @@ export class GraphIndexerService {
                 },
             });
         } catch (error) {
+            if (error instanceof StaleGraphJobError) throw error;
             // The processor owns the failure transition once the job is aborted.
             signal?.throwIfAborted();
             const totalMs = Date.now() - buildStart;
-            await this.repositoryService.updateGraphStatus(
-                repositoryId,
-                AstGraphStatus.FAILED,
-            );
+            if (!job) {
+                await this.astGraphRepo.updateBuildStatus(
+                    repositoryId,
+                    AstGraphStatus.FAILED,
+                    job,
+                    signal,
+                );
+            }
             const errorMessage =
                 error instanceof Error ? error.message : String(error);
             this.logger.error({
@@ -181,13 +191,14 @@ export class GraphIndexerService {
         changedFiles: string[];
         newSha: string;
         signal?: AbortSignal;
+        job?: GraphJobAttempt;
     }): Promise<void> {
-        const { repositoryId, sandbox, newSha, signal } = params;
+        const { repositoryId, sandbox, newSha, signal, job } = params;
         signal?.throwIfAborted();
         // Azure reports paths from the repository root with a leading slash.
         // The parser and the stored graph both use repository-relative paths.
         const changedFiles = params.changedFiles.map((file) =>
-            file.replace(/^\/+/, ''),
+            posix.normalize(file).replace(/^\/+/, ''),
         );
         const updateStart = Date.now();
 
@@ -204,7 +215,7 @@ export class GraphIndexerService {
 
         try {
             const installStart = Date.now();
-            await this.cli.install(sandbox);
+            await this.cli.install(sandbox, signal);
             this.logger.log({
                 message: `[AST-GRAPH] kodus-graph installed (${Date.now() - installStart}ms)`,
                 context: GraphIndexerService.name,
@@ -214,6 +225,7 @@ export class GraphIndexerService {
             signal?.throwIfAborted();
             const parseStart = Date.now();
             await this.cli.parseFiles(sandbox, changedFiles, {
+                signal,
                 outPath: GRAPH_PATH,
             });
 
@@ -239,7 +251,7 @@ export class GraphIndexerService {
                 changedFiles,
                 nodes,
                 edges,
-                { sha: newSha, signal },
+                { sha: newSha, signal, job },
             );
 
             this.logger.log({

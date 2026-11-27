@@ -661,6 +661,7 @@ export async function runE2BCommand(
 ): Promise<SandboxRunResult> {
     const result = await sandbox.commands.run(command, {
         timeoutMs: opts?.timeoutMs ?? TIMEOUTS.COMMAND_LONG_MS,
+        ...(opts?.signal && { signal: opts.signal }),
         ...(opts?.envs && { envs: opts.envs }),
         ...(opts?.asRoot && { user: 'root' }),
     });

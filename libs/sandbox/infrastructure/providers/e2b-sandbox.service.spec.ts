@@ -1188,6 +1188,20 @@ describe('E2B review user lockdown', () => {
         expect(instance.privilegesDropped).toBe(false);
     });
 
+    it('passes cancellation to the E2B SDK for a running graph command', async () => {
+        const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
+        const instance = await createWith(sbx);
+        const controller = new AbortController();
+        sbx.commands.run.mockClear();
+        await instance.run('kodus-graph --version', {
+            signal: controller.signal,
+        });
+        expect(sbx.commands.run).toHaveBeenCalledWith(
+            'kodus-graph --version',
+            expect.objectContaining({ signal: controller.signal }),
+        );
+    });
+
     it('runs an asRoot command as root, and others as the review user', async () => {
         const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
         const instance = await createWith(sbx);

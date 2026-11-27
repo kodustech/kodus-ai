@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { Connection, createConnection } from 'mongoose';
 import pino from 'pino';
+import { GraphJobSandbox } from '@libs/code-review/workflow/graph-job-sandbox';
 import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-build-job.processor';
 import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
 import { addLogProcessor, removeLogProcessor } from '@libs/core/log/logger';
@@ -28,6 +29,7 @@ const repositoryId = randomUUID();
     let connection: Connection;
     let leases: SandboxLeaseRepository;
     let manager: SandboxLeaseManager;
+    let acquisitions: GraphJobSandbox;
     const sandbox = {
         sandboxId: 'graph-sandbox',
         type: 'e2b',
@@ -80,6 +82,7 @@ const repositoryId = randomUUID();
     beforeEach(() => {
         jest.clearAllMocks();
         provider.createSandboxWithRepo.mockResolvedValue(sandbox);
+        acquisitions = new GraphJobSandbox();
         manager = new SandboxLeaseManager(
             provider as never,
             leases,
@@ -108,6 +111,7 @@ const repositoryId = randomUUID();
             code as never,
             indexer as never,
             repo as never,
+            acquisitions,
         );
         return {
             prKey: `${organizationId}:${repositoryId}:graph:${jobId}`,
@@ -172,7 +176,16 @@ const repositoryId = randomUUID();
                 JobStatus.FAILED,
             );
             expect(release).not.toHaveBeenCalled();
+            let drained = false;
+            const shutdown = acquisitions
+                .beforeApplicationShutdown()
+                .then(() => {
+                    drained = true;
+                });
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(drained).toBe(false);
             finishCreate();
+            await shutdown;
             const lease = await acquire.mock.results[0].value;
             await new Promise<void>((resolve) => setImmediate(resolve));
             await release.mock.results[0]?.value;
@@ -215,27 +228,38 @@ const repositoryId = randomUUID();
             await unclaimed.run();
 
             await exporter.flush();
-            for (const [prKey, message] of [
-                [succeeded.prKey, /killed single-use sandbox immediately/],
-                [failed.prKey, /immediate kill failed/],
-                [unclaimed.prKey, /single-use release lost the cleanup claim/],
+            for (const [prKey, source, message] of [
+                [
+                    succeeded.prKey,
+                    'AST-GRAPH-JOB',
+                    `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${sandbox.sandboxId}" prKey="${succeeded.prKey}"`,
+                ],
+                [
+                    failed.prKey,
+                    'AST-GRAPH-INCR',
+                    `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${sandbox.sandboxId}" prKey="${failed.prKey}"`,
+                ],
+                [
+                    unclaimed.prKey,
+                    'AST-GRAPH-JOB',
+                    `SandboxLeaseManager: single-use release lost the cleanup claim, leaving the sandbox to its holder prKey="${unclaimed.prKey}"`,
+                ],
             ] as const) {
-                expect(
-                    await logs.findOne({
-                        'metadata.organizationId': organizationId,
-                        'attributes.prKey': prKey,
-                        'attributes.sandboxId': sandbox.sandboxId,
-                        message,
-                    }),
-                ).not.toBeNull();
-            }
-            expect(
-                await logs.countDocuments({
+                const filter = {
                     'metadata.organizationId': organizationId,
-                    'message': /Sandbox cleaned up for org\/repo/,
+                    'attributes.prKey': prKey,
                     'attributes.sandboxId': sandbox.sandboxId,
-                }),
-            ).toBe(3);
+                };
+                expect(await logs.countDocuments({ ...filter, message })).toBe(
+                    1,
+                );
+                expect(
+                    await logs.countDocuments({
+                        ...filter,
+                        message: `[${source}] Sandbox cleaned up for org/repo`,
+                    }),
+                ).toBe(1);
+            }
         } finally {
             removeLogProcessor(exporter);
             await logs.drop();

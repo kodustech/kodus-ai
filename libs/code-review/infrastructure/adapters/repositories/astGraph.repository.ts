@@ -1,12 +1,19 @@
+import {
+    GraphJobAttempt,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, JsonContains, Repository } from 'typeorm';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { WorkflowJobModel } from '@libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model';
 
 import { AstNodeModel } from './schemas/astNode.model';
 import { AstEdgeModel } from './schemas/astEdge.model';
 import { AstGraphStatus, RepositoryModel } from './schemas/repository.model';
 
 interface GraphRevision {
+    job?: GraphJobAttempt;
     sha?: string;
     signal?: AbortSignal;
 }
@@ -153,45 +160,9 @@ export class AstGraphRepository {
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
     ): Promise<{ nodeCount: number; edgeCount: number }> {
-        return this.dataSource.transaction(async (manager) => {
-            revision?.signal?.throwIfAborted();
-            await manager.query(`DELETE FROM ast_edges WHERE repo_id = $1`, [
-                repoId,
-            ]);
-            await manager.query(`DELETE FROM ast_nodes WHERE repo_id = $1`, [
-                repoId,
-            ]);
-
-            for (let i = 0; i < nodes.length; i += NODE_CHUNK_SIZE) {
-                const chunk = nodes.slice(i, i + NODE_CHUNK_SIZE);
-                const { sql, params } = this.buildNodeInsertSQL(
-                    repoId,
-                    chunk,
-                    true,
-                );
-                await manager.query(sql, params);
-            }
-
-            for (let i = 0; i < edges.length; i += EDGE_CHUNK_SIZE) {
-                const chunk = edges.slice(i, i + EDGE_CHUNK_SIZE);
-                const { sql, params } = this.buildEdgeInsertSQL(
-                    repoId,
-                    chunk,
-                    true,
-                );
-                await manager.query(sql, params);
-            }
-
-            return this.finishGraphWrite(manager, repoId, revision);
-        });
+        return this.writeGraph(repoId, nodes, edges, revision);
     }
 
-    /**
-     * Incremental update: delete stale data for changed files, then insert
-     * fresh data — all in a single transaction.
-     * Uses ON CONFLICT DO NOTHING because edges from non-updated files may
-     * share qualified names with the new data.
-     */
     async incrementalUpdate(
         repoId: string,
         filePaths: string[],
@@ -199,41 +170,112 @@ export class AstGraphRepository {
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
     ): Promise<{ nodeCount: number; edgeCount: number }> {
+        return this.writeGraph(repoId, nodes, edges, revision, filePaths);
+    }
+
+    private async writeGraph(
+        repoId: string,
+        nodes: GraphNodeJson[],
+        edges: GraphEdgeJson[],
+        revision?: GraphRevision,
+        filePaths?: string[],
+    ): Promise<{ nodeCount: number; edgeCount: number }> {
+        const signal = revision?.signal;
         return this.dataSource.transaction(async (manager) => {
-            revision?.signal?.throwIfAborted();
-            if (filePaths.length > 0) {
+            signal?.throwIfAborted();
+            // Serialize writers before they replace rows or count a revision.
+            await this.lockRepository(manager, repoId);
+            if (!filePaths || filePaths.length) {
+                const where = filePaths
+                    ? 'repo_id = $1 AND file_path = ANY($2::text[])'
+                    : 'repo_id = $1';
+                const params = filePaths ? [repoId, filePaths] : [repoId];
+                signal?.throwIfAborted();
                 await manager.query(
-                    `DELETE FROM ast_edges WHERE repo_id = $1 AND file_path = ANY($2::text[])`,
-                    [repoId, filePaths],
+                    `DELETE FROM ast_edges WHERE ${where}`,
+                    params,
                 );
+                signal?.throwIfAborted();
                 await manager.query(
-                    `DELETE FROM ast_nodes WHERE repo_id = $1 AND file_path = ANY($2::text[])`,
-                    [repoId, filePaths],
+                    `DELETE FROM ast_nodes WHERE ${where}`,
+                    params,
                 );
             }
 
             for (let i = 0; i < nodes.length; i += NODE_CHUNK_SIZE) {
-                const chunk = nodes.slice(i, i + NODE_CHUNK_SIZE);
+                signal?.throwIfAborted();
                 const { sql, params } = this.buildNodeInsertSQL(
                     repoId,
-                    chunk,
+                    nodes.slice(i, i + NODE_CHUNK_SIZE),
                     true,
                 );
                 await manager.query(sql, params);
             }
-
             for (let i = 0; i < edges.length; i += EDGE_CHUNK_SIZE) {
-                const chunk = edges.slice(i, i + EDGE_CHUNK_SIZE);
+                signal?.throwIfAborted();
                 const { sql, params } = this.buildEdgeInsertSQL(
                     repoId,
-                    chunk,
+                    edges.slice(i, i + EDGE_CHUNK_SIZE),
                     true,
                 );
                 await manager.query(sql, params);
             }
 
+            signal?.throwIfAborted();
             return this.finishGraphWrite(manager, repoId, revision);
         });
+    }
+
+    private async lockRepository(
+        manager: EntityManager,
+        repoId: string,
+    ): Promise<void> {
+        await manager.findOneOrFail(RepositoryModel, {
+            select: { uuid: true },
+            where: { uuid: repoId },
+            lock: { mode: 'for_no_key_update' },
+        });
+    }
+
+    async updateBuildStatus(
+        repoId: string,
+        status: AstGraphStatus.BUILDING | AstGraphStatus.FAILED,
+        job?: GraphJobAttempt,
+        signal?: AbortSignal,
+    ): Promise<void> {
+        await this.dataSource.transaction(async (manager) => {
+            signal?.throwIfAborted();
+            await this.lockRepository(manager, repoId);
+            await this.lockActiveJob(manager, job);
+            signal?.throwIfAborted();
+            await manager.update(
+                RepositoryModel,
+                { uuid: repoId },
+                {
+                    astGraphStatus: status,
+                },
+            );
+            signal?.throwIfAborted();
+        });
+    }
+
+    private async lockActiveJob(
+        manager: EntityManager,
+        job?: GraphJobAttempt,
+    ): Promise<void> {
+        if (!job) return;
+        // A retry can reuse the job ID. Only the current attempt may publish it.
+        // Hold through COMMIT so a concurrent failure cannot become visible first.
+        const active = await manager.findOne(WorkflowJobModel, {
+            select: { uuid: true },
+            where: {
+                uuid: job.jobId,
+                status: JobStatus.PROCESSING,
+                metadata: JsonContains({ attemptId: job.attemptId }),
+            },
+            lock: { mode: 'pessimistic_read' },
+        });
+        if (!active) throw new StaleGraphJobError(job.jobId);
     }
 
     private async finishGraphWrite(
@@ -248,6 +290,9 @@ export class AstGraphRepository {
             [repoId],
         );
         if (revision) {
+            revision.signal?.throwIfAborted();
+            await this.lockActiveJob(manager, revision.job);
+            revision.signal?.throwIfAborted();
             // Publish the SHA, counts and rows in one transaction. An abort during
             // any of these writes must leave the previous revision intact.
             await manager.update(

@@ -2,10 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { GraphIndexerService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-indexer.service';
 import { KodusGraphCli } from '@libs/code-review/infrastructure/adapters/services/graph/kodus-graph-cli';
 import { AstGraphRepository } from '@libs/code-review/infrastructure/adapters/repositories/astGraph.repository';
-import {
-    IRepositoryService,
-    REPOSITORY_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
@@ -22,7 +18,6 @@ jest.mock('@libs/core/log/logger', () => ({
 describe('GraphIndexerService', () => {
     let service: GraphIndexerService;
     let mockAstGraphRepo: jest.Mocked<AstGraphRepository>;
-    let mockRepositoryRepo: jest.Mocked<IRepositoryService>;
     let mockSandbox: jest.Mocked<SandboxInstance>;
 
     const REPO_ID = 'repo-123';
@@ -88,16 +83,13 @@ describe('GraphIndexerService', () => {
 
     beforeEach(async () => {
         mockAstGraphRepo = {
+            updateBuildStatus: jest.fn(),
             fullRebuild: jest
                 .fn()
                 .mockResolvedValue({ nodeCount: 1, edgeCount: 1 }),
             incrementalUpdate: jest
                 .fn()
                 .mockResolvedValue({ nodeCount: 1, edgeCount: 1 }),
-        } as any;
-
-        mockRepositoryRepo = {
-            updateGraphStatus: jest.fn().mockResolvedValue(undefined),
         } as any;
 
         mockSandbox = createMockSandbox();
@@ -107,15 +99,39 @@ describe('GraphIndexerService', () => {
                 GraphIndexerService,
                 KodusGraphCli,
                 { provide: AstGraphRepository, useValue: mockAstGraphRepo },
-                {
-                    provide: REPOSITORY_SERVICE_TOKEN,
-                    useValue: mockRepositoryRepo,
-                },
             ],
         }).compile();
 
         service = module.get<GraphIndexerService>(GraphIndexerService);
     });
+
+    it.each(['full', 'incremental'])(
+        'passes the %s job signal into installation and stops after a cancelled version check',
+        async (kind) => {
+            const controller = new AbortController();
+            const reason = new Error('job deadline');
+            mockSandbox.run.mockImplementationOnce(async (_cmd, options) => {
+                expect(options?.signal).toBe(controller.signal);
+                controller.abort(reason);
+                return { stdout: '', exitCode: 0 };
+            });
+            const params = {
+                repositoryId: REPO_ID,
+                sandbox: mockSandbox,
+                signal: controller.signal,
+            };
+            const indexing =
+                kind === 'full'
+                    ? service.fullBuild({ ...params, headSha: HEAD_SHA })
+                    : service.incrementalUpdate({
+                          ...params,
+                          changedFiles: ['src/a.ts'],
+                          newSha: HEAD_SHA,
+                      });
+            await expect(indexing).rejects.toBe(reason);
+            expect(mockSandbox.run).toHaveBeenCalledTimes(1);
+        },
+    );
 
     describe('fullBuild', () => {
         it('should install kodus-graph then parse the repo', async () => {
@@ -233,9 +249,7 @@ describe('GraphIndexerService', () => {
             ).rejects.toThrow();
 
             expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
-            expect(mockRepositoryRepo.updateGraphStatus.mock.calls).toEqual([
-                [REPO_ID, AstGraphStatus.BUILDING],
-            ]);
+            expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledTimes(1);
         });
 
         it('marks the graph BUILDING before parsing', async () => {
@@ -245,8 +259,8 @@ describe('GraphIndexerService', () => {
                 headSha: HEAD_SHA,
             });
 
-            expect(mockRepositoryRepo.updateGraphStatus.mock.calls).toEqual([
-                [REPO_ID, AstGraphStatus.BUILDING],
+            expect(mockAstGraphRepo.updateBuildStatus.mock.calls).toEqual([
+                [REPO_ID, AstGraphStatus.BUILDING, undefined, undefined],
             ]);
         });
 
@@ -269,9 +283,11 @@ describe('GraphIndexerService', () => {
                 }),
             ).rejects.toThrow('kodus-graph parse --all failed');
 
-            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+            expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
+                undefined,
+                undefined,
             );
         });
 
@@ -285,9 +301,11 @@ describe('GraphIndexerService', () => {
                 headSha: HEAD_SHA,
             });
 
-            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+            expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
+                undefined,
+                undefined,
             );
 
             expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
@@ -311,9 +329,11 @@ describe('GraphIndexerService', () => {
                 }),
             ).rejects.toThrow('kodus-graph install failed');
 
-            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+            expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
+                undefined,
+                undefined,
             );
         });
 
@@ -328,9 +348,11 @@ describe('GraphIndexerService', () => {
                 }),
             ).rejects.toThrow('Failed to read graph file from sandbox');
 
-            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+            expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
+                undefined,
+                undefined,
             );
         });
     });
@@ -361,17 +383,23 @@ describe('GraphIndexerService', () => {
             await service.incrementalUpdate({
                 repositoryId: REPO_ID,
                 sandbox: mockSandbox,
-                changedFiles: ['/src/foo.ts', '/src/deleted.ts'],
+                changedFiles: [
+                    '/./src/foo.ts',
+                    './src//deleted.ts',
+                    String.raw`src/a\b.ts`,
+                ],
                 newSha,
             });
             const parseCommand = mockSandbox.run.mock.calls.find(([cmd]) =>
                 cmd.includes('kodus-graph parse --files'),
             )?.[0];
-            expect(parseCommand).toContain(
-                "--files 'src/foo.ts' 'src/deleted.ts'",
-            );
+            expect(
+                parseCommand
+                    ?.split('kodus-graph parse --files ')[1]
+                    .split(' --repo-dir')[0],
+            ).toBe(String.raw`'src/foo.ts' 'src/deleted.ts' 'src/a\b.ts'`);
             expect(mockAstGraphRepo.incrementalUpdate.mock.calls[0][1]).toEqual(
-                ['src/foo.ts', 'src/deleted.ts'],
+                ['src/foo.ts', 'src/deleted.ts', String.raw`src/a\b.ts`],
             );
         });
 
@@ -433,7 +461,7 @@ describe('GraphIndexerService', () => {
             ).rejects.toThrow('kodus-graph parse --files failed');
 
             const failedCalls =
-                mockRepositoryRepo.updateGraphStatus.mock.calls.filter(
+                mockAstGraphRepo.updateBuildStatus.mock.calls.filter(
                     (call) => call[1] === AstGraphStatus.FAILED,
                 );
             expect(failedCalls).toHaveLength(0);

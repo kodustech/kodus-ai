@@ -12,7 +12,12 @@ export interface StaleWorkflowJobReapResult {
 
 export interface IWorkflowJobRepository {
     create(job: any, transactionManager?: unknown): Promise<any>;
-    update(id: string, data: any, expectedStatus?: JobStatus): Promise<any>;
+    update(
+        id: string,
+        data: any,
+        expectedStatus?: JobStatus | JobStatus[],
+        expectedAttemptId?: string,
+    ): Promise<any>;
     findOne(id: string): Promise<any>;
     findMany(query: any): Promise<{ data: any[]; total?: number }>;
     prunePayloadForFinalizedJobs?(params: {

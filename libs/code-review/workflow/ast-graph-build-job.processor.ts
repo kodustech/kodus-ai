@@ -1,3 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import {
+    GraphJobAttempt,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject } from '@nestjs/common';
 
@@ -23,7 +28,8 @@ import {
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
-import { acquireGraphJobSandbox } from './graph-job-sandbox';
+import { updateGraphJobStage } from './graph-job-stage';
+import { GraphJobSandbox } from './graph-job-sandbox';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. A full-repo AST build on a large repo can legitimately run
@@ -55,6 +61,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         private readonly graphIndexer: GraphIndexerService,
         @Inject(REPOSITORY_SERVICE_TOKEN)
         private readonly repositoryService: IRepositoryService,
+        private readonly graphSandbox: GraphJobSandbox,
     ) {}
 
     async process(jobId: string, signal?: AbortSignal): Promise<void> {
@@ -86,7 +93,15 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             },
         });
 
-        await this.updateJobStage(jobId, 'VALIDATING');
+        const attempt: GraphJobAttempt = { jobId, attemptId: randomUUID() };
+        if (
+            !(await updateGraphJobStage(
+                this.jobRepository,
+                attempt,
+                'VALIDATING',
+            ))
+        )
+            return;
 
         if (
             !payload?.repositoryId ||
@@ -132,7 +147,11 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             signal?.throwIfAborted();
             // 1. Resolve auth
             await raceWithAbortSignal(
-                this.updateJobStage(jobId, 'RESOLVING_AUTH'),
+                updateGraphJobStage(
+                    this.jobRepository,
+                    attempt,
+                    'RESOLVING_AUTH',
+                ),
                 signal,
             );
             const authStart = Date.now();
@@ -188,7 +207,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             // 2. Create sandbox + clone
             signal?.throwIfAborted();
             await raceWithAbortSignal(
-                this.updateJobStage(jobId, 'CLONING'),
+                updateGraphJobStage(this.jobRepository, attempt, 'CLONING'),
                 signal,
             );
             const cloneStart = Date.now();
@@ -196,7 +215,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            lease = await acquireGraphJobSandbox(
+            lease = await this.graphSandbox.acquire(
                 () =>
                     this.leaseManager.acquire(
                         prKey,
@@ -226,9 +245,14 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 this.jobRepository.update(
                     jobId,
                     {
-                        metadata: { sandboxId, stage: 'CLONING' },
+                        metadata: {
+                            attemptId: attempt.attemptId,
+                            sandboxId,
+                            stage: 'CLONING',
+                        },
                     },
                     JobStatus.PROCESSING,
+                    attempt.attemptId,
                 ),
                 signal,
             );
@@ -244,6 +268,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const shaResult = await raceWithAbortSignal(
                 sandbox.run(`git -C ${sandbox.repoDir} rev-parse HEAD`, {
                     timeoutMs: 10_000,
+                    signal,
                 }),
                 signal,
             );
@@ -262,7 +287,10 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             // 4. Parse + persist
             signal?.throwIfAborted();
             await raceWithAbortSignal(
-                this.updateJobStage(jobId, 'PARSING', { sandboxId, headSha }),
+                updateGraphJobStage(this.jobRepository, attempt, 'PARSING', {
+                    sandboxId,
+                    headSha,
+                }),
                 signal,
             );
 
@@ -271,6 +299,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 this.graphIndexer.fullBuild({
                     repositoryId: payload.repositoryId,
                     sandbox,
+                    job: attempt,
                     headSha,
                     signal,
                 }),
@@ -281,12 +310,16 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const totalMs = Date.now() - jobStart;
 
             await raceWithAbortSignal(
-                this.markCompleted(jobId, {
-                    repositoryId: payload.repositoryId,
-                    headSha,
-                    sandboxId,
-                    durationMs: totalMs,
-                }),
+                this.markCompleted(
+                    jobId,
+                    {
+                        repositoryId: payload.repositoryId,
+                        headSha,
+                        sandboxId,
+                        durationMs: totalMs,
+                    },
+                    attempt.attemptId,
+                ),
                 signal,
             );
 
@@ -302,6 +335,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 },
             });
         } catch (error) {
+            if (error instanceof StaleGraphJobError) return;
             const totalMs = Date.now() - jobStart;
             const classification = this.classifyError(error);
 
@@ -324,6 +358,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 classification,
                 sandboxId,
                 payload.repositoryId,
+                attempt.attemptId,
             );
 
             // Only re-throw TRANSIENT errors so RabbitMQ retries.
@@ -334,23 +369,6 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         } finally {
             if (lease) await releaseSandbox(lease);
         }
-    }
-
-    private async updateJobStage(
-        jobId: string,
-        stage: string,
-        extra?: Record<string, unknown>,
-    ): Promise<void> {
-        await this.jobRepository.update(
-            jobId,
-            {
-                status: JobStatus.PROCESSING,
-                startedAt: new Date(),
-                currentStage: stage,
-                metadata: { stage, ...extra },
-            },
-            stage === 'VALIDATING' ? undefined : JobStatus.PROCESSING,
-        );
     }
 
     private classifyError(error: any): ErrorClassification {
@@ -388,14 +406,21 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         classification: ErrorClassification = ErrorClassification.PERMANENT,
         sandboxId?: string,
         repositoryId?: string,
+        attemptId?: string,
     ): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.FAILED,
-            errorClassification: classification,
-            lastError: error.message?.slice(0, 1000),
-            failedAt: new Date(),
-            metadata: { sandboxId, stage: 'FAILED' },
-        });
+        const updated = await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.FAILED,
+                errorClassification: classification,
+                lastError: error.message?.slice(0, 1000),
+                failedAt: new Date(),
+                metadata: { attemptId, sandboxId, stage: 'FAILED' },
+            },
+            [JobStatus.PROCESSING, JobStatus.FAILED],
+            attemptId,
+        );
+        if (updated === null) return;
 
         // Ensure repository status is updated to FAILED so it doesn't stay stuck in PENDING/BUILDING
         if (repositoryId) {
@@ -403,6 +428,12 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 await this.repositoryService.updateGraphStatus(
                     repositoryId,
                     AstGraphStatus.FAILED,
+                    {
+                        expectedStatuses: [
+                            AstGraphStatus.PENDING,
+                            AstGraphStatus.BUILDING,
+                        ],
+                    },
                 );
             } catch (statusError) {
                 this.logger.warn({
@@ -415,8 +446,12 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         }
     }
 
-    async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        await this.jobRepository.update(
+    async markCompleted(
+        jobId: string,
+        result?: unknown,
+        attemptId?: string,
+    ): Promise<void> {
+        const updated = await this.jobRepository.update(
             jobId,
             {
                 status: JobStatus.COMPLETED,
@@ -425,6 +460,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 result,
             },
             JobStatus.PROCESSING,
+            attemptId,
         );
+        if (updated === null) throw new StaleGraphJobError(jobId);
     }
 }

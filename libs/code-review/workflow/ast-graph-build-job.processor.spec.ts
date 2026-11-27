@@ -1,3 +1,5 @@
+import { StaleGraphJobError } from '@libs/code-review/domain/graph-job-attempt';
+import { GraphJobSandbox } from './graph-job-sandbox';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
@@ -116,6 +118,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
             codeManagementService as any,
             graphIndexer as any,
             repositoryService as any,
+            new GraphJobSandbox(),
         );
     });
 
@@ -202,25 +205,48 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
 
         it('fails promptly if cancellation arrives during the completion write', async () => {
             let finishCompletion: () => void;
+            let persisted = JobStatus.PENDING;
             const writing = new Promise<void>((started) => {
-                jobRepository.update.mockImplementation(async (_id, patch) => {
-                    if (patch.status === JobStatus.COMPLETED) {
-                        await new Promise<void>((finish) => {
-                            finishCompletion = finish;
-                            started();
-                        });
-                    }
-                });
+                jobRepository.update.mockImplementation(
+                    async (_id, patch, expected) => {
+                        if (patch.status === JobStatus.COMPLETED) {
+                            await new Promise<void>((finish) => {
+                                finishCompletion = finish;
+                                started();
+                            });
+                        }
+                        if (
+                            patch.status &&
+                            (!expected || [expected].flat().includes(persisted))
+                        )
+                            persisted = patch.status;
+                    },
+                );
             });
             const controller = new AbortController();
             const job = processor.process('job-1', controller.signal);
             await writing;
             controller.abort();
             await new Promise<void>((resolve) => setImmediate(resolve));
-            const terminal = jobRepository.update.mock.calls.at(-1)[1].status;
+            expect(persisted).toBe(JobStatus.FAILED);
             finishCompletion();
             await job;
-            expect(terminal).toBe(JobStatus.FAILED);
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(persisted).toBe(JobStatus.FAILED);
+        });
+
+        it('leaves a replacement attempt running when the graph write loses ownership', async () => {
+            graphIndexer.fullBuild.mockRejectedValueOnce(
+                new StaleGraphJobError('job-1'),
+            );
+            await processor.process('job-1');
+            expect(
+                jobRepository.update.mock.calls.map(
+                    ([, patch]) => patch.status,
+                ),
+            ).not.toContain(JobStatus.FAILED);
+            expect(repositoryService.updateGraphStatus).not.toHaveBeenCalled();
+            expect(leaseManager.release).toHaveBeenCalledTimes(1);
         });
 
         it('only lets a processing job write its completion', async () => {
@@ -229,6 +255,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
                 'job-1',
                 expect.objectContaining({ status: JobStatus.COMPLETED }),
                 JobStatus.PROCESSING,
+                expect.any(String),
             );
         });
 

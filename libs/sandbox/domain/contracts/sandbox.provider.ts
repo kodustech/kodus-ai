@@ -37,6 +37,7 @@ export interface CreateSandboxParams {
 }
 
 export interface SandboxRunOptions {
+    signal?: AbortSignal;
     timeoutMs?: number;
     envs?: Record<string, string>;
     asRoot?: boolean;

@@ -383,6 +383,7 @@ export class LocalSandboxService implements ISandboxProvider {
                 try {
                     const { stdout, stderr } = await execAsync(command, {
                         cwd: capturedRepoDir,
+                        signal: opts?.signal,
                         timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
                         maxBuffer: MAX_BUFFER,
                         env: sandboxEnv(opts?.envs),
@@ -393,6 +394,7 @@ export class LocalSandboxService implements ISandboxProvider {
                         exitCode: 0,
                     };
                 } catch (error: any) {
+                    opts?.signal?.throwIfAborted();
                     return {
                         stdout: error.stdout || '',
                         stderr: error.stderr || '',

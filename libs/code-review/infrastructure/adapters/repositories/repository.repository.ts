@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { IRepositoryRepository } from '@libs/code-review/domain/contracts/RepositoryRepository.contract';
 
@@ -96,6 +96,7 @@ export class RepositoryRepository implements IRepositoryRepository {
             sha?: string;
             nodeCount?: number;
             edgeCount?: number;
+            expectedStatuses?: AstGraphStatus[];
         },
     ): Promise<void> {
         const update: Partial<RepositoryModel> = {
@@ -115,6 +116,14 @@ export class RepositoryRepository implements IRepositoryRepository {
             update.astGraphBuiltAt = new Date();
         }
 
-        await this.repo.update({ uuid }, update);
+        await this.repo.update(
+            {
+                uuid,
+                ...(extra?.expectedStatuses && {
+                    astGraphStatus: In(extra.expectedStatuses),
+                }),
+            },
+            update,
+        );
     }
 }
