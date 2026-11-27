@@ -52,7 +52,11 @@ export class PgEnvironmentSetupReads {
     }
 }
 
-/** The runtime-worker's store: one row per environment, replaced by each save of its latest setup. */
+/**
+ * The runtime-worker's store: one row per environment, replaced by each save of its latest setup. A save of a setup
+ * requested before the one the row holds is dropped: two setups of one environment that raced must not leave the
+ * older one's record last, which the product reads as a setup still running (push-setup.ts isSetupInFlight).
+ */
 export class PgEnvironmentSetupStore extends PgEnvironmentSetupReads {
     async save(record: EnvironmentSetupRecord): Promise<void> {
         const split = SETUP_COLUMNS.split({ ...record } as Record<string, unknown>);
@@ -65,7 +69,8 @@ export class PgEnvironmentSetupStore extends PgEnvironmentSetupReads {
         await this.db.query(
             `INSERT INTO ${RUNTIME_ENVIRONMENT_SETUPS_TABLE} (${columns.join(', ')})
              VALUES (${columns.map((c, i) => (c === 'record' ? `$${i + 1}::jsonb` : `$${i + 1}`)).join(', ')})
-             ON CONFLICT (environment_id) DO UPDATE SET ${columns.filter((c) => c !== 'environment_id').map((c) => `${c} = EXCLUDED.${c}`).join(', ')}`,
+             ON CONFLICT (environment_id) DO UPDATE SET ${columns.filter((c) => c !== 'environment_id').map((c) => `${c} = EXCLUDED.${c}`).join(', ')}
+             WHERE ${RUNTIME_ENVIRONMENT_SETUPS_TABLE}.requested_at IS NULL OR EXCLUDED.requested_at IS NULL OR EXCLUDED.requested_at >= ${RUNTIME_ENVIRONMENT_SETUPS_TABLE}.requested_at`,
             [...values, jsonb(split.rest)],
         );
     }

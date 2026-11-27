@@ -51,6 +51,23 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         ...patch,
     });
 
+    // Two setups of one environment raced and the older one's record arrived last: the product read it as a setup
+    // still running and held the next push back. A save of an older request never replaces the newer one's row.
+    it('drops the late save of a setup requested before the one the environment already holds', async () => {
+        const older = setup({ requestedAt: '2026-11-12T10:00:00.000Z', key: 'older' });
+        const newer = setup({ environmentId: older.environmentId, requestedAt: '2026-11-12T10:03:00.000Z', key: 'newer', state: 'active', finishedAt: '2026-11-12T10:08:00.000Z' });
+        await setups.save(newer);
+        await setups.save({ ...older, updatedAt: '2026-11-12T10:09:00.000Z' });
+        expect(await setups.get(older.environmentId)).toEqual(newer);
+        // The newer setup's own later saves, and a newer request, still land.
+        const settled = { ...newer, updatedAt: '2026-11-12T10:10:00.000Z' };
+        await setups.save(settled);
+        expect(await setups.get(older.environmentId)).toEqual(settled);
+        const newest = setup({ environmentId: older.environmentId, requestedAt: '2026-11-12T10:20:00.000Z', key: 'newest' });
+        await setups.save(newest);
+        expect((await setups.get(older.environmentId))?.key).toBe('newest');
+    });
+
     it("an environment keeps only its latest setup, and another org's read of it finds nothing", async () => {
         const first = setup({ expose: [{ service: 'web', port: 3000 } as never], imageId: 'img-1' });
         await setups.save(first);

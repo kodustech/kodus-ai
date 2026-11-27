@@ -20,6 +20,7 @@ import { RUN_DEPS_FACTORY, RunDepsFactory } from './run-deps.factory';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator, admissionRefOf } from './admission-coordinator';
 import type { StuckDetector } from '../maintenance/stuck-detector';
 import { queueRegistrations } from './queue-limits';
+import { setupTurn, type SetupTurn } from './setup-turn';
 import { dbosWorkflowHistory, pruneWorkflowHistory, type WorkflowHistory, type WorkflowRetentionOptions } from '../../shared/persistence/workflow-retention';
 
 // The Run as a DBOS Transact workflow (ADR-046): workflowID = runId makes the
@@ -404,33 +405,48 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
      * hold the queue slot the running one needs. Setups with another kind of key (a template build) are not the
      * environment's own.
      */
-    private async waitForEarlierSetups(cmd: RuntimeEnvironmentSetupRequested): Promise<void> {
+    private async waitForEarlierSetups(cmd: RuntimeEnvironmentSetupRequested): Promise<SetupTurn> {
         const me = setupWorkflowId(cmd.key);
         const prefix = environmentSetupPrefix(cmd.environmentId);
-        if (!me.startsWith(prefix)) return;
-        await dbosStep('setup:turn', async () => {
-            for (;;) {
-                const mine = await DBOS.getWorkflowStatus(me);
-                const live = await DBOS.listWorkflows({ workflow_id_prefix: prefix, status: ['PENDING'], loadInput: false, loadOutput: false });
-                const earlier = live.filter((w) => w.workflowID !== me && !w.workflowID.endsWith(':admission-rejected') && (w.createdAt < (mine?.createdAt ?? Infinity) || (w.createdAt === mine?.createdAt && w.workflowID < me)));
-                if (!earlier.length) return;
-                const signal = DBOS.stepStatus?.cancelSignal;
-                if (signal?.aborted) throw signal.reason ?? Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
-                await new Promise((r) => setTimeout(r, SETUP_TURN_POLL_MS));
-            }
-        });
+        if (!me.startsWith(prefix)) return 'go';
+        // A step that answered nothing before (undefined) reads as `go`: a workflow that began before this existed resumes as it did.
+        return (
+            (await dbosStep('setup:turn', async (): Promise<SetupTurn> => {
+                for (;;) {
+                    const mine = await DBOS.getWorkflowStatus(me);
+                    const startTime = mine ? new Date(mine.createdAt).toISOString() : undefined;
+                    const peers = await DBOS.listWorkflows({ workflow_id_prefix: prefix, status: ['PENDING', 'SUCCESS'], ...(startTime ? { startTime } : {}), loadInput: false, loadOutput: false });
+                    const earlierRunning = await DBOS.listWorkflows({ workflow_id_prefix: prefix, status: ['PENDING'], loadInput: false, loadOutput: false });
+                    const all = new Map([...earlierRunning, ...peers].map((w) => [w.workflowID, { workflowID: w.workflowID, createdAt: w.createdAt, status: String(w.status) }]));
+                    const turn = setupTurn({ workflowID: me, createdAt: mine?.createdAt ?? Infinity, status: 'PENDING' }, [...all.values()]);
+                    if (turn !== 'wait') return turn;
+                    const signal = DBOS.stepStatus?.cancelSignal;
+                    if (signal?.aborted) throw signal.reason ?? Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
+                    await new Promise((r) => setTimeout(r, SETUP_TURN_POLL_MS));
+                }
+            })) ?? 'go'
+        );
     }
 
     private async executeSetupWorkflow(cmd: RuntimeEnvironmentSetupRequested, opts: SetupWorkflowOptions): Promise<unknown> {
         if (!this.setup) throw new Error('setup service unavailable');
-        await this.waitForEarlierSetups(cmd);
-        if (!opts.admissionRef) return this.setup.run(cmd, dbosStep, () => DBOS.stepStatus?.cancelSignal, { admissionBlocker: opts.admissionBlocker });
+        const turn = await this.waitForEarlierSetups(cmd);
+        if (turn === 'superseded') this.logger.warn({ msg: 'setup.superseded', environmentId: cmd.environmentId, key: cmd.key });
+        if (!opts.admissionRef) {
+            if (turn === 'superseded') return { superseded: true };
+            return this.setup.run(cmd, dbosStep, () => DBOS.stepStatus?.cancelSignal, { admissionBlocker: opts.admissionBlocker });
+        }
         if (!this.admission) throw new Error('admission coordinator unavailable');
         const ref = opts.admissionRef;
         const executionId = setupWorkflowId(cmd.key);
         const decision = await dbosStep('admission:execute', () => this.admission!.begin(ref, executionId));
         let completed = false;
         try {
+            if (turn === 'superseded') {
+                // The newer setup answers the request; this execution only gives its admission back.
+                completed = true;
+                return { superseded: true };
+            }
             const options = decision.status === 'ready'
                 ? { admissionTicket: decision.ticket, noCapacityWait: true }
                 : { admissionBlocker: { kind: 'resources' as const, signature: decision.reason, message: admissionMessage(decision.reason) } };
