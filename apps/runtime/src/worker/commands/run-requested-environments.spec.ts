@@ -71,3 +71,44 @@ describe('the recipe a Run records', () => {
         expect((await projection.get(req.runId))?.recipe).toMatchObject({ origin: 'submitted', path: '.kodus/workspace.yaml', sha: 'a'.repeat(40) });
     });
 });
+
+describe("the boot a Run waits for", () => {
+    const setupWith = (req: ReturnType<typeof shopRunRequest>, steps: unknown[]) => ({
+        get: async () =>
+            ({
+                environmentId: req.environment.environmentId,
+                organizationId: req.organizationId,
+                repositoryId: req.repository.id,
+                key: 'k',
+                state: 'active',
+                steps,
+                blockers: [],
+                requestedAt: '2026-11-27T00:00:00.000Z',
+                updatedAt: '2026-11-27T00:00:00.000Z',
+                recipe: { path: '.kodus/workspace.yaml', sha: 'a'.repeat(40), state: 'found', content: 'version: 1\n' },
+            }) as any,
+    });
+
+    it("carries the boot the environment's setup measured, never one the product sent", async () => {
+        const engine = { start: jest.fn(async () => undefined), stop: jest.fn(async () => undefined) };
+        const req = shopRunRequest();
+        const sent = { ...req, environment: { ...req.environment, setupBootMs: 1 } } as any;
+        const setups = setupWith(req, [{ name: 'boot', state: 'done', startedAt: '2026-11-27T00:00:00.000Z', durationMs: 878_000 }]);
+        const h = new RunRequestedHandler(engine as any, new InMemoryRunProjectionStore(), { isStopped: async () => false } as any, new InMemoryDistributedLocks(), new InMemoryPrAdmissionStore(), setups);
+
+        await h.requested(sent);
+
+        expect((engine.start.mock.calls[0] as any)[0].environment.setupBootMs).toBe(878_000);
+    });
+
+    it('carries none when the setup measured no finished boot', async () => {
+        const engine = { start: jest.fn(async () => undefined), stop: jest.fn(async () => undefined) };
+        const req = shopRunRequest();
+        const h = new RunRequestedHandler(engine as any, new InMemoryRunProjectionStore(), { isStopped: async () => false } as any, new InMemoryDistributedLocks(), new InMemoryPrAdmissionStore(), setupWith(req, []));
+
+        await h.requested(req);
+
+        expect((engine.start.mock.calls[0] as any)[0].environment.setupBootMs).toBeUndefined();
+    });
+});
+
