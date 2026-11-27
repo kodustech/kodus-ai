@@ -16,7 +16,7 @@ export interface IWorkflowJobRepository {
         id: string,
         data: any,
         expectedStatus?: JobStatus | JobStatus[],
-        expectedAttemptId?: string,
+        expectedAttemptId?: string | null,
     ): Promise<any>;
     findOne(id: string): Promise<any>;
     findMany(query: any): Promise<{ data: any[]; total?: number }>;

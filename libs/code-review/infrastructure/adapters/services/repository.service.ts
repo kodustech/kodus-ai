@@ -47,7 +47,6 @@ export class RepositoryService implements IRepositoryService {
             sha?: string;
             nodeCount?: number;
             edgeCount?: number;
-            expectedStatuses?: AstGraphStatus[];
         },
     ): Promise<void> {
         return this.repositoryRepository.updateGraphStatus(uuid, status, extra);

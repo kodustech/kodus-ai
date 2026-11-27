@@ -1,3 +1,5 @@
+import { ClaimConflictError } from '../domain/errors/claim-conflict.error';
+import { RecordedJobFailure } from '../domain/errors/recorded-job-failure.error';
 import { runWithTimeout } from './run-with-timeout';
 import { JobProcessorRouterService } from './job-processor-router.service';
 import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
@@ -96,3 +98,35 @@ describe('JobProcessorRouterService slice preempt', () => {
         expect(jobRepository.update).not.toHaveBeenCalled();
     });
 });
+
+it.each([
+    new RecordedJobFailure('Repository graph build failed temporarily'),
+    new ClaimConflictError(),
+])(
+    'preserves the graph processor state when the router receives %p',
+    async (error) => {
+        const jobs = {
+            findOne: jest.fn().mockResolvedValue({
+                workflowType: WorkflowType.AST_GRAPH_BUILD,
+            }),
+            update: jest.fn(),
+        };
+        const unused = {} as never;
+        const router = new JobProcessorRouterService(
+            jobs as never,
+            unused,
+            unused,
+            unused,
+            {
+                process: async () => {
+                    throw error;
+                },
+            } as never,
+            unused,
+            unused,
+            unused,
+        );
+        await expect(router.process('job-1')).rejects.toBe(error);
+        expect(jobs.update).not.toHaveBeenCalled();
+    },
+);

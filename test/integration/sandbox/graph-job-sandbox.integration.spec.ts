@@ -42,7 +42,11 @@ const repositoryId = randomUUID();
         isAvailable: () => true,
         createSandboxWithRepo: jest.fn(),
     };
-    const indexer = { fullBuild: jest.fn(), incrementalUpdate: jest.fn() };
+    const indexer = {
+        failBuildForAttempt: jest.fn(),
+        fullBuild: jest.fn(),
+        incrementalUpdate: jest.fn(),
+    };
     const repo = {
         findById: async () => ({
             externalId: 'repo',
@@ -56,6 +60,7 @@ const repositoryId = randomUUID();
     };
     const jobs = {
         findOne: async () => ({
+            status: JobStatus.PENDING,
             payload: {
                 repositoryId,
                 fullName: 'org/repo',

@@ -1,10 +1,17 @@
 import {
+    GraphBaselineChangedError,
     GraphJobAttempt,
     StaleGraphJobError,
 } from '@libs/code-review/domain/graph-job-attempt';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, JsonContains, Repository } from 'typeorm';
+import {
+    DataSource,
+    EntityManager,
+    In,
+    JsonContains,
+    Repository,
+} from 'typeorm';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowJobModel } from '@libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model';
 
@@ -15,6 +22,7 @@ import { AstGraphStatus, RepositoryModel } from './schemas/repository.model';
 interface GraphRevision {
     job?: GraphJobAttempt;
     sha?: string;
+    expectedSha?: string | null;
     signal?: AbortSignal;
 }
 
@@ -184,7 +192,7 @@ export class AstGraphRepository {
         return this.dataSource.transaction(async (manager) => {
             signal?.throwIfAborted();
             // Serialize writers before they replace rows or count a revision.
-            await this.lockRepository(manager, repoId);
+            await this.lockRepository(manager, repoId, revision);
             if (!filePaths || filePaths.length) {
                 const where = filePaths
                     ? 'repo_id = $1 AND file_path = ANY($2::text[])'
@@ -229,24 +237,32 @@ export class AstGraphRepository {
     private async lockRepository(
         manager: EntityManager,
         repoId: string,
+        revision?: GraphRevision,
     ): Promise<void> {
-        await manager.findOneOrFail(RepositoryModel, {
-            select: { uuid: true },
+        const locked = await manager.findOneOrFail(RepositoryModel, {
+            select: { uuid: true, astGraphSha: true },
             where: { uuid: repoId },
             lock: { mode: 'for_no_key_update' },
         });
+        if (
+            revision?.expectedSha !== undefined &&
+            locked.astGraphSha !== revision.expectedSha &&
+            locked.astGraphSha !== revision.sha
+        ) {
+            throw new GraphBaselineChangedError();
+        }
     }
 
     async updateBuildStatus(
         repoId: string,
         status: AstGraphStatus.BUILDING | AstGraphStatus.FAILED,
-        job?: GraphJobAttempt,
-        signal?: AbortSignal,
+        revision?: GraphRevision,
     ): Promise<void> {
+        const { signal, job } = revision ?? {};
         await this.dataSource.transaction(async (manager) => {
             signal?.throwIfAborted();
-            await this.lockRepository(manager, repoId);
-            await this.lockActiveJob(manager, job);
+            await this.lockRepository(manager, repoId, revision);
+            await this.lockJob(manager, job);
             signal?.throwIfAborted();
             await manager.update(
                 RepositoryModel,
@@ -259,9 +275,31 @@ export class AstGraphRepository {
         });
     }
 
-    private async lockActiveJob(
+    async failBuildForAttempt(
+        repoId: string,
+        job: GraphJobAttempt,
+    ): Promise<void> {
+        await this.dataSource.transaction(async (manager) => {
+            await this.lockRepository(manager, repoId);
+            await this.lockJob(manager, job, JobStatus.FAILED);
+            await manager.update(
+                RepositoryModel,
+                {
+                    uuid: repoId,
+                    astGraphStatus: In([
+                        AstGraphStatus.PENDING,
+                        AstGraphStatus.BUILDING,
+                    ]),
+                },
+                { astGraphStatus: AstGraphStatus.FAILED },
+            );
+        });
+    }
+
+    private async lockJob(
         manager: EntityManager,
         job?: GraphJobAttempt,
+        status = JobStatus.PROCESSING,
     ): Promise<void> {
         if (!job) return;
         // A retry can reuse the job ID. Only the current attempt may publish it.
@@ -270,7 +308,7 @@ export class AstGraphRepository {
             select: { uuid: true },
             where: {
                 uuid: job.jobId,
-                status: JobStatus.PROCESSING,
+                status,
                 metadata: JsonContains({ attemptId: job.attemptId }),
             },
             lock: { mode: 'pessimistic_read' },
@@ -291,7 +329,7 @@ export class AstGraphRepository {
         );
         if (revision) {
             revision.signal?.throwIfAborted();
-            await this.lockActiveJob(manager, revision.job);
+            await this.lockJob(manager, revision.job);
             revision.signal?.throwIfAborted();
             // Publish the SHA, counts and rows in one transaction. An abort during
             // any of these writes must leave the previous revision intact.

@@ -1,4 +1,9 @@
-import { StaleGraphJobError } from '@libs/code-review/domain/graph-job-attempt';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import {
+    GraphBaselineChangedError,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 import { GraphJobSandbox } from './graph-job-sandbox';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -56,6 +61,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
     };
 
     const graphIndexer = {
+        failBuildForAttempt: jest.fn(),
         fullBuild: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -169,6 +175,60 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         expect(sandbox.cleanup).not.toHaveBeenCalled();
     });
 
+    it.each([
+        [
+            'invalid parser output',
+            ErrorClassification.PERMANENT,
+            'Repository graph build failed',
+        ],
+        [
+            'ECONNRESET',
+            ErrorClassification.RETRYABLE,
+            'Repository graph build failed temporarily',
+        ],
+    ])(
+        'keeps provider details out of the stored and rethrown %s error',
+        async (reason, classification, message) => {
+            graphIndexer.fullBuild.mockRejectedValueOnce(
+                new Error(`${reason}: private-provider-query`),
+            );
+            const result = processor.process('job-1');
+            if (classification === ErrorClassification.RETRYABLE) {
+                await expect(result).rejects.toBeInstanceOf(RecordedJobFailure);
+                await expect(result).rejects.toMatchObject({ message });
+            } else {
+                await result;
+            }
+            expect(jobRepository.update).toHaveBeenLastCalledWith(
+                'job-1',
+                expect.objectContaining({
+                    status: JobStatus.FAILED,
+                    errorClassification: classification,
+                    lastError: message,
+                }),
+                [JobStatus.PROCESSING, JobStatus.FAILED],
+                expect.any(String),
+            );
+        },
+    );
+
+    it('retries a reused checkout whose refresh did not reach the stored revision', async () => {
+        leaseManager.acquire.mockResolvedValueOnce({
+            sandbox,
+            leaseId: 'reused',
+            sandboxId: 'existing',
+            wasCreated: false,
+        });
+        await expect(processor.process('job-1')).rejects.toBeInstanceOf(
+            GraphBaselineChangedError,
+        );
+        expect(graphIndexer.fullBuild).not.toHaveBeenCalled();
+        expect(graphIndexer.failBuildForAttempt).not.toHaveBeenCalled();
+        expect(leaseManager.release).toHaveBeenCalledWith('reused', {
+            idleMs: 0,
+        });
+    });
+
     // The build runs clone + many /contents reads + indexing, any of which
     // can stall on a retry-after; without the race the worker slot stayed
     // held past the router timeout.
@@ -245,7 +305,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
                     ([, patch]) => patch.status,
                 ),
             ).not.toContain(JobStatus.FAILED);
-            expect(repositoryService.updateGraphStatus).not.toHaveBeenCalled();
+            expect(graphIndexer.failBuildForAttempt).not.toHaveBeenCalled();
             expect(leaseManager.release).toHaveBeenCalledTimes(1);
         });
 

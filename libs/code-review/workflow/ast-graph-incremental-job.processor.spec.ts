@@ -1,4 +1,9 @@
-import { StaleGraphJobError } from '@libs/code-review/domain/graph-job-attempt';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import {
+    GraphBaselineChangedError,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 import { GraphJobSandbox } from './graph-job-sandbox';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -30,6 +35,9 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
         repoDir: '/home/user/repo',
         sandboxId: 'sbx-2',
         type: 'e2b',
+        run: jest
+            .fn()
+            .mockResolvedValue({ stdout: 'checked-out-sha', exitCode: 0 }),
         cleanup: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -139,6 +147,31 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
         });
     });
 
+    it('publishes the checked-out SHA for a late merge event', async () => {
+        repositoryService.findById.mockResolvedValueOnce({
+            externalId: 'ext-1',
+            defaultBranch: 'main',
+            fullName: 'org/repo',
+            astGraphSha: 'previous',
+        });
+        await processor.process('job-2');
+        expect(graphIndexer.incrementalUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                expectedSha: 'previous',
+                newSha: 'checked-out-sha',
+                changedFiles: job.payload.changedFiles,
+            }),
+        );
+        expect(jobRepository.update).toHaveBeenLastCalledWith(
+            'job-2',
+            expect.objectContaining({
+                result: expect.objectContaining({ newSha: 'checked-out-sha' }),
+            }),
+            JobStatus.PROCESSING,
+            expect.any(String),
+        );
+    });
+
     it('cleans up the leased sandbox on completion', async () => {
         await processor.process('job-2');
 
@@ -161,6 +194,59 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
             idleMs: 0,
         });
         expect(sandbox.cleanup).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [
+            'invalid parser output',
+            ErrorClassification.PERMANENT,
+            'Repository graph incremental update failed',
+        ],
+        [
+            'ECONNRESET',
+            ErrorClassification.RETRYABLE,
+            'Repository graph incremental update failed temporarily',
+        ],
+    ])(
+        'keeps provider details out of the stored and rethrown %s error',
+        async (reason, classification, message) => {
+            graphIndexer.incrementalUpdate.mockRejectedValueOnce(
+                new Error(`${reason}: private-provider-query`),
+            );
+            const result = processor.process('job-2');
+            if (classification === ErrorClassification.RETRYABLE) {
+                await expect(result).rejects.toBeInstanceOf(RecordedJobFailure);
+                await expect(result).rejects.toMatchObject({ message });
+            } else {
+                await result;
+            }
+            expect(jobRepository.update).toHaveBeenLastCalledWith(
+                'job-2',
+                expect.objectContaining({
+                    status: JobStatus.FAILED,
+                    errorClassification: classification,
+                    lastError: message,
+                }),
+                [JobStatus.PROCESSING, JobStatus.FAILED],
+                expect.any(String),
+            );
+        },
+    );
+
+    it('retries a reused checkout whose refresh did not reach the stored revision', async () => {
+        leaseManager.acquire.mockResolvedValueOnce({
+            sandbox,
+            leaseId: 'reused',
+            sandboxId: 'existing',
+            wasCreated: false,
+        });
+        await expect(processor.process('job-2')).rejects.toBeInstanceOf(
+            GraphBaselineChangedError,
+        );
+        expect(graphIndexer.incrementalUpdate).not.toHaveBeenCalled();
+        expect(leaseManager.release).toHaveBeenCalledWith('reused', {
+            idleMs: 0,
+        });
     });
 
     // The build runs clone + many /contents reads + indexing, any of which

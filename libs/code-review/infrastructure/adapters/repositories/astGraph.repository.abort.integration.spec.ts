@@ -4,7 +4,16 @@ import { DataSource, EntitySchema } from 'typeorm';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowJobModel } from '@libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model';
 import { WorkflowJobRepository } from '@libs/core/workflow/infrastructure/repositories/workflow-job.repository';
-import { StaleGraphJobError } from '@libs/code-review/domain/graph-job-attempt';
+import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
+import { GraphJobSandbox } from '@libs/code-review/workflow/graph-job-sandbox';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import { claimGraphJob } from '@libs/code-review/workflow/graph-job-stage';
+import {
+    GraphBaselineChangedError,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 
 import { AstGraphRepository, GraphNodeJson } from './astGraph.repository';
 import { AstEdgeModel } from './schemas/astEdge.model';
@@ -42,7 +51,13 @@ const db = new DataSource({
             columns: {
                 uuid: { type: 'uuid', primary: true },
                 status: { type: 'varchar' },
-                metadata: { type: 'jsonb' },
+                metadata: { type: 'jsonb', nullable: true },
+                startedAt: { type: 'timestamp', nullable: true },
+                currentStage: { type: 'varchar', nullable: true },
+                payload: { type: 'jsonb', nullable: true },
+                errorClassification: { type: 'varchar', nullable: true },
+                lastError: { type: 'text', nullable: true },
+                completedAt: { type: 'timestamp', nullable: true },
             },
         }),
     ],
@@ -68,6 +83,18 @@ async function waitForBlockedWriter() {
         await new Promise((resolve) => setTimeout(resolve, 10));
     }
     throw new Error('Expected a PostgreSQL writer to be waiting on a lock');
+}
+
+function readPublishedRevision(repoId: string) {
+    return db.getRepository(RepositoryModel).findOneOrFail({
+        select: {
+            astGraphStatus: true,
+            astGraphSha: true,
+            astGraphNodeCount: true,
+            astGraphEdgeCount: true,
+        },
+        where: { uuid: repoId },
+    });
 }
 
 const repoId = randomUUID();
@@ -194,6 +221,238 @@ const run =
             );
         });
 
+        it('retries an older checkout without replacing rows or losing disjoint changes', async () => {
+            const update = (
+                file: string,
+                expectedSha: string,
+                sha: string,
+                name: string,
+            ) =>
+                graph.incrementalUpdate(
+                    repoId,
+                    [file],
+                    [{ ...node(name), file_path: file }],
+                    [],
+                    { expectedSha, sha },
+                );
+            await update('src/a.ts', 'old', 'newer', 'new-content');
+            await expect(
+                graph.updateBuildStatus(repoId, AstGraphStatus.BUILDING, {
+                    expectedSha: 'old',
+                    sha: 'older',
+                    job,
+                }),
+            ).rejects.toBeInstanceOf(GraphBaselineChangedError);
+            expect((await readPublishedRevision(repoId)).astGraphStatus).toBe(
+                AstGraphStatus.READY,
+            );
+            const late = update('src/a.ts', 'old', 'older', 'stale-content');
+            await expect(late).rejects.toBeInstanceOf(
+                GraphBaselineChangedError,
+            );
+            // A retry reparses this event's paths on the latest default-branch checkout.
+            await update('src/b.ts', 'newer', 'newer', 'separate-change');
+            const stored = await graph.exportAsGraphJson(repoId);
+            expect(stored.nodes.map((n) => n.name).sort()).toEqual([
+                'new-content',
+                'separate-change',
+            ]);
+            expect(
+                (
+                    await db
+                        .getRepository(RepositoryModel)
+                        .findOneByOrFail({ uuid: repoId })
+                ).astGraphSha,
+            ).toBe('newer');
+        });
+
+        it.each(['replacement', 'provider failure'] as const)(
+            'persists the incremental processor outcome after %s',
+            async (condition) => {
+                const rows = db.getRepository(WorkflowJobModel);
+                const jobs = new WorkflowJobRepository(rows);
+                const replacementId = randomUUID();
+                await rows.update(job.jobId, {
+                    status: JobStatus.PENDING,
+                    metadata: null,
+                    errorClassification: null,
+                    lastError: null,
+                    payload: {
+                        repositoryId: repoId,
+                        fullName: 'org/repo',
+                        defaultBranch: 'main',
+                        platform: 'GITHUB',
+                        changedFiles: ['src/a.ts'],
+                    },
+                });
+                const processor = new AstGraphIncrementalJobProcessor(
+                    jobs,
+                    {
+                        acquire: async () => ({
+                            leaseId: 'lease',
+                            sandboxId: 'sandbox',
+                            wasCreated: true,
+                            sandbox: {
+                                repoDir: '/repo',
+                                run: async () => ({
+                                    stdout: 'candidate',
+                                    exitCode: 0,
+                                }),
+                            },
+                        }),
+                        release: async () => {},
+                    } as never,
+                    {
+                        getCloneParams: async () => ({
+                            url: 'https://example.org/repo',
+                        }),
+                    } as never,
+                    {
+                        incrementalUpdate: async ({ job: writing }) => {
+                            if (condition === 'provider failure')
+                                throw new Error(
+                                    'ECONNRESET private-provider-query',
+                                );
+                            await rows.update(job.jobId, {
+                                status: JobStatus.PROCESSING,
+                                metadata: { attemptId: replacementId },
+                            });
+                            await graph.incrementalUpdate(
+                                repoId,
+                                ['src/a.ts'],
+                                [node('late')],
+                                [],
+                                { sha: 'candidate', job: writing },
+                            );
+                        },
+                    } as never,
+                    {
+                        findById: () =>
+                            db
+                                .getRepository(RepositoryModel)
+                                .findOneByOrFail({ uuid: repoId }),
+                    } as never,
+                    new GraphJobSandbox(),
+                );
+                const processing = processor.process(job.jobId);
+                if (condition === 'provider failure') {
+                    await expect(processing).rejects.toBeInstanceOf(
+                        RecordedJobFailure,
+                    );
+                    expect(
+                        await rows.findOneOrFail({
+                            where: { uuid: job.jobId },
+                            select: {
+                                status: true,
+                                lastError: true,
+                                errorClassification: true,
+                            },
+                        }),
+                    ).toEqual({
+                        status: JobStatus.FAILED,
+                        lastError:
+                            'Repository graph incremental update failed temporarily',
+                        errorClassification: ErrorClassification.RETRYABLE,
+                    });
+                } else {
+                    await processing;
+                    expect(
+                        await rows.findOneOrFail({
+                            where: { uuid: job.jobId },
+                            select: { status: true, metadata: true },
+                        }),
+                    ).toEqual({
+                        status: JobStatus.PROCESSING,
+                        metadata: { attemptId: replacementId },
+                    });
+                }
+                expect(
+                    (
+                        await db
+                            .getRepository(RepositoryModel)
+                            .findOneByOrFail({ uuid: repoId })
+                    ).astGraphSha,
+                ).toBe('old');
+                expect(
+                    (await graph.exportAsGraphJson(repoId)).nodes
+                        .map((n) => n.name)
+                        .sort(),
+                ).toEqual(['callee', 'caller']);
+            },
+        );
+
+        it('claims only the observed attempt, keeps live work and reclaims after the deadline', async () => {
+            const rows = db.getRepository(WorkflowJobModel);
+            const jobs = new WorkflowJobRepository(rows);
+            await rows.update(job.jobId, {
+                status: JobStatus.PENDING,
+                metadata: null,
+            });
+            const pending = await jobs.findOne(job.jobId);
+            const stale = { jobId: job.jobId, attemptId: randomUUID() };
+            expect(await claimGraphJob(jobs, pending, job, 60_000)).toBe(true);
+            expect(await claimGraphJob(jobs, pending, stale, 60_000)).toBe(
+                false,
+            );
+            const live = await jobs.findOne(job.jobId);
+            await expect(
+                claimGraphJob(jobs, live, stale, 60_000),
+            ).rejects.toBeInstanceOf(ClaimConflictError);
+            await rows.update(job.jobId, {
+                startedAt: new Date(Date.now() - 120_000),
+            });
+            const expired = await jobs.findOne(job.jobId);
+            const next = { jobId: job.jobId, attemptId: randomUUID() };
+            expect(await claimGraphJob(jobs, expired, next, 60_000)).toBe(true);
+            expect(await claimGraphJob(jobs, expired, stale, 60_000)).toBe(
+                false,
+            );
+            expect((await jobs.findOne(job.jobId)).metadata).toEqual({
+                attemptId: next.attemptId,
+                stage: 'VALIDATING',
+            });
+            await rows.update(job.jobId, { status: JobStatus.FAILED });
+            expect(
+                await claimGraphJob(
+                    jobs,
+                    await jobs.findOne(job.jobId),
+                    stale,
+                    60_000,
+                ),
+            ).toBe(true);
+        });
+
+        it('only the failed owner can fail a build and a published graph stays ready', async () => {
+            const rows = db.getRepository(WorkflowJobModel);
+            const repos = db.getRepository(RepositoryModel);
+            await rows.update(job.jobId, { status: JobStatus.FAILED });
+            await graph.failBuildForAttempt(repoId, job);
+            expect(
+                (await repos.findOneByOrFail({ uuid: repoId })).astGraphStatus,
+            ).toBe(AstGraphStatus.READY);
+            await repos.update(repoId, {
+                astGraphStatus: AstGraphStatus.BUILDING,
+            });
+            await graph.failBuildForAttempt(repoId, job);
+            expect(
+                (await repos.findOneByOrFail({ uuid: repoId })).astGraphStatus,
+            ).toBe(AstGraphStatus.FAILED);
+            const replacement = { jobId: job.jobId, attemptId: randomUUID() };
+            await rows.update(job.jobId, {
+                status: JobStatus.PROCESSING,
+                metadata: { attemptId: replacement.attemptId },
+            });
+            await graph.updateBuildStatus(repoId, AstGraphStatus.BUILDING, {
+                job: replacement,
+            });
+            await expect(
+                graph.failBuildForAttempt(repoId, job),
+            ).rejects.toBeInstanceOf(StaleGraphJobError);
+            expect(
+                (await repos.findOneByOrFail({ uuid: repoId })).astGraphStatus,
+            ).toBe(AstGraphStatus.BUILDING);
+        });
+
         it('orders a failure after a publication already committing', async () => {
             const entered = latch(),
                 release = latch();
@@ -273,12 +532,10 @@ const run =
                     controller.abort(reason);
             };
             await expect(
-                graph.updateBuildStatus(
-                    repoId,
-                    AstGraphStatus.BUILDING,
+                graph.updateBuildStatus(repoId, AstGraphStatus.BUILDING, {
                     job,
-                    controller.signal,
-                ),
+                    signal: controller.signal,
+                }),
             ).rejects.toBe(reason);
             expect(
                 (
@@ -310,14 +567,14 @@ const run =
             it.each(['failed', 'replaced'])(
                 `${kind} refuses publication by a %s attempt`,
                 async (condition) => {
-                    await db
-                        .getRepository(WorkflowJobModel)
-                        .update(
-                            job.jobId,
-                            condition === 'failed'
-                                ? { status: JobStatus.FAILED }
-                                : { metadata: { attemptId: randomUUID() } },
-                        );
+                    const replacementId = randomUUID();
+                    const rows = db.getRepository(WorkflowJobModel);
+                    await rows.update(
+                        job.jobId,
+                        condition === 'failed'
+                            ? { status: JobStatus.FAILED }
+                            : { metadata: { attemptId: replacementId } },
+                    );
                     await expect(save()).rejects.toBeInstanceOf(
                         StaleGraphJobError,
                     );
@@ -325,9 +582,27 @@ const run =
                         graph.updateBuildStatus(
                             repoId,
                             AstGraphStatus.BUILDING,
-                            job,
+                            { job },
                         ),
                     ).rejects.toBeInstanceOf(StaleGraphJobError);
+                    if (condition === 'replaced') {
+                        const jobs = new WorkflowJobRepository(rows);
+                        await jobs.update(
+                            job.jobId,
+                            { status: JobStatus.FAILED },
+                            JobStatus.PROCESSING,
+                            job.attemptId,
+                        );
+                        expect(
+                            await rows.findOneOrFail({
+                                select: { status: true, metadata: true },
+                                where: { uuid: job.jobId },
+                            }),
+                        ).toEqual({
+                            status: JobStatus.PROCESSING,
+                            metadata: { attemptId: replacementId },
+                        });
+                    }
                     expect(
                         (
                             await db
@@ -390,11 +665,8 @@ const run =
                     };
                     await expect(save(controller.signal)).rejects.toBe(reason);
                     expect(controller.signal.aborted).toBe(true);
-                    expect(
-                        await db
-                            .getRepository(RepositoryModel)
-                            .findOneBy({ uuid: repoId }),
-                    ).toMatchObject({
+                    expect(await readPublishedRevision(repoId)).toEqual({
+                        astGraphStatus: AstGraphStatus.READY,
                         astGraphSha: 'old',
                         astGraphNodeCount: 2,
                         astGraphEdgeCount: 1,
@@ -403,18 +675,12 @@ const run =
                     expect(
                         stored.nodes.map((n) => n.qualified_name).sort(),
                     ).toEqual(['src/a.ts::callee', 'src/a.ts::caller']);
-                    expect(stored.edges).toEqual([
-                        expect.objectContaining(oldEdges[0]),
-                    ]);
+                    expect(stored.edges).toEqual(oldEdges);
                 },
             );
             it(`${kind} save publishes the new content, SHA and counts together`, async () => {
                 await save();
-                expect(
-                    await db
-                        .getRepository(RepositoryModel)
-                        .findOneBy({ uuid: repoId }),
-                ).toMatchObject({
+                expect(await readPublishedRevision(repoId)).toEqual({
                     astGraphStatus: AstGraphStatus.READY,
                     astGraphSha: 'new',
                     astGraphNodeCount: 1,

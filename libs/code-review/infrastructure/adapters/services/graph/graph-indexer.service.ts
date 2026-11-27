@@ -53,6 +53,13 @@ export class GraphIndexerService {
         private readonly cli: KodusGraphCli,
     ) {}
 
+    failBuildForAttempt(
+        repositoryId: string,
+        job: GraphJobAttempt,
+    ): Promise<void> {
+        return this.astGraphRepo.failBuildForAttempt(repositoryId, job);
+    }
+
     /**
      * Full build: parse entire repo and persist to DB.
      */
@@ -62,9 +69,16 @@ export class GraphIndexerService {
         headSha: string;
         signal?: AbortSignal;
         job?: GraphJobAttempt;
+        expectedSha?: string | null;
     }): Promise<void> {
         const { repositoryId, sandbox, headSha, signal, job } = params;
         signal?.throwIfAborted();
+        const revision = {
+            sha: headSha,
+            expectedSha: params.expectedSha,
+            job,
+            signal,
+        };
         const buildStart = Date.now();
 
         this.logger.log({
@@ -76,8 +90,7 @@ export class GraphIndexerService {
         await this.astGraphRepo.updateBuildStatus(
             repositoryId,
             AstGraphStatus.BUILDING,
-            job,
-            signal,
+            revision,
         );
 
         try {
@@ -122,8 +135,7 @@ export class GraphIndexerService {
                 await this.astGraphRepo.updateBuildStatus(
                     repositoryId,
                     AstGraphStatus.FAILED,
-                    job,
-                    signal,
+                    revision,
                 );
                 return;
             }
@@ -133,7 +145,7 @@ export class GraphIndexerService {
                 repositoryId,
                 nodes,
                 edges,
-                { sha: headSha, signal, job },
+                revision,
             );
 
             this.logger.log({
@@ -167,8 +179,7 @@ export class GraphIndexerService {
                 await this.astGraphRepo.updateBuildStatus(
                     repositoryId,
                     AstGraphStatus.FAILED,
-                    job,
-                    signal,
+                    revision,
                 );
             }
             const errorMessage =
@@ -192,6 +203,7 @@ export class GraphIndexerService {
         newSha: string;
         signal?: AbortSignal;
         job?: GraphJobAttempt;
+        expectedSha?: string | null;
     }): Promise<void> {
         const { repositoryId, sandbox, newSha, signal, job } = params;
         signal?.throwIfAborted();
@@ -251,7 +263,7 @@ export class GraphIndexerService {
                 changedFiles,
                 nodes,
                 edges,
-                { sha: newSha, signal, job },
+                { sha: newSha, expectedSha: params.expectedSha, signal, job },
             );
 
             this.logger.log({

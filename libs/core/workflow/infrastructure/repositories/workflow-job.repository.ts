@@ -6,6 +6,7 @@ import {
     EntityManager,
     In,
     JsonContains,
+    Raw,
 } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -164,7 +165,7 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         id: string,
         data: Partial<IWorkflowJob>,
         expectedStatus?: JobStatus | JobStatus[],
-        expectedAttemptId?: string,
+        expectedAttemptId?: string | null,
     ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
@@ -218,10 +219,16 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                             ? In(expectedStatus)
                             : expectedStatus,
                     }),
-                    ...(expectedAttemptId && {
-                        metadata: JsonContains({
-                            attemptId: expectedAttemptId,
-                        }),
+                    ...(expectedAttemptId !== undefined && {
+                        metadata:
+                            expectedAttemptId === null
+                                ? Raw(
+                                      (alias) =>
+                                          `(${alias} ->> 'attemptId') IS NULL`,
+                                  )
+                                : JsonContains({
+                                      attemptId: expectedAttemptId,
+                                  }),
                     }),
                 },
                 updateData,

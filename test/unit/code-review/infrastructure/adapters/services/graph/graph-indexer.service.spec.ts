@@ -260,7 +260,16 @@ describe('GraphIndexerService', () => {
             });
 
             expect(mockAstGraphRepo.updateBuildStatus.mock.calls).toEqual([
-                [REPO_ID, AstGraphStatus.BUILDING, undefined, undefined],
+                [
+                    REPO_ID,
+                    AstGraphStatus.BUILDING,
+                    {
+                        sha: HEAD_SHA,
+                        expectedSha: undefined,
+                        job: undefined,
+                        signal: undefined,
+                    },
+                ],
             ]);
         });
 
@@ -286,8 +295,12 @@ describe('GraphIndexerService', () => {
             expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
-                undefined,
-                undefined,
+                {
+                    sha: HEAD_SHA,
+                    expectedSha: undefined,
+                    signal: undefined,
+                    job: undefined,
+                },
             );
         });
 
@@ -304,8 +317,12 @@ describe('GraphIndexerService', () => {
             expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
-                undefined,
-                undefined,
+                {
+                    sha: HEAD_SHA,
+                    expectedSha: undefined,
+                    signal: undefined,
+                    job: undefined,
+                },
             );
 
             expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
@@ -332,8 +349,12 @@ describe('GraphIndexerService', () => {
             expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
-                undefined,
-                undefined,
+                {
+                    sha: HEAD_SHA,
+                    expectedSha: undefined,
+                    signal: undefined,
+                    job: undefined,
+                },
             );
         });
 
@@ -351,8 +372,12 @@ describe('GraphIndexerService', () => {
             expect(mockAstGraphRepo.updateBuildStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.FAILED,
-                undefined,
-                undefined,
+                {
+                    sha: HEAD_SHA,
+                    expectedSha: undefined,
+                    signal: undefined,
+                    job: undefined,
+                },
             );
         });
     });

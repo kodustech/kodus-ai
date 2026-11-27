@@ -32,6 +32,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { RecordedJobFailure } from '../domain/errors/recorded-job-failure.error';
 import { isClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
@@ -99,7 +100,10 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
     }
 
     protected shouldMarkJobFailed(error: unknown): boolean {
-        return !isClaimConflictError(error);
+        return (
+            !isClaimConflictError(error) &&
+            !(error instanceof RecordedJobFailure)
+        );
     }
 
     protected abortInFlightWork(): void {
@@ -305,7 +309,7 @@ export abstract class WorkflowJobConsumerBase implements BeforeApplicationShutdo
                     this.logger.error({
                         message: this.shouldMarkJobFailed(error)
                             ? 'Failed to process workflow job'
-                            : 'Held or preempted job; requeueing without failing it',
+                            : 'Requeueing workflow job with its existing status',
                         context: CONSUMER_CONTEXT,
                         error,
                         metadata: {

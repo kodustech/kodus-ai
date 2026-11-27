@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
+    AST_GRAPH_BUILD_TIMEOUT_MS,
+    GraphBaselineChangedError,
     GraphJobAttempt,
     StaleGraphJobError,
 } from '@libs/code-review/domain/graph-job-attempt';
@@ -25,11 +27,11 @@ import {
     IRepositoryService,
     REPOSITORY_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
-import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
-import { updateGraphJobStage } from './graph-job-stage';
-import { GraphJobSandbox } from './graph-job-sandbox';
+import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import { claimGraphJob, updateGraphJobStage } from './graph-job-stage';
+import { GraphJobSandbox, graphCheckoutSha } from './graph-job-sandbox';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. A full-repo AST build on a large repo can legitimately run
@@ -95,10 +97,11 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
 
         const attempt: GraphJobAttempt = { jobId, attemptId: randomUUID() };
         if (
-            !(await updateGraphJobStage(
+            !(await claimGraphJob(
                 this.jobRepository,
+                job,
                 attempt,
-                'VALIDATING',
+                AST_GRAPH_BUILD_TIMEOUT_MS,
             ))
         )
             return;
@@ -265,18 +268,12 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
 
             // 3. Get HEAD sha
             signal?.throwIfAborted();
-            const shaResult = await raceWithAbortSignal(
-                sandbox.run(`git -C ${sandbox.repoDir} rev-parse HEAD`, {
-                    timeoutMs: 10_000,
-                    signal,
-                }),
+            const headSha = await graphCheckoutSha(
+                sandbox,
+                lease.wasCreated,
+                repoRecord.astGraphSha,
                 signal,
             );
-            const headSha = shaResult.stdout?.trim() || '';
-
-            if (!headSha) {
-                throw new Error('Failed to resolve HEAD sha from sandbox');
-            }
 
             this.logger.log({
                 message: `[AST-GRAPH-JOB] HEAD sha resolved: ${headSha.substring(0, 8)} for ${repoLabel}`,
@@ -300,6 +297,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                     repositoryId: payload.repositoryId,
                     sandbox,
                     job: attempt,
+                    expectedSha: repoRecord.astGraphSha ?? null,
                     headSha,
                     signal,
                 }),
@@ -340,7 +338,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             const classification = this.classifyError(error);
 
             this.logger.error({
-                message: `[AST-GRAPH-JOB] Build FAILED for ${repoLabel} after ${totalMs}ms — ${error.message}`,
+                message: `[AST-GRAPH-JOB] Build FAILED for ${repoLabel} after ${totalMs}ms`,
                 error,
                 context: AstGraphBuildJobProcessor.name,
                 metadata: {
@@ -363,8 +361,11 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
 
             // Only re-throw TRANSIENT errors so RabbitMQ retries.
             // PERMANENT errors are already marked FAILED — retrying would just overwrite the status.
+            if (error instanceof GraphBaselineChangedError) throw error;
             if (classification === ErrorClassification.RETRYABLE) {
-                throw error;
+                throw new RecordedJobFailure(
+                    this.failureMessage(classification),
+                );
             }
         } finally {
             if (lease) await releaseSandbox(lease);
@@ -372,6 +373,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
     }
 
     private classifyError(error: any): ErrorClassification {
+        if (error instanceof GraphBaselineChangedError)
+            return ErrorClassification.RETRYABLE;
         const msg = (error?.message || '').toLowerCase();
         const stderr = (error?.result?.stderr || '').toLowerCase();
         const combined = `${msg} ${stderr}`;
@@ -400,10 +403,16 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         return ErrorClassification.PERMANENT;
     }
 
+    private failureMessage(classification: ErrorClassification): string {
+        return classification === ErrorClassification.RETRYABLE
+            ? 'Repository graph build failed temporarily'
+            : 'Repository graph build failed';
+    }
+
     async handleFailure(
         jobId: string,
         error: Error,
-        classification: ErrorClassification = ErrorClassification.PERMANENT,
+        classification: ErrorClassification = this.classifyError(error),
         sandboxId?: string,
         repositoryId?: string,
         attemptId?: string,
@@ -413,7 +422,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             {
                 status: JobStatus.FAILED,
                 errorClassification: classification,
-                lastError: error.message?.slice(0, 1000),
+                lastError: this.failureMessage(classification),
                 failedAt: new Date(),
                 metadata: { attemptId, sandboxId, stage: 'FAILED' },
             },
@@ -422,20 +431,18 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         );
         if (updated === null) return;
 
-        // Ensure repository status is updated to FAILED so it doesn't stay stuck in PENDING/BUILDING
-        if (repositoryId) {
+        if (
+            repositoryId &&
+            attemptId &&
+            !(error instanceof GraphBaselineChangedError)
+        ) {
             try {
-                await this.repositoryService.updateGraphStatus(
-                    repositoryId,
-                    AstGraphStatus.FAILED,
-                    {
-                        expectedStatuses: [
-                            AstGraphStatus.PENDING,
-                            AstGraphStatus.BUILDING,
-                        ],
-                    },
-                );
+                await this.graphIndexer.failBuildForAttempt(repositoryId, {
+                    jobId,
+                    attemptId,
+                });
             } catch (statusError) {
+                if (statusError instanceof StaleGraphJobError) return;
                 this.logger.warn({
                     message: `[AST-GRAPH-JOB] Failed to update repository status to FAILED`,
                     context: AstGraphBuildJobProcessor.name,
