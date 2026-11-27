@@ -222,7 +222,14 @@ func (t *Tracker) Line(line string) {
 // "[2/5] RUN npm install", and a platform may come first
 // ("[linux/amd64 build 2/5] RUN ..."). Reading only the named form left an
 // `npm install` of an unnamed stage looking like a builder that hung.
-var projectStep = regexp.MustCompile(`^\[(?:[^\]\s]+ ){0,2}\d+/\d+\] `)
+//
+// BuildKit pads the step number to the width of the step count, so a
+// Dockerfile of ten or more steps names its first nine "[stage-0  2/13] RUN
+// ..." (two spaces), or "[ 2/13]" with no stage: the separators are any run of
+// blanks. Matching one space left every step before the tenth, an `apt-get
+// install` that printed nothing for five minutes among them, looking like a
+// builder that hung (seen live on a 13-step Dockerfile).
+var projectStep = regexp.MustCompile(`^\[\s*(?:[^\]\s]+\s+){0,2}\d+/\d+\] `)
 
 // LastLine is when the builder printed its last line; zero before the first.
 func (t *Tracker) LastLine() time.Time {

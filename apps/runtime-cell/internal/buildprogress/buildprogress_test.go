@@ -1,6 +1,7 @@
 package buildprogress
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -394,5 +395,46 @@ func TestATrackerReadsTheTarballAndCacheExportStepsAsLongPhases(t *testing.T) {
 	tr.Line("#2 [internal] load .dockerignore")
 	if tr.ExportRunning() {
 		t.Error("a short step of BuildKit read as a long phase")
+	}
+}
+
+// BuildKit pads a step's number to the width of the step count: the first nine
+// steps of a 13-step Dockerfile read "[stage-0  2/13] RUN ..." with two spaces.
+// A RUN there (an apt-get install with no output for minutes) is the project's
+// step, not a builder that hung between BuildKit's own. The transcript is
+// recorded from a live build of a monorepo's Dockerfile, with names removed.
+func TestATrackerReadsPaddedStepNumbersAsTheProjects(t *testing.T) {
+	raw, err := os.ReadFile("testdata/node-padded-steps.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := New()
+	sawApt := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		tr.Line(line)
+		if strings.HasPrefix(line, "#6 764.1") {
+			sawApt = true
+			if !tr.ProjectStepRunning() {
+				t.Fatal("the apt-get step of a padded step number is not read as the project's while it runs")
+			}
+		}
+		if strings.HasPrefix(line, "#6 DONE") && tr.ProjectStepRunning() {
+			t.Fatal("a finished padded step still reads as running")
+		}
+	}
+	if !sawApt {
+		t.Fatal("transcript lost its apt-get lines")
+	}
+	for _, name := range []string{"[stage-0  2/13] RUN apt-get update", "[ 2/13] RUN apt-get update", "[stage-0 10/13] RUN x", "[linux/amd64 build  2/13] RUN x"} {
+		tr := New()
+		tr.Line("#6 " + name)
+		if !tr.ProjectStepRunning() {
+			t.Errorf("a running step named %q is not read as the project's", name)
+		}
+	}
+	tr = New()
+	tr.Line("#5 [internal] load build context")
+	if tr.ProjectStepRunning() {
+		t.Error("BuildKit's own step read as the project's")
 	}
 }

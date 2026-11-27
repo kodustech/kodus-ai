@@ -122,6 +122,28 @@ func TestABuilderSilentInAStepOfAnUnnamedStageIsLeftRunning(t *testing.T) {
 	}
 }
 
+// The same for a Dockerfile of ten or more steps, whose first nine BuildKit
+// pads with a second space ("[stage-0  2/13] RUN apt-get ..."): live, an
+// apt-get install of that form was stopped as the cell's after 5m of silence.
+func TestABuilderSilentInAPaddedProjectStepIsLeftRunning(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.buildOutput = []string{
+		"#1 [internal] load build definition from Dockerfile",
+		"#1 DONE 0.0s",
+		"#6 [stage-0  2/13] RUN apt-get update  && apt-get install -y xvfb",
+		"#6 581.6 Preparing to unpack .../90-xvfb_amd64.deb ...",
+	}
+	docker.stallBuild = true
+	h := d.hooksForTest()
+	h.buildStallAfter, h.buildStallEvery = 50*time.Millisecond, 5*time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	_, _, err := d.build(ctx, machine("claim-pr", bakeEnv), []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, "net", "resolv", bakeSubnet, nil, nil)
+	if errors.Is(err, driver.ErrBuilderFailed) {
+		t.Fatalf("a quiet padded project step was stopped as the cell's failure: %v", err)
+	}
+}
+
 // No phase is silent forever: a project's step that prints nothing past the
 // hard ceiling is stopped as the cell's failure all the same.
 func TestABuilderSilentInAProjectStepPastTheHardCeilingIsStopped(t *testing.T) {

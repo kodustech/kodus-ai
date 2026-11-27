@@ -1,0 +1,20 @@
+#1 [internal] load build definition from Dockerfile.backend
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-trixie
+#2 DONE 1.7s
+
+#4 [stage-0  1/13] FROM docker.io/library/node:22-trixie@sha256:0000000000000000000000000000000000000000000000000000000000000000
+#4 DONE 211.0s
+
+#6 [stage-0  2/13] RUN apt-get update  && apt-get install -y --no-install-recommends openjdk-21-jre-headless xvfb
+#6 0.884 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#6 16.46 Fetched 114 MB in 10s (11.8 MB/s)
+#6 21.62 Unpacking systemd (257.13-1~deb13u1) ...
+#6 133.3 Setting up libapparmor1:amd64 (4.1.0-1) ...
+#6 660.2 Processing triggers for shared-mime-info (2.4-5+b2) ...
+#6 764.1 Processing triggers for procps (2:4.0.4-9) ...
+#6 DONE 775.8s
+
+#7 [stage-0  3/13] RUN npm install -g bun@1.4.4 wait-on@8
+#7 DONE 90.7s
