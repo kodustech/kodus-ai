@@ -1266,6 +1266,19 @@ func (c CLI) ComposeStopServices(ctx context.Context, project string, services .
 	return err
 }
 
+// ComposeStartServices starts the named stopped services of a project.
+func (c CLI) ComposeStartServices(ctx context.Context, project string, services ...string) error {
+	_, err := c.run(ctx, nil, composecmd.Start(project, services...)...)
+	return err
+}
+
+// ComposeRestartServices restarts the named services of a project, in
+// place: the containers are kept, only their processes start again.
+func (c CLI) ComposeRestartServices(ctx context.Context, project string, services ...string) error {
+	_, err := c.run(ctx, nil, composecmd.Restart(project, services...)...)
+	return err
+}
+
 // Volume is one Docker volume with its labels.
 type Volume struct {
 	Name   string

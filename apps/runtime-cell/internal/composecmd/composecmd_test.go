@@ -46,6 +46,9 @@ func TestEachVerbIsTheComposeCommandLineTheDriversRun(t *testing.T) {
 		// F3-04: a service a compose file names "--dry-run" read as a flag.
 		{"stop names services after the flags", Stop("p", "--dry-run"), "compose -p p stop -t 10 -- --dry-run"},
 		{"kill signals the named services only", Kill("p", "SIGUSR2", "api", "worker"), "compose -p p kill -s SIGUSR2 -- api worker"},
+		// The data-only reset starts and restarts named services in place.
+		{"start names services after the flags", Start("p", "--dry-run", "db"), "compose -p p start -- --dry-run db"},
+		{"restart waits the cell's bound and names services after the flags", Restart("p", "api"), "compose -p p restart -t 10 -- api"},
 		{"exec runs without a tty", Project{Name: "p"}.Exec("api", "sh", "-c", "x"), "compose -p p exec -T -- api sh -c x"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

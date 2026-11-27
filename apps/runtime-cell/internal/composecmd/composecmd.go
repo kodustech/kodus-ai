@@ -111,6 +111,18 @@ func Stop(project string, services ...string) []string {
 	return append(append(args, "--"), services...)
 }
 
+// Start starts the named stopped services of a project, and no other: "--"
+// ends the flags, so no service name reads as one.
+func Start(project string, services ...string) []string {
+	return append(Project{Name: project}.with("start", "--"), services...)
+}
+
+// Restart restarts the named services of a project, waiting StopTimeoutSec
+// at most for each to stop, and no other service.
+func Restart(project string, services ...string) []string {
+	return append(Project{Name: project}.with("restart", "-t", strconv.Itoa(StopTimeoutSec), "--"), services...)
+}
+
 // Kill sends signal to the named services of a project, and no other:
 // "--" ends the flags, so no service name reads as one.
 func Kill(project, signal string, services ...string) []string {

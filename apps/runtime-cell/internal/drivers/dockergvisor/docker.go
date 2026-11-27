@@ -58,6 +58,10 @@ type composePort interface {
 	ComposeDown(ctx context.Context, project string, volumes bool) error
 	ComposeStop(ctx context.Context, project string) error
 	ComposeStopServices(ctx context.Context, project string, services ...string) error
+	// ComposeStartServices and ComposeRestartServices act on the named
+	// services of a project in place, the containers kept (datareset.go).
+	ComposeStartServices(ctx context.Context, project string, services ...string) error
+	ComposeRestartServices(ctx context.Context, project string, services ...string) error
 	ComposeKill(ctx context.Context, project, signal string, services ...string) error
 	NetworkSubnet(ctx context.Context, name string) (string, error)
 	// PullServiceImage makes the image of a service the cell did not build

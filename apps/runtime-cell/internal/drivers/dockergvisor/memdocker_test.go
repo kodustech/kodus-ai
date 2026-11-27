@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,9 +62,19 @@ type memDocker struct {
 	saveErr     error
 	volumes     map[string]memVolume // by name
 	copyParents []string
-	copies      []string  // every volume copy, "runtime from->to"
-	execs       []memExec // every exec, in order
-	ups         []string  // every compose up's project, in order
+	copies      []string // every volume copy, "runtime from->to"
+	// svcOps is every compose stop, start and restart of named services, in
+	// order ("stop db"); stopped the containers those left not running,
+	// health the health status each container reports ("" is none), and
+	// svcErr the verb that fails ("start").
+	svcOps  []string
+	stopped map[string]bool
+	health  map[string]string
+	svcErr  map[string]error
+	// onRestart runs inside every compose restart.
+	onRestart func()
+	execs     []memExec // every exec, in order
+	ups       []string  // every compose up's project, in order
 	// imageConfigs are what ImageConfig answers, by image reference.
 	imageConfigs map[string]dockercli.ImageConfig
 	// imageIDs are what ImageID answers, by image reference.
@@ -215,6 +226,16 @@ func (m *memDocker) IDs(_ context.Context, f dockercli.Filters) ([]string, error
 				ok = false
 			}
 		}
+		for _, st := range f["status"] {
+			if st == "running" && m.stopped[c.ID] {
+				ok = false
+			}
+		}
+		for _, h := range f["health"] {
+			if m.health[c.ID] != h {
+				ok = false
+			}
+		}
 		if ok {
 			ids = append(ids, c.ID)
 		}
@@ -295,10 +316,39 @@ func (m *memDocker) PullServiceImage(_ context.Context, ref string, maxBytes int
 	return nil
 }
 
-func (m *memDocker) ComposeStopServices(context.Context, string, ...string) error {
-	return nil
+func (m *memDocker) ComposeStopServices(_ context.Context, project string, services ...string) error {
+	return m.serviceVerb("stop", project, services, true)
 }
 func (m *memDocker) ComposeStart(context.Context, string) error { return nil }
+func (m *memDocker) ComposeStartServices(_ context.Context, project string, services ...string) error {
+	return m.serviceVerb("start", project, services, false)
+}
+func (m *memDocker) ComposeRestartServices(_ context.Context, project string, services ...string) error {
+	return m.serviceVerb("restart", project, services, false)
+}
+
+// serviceVerb records a compose verb on named services and leaves their
+// containers stopped or running.
+func (m *memDocker) serviceVerb(verb, project string, services []string, stop bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.svcOps = append(m.svcOps, verb+" "+strings.Join(services, ","))
+	if err := m.svcErr[verb]; err != nil {
+		return err
+	}
+	if verb == "restart" && m.onRestart != nil {
+		m.onRestart()
+	}
+	if m.stopped == nil {
+		m.stopped = map[string]bool{}
+	}
+	for _, c := range m.containers {
+		if c.Labels["com.docker.compose.project"] == project && slices.Contains(services, c.Labels["com.docker.compose.service"]) {
+			m.stopped[c.ID] = stop
+		}
+	}
+	return nil
+}
 func (m *memDocker) ComposeKill(context.Context, string, string, ...string) error {
 	return nil
 }
