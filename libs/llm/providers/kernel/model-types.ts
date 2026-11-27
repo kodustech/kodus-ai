@@ -49,6 +49,10 @@ export interface ModelCapabilities {
      *  place that answers, and `kernel/temperature.ts` is the only place that
      *  reads it. */
     supportsReasoning: boolean;
+    /** The model always reasons and refuses to have it turned off, while no
+     *  reasoning level can be sent for it (#2036): the form must not call it
+     *  a model without reasoning. Set only when true. */
+    reasoningAlwaysOn?: boolean;
     reasoningConfig?: ReasoningConfig;
     defaultMaxTokens?: number;
 }

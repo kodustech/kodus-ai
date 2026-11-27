@@ -35,9 +35,13 @@ import { PreviewPrRiskUseCase } from '../application/use-cases/risk/preview-pr-r
 import { PreviewPrApprovalUseCase } from '../application/use-cases/approval/preview-pr-approval.use-case';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 
 @Module({
     imports: [
+        // The release track, for the Ultra review alpha gate.
+        forwardRef(() => OrganizationModule),
         forwardRef(() => CodeReviewPipelineModule),
         forwardRef(() => AutomationModule),
         forwardRef(() => PlatformDataModule),
@@ -74,6 +78,7 @@ import { PlatformDataModule } from '@libs/platformData/platformData.module';
         UpdateCodeReviewParameterRepositoriesUseCase,
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
+        UltraReviewGate,
         PreviewPrSummaryUseCase, // Added
         ResolveCustomAgentUseCase,
         TryCustomAgentUseCase,

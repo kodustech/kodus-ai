@@ -30,6 +30,7 @@ import type {
 import type { TemperaturePolicy } from '../kernel/model-types';
 import {
     resolveCompatibleReasoningTraits,
+    reasonsWithNoLevelSent,
     compatibleTemperaturePolicy,
     type ModelReasoningTraits,
     type StructuredOutputMode,
@@ -62,8 +63,15 @@ export const anthropicModule: ProviderModule = {
 
     capabilities(model: string): ModelCapabilities {
         const reasoningConfig = anthropicReasoningConfig(model);
+        // Reasons on every call and no level is sent (MiniMax M3.1, M2): the
+        // picker has nothing to offer. Kimi k2.7-code/k3 and GLM-5.3 also always
+        // think, but their default sends a thinking budget, so they are not this.
+        const alwaysOn =
+            !reasoningConfig &&
+            reasonsWithNoLevelSent(resolveCompatibleReasoningTraits(model));
         return {
             supportsReasoning: !!reasoningConfig,
+            ...(alwaysOn ? { reasoningAlwaysOn: true } : {}),
             reasoningConfig,
             // Anthropic does structured output via tool use, not a native
             // response_format json_schema → 'none' at this tier.
@@ -196,8 +204,8 @@ export const anthropicModule: ProviderModule = {
             // instead of risking a rejected body. The faithful effort needs the
             // OpenAI transport, where the openai module now emits it.
             if (
-                resolveCompatibleReasoningTraits(cfg.model)
-                    .reasoningControl === 'effort-only'
+                resolveCompatibleReasoningTraits(cfg.model).reasoningControl ===
+                'effort-only'
             ) {
                 return {};
             }

@@ -1,7 +1,10 @@
-import { monitorEventLoopDelay, PerformanceObserver } from 'perf_hooks';
+import { monitorEventLoopDelay } from 'perf_hooks';
+import { activityCounts } from '@libs/core/infrastructure/activity/activity-registry';
+import { readMemoryGauges } from '@libs/core/infrastructure/memory/memory-gauges';
 import { createLogger } from '@libs/core/log/logger';
 
 import { getLastHealthProbe } from './health-probe';
+import { startMemorySampler } from './memory-sampler';
 import { StallWatchdogOptions, startStallWatchdog } from './stall-watchdog';
 
 type MonitorLogger = Pick<ReturnType<typeof createLogger>, 'log' | 'warn'>;
@@ -22,27 +25,6 @@ export interface EventLoopMonitorOptions {
 }
 
 const NS_PER_MS = 1e6;
-const BYTES_PER_MB = 1024 * 1024;
-
-/**
- * Where the process's memory is, once per window. Workers grow ~100 MB/h
- * until the 8 GB heap limit (Nov 2026) and the container metric cannot say
- * whether that is the JS heap (objects kept alive) or memory outside it
- * (WASM such as tiktoken, Buffers, native addons): `heapUsedMb` growing
- * points at the heap, `externalMb`/`arrayBuffersMb` or `rssMb` growing
- * alone at the rest.
- */
-function memorySnapshot(): Record<string, number> {
-    const m = process.memoryUsage();
-    const mb = (bytes: number) => Math.round(bytes / BYTES_PER_MB);
-    return {
-        rssMb: mb(m.rss),
-        heapUsedMb: mb(m.heapUsed),
-        heapTotalMb: mb(m.heapTotal),
-        externalMb: mb(m.external),
-        arrayBuffersMb: mb(m.arrayBuffers),
-    };
-}
 
 /**
  * Reports how long the main thread was unable to run callbacks. The ECS
@@ -70,22 +52,10 @@ export function startEventLoopMonitor(
 
     const histogram = monitorEventLoopDelay({ resolution: 20 });
     histogram.enable();
-
-    // Time spent in garbage collection per window: a heap near its limit
-    // shows up here before it shows up as an out-of-memory kill.
-    const gc = { ms: 0, count: 0 };
-    let gcObserver: PerformanceObserver | null = null;
-    try {
-        gcObserver = new PerformanceObserver((list) => {
-            for (const entry of list.getEntries()) {
-                gc.ms += entry.duration;
-                gc.count++;
-            }
-        });
-        gcObserver.observe({ entryTypes: ['gc'] });
-    } catch {
-        gcObserver = null;
-    }
+    // Memory and jobs ride on the same line, so one line per window says
+    // how much the process held, how many jobs of what size held it, and
+    // whether the thread was blocked.
+    const memory = startMemorySampler();
 
     const timer = setInterval(() => {
         // A throw inside a timer callback would crash the process — this is
@@ -104,14 +74,12 @@ export function startEventLoopMonitor(
                     windowMs: intervalMs,
                     msSinceLastProbe: probe ? Date.now() - probe.at : null,
                     lastProbeStatus: probe?.status ?? null,
-                    ...memorySnapshot(),
-                    gcMs: Math.round(gc.ms),
-                    gcCount: gc.count,
+                    memory: memory.take(),
+                    jobs: activityCounts(),
+                    gauges: readMemoryGauges(),
                 },
             };
             histogram.reset();
-            gc.ms = 0;
-            gc.count = 0;
 
             if (maxMs > warnMs) logger.warn(payload);
             else logger.log(payload);
@@ -128,7 +96,7 @@ export function startEventLoopMonitor(
     return () => {
         clearInterval(timer);
         histogram.disable();
-        gcObserver?.disconnect();
+        memory.stop();
         stopWatchdog();
     };
 }

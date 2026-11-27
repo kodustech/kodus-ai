@@ -30,6 +30,10 @@ __snap_GH_DEV_TOKEN="${GH_DEV_TOKEN+__SET__}${GH_DEV_TOKEN:-}"
 __snap_API_OPEN_AI_API_KEY="${API_OPEN_AI_API_KEY+__SET__}${API_OPEN_AI_API_KEY:-}"
 __snap_API_OPENAI_FORCE_BASE_URL="${API_OPENAI_FORCE_BASE_URL+__SET__}${API_OPENAI_FORCE_BASE_URL:-}"
 __snap_API_LLM_PROVIDER_MODEL="${API_LLM_PROVIDER_MODEL+__SET__}${API_LLM_PROVIDER_MODEL:-}"
+__snap_API_LLM_PROVIDER="${API_LLM_PROVIDER+__SET__}${API_LLM_PROVIDER:-}"
+__snap_API_LLM_API_KEY="${API_LLM_API_KEY+__SET__}${API_LLM_API_KEY:-}"
+__snap_API_LLM_BASE_URL="${API_LLM_BASE_URL+__SET__}${API_LLM_BASE_URL:-}"
+__snap_API_LLM_REASONING_EFFORT="${API_LLM_REASONING_EFFORT+__SET__}${API_LLM_REASONING_EFFORT:-}"
 __snap_KODUS_INSTALLER_PATH="${KODUS_INSTALLER_PATH+__SET__}${KODUS_INSTALLER_PATH:-}"
 __snap_TEST_VM_PROVIDER="${TEST_VM_PROVIDER+__SET__}${TEST_VM_PROVIDER:-}"
 __snap_IMAGE_TAG="${IMAGE_TAG+__SET__}${IMAGE_TAG:-}"
@@ -46,8 +50,34 @@ __load_value_from_file() {
     # shellcheck disable=SC1090
     set -a; . "$file"; set +a
 }
+# The LLM vars are read from the files alone (restored below): a caller that
+# exported the config first (scripts/e2e/run.sh's load_config_file, direnv's
+# .envrc) holds the config's own values, which say nothing about what it wants.
+unset API_OPEN_AI_API_KEY API_OPENAI_FORCE_BASE_URL API_LLM_PROVIDER \
+      API_LLM_API_KEY API_LLM_BASE_URL
 __load_value_from_file "$GLOBAL_CONFIG"
 __load_value_from_file "$REPO_ROOT/scripts/selfhosted/.env"
+# A caller value equal to the config's is the config's: not caller-set for the
+# legacy-vs-generic rule below. Restoring it changes nothing either way.
+__from_config() {
+    local var="$1" snap_var="$2"
+    [ -n "${!var+x}" ] && [ "${!snap_var}" = "__SET__${!var}" ] && eval "$snap_var="
+    return 0
+}
+__from_config API_OPENAI_FORCE_BASE_URL __snap_API_OPENAI_FORCE_BASE_URL
+__from_config API_LLM_PROVIDER          __snap_API_LLM_PROVIDER
+__from_config API_LLM_API_KEY           __snap_API_LLM_API_KEY
+__from_config API_LLM_BASE_URL          __snap_API_LLM_BASE_URL
+# The config's API_OPEN_AI_API_KEY is the embeddings key, an OpenAI key, and
+# direnv exports it to every caller. An equal key is the caller's LLM key only
+# when the caller moves the LLM to OpenAI: the legacy endpoint (run.sh's trio)
+# or provider openai. Beside any other provider or endpoint it is the config's,
+# so it never replaces the configured LLM key nor leaves for another host.
+case "$__snap_API_OPENAI_FORCE_BASE_URL" in
+    __SET__*) ;;
+    *) [ "$__snap_API_LLM_PROVIDER" = "__SET__openai" ] \
+        || __from_config API_OPEN_AI_API_KEY __snap_API_OPEN_AI_API_KEY ;;
+esac
 
 # Restore caller's pre-existing values on top (caller wins).
 __restore_if_set() {
@@ -63,6 +93,10 @@ __restore_if_set GH_DEV_TOKEN              "$__snap_GH_DEV_TOKEN"
 __restore_if_set API_OPEN_AI_API_KEY       "$__snap_API_OPEN_AI_API_KEY"
 __restore_if_set API_OPENAI_FORCE_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL"
 __restore_if_set API_LLM_PROVIDER_MODEL    "$__snap_API_LLM_PROVIDER_MODEL"
+__restore_if_set API_LLM_PROVIDER          "$__snap_API_LLM_PROVIDER"
+__restore_if_set API_LLM_API_KEY           "$__snap_API_LLM_API_KEY"
+__restore_if_set API_LLM_BASE_URL          "$__snap_API_LLM_BASE_URL"
+__restore_if_set API_LLM_REASONING_EFFORT  "$__snap_API_LLM_REASONING_EFFORT"
 __restore_if_set KODUS_INSTALLER_PATH      "$__snap_KODUS_INSTALLER_PATH"
 __restore_if_set TEST_VM_PROVIDER          "$__snap_TEST_VM_PROVIDER"
 __restore_if_set IMAGE_TAG                 "$__snap_IMAGE_TAG"
@@ -73,13 +107,42 @@ __restore_if_set HCLOUD_LOCATION           "$__snap_HCLOUD_LOCATION"
 __restore_if_set HCLOUD_SERVER_TYPE        "$__snap_HCLOUD_SERVER_TYPE"
 __restore_if_set HCLOUD_IMAGE              "$__snap_HCLOUD_IMAGE"
 
+# A caller that sets only the OpenAI-named var (scripts/e2e/run.sh, the old
+# docs' `API_OPEN_AI_API_KEY=… provision`) means it for the LLM, as it did
+# before API_LLM_*. The runtime prefers the generic var, so the one a config
+# file brought would outrank the caller: dropped unless the caller set it too.
+# Returns 0 only when it dropped the config's value.
+__caller_legacy_wins() {
+    local generic="$1" legacy_snap="$2" generic_snap="$3"
+    case "$legacy_snap" in __SET__*) ;; *) return 1 ;; esac
+    case "$generic_snap" in __SET__*) return 1 ;; esac
+    [ -n "${!generic:-}" ] || return 1
+    unset "$generic"
+}
+# The key alone is ambiguous: API_OPEN_AI_API_KEY is also the embeddings key.
+# It stands for the LLM when the caller says so: beside an endpoint (either
+# name) or a provider it declared itself. Otherwise only in a config that names
+# no provider (a pre-API_LLM_* one); the configured LLM key stays.
+__caller_key_won=
+case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_BASE_URL$__snap_API_LLM_PROVIDER" in
+    *__SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" && __caller_key_won=1 ;;
+    *) [ -z "${API_LLM_PROVIDER:-}" ] && __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" && __caller_key_won=1 ;;
+esac
+# The config's endpoint belongs to the config's key: when the caller's key won,
+# it goes too, unless the caller also set API_LLM_BASE_URL.
+__caller_legacy_wins API_LLM_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL" "$__snap_API_LLM_BASE_URL" \
+    || { [ -n "$__caller_key_won" ] && __caller_legacy_wins API_LLM_BASE_URL __SET__ "$__snap_API_LLM_BASE_URL"; } \
+    || true
+unset __caller_key_won
+
 unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \
       __snap_GH_DEV_TOKEN __snap_API_OPEN_AI_API_KEY __snap_API_OPENAI_FORCE_BASE_URL \
-      __snap_API_LLM_PROVIDER_MODEL \
+      __snap_API_LLM_PROVIDER_MODEL __snap_API_LLM_PROVIDER __snap_API_LLM_API_KEY \
+      __snap_API_LLM_BASE_URL __snap_API_LLM_REASONING_EFFORT \
       __snap_KODUS_INSTALLER_PATH __snap_TEST_VM_PROVIDER \
       __snap_IMAGE_TAG __snap_DO_REGION __snap_DO_SIZE __snap_DO_IMAGE \
       __snap_HCLOUD_LOCATION __snap_HCLOUD_SERVER_TYPE __snap_HCLOUD_IMAGE
-unset -f __load_value_from_file __restore_if_set
+unset -f __load_value_from_file __restore_if_set __caller_legacy_wins __from_config
 
 # Resolve 1Password CLI references — any var whose value starts with `op://`
 # is replaced with the value of that 1Password item field, fetched via the
@@ -122,7 +185,22 @@ __resolve_op_ref CLOUDFLARE_API_TOKEN      || exit 1
 __resolve_op_ref API_OPEN_AI_API_KEY       || exit 1
 __resolve_op_ref API_OPENAI_FORCE_BASE_URL || exit 1
 __resolve_op_ref API_LLM_PROVIDER_MODEL    || exit 1
+__resolve_op_ref API_LLM_API_KEY           || exit 1
+__resolve_op_ref API_LLM_BASE_URL          || exit 1
 unset -f __resolve_op_ref
+
+# The LLM vars the VM .env gets, as KEY=VALUE lines, set ones only.
+# API_LLM_PROVIDER + API_LLM_* is what setup.sh writes now; the OpenAI-named
+# vars still reach the VM so a config written before it keeps running as it
+# did (and API_OPEN_AI_API_KEY is also the embeddings key).
+SELFHOSTED_LLM_VARS="API_LLM_PROVIDER API_LLM_PROVIDER_MODEL API_LLM_API_KEY API_LLM_BASE_URL API_LLM_REASONING_EFFORT API_OPEN_AI_API_KEY API_OPENAI_FORCE_BASE_URL"
+selfhosted_llm_env() {
+    local var
+    for var in $SELFHOSTED_LLM_VARS; do
+        [ -n "${!var:-}" ] && printf '%s=%s\n' "$var" "${!var}"
+    done
+    return 0
+}
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; GRAY='\033[0;90m'; NC='\033[0m'
 log()  { echo -e "${BLUE}[selfhosted]${NC} $*"; }

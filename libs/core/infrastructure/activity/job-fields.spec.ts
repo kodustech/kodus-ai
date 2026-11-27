@@ -111,6 +111,61 @@ describe('jobFields', () => {
             },
             { repository: 'r', prNumber: 77 },
         ],
+        [
+            'the size of a GitHub PR from its webhook body',
+            {
+                payload: {
+                    platformType: 'GITHUB',
+                    codeManagementPayload: {
+                        pull_request: {
+                            number: 3,
+                            changed_files: 14,
+                            additions: 300,
+                            deletions: 25,
+                        },
+                        repository: { full_name: 'acme/app' },
+                    },
+                },
+            },
+            {
+                repository: 'acme/app',
+                prNumber: 3,
+                platform: 'GITHUB',
+                changedFiles: 14,
+                changedLines: 325,
+            },
+        ],
+        [
+            'a GitHub PR that changes no lines as size 0, not unknown',
+            {
+                payload: {
+                    codeManagementPayload: {
+                        pull_request: {
+                            number: 4,
+                            changed_files: 0,
+                            additions: 0,
+                            deletions: 0,
+                        },
+                    },
+                },
+            },
+            { prNumber: 4, changedFiles: 0, changedLines: 0 },
+        ],
+        [
+            'no line count when the payload carries only one of the two',
+            {
+                payload: {
+                    codeManagementPayload: {
+                        pull_request: {
+                            number: 5,
+                            changed_files: 2,
+                            additions: 9,
+                        },
+                    },
+                },
+            },
+            { prNumber: 5, changedFiles: 2 },
+        ],
         ['an empty job', {}, {}],
     ])('reads %s', (_l, job, expected) => {
         const out = jobFields(job as any);

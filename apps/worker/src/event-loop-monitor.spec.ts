@@ -1,5 +1,36 @@
-import { startEventLoopMonitor } from './event-loop-monitor';
+import {
+    runActivity,
+    updateActivity,
+} from '@libs/core/infrastructure/activity/activity-registry';
+import {
+    clearMemoryGauges,
+    registerMemoryGauge,
+} from '@libs/core/infrastructure/memory/memory-gauges';
 import { monitorEventLoopDelay } from 'perf_hooks';
+
+import { startEventLoopMonitor } from './event-loop-monitor';
+import type { MemoryWindow } from './memory-sampler';
+
+const memoryWindow: MemoryWindow = {
+    rssMb: 3000,
+    heapUsedMb: 2000,
+    heapTotalMb: 2500,
+    heapLimitMb: 8192,
+    externalMb: 100,
+    arrayBuffersMb: 40,
+    heapAfterMajorGcMb: 700,
+    heapAfterMajorGcMinMb: 650,
+    majorGcs: 2,
+    gcPauseMs: 102,
+    gcMaxPauseMs: 60,
+};
+
+jest.mock('./memory-sampler', () => ({
+    startMemorySampler: () => ({
+        take: () => memoryWindow,
+        stop: () => undefined,
+    }),
+}));
 
 jest.mock('perf_hooks', () => ({
     ...jest.requireActual('perf_hooks'),
@@ -37,6 +68,7 @@ describe('startEventLoopMonitor', () => {
     afterEach(() => {
         stop?.();
         stop = undefined;
+        clearMemoryGauges();
         jest.useRealTimers();
         jest.clearAllMocks();
     });
@@ -66,31 +98,40 @@ describe('startEventLoopMonitor', () => {
         );
     });
 
-    it('reports where the memory is, so a slow leak can be told heap from native', () => {
+    it('reports memory, the jobs in flight and the gauges on the same line', async () => {
         const logger = { log: jest.fn(), warn: jest.fn() };
-        const usage = jest.spyOn(process, 'memoryUsage').mockReturnValue({
-            rss: 3_000 * 1024 * 1024,
-            heapTotal: 2_200 * 1024 * 1024,
-            heapUsed: 2_000 * 1024 * 1024,
-            external: 300 * 1024 * 1024,
-            arrayBuffers: 120 * 1024 * 1024,
+        registerMemoryGauge('cache', () => ({ entries: 7, valueMb: 3 }));
+        let release!: () => void;
+        const review = runActivity('job-1', {}, async () => {
+            updateActivity({
+                workflowType: 'CODE_REVIEW',
+                changedFiles: 12,
+                changedLines: 340,
+            });
+            await new Promise<void>((r) => (release = r));
         });
         stop = startEventLoopMonitor({ intervalMs: 100, logger });
 
         jest.advanceTimersByTime(100);
-        usage.mockRestore();
+        release();
+        await review;
 
-        expect(logger.log.mock.calls[0][0].metadata).toEqual(
-            expect.objectContaining({
-                rssMb: 3_000,
-                heapUsedMb: 2_000,
-                heapTotalMb: 2_200,
-                externalMb: 300,
-                arrayBuffersMb: 120,
-                gcMs: expect.any(Number),
-                gcCount: expect.any(Number),
-            }),
-        );
+        const { metadata } = logger.log.mock.calls[0][0];
+        expect(metadata.memory).toEqual(memoryWindow);
+        expect(metadata.jobs).toEqual({
+            total: 1,
+            byWorkflowType: { CODE_REVIEW: 1 },
+            reviews: {
+                withSize: 1,
+                withLines: 1,
+                changedFilesSum: 12,
+                changedFilesMax: 12,
+                changedLinesSum: 340,
+            },
+        });
+        expect(metadata.gauges).toEqual({
+            cache: { entries: 7, valueMb: 3 },
+        });
     });
 
     it('warns with the measured delay when the histogram reports a blocked thread', () => {

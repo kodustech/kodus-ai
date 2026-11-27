@@ -41,6 +41,8 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { ultraModeScopes } from '@libs/code-review/domain/review-mode';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { normalizeModelId } from '@libs/ee/ultra-review/ultra-merge-ranking';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
+import { ULTRA_MODELS_NOT_ENABLED_MESSAGE } from '@libs/ee/ultra-review/ultra-review-messages';
 import {
     BadRequestException,
     HttpException,
@@ -86,6 +88,9 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         @Optional()
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService?: ITeamService,
+        // Without it no Ultra models are saved: Ultra is in alpha.
+        @Optional()
+        private readonly ultraReviewGate?: UltraReviewGate,
     ) {}
 
     async execute(
@@ -164,6 +169,32 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 { cause: error },
             );
         }
+    }
+
+    /**
+     * Ultra review is in alpha: an organization outside it cannot pick Ultra
+     * models. Only a save that changes them to a non-empty set is checked, so
+     * clearing them, or any unrelated edit, still saves.
+     */
+    private async assertUltraModelsAllowed(
+        next: BYOKConfig,
+        previous: BYOKConfig | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        const ids = (config: BYOKConfig | undefined) =>
+            [...new Set((config?.routing?.ultraModelIds ?? []).filter(Boolean))]
+                .sort()
+                .join();
+        const picked = ids(next);
+        if (!picked || picked === ids(previous)) return;
+        if (
+            (await this.ultraReviewGate?.isEnabledFor(
+                organizationAndTeamData.organizationId,
+            )) === true
+        ) {
+            return;
+        }
+        throw new BadRequestException(ULTRA_MODELS_NOT_ENABLED_MESSAGE);
     }
 
     /**
@@ -286,6 +317,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             await this.assertKodusProviderAllowed(
                 configValue as BYOKConfig,
                 isByokConfig(existingConfig) ? existingConfig : undefined,
+            );
+            await this.assertUltraModelsAllowed(
+                configValue as BYOKConfig,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+                organizationAndTeamData,
             );
             await this.assertUltraTrioKeptWhileInUse(
                 configValue as BYOKConfig,

@@ -27,7 +27,7 @@ When you set a field's value to `op://Vault/Item/field` in `~/.kodus-dev/config`
 | `SH_LICENSE_KEY` | `op://Engineering/kodus-self-hosted-dev/license-paid` | Optional |
 | `SH_LICENSE_KEY_PATH` | path to a `seats=1` JWT on disk (default `~/.kodus-dev/license-seats1.jwt`) | Optional; needed only by the `per-seat-license-toggle` matrix scenario |
 | `GH_DEV_TOKEN` | `op://Engineering/kodus-self-hosted-dev/gh-bot-token` | Optional |
-| `API_OPEN_AI_API_KEY` | `op://Engineering/kodus-self-hosted-dev/openai-key` | **Required.** Stores the Moonshot API key (team default uses Kimi K2.6 — see below). For native OpenAI, replace with a `sk-...` from platform.openai.com. |
+| `API_LLM_API_KEY` | `op://Engineering/kodus-self-hosted-dev/openai-key` | **Required.** Stores the Moonshot API key (team default uses Kimi K2.6 — see below). For another provider, use that provider's key. Configs written before `API_LLM_PROVIDER` kept it in `API_OPEN_AI_API_KEY`; re-running setup moves it. |
 
 ### LLM provider config (Kimi K2.6 default — not secret)
 
@@ -35,8 +35,9 @@ These are not in 1Password — they're plain values with team defaults set in `s
 
 | Env | Default value | Override if |
 |---|---|---|
-| `API_OPENAI_FORCE_BASE_URL` | `https://api.moonshot.ai/v1` | Using native OpenAI, set empty or `https://api.openai.com/v1` |
-| `API_LLM_PROVIDER_MODEL` | `kimi-k2.6` | Using native OpenAI, set to `gpt-4o` (or `auto` to let Kodus router pick) |
+| `API_LLM_PROVIDER` | `openai_compatible` | Using native OpenAI, `openai`; Gemini, `google_gemini` |
+| `API_LLM_BASE_URL` | `https://api.moonshot.ai/v1` | Using native OpenAI, set empty; not used by `google_gemini` / `google_vertex` |
+| `API_LLM_PROVIDER_MODEL` | `kimi-k2.6` | The provider's model id, e.g. `gpt-5.4` or `gemini-3.5-flash` |
 
 ## How to use
 
@@ -49,7 +50,10 @@ These are not in 1Password — they're plain values with team defaults set in `s
    DIGITALOCEAN_TOKEN=op://Engineering/kodus-self-hosted-dev/do-token
    SH_LICENSE_KEY=op://Engineering/kodus-self-hosted-dev/license-paid
    GH_DEV_TOKEN=op://Engineering/kodus-self-hosted-dev/gh-bot-token
-   API_OPEN_AI_API_KEY=op://Engineering/kodus-self-hosted-dev/openai-key
+   API_LLM_PROVIDER=openai_compatible
+   API_LLM_PROVIDER_MODEL=kimi-k2.6
+   API_LLM_API_KEY=op://Engineering/kodus-self-hosted-dev/openai-key
+   API_LLM_BASE_URL=https://api.moonshot.ai/v1
    KODUS_INSTALLER_PATH=/Users/you/dev/kodus-installer
    ```
 
@@ -71,7 +75,7 @@ You can mix freely. E.g., test a custom DO token locally while keeping the team'
 # ~/.kodus-dev/config
 DIGITALOCEAN_TOKEN=dop_v1_my_personal_test_token
 SH_LICENSE_KEY=op://Engineering/kodus-self-hosted-dev/license-paid
-API_OPEN_AI_API_KEY=op://Engineering/kodus-self-hosted-dev/openai-key
+API_LLM_API_KEY=op://Engineering/kodus-self-hosted-dev/openai-key
 ```
 
 ## When op resolution fails

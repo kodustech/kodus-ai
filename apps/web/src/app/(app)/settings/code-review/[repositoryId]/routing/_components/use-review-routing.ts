@@ -4,6 +4,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import {
     useCodeReviewConfig,
     useCodeReviewModelData,
+    useFeatureFlags,
 } from "src/app/(app)/settings/_components/context";
 import {
     draftTaskModel,
@@ -73,6 +74,8 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
     const license = useSubscriptionContext().license;
     const heavyAllowed = isHeavyModePlan(license);
     const ultraAllowed = isUltraReviewPlan(license);
+    // In alpha: outside it, Ultra is not offered at all.
+    const ultraEnabled = useFeatureFlags().ultraReview === true;
     // The trio being edited on this page (cleared included), else the saved.
     const ultraModelIds = modelDraft
         ? modelDraft.ultraModelIds
@@ -162,6 +165,7 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         active,
         heavyAllowed,
         ultraAllowed,
+        ultraEnabled,
         ultraSet,
         configuredDefault,
         noRisk,

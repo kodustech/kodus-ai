@@ -28,6 +28,8 @@ function buildUseCase(
         teamConfigs?: unknown[];
         /** Each team's status; active when absent. */
         teamStatuses?: string[];
+        /** On the Ultra review alpha; on unless a test says otherwise. */
+        ultraEnabled?: boolean;
     } = {},
 ) {
     const persisted: { value?: any } = {};
@@ -80,6 +82,9 @@ function buildUseCase(
         kodusGate as any,
         parametersService as any,
         teamService as any,
+        {
+            isEnabledFor: jest.fn(async () => options.ultraEnabled ?? true),
+        } as any,
     );
 
     return {
@@ -1207,6 +1212,28 @@ describe('the Ultra trio while a review mode is Ultra', () => {
                 ...(ultraModelIds && { ultraModelIds }),
             } as any,
         });
+
+    it('outside the Ultra alpha, refuses picking Ultra models, but saves clearing them or an unrelated edit', async () => {
+        const fresh = buildUseCase(withTrio(), { ultraEnabled: false });
+        await expect(
+            saveByok(fresh.useCase, withTrio(['a', 'b', 'c'])),
+        ).rejects.toThrow(
+            'Ultra review is not available for this organization yet',
+        );
+        expect(fresh.createOrUpdateConfig).not.toHaveBeenCalled();
+
+        const kept = buildUseCase(withTrio(['a', 'b', 'c']), {
+            ultraEnabled: false,
+        });
+        await saveByok(kept.useCase, withTrio(['c', 'b', 'a']));
+        expect(kept.persisted.value).toBeDefined();
+
+        const cleared = buildUseCase(withTrio(['a', 'b', 'c']), {
+            ultraEnabled: false,
+        });
+        await saveByok(cleared.useCase, withTrio());
+        expect(cleared.persisted.value.routing?.ultraModelIds).toBeUndefined();
+    });
 
     it('refuses clearing it while a scope of any team runs Ultra, naming the scopes', async () => {
         const { useCase, createOrUpdateConfig } = buildUseCase(

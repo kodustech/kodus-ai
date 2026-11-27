@@ -38,6 +38,8 @@ export interface ModelUiCapabilities {
     temperatureWhenReasoningOff?: TemperaturePolicy;
     /** The model can run with a reasoning/thinking budget. */
     supportsReasoning: boolean;
+    /** It always reasons, and no level can be set for it (#2036). */
+    reasoningAlwaysOn?: boolean;
     /** The valid canonical reasoning levels for this model (from the module's
      *  reasoningConfig). Empty when reasoning is unsupported or uses a non-level
      *  (budget) config — the UI then offers the generic effort scale / Custom. */
@@ -113,6 +115,7 @@ export class GetModelCapabilitiesUseCase {
                 ? { temperatureWhenReasoningOff }
                 : {}),
             supportsReasoning: caps.supportsReasoning ?? false,
+            ...(caps.reasoningAlwaysOn ? { reasoningAlwaysOn: true } : {}),
             reasoningOptions,
             reasoningOverrideExample: providerModule.reasoningOverrideExample?.(
                 provider,
