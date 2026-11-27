@@ -1111,7 +1111,9 @@ export async function runFinderWithVerify(
     const lensFailed = (error: unknown) =>
         finderLogger.warn({
             msg: 'heavy lens failed; keeping the generalist findings',
-            error: error instanceof Error ? error.message : String(error),
+            // A provider error can carry the request or the response body:
+            // its name and the retryable verdict are what a reader can act on.
+            errorName: error instanceof Error ? error.name : typeof error,
             retryable: isRetryableForReissue(error),
         });
     const lensResult = lenses

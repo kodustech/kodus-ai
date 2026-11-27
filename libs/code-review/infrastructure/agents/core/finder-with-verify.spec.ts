@@ -941,8 +941,10 @@ describe('runFinderWithVerify (generalist failed at the provider)', () => {
         expect(r.kept).toEqual([recovered]);
         expect(r.keptParseMode).toEqual(['default-keep']);
         // The salvaged finding passes the verify gate like any other: a scan
-        // never publishes a finding nobody judged.
+        // never publishes a finding nobody judged. The verify tokens, not the
+        // call count (a recall pass would add calls too), prove it ran.
         expect(run.mock.calls.length).toBeGreaterThan(1);
+        expect(r.verifyUsage.inputTokens).toBeGreaterThan(0);
     });
 
     it('does not recover prose for a caller that discards the failure', async () => {
