@@ -147,38 +147,31 @@ function detectCriteria(task: Task): Task {
     const description = task.description ?? '';
     const own = ownArtifactLink(task);
 
-    // The body is read exactly as without artifacts: the first criteria
-    // heading with items, else its list when it has two or more items (only
-    // links to the issue's own artifacts are left out). Artifact criteria
-    // are added on top, de-duplicated; they never change what the body says.
+    // Artifacts only add criteria: no body item ever leaves the list because
+    // an artifact exists, and without artifacts the result is what the body
+    // alone gives (its first criteria section, else its list of two or more
+    // items). A body that gives nothing by itself still keeps its AC-labelled
+    // items when the artifacts state criteria. Artifact criteria come after
+    // the body's, de-duplicated; links to the issue's own artifacts are left out.
+    const items = keepSubstantive(listItems(description), own);
     let section: string[] = [];
     for (const heading of CRITERIA_HEADINGS) {
         const text = sectionUnder(description, heading);
-        const items = text ? keepSubstantive(listItems(text), own) : [];
-        if (items.length) {
-            section = items;
+        const found = text ? keepSubstantive(listItems(text), own) : [];
+        if (found.length) {
+            section = found;
             break;
         }
     }
-    if (section.length) {
-        return {
-            ...task,
-            acceptanceCriteria: withArtifactCriteria(task, section),
-        };
-    }
-    // An implicit list of the body yields to criteria the artifacts state;
-    // the body's own AC-labelled items stay, ahead of them.
-    if (withArtifactCriteria(task, []).length) {
-        const labelled = keepSubstantive(listItems(description), own).filter(
-            isLabelledCriterion,
-        );
-        return {
-            ...task,
-            acceptanceCriteria: withArtifactCriteria(task, labelled),
-        };
-    }
-    const items = keepSubstantive(listItems(description), own);
-    return items.length >= 2 ? { ...task, acceptanceCriteria: items } : task;
+    const body = section.length
+        ? section
+        : items.length >= 2
+          ? items
+          : withArtifactCriteria(task, []).length
+            ? items.filter(isLabelledCriterion)
+            : [];
+    const merged = withArtifactCriteria(task, body);
+    return merged.length ? { ...task, acceptanceCriteria: merged } : task;
 }
 
 /** The explicit criteria of a text: its criteria section, plus its AC-labelled items. */

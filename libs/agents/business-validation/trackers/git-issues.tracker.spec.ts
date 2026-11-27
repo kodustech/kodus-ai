@@ -764,19 +764,23 @@ describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
         ].join('\n'),
     );
 
-    it('takes the criteria from the artifact, not the contract or reference lines', async () => {
+    it('adds the criteria of the artifact after the body items, without the reference lines', async () => {
         const { graded, block } = await criteria(
             issue({ body: body(ownRefs), artifacts: [qa] }),
         );
         expect(graded.acceptanceCriteria).toEqual([
+            'Source: artifacts',
+            'Delivery: several PRs',
             '[artifact #2 qa.md] AC1: When the form is empty, the API returns 422.',
             '[artifact #2 qa.md] AC2: When the email is taken, the API returns 409.',
         ]);
         expect(block).toBe(
             [
                 'ACCEPTANCE_CRITERIA:',
-                '1. "[artifact #2 qa.md] AC1: When the form is empty, the API returns 422."',
-                '2. "[artifact #2 qa.md] AC2: When the email is taken, the API returns 409."',
+                '1. "Source: artifacts"',
+                '2. "Delivery: several PRs"',
+                '3. "[artifact #2 qa.md] AC1: When the form is empty, the API returns 422."',
+                '4. "[artifact #2 qa.md] AC2: When the email is taken, the API returns 409."',
                 '',
                 '',
             ].join('\n'),
@@ -1049,22 +1053,53 @@ describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
         ]);
     });
 
-    it('keeps the AC-labelled items of the body ahead of the artifact criteria, and the contract lines out', async () => {
-        const { graded } = await criteria(
-            issue({
-                body: '- AC1: Return 422 on an empty form\n- Some contract line here',
-                artifacts: [
-                    artifact(
-                        2,
-                        'qa.md',
-                        '- AC2: The API returns 409 on a taken email',
-                    ),
-                ],
-            }),
+    describe('artifacts only add criteria', () => {
+        const art =
+            '[artifact #2 qa.md] AC9: The API returns 429 when throttled';
+        const intact = artifact(
+            2,
+            'qa.md',
+            '- AC9: The API returns 429 when throttled',
         );
-        expect(graded.acceptanceCriteria).toEqual([
-            'AC1: Return 422 on an empty form',
-            '[artifact #2 qa.md] AC2: The API returns 409 on a taken email',
-        ]);
+        const clipped = artifact(2, 'qa.md', 'x'.repeat(7000));
+        const ac1 = 'AC1: Return 422 on empty';
+        const ac2 = 'AC2: Return 409 on taken';
+        const keep = 'Keep the form accessible';
+        const fast = 'Keep the form fast';
+
+        it.each([
+            [
+                'labelled items',
+                `- ${ac1}\n- ${ac2}`,
+                [ac1, ac2, art],
+                [ac1, ac2],
+            ],
+            [
+                'unlabelled items',
+                `- ${keep}\n- ${fast}`,
+                [keep, fast, art],
+                [keep, fast],
+            ],
+            [
+                'a labelled and an unlabelled item',
+                `- ${ac1}\n- ${keep}`,
+                [ac1, keep, art],
+                [ac1, keep],
+            ],
+            ['a single labelled item', `- ${ac1}`, [ac1, art], undefined],
+            ['a single unlabelled item', `- ${keep}`, [art], undefined],
+        ])(
+            'keeps every body item of %s',
+            async (_label, text, withIntact, withClipped) => {
+                const read1 = await criteria(
+                    issue({ body: text, artifacts: [intact] }),
+                );
+                const read2 = await criteria(
+                    issue({ body: text, artifacts: [clipped] }),
+                );
+                expect(read1.graded.acceptanceCriteria).toEqual(withIntact);
+                expect(read2.graded.acceptanceCriteria).toEqual(withClipped);
+            },
+        );
     });
 });
