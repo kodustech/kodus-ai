@@ -30,9 +30,24 @@ export class FormatCliOutputStage extends BasePipelineStage<CliReviewPipelineCon
             },
         });
 
+        // A Kody Rule finding that cites no line goes to the PR-level list,
+        // not to validSuggestions (#2420). The CLI has no PR to post it on,
+        // so it is listed with the rest, on its file when it names one.
+        const prLevelRuleFindings = (context.validSuggestionsByPR ?? [])
+            .filter((s) => s.label === 'kody_rules')
+            .map((s) => ({
+                relevantFile: s.relevantFile,
+                severity: s.severity,
+                label: s.label,
+                oneSentenceSummary: s.oneSentenceSummary,
+                suggestionContent: s.suggestionContent,
+                fullExplanation: s.fullExplanation,
+                brokenKodyRulesIds: s.brokenKodyRulesIds,
+            }));
+
         // Convert pipeline results to CLI format
         const cliResponse = this.converter.convertToCliResponse(
-            context.validSuggestions,
+            [...context.validSuggestions, ...prLevelRuleFindings],
             context.changedFiles.length,
             context.startTime,
         );

@@ -190,6 +190,7 @@ export class PullRequestsModel extends CoreDocument {
     @Prop({ type: Array, required: false })
     public prLevelSuggestions: Array<{
         id: string;
+        relevantFile?: string;
         suggestionContent: string;
         fullExplanation?: string;
         oneSentenceSummary: string;

@@ -2508,6 +2508,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.validSuggestionsByPR.push(
                     ...prLevelSuggestions.map((s) => ({
                         id: crypto.randomUUID(),
+                        // Kept on the record, not only in the text: the
+                        // repeat check of the next round compares a finding
+                        // with the comments on the same file (#2420).
+                        ...(s.relevantFile && { relevantFile: s.relevantFile }),
                         // Any finding that named a file has to say WHERE,
                         // since a PR-level comment carries no anchor of
                         // its own — true whether it's fileAnchored

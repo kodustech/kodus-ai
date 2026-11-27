@@ -60,10 +60,11 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
 }
 
 /** PR-level suggestions (`ISuggestionByPR`, stored in `prLevelSuggestions`)
- *  carry no `relevantFile` and no `implementationStatus` — the implementation
- *  check only diffs file patches, so there is no signal to derive an outcome
- *  from. Always `pending`: descriptive context ("this was already flagged"),
- *  never refutation evidence. */
+ *  carry no line and no `implementationStatus` — the implementation check
+ *  only diffs file patches, so there is no signal to derive an outcome from.
+ *  Always `pending`: descriptive context ("this was already flagged"), never
+ *  refutation evidence. A Kody Rule finding that named a file without a line
+ *  is posted here too (#2420) and keeps that file. */
 export function toRecordFromPrLevel(
     suggestion: ISuggestionByPR,
 ): PrDecisionRecord {
@@ -83,6 +84,9 @@ export function toRecordFromPrLevel(
                       ]),
                   )
                   .digest('hex')}`,
+        ...(suggestion.relevantFile && {
+            relevantFile: suggestion.relevantFile,
+        }),
         suggestionContent:
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,

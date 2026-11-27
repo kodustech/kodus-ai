@@ -31,8 +31,10 @@ export interface PrDecisionRecord {
     readonly suggestionId: string;
     /** Absent for a PR-LEVEL decision — a kody-rules PULL_REQUEST-scope
      *  finding, which judges the diff as a whole and is never anchored to one
-     *  file (`ISuggestionByPR`, stored in `prLevelSuggestions`, has no file
-     *  field at all). A PR-level record has no `implementationStatus` either
+     *  file (`ISuggestionByPR`, stored in `prLevelSuggestions`). Present, with
+     *  no lines, for a rule finding that named a changed file but no line,
+     *  posted at PR level too (#2420). A PR-level record has no
+     *  `implementationStatus` either
      *  (that check only diffs file patches), so it always carries
      *  `outcome: 'pending'` — descriptive context, never refutation evidence. */
     readonly relevantFile?: string;

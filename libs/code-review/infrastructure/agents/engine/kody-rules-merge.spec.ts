@@ -90,7 +90,8 @@ describe('mergeKodyRuleFindings', () => {
     });
 
     it('does not carry a location with no known line into the merged list', () => {
-        const merges: Array<{ otherLocations: number }> = [];
+        const merges: Array<{ scope: 'pr' | 'file'; otherLocations: number }> =
+            [];
 
         const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>(
             [
@@ -123,35 +124,44 @@ describe('mergeKodyRuleFindings', () => {
             (merge) => merges.push(merge),
         );
 
-        expect(out).toHaveLength(1);
+        expect(out).toHaveLength(2);
         expect(out[0].kodyRuleOtherLocations).toEqual(['c.ts:5-6']);
-        expect(merges[0].otherLocations).toBe(1);
+        expect(out[1].suggestionContent).toBe('lines but no file');
+        expect(merges).toEqual([
+            expect.objectContaining({ scope: 'pr', collapsed: 2 }),
+            expect.objectContaining({ scope: 'file', otherLocations: 1 }),
+        ]);
     });
 
-    it('reports the scope of the kept finding, not of the group', () => {
-        const merges: Array<{ scope: 'pr' | 'file' }> = [];
+    // QA M6/M7 on #2420: the line-less finding had the longest text, so it
+    // was kept and posted PR-level, and the lined AverageDues.cs:1-1 lived on
+    // only as text in its "Also found in": the PR-level record has no field
+    // for it, and the implementation check never read it.
+    it('never folds a lined finding under a line-less one', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'AverageDues.cs',
+                relevantLinesStart: 1,
+                relevantLinesEnd: 1,
+                suggestionContent: 'short',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'CheckinReport.cs',
+                suggestionContent:
+                    'the file name must start with the qa2420_ prefix, and this one does not',
+            },
+        ]);
 
-        mergeKodyRuleFindings<Partial<CodeSuggestion>>(
-            [
-                {
-                    brokenKodyRulesIds: ['rule-1'],
-                    relevantFile: 'a.ts',
-                    relevantLinesStart: 1,
-                    relevantLinesEnd: 2,
-                    suggestionContent: 'short',
-                },
-                {
-                    // A rule about the PR itself: the longest text, so it is
-                    // the finding the comment is written from.
-                    brokenKodyRulesIds: ['rule-1'],
-                    relevantFile: 'b.ts',
-                    suggestionContent:
-                        'the title must name the affected module and the change',
-                },
-            ],
-            (merge) => merges.push(merge),
-        );
-
-        expect(merges[0].scope).toBe('pr');
+        expect(out).toEqual([
+            expect.objectContaining({
+                relevantFile: 'AverageDues.cs',
+                relevantLinesStart: 1,
+            }),
+            expect.objectContaining({ relevantFile: 'CheckinReport.cs' }),
+        ]);
+        expect(out[1].relevantLinesStart).toBeUndefined();
+        expect(out[1].kodyRuleOtherLocations).toBeUndefined();
     });
 });

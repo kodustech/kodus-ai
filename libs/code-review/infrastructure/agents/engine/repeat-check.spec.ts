@@ -596,6 +596,38 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
+    // QA M14 on #2420: a rule finding that named a file and no line is
+    // posted and stored PR-level with that file and no lines. When the model
+    // fails, the same finding on the next push has to be held, not reposted.
+    it('a model failure holds a line-less rule finding already posted on the same file', async () => {
+        const old = earlier({
+            suggestionId: 'pr-comment-d',
+            relevantFile: 'qa2420/CheckinReport.cs',
+            relevantLinesStart: undefined,
+            relevantLinesEnd: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-d'],
+            suggestionContent:
+                'CheckinReport.cs does not start with the qa2420_ prefix.',
+        });
+        const again = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-d'],
+            relevantFile: 'qa2420/CheckinReport.cs',
+            suggestionContent:
+                'CheckinReport.cs does not start with the required qa2420_ prefix.',
+        };
+        runSpy.mockRejectedValue(new Error('provider 500'));
+
+        const result = await checkRepeats([again], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+
+        expect(result.kept).toEqual([]);
+        expect(result.withheld).toEqual([again]);
+    });
+
     it('after two timeouts withholds the repeated CSV claim and delivers the PDF claim under the same PR rule', async () => {
         const old = earlier({
             suggestionId: 'pr-comment-old',

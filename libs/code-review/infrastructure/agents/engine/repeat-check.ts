@@ -361,6 +361,16 @@ function plausibleRepeat(
     }
     const start = finding.relevantLinesStart;
     const oldStart = earlier.relevantLinesStart;
+    if (!start && !oldStart) {
+        // A rule finding that names the file and no line is posted PR-level
+        // and stored that way, without lines (#2420). Without lines the file
+        // and the rule are the place, and the text says it is the same claim.
+        return (
+            isRule(finding) &&
+            sharesRule(finding, earlier) &&
+            contentSimilarity(finding, earlier) >= 0.4
+        );
+    }
     return (
         start != null &&
         oldStart != null &&

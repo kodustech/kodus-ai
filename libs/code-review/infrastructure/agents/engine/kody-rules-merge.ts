@@ -4,11 +4,16 @@ import type { CodeSuggestion } from '@libs/core/infrastructure/config/types/gene
  * Merges Kody Rule findings deterministically by rule UUID, without a model:
  * the UUID says which rule each finding belongs to.
  *
- *   - PR-level (no relevantFile): keep the most detailed finding, drop the
- *     rest. A PR-level rule is broken once per PR.
- *   - File-level: keep the most detailed finding and carry the other
- *     locations on `kodyRuleOtherLocations`, rendered as "Also found in"
- *     after the formatter (#2015).
+ *   - PR-level (no file, or a file with no cited line): keep the most
+ *     detailed finding, drop the rest. A PR-level rule is broken once per PR.
+ *   - File-level (a file and a line): keep the most detailed finding and
+ *     carry the other locations on `kodyRuleOtherLocations`, rendered as
+ *     "Also found in" after the formatter (#2015).
+ *
+ * A rule with findings of both shapes gets one of each. The PR-level one is
+ * posted as a PR comment (#2420), which keeps no location of its own: a lined
+ * finding folded under it would live only in the comment's text, out of reach
+ * of the implementation check and of the record of where the rule was broken.
  *
  * Shared by agent-review.stage.ts and evals/review-rounds, so the eval merges
  * what the stage merges.
@@ -47,45 +52,37 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
         (b.suggestionContent?.length || 0) - (a.suggestionContent?.length || 0);
 
     for (const [ruleUuid, group] of groupsByRuleUuid) {
-        if (group.length === 1) {
-            result.push(group[0]);
-            continue;
-        }
+        // A finding without a file, or with a file but no line, names no
+        // location to list and is posted PR-level (#2420).
+        const lined = group.filter(
+            (s) => !!s.relevantFile && !!s.relevantLinesStart,
+        );
+        const lineLess = group.filter((s) => !lined.includes(s));
 
-        if (group.every((s) => !s.relevantFile)) {
-            result.push([...group].sort(byDetail)[0]);
+        if (lineLess.length > 1) {
             onMerge?.({
                 ruleUuid,
                 scope: 'pr',
-                collapsed: group.length,
+                collapsed: lineLess.length,
                 otherLocations: 0,
             });
+        }
+        if (lined.length <= 1) {
+            result.push(...lined);
+            if (lineLess.length) result.push([...lineLess].sort(byDetail)[0]);
             continue;
         }
 
-        const sorted = [...group].sort(byDetail);
+        const sorted = [...lined].sort(byDetail);
         const keep = { ...sorted[0] };
         const otherLocations: string[] = [];
-        // A finding with no cited line has no location to name: the previous
-        // `?? '?'` placeholder rendered as `file:?-?` and inflated the merge
-        // count. Those findings are routed PR-level (#2420), so skip them.
-        const locationOf = (s: T): string | null => {
-            const start = s.relevantLinesStart;
-            if (!start) {
-                return null;
-            }
-            return `${s.relevantFile}:${start}-${s.relevantLinesEnd ?? start}`;
-        };
+        const locationOf = (s: T) =>
+            `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd ?? s.relevantLinesStart}`;
         const keptLocation = locationOf(keep);
 
         for (let i = 1; i < sorted.length; i++) {
-            const dup = sorted[i];
-            // A duplicate with no file names no other place to look at: the
-            // start-only test in `locationOf` would otherwise render it as
-            // `undefined:3-3` in "Also found in" (#2571).
-            if (!dup.relevantFile) continue;
-            const loc = locationOf(dup);
-            if (loc && loc !== keptLocation && !otherLocations.includes(loc)) {
+            const loc = locationOf(sorted[i]);
+            if (loc !== keptLocation && !otherLocations.includes(loc)) {
                 otherLocations.push(loc);
             }
         }
@@ -98,17 +95,14 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
             keep.kodyRuleOtherLocations = otherLocations;
         }
 
-        // The kept finding can itself be the line-less in-PR one (#2420), in
-        // which case the comment is routed PR-level although its group holds
-        // files. The telemetry has to name the scope that is delivered, not the
-        // shape of the group.
         onMerge?.({
             ruleUuid,
-            scope: keptLocation ? 'file' : 'pr',
-            collapsed: group.length,
+            scope: 'file',
+            collapsed: lined.length,
             otherLocations: otherLocations.length,
         });
         result.push(keep);
+        if (lineLess.length) result.push([...lineLess].sort(byDetail)[0]);
     }
 
     return result;

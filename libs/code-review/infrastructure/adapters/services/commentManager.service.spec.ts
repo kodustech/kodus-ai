@@ -2053,6 +2053,28 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
         );
     });
 
+    // QA M11 on #2420: Azure numbers comments within a thread, so every
+    // PR-level comment came back as id 1 and two records shared it.
+    it('stores the Azure thread id, not the in-thread comment id', async () => {
+        codeManagementService.createIssueComment
+            .mockResolvedValueOnce({ id: 1, threadId: 501 })
+            .mockResolvedValueOnce({ id: 1, threadId: 502 });
+
+        const { commentResults } = await service.createPrLevelReviewComments(
+            { organizationId: 'org-1', teamId: 'team-1' } as never,
+            7,
+            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
+            [suggestion(), { ...suggestion(), id: 'uuid-2' }] as never,
+            'typescript',
+            undefined,
+            PlatformType.AZURE_REPOS,
+        );
+
+        expect(
+            commentResults.map((r) => r.codeReviewFeedbackData.commentId),
+        ).toEqual([501, 502]);
+    });
+
     it('does not duplicate the marker when the formatted body already carries it', async () => {
         codeManagementService.formatReviewCommentBody.mockResolvedValue(
             '![badge](https://img.shields.io/badge/...)\n\nrule body\n\n' +
