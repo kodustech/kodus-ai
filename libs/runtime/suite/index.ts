@@ -15,6 +15,8 @@ export { FAIL_FAST_BATCH_SHARE, FAIL_FAST_MIN_BATCH, FAIL_FAST_RATIO, failFast, 
 export type { FailFastDecision, FailFastInput, OrderContext } from './order';
 export { hostsToAsk, spreadOnto } from './hosts';
 export type { ShardSpecs } from './hosts';
+export { afterLostClaim, batchSize, leaseExpired, QUEUE_BATCH_MAX_SPECS, QUEUE_BATCH_TARGET_MS, QUEUE_IDLE_POLL_MS, QUEUE_LEASE_MS, QUEUE_MAX_ATTEMPTS, queueEntries } from './queue';
+export type { QueueEntry } from './queue';
 export { suiteDigestOf } from './digest';
 export type { DigestedSuite } from './digest';
 export { MAIN_SPECS_MAX, mainSpecsOfTree, specListOf } from './spec-list';

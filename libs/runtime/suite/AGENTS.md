@@ -11,6 +11,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `repush.ts` `planRepush`: a new push on the same PR runs what was red before (minus `pre_existing`) plus what the delta reaches; a green previous run and an empty delta run none; a delta in the safety net escalates to full; a rebase selects again from the new merge base.
 - `order.ts`: `orderBin` / `orderBins` (inside a shard: failed before, then specs covering the diff by number of changed files, then the rest longest first; the balance is untouched) and `failFast` (more than 25% of the first `max(5, 10%)` specs failed: stop the first pass and name the rest `not_run`; the classifier then sees a mass failure).
 
+- `queue.ts` (the dynamic spec queue, section 6): `queueEntries` (what a suite run's queue holds and the order it is handed out in: red before, then covering the diff, then longest first by the stored duration, the file size with none), `batchSize` (a pull takes specs until their estimates add up to `QUEUE_BATCH_TARGET_MS`, a long one alone, at most `QUEUE_BATCH_MAX_SPECS`) and the lease rules (`QUEUE_LEASE_MS`, `QUEUE_MAX_ATTEMPTS`, `afterLostClaim`, `leaseExpired`). `PgSuiteQueue` in the worker applies them.
 - `hosts.ts` `hostsToAsk` (one host per shard, at most the pool headroom, at least one) and `spreadOnto` (every spec onto the shards that got a host, balanced by the stored durations; the missing shards carry none).
 - `digest.ts` `suiteDigestOf`: the digest of a suite (the block's command, runner, directory, results glob and env, and the sorted spec list) that keys a baseline; timeouts and the shard ceiling do not move it.
 - `spec-list.ts` `specListOf`: the spec files one run executes: main's listing under the recipe's glob, plus the specs the PR adds, minus the ones it removes (paths read relative to the suite directory), or exactly the specs a retry names.
@@ -40,7 +41,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (17, tests apart): `artifacts.ts`, `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `plan.ts`, `report.ts`, `repush.ts`, `select.ts`, `shadow.ts`, `spec-list.ts`, `types.ts`
+Files (18, tests apart): `artifacts.ts`, `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `plan.ts`, `queue.ts`, `report.ts`, `repush.ts`, `select.ts`, `shadow.ts`, `spec-list.ts`, `types.ts`
 
 Imports these Runtime modules:
 
