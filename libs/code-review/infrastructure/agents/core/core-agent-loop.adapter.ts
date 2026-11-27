@@ -425,6 +425,9 @@ export async function runAgentLoopViaCore(
             finderSpec,
             skipHeavyPasses,
             skipSynthesisRescue,
+            // The security scan publishes what a failed run salvaged; the
+            // review agent throws it away with the generalist's error.
+            consumePartialResults: input.agentName === 'security',
             teamSystemTools: input.teamSystemTools,
             laneFocus: input.laneFocus,
             ...(heavyLenses && { heavyLenses }),

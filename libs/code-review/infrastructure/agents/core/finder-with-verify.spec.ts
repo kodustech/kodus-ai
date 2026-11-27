@@ -926,10 +926,13 @@ describe('runFinderWithVerify (generalist failed at the provider)', () => {
         const r = await runFinderWithVerify(
             {
                 runner: { run } as any,
-                finderSpec: {} as any,
+                finderSpec: { policies: [] } as any,
                 modelId: 'mock',
                 tools: new InMemoryToolRegistry([]),
                 recoverProse: async () => [recovered],
+                // The security scan is the caller that publishes the partial
+                // result of a failed generalist.
+                consumePartialResults: true,
             },
             { prompt: 'review' },
             ctx,
@@ -937,7 +940,43 @@ describe('runFinderWithVerify (generalist failed at the provider)', () => {
 
         expect(r.kept).toEqual([recovered]);
         expect(r.keptParseMode).toEqual(['default-keep']);
-        expect(run).toHaveBeenCalledTimes(1);
+        // The salvaged finding passes the verify gate like any other: a scan
+        // never publishes a finding nobody judged.
+        expect(run.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it('does not recover prose for a caller that discards the failure', async () => {
+        // A review throws the failed run away with the error: the extra
+        // model request would buy nothing.
+        const recoverProse = jest.fn(async () => []);
+        const run = jest.fn().mockResolvedValue({
+            status: 'error',
+            steps: [],
+            toolCalls: [],
+            artifacts: [],
+            usage: {
+                inputTokens: 10,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+            error: { message: 'the provider refused the request' },
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: { run } as any,
+                finderSpec: {} as any,
+                modelId: 'mock',
+                tools: new InMemoryToolRegistry([]),
+                recoverProse,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept).toEqual([]);
+        expect(recoverProse).not.toHaveBeenCalled();
     });
 
     it('rethrows a lens failure that is not the abort', async () => {
@@ -961,16 +1000,53 @@ describe('runFinderWithVerify (generalist failed at the provider)', () => {
                     finderSpec: {} as any,
                     modelId: 'mock',
                     tools: new InMemoryToolRegistry([]),
-                    heavyLenses: async () => {
-                        // Reject once the pipeline is awaiting it: an already
-                        // rejected promise would be reported as unhandled.
-                        await new Promise((resolve) => setTimeout(resolve, 20));
-                        throw new Error('sandbox lease superseded');
+                    heavyLenses: () => {
+                        // Reject while the generalist is still running: the
+                        // pipeline must observe the promise when it is created,
+                        // and still surface the failure when the generalist
+                        // left nothing to publish.
+                        const rejection = Promise.reject(
+                            new Error('sandbox lease superseded'),
+                        );
+                        rejection.catch(() => {});
+                        return rejection;
                     },
                 },
                 { prompt: 'review' },
                 ctx,
             ),
-        ).rejects.toThrow('sandbox lease superseded');
+        ).rejects.toThrow(new Error('sandbox lease superseded'));
+    });
+
+    it('keeps the generalist findings when a lens fails', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+
+        const r = await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                heavyLenses: () => {
+                    // The lens dies while the generalist is still working.
+                    const rejection = Promise.reject(new Error('lens down'));
+                    rejection.catch(() => {});
+                    return rejection;
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        // The lens failure is logged, not thrown over a review that has
+        // findings of its own.
+        expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
     });
 });
