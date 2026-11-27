@@ -21,8 +21,8 @@
  * license)" notice dedupe: evicted with the file contents, the author got the
  * notice again every few hours. Small entries leave by the entry cap, and by
  * size only once no large value is left; with the global bounds that never
- * happens (50k × 1,024 is 51M of 256M characters), but `maxChars` holds
- * either way. Large keys keep their own order, so the size budget never walks
+ * happens on a production worker (200k × 1,024 is 205M of 1G characters),
+ * but `maxChars` holds either way. Large keys keep their own order, so the size budget never walks
  * past the small ones.
  */
 
