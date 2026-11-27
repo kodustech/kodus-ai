@@ -1,4 +1,5 @@
 import { isOpenAiHost, servedByOpenAi } from './endpoint';
+import { openAiPrefixCacheHint } from './prompt-cache';
 
 describe('providers/openai/endpoint', () => {
     it('knows OpenAI by its API host, whatever the path', () => {
@@ -17,6 +18,23 @@ describe('providers/openai/endpoint', () => {
         expect(isOpenAiHost('https://api.openai.com.evil.example/v1')).toBe(
             false,
         );
+    });
+
+    it('knows OpenAI data-residency hosts as OpenAI', () => {
+        expect(isOpenAiHost('https://us.api.openai.com/v1')).toBe(true);
+        expect(isOpenAiHost('https://eu.api.openai.com/v1')).toBe(true);
+        expect(isOpenAiHost('https://ae.api.openai.com/v1')).toBe(true);
+        expect(isOpenAiHost('https://us.api.openai.com.evil.example/v1')).toBe(
+            false,
+        );
+        expect(isOpenAiHost('https://proxy.api.openai.com/v1')).toBe(false);
+        expect(
+            openAiPrefixCacheHint({
+                provider: 'openai',
+                model: 'gpt-6.1-sol',
+                baseURL: 'https://eu.api.openai.com/v1',
+            } as Parameters<typeof openAiPrefixCacheHint>[0]),
+        ).toBeDefined();
     });
 
     it('sends only OpenAI reasoning models on OpenAI itself to the native SDK', () => {
