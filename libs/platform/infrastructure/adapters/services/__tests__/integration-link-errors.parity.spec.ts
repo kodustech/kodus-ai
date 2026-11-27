@@ -462,7 +462,13 @@ describe('GitLab OAuth link', () => {
         ]);
         // The exception filter logs the same error.
         const written = serialized(thrown);
-        expect(written).toContain('oauth/token');
+        // The request is written, without its body.
+        const { config } = JSON.parse(written) as {
+            config: Record<string, unknown>;
+        };
+        expect(config.url).toBe(process.env.API_GITLAB_TOKEN_URL);
+        expect(config.method).toBe('post');
+        expect(config).not.toHaveProperty('data');
         expect(written).not.toContain(CODE);
         expect(written).not.toContain(SECRET);
     });
