@@ -113,7 +113,7 @@ describe('KodusIssuesTools', () => {
         });
 
         it('accepts an optional artifacts field', () => {
-            const parsed = schema().safeParse({
+            const payload = {
                 success: true,
                 data: {
                     ...base,
@@ -125,9 +125,11 @@ describe('KodusIssuesTools', () => {
                         },
                     ],
                 },
-            });
-            expect(parsed.error?.issues ?? []).toEqual([]);
+            };
+            const parsed = schema().safeParse(payload);
+            expect(parsed.error).toBeUndefined();
             expect(parsed.success).toBe(true);
+            expect(parsed.data).toEqual(payload);
         });
 
         it('passes includeArtifacts on to the facade, and only when given', async () => {
@@ -144,8 +146,19 @@ describe('KodusIssuesTools', () => {
             await tools.getIssue().execute(args as any);
             const [withFlag, without] =
                 mockCodeManagementService.getIssue.mock.calls.map(([p]) => p);
-            expect(withFlag).toMatchObject({ includeArtifacts: true });
-            expect(without.includeArtifacts).toBeUndefined();
+            const common = {
+                organizationAndTeamData: {
+                    organizationId: 'org',
+                    teamId: 'team',
+                },
+                repository: { owner: 'acme', name: 'web' },
+                issueNumber: 7,
+            };
+            expect(withFlag).toEqual({ ...common, includeArtifacts: true });
+            expect(without).toStrictEqual({
+                ...common,
+                includeArtifacts: undefined,
+            });
         });
 
         it('returns the artifacts the facade read, untouched', async () => {

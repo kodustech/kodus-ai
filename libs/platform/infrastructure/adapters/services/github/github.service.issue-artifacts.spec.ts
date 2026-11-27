@@ -55,8 +55,28 @@ describe('GithubService.getIssue: issue artifacts', () => {
             includeArtifacts: true,
         });
 
-    const isList = (route: string) =>
-        /issues\/\{issue_number\}\/artifacts$/.test(route);
+    const TIMEOUT_MS = 10_000;
+    const signal = new AbortController().signal;
+    let timeoutSpy: jest.SpyInstance;
+    beforeEach(() => {
+        timeoutSpy = jest.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+    });
+    afterEach(() => {
+        timeoutSpy.mockRestore();
+    });
+
+    /** The one call the artifact list is read with, in full. */
+    const LIST_CALL = [
+        'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts',
+        {
+            owner: 'acme',
+            repo: 'web',
+            issue_number: 12,
+            per_page: 100,
+            headers: { 'X-GitHub-Api-Version': API_VERSION },
+            request: { signal },
+        },
+    ];
 
     const artifactsOf = (result: unknown) =>
         (result as { artifacts?: any[] } | null)?.artifacts;
@@ -73,32 +93,9 @@ describe('GithubService.getIssue: issue artifacts', () => {
             { number: 1, name: 'qa.md', content: 'Returns 422.' },
             { number: 2, name: 'product.md', content: 'Sign up by email.' },
         ]);
-        expect(unreadOf(result) ?? []).toEqual([]);
-        expect(request).toHaveBeenCalledTimes(1);
-        expect(request.mock.calls[0][0]).toBe(
-            'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts',
-        );
-        expect(request.mock.calls[0][1]).toEqual({
-            owner: 'acme',
-            repo: 'web',
-            issue_number: 12,
-            per_page: 100,
-            headers: { 'X-GitHub-Api-Version': API_VERSION },
-            request: { signal: expect.any(AbortSignal) },
-        });
-    });
-
-    it('sends the preview API version and a timeout only on the artifact call', async () => {
-        const { service, request } = serviceWith(issue(), () => [
-            item(1, 'qa.md', 'Returns 422.'),
-        ]);
-        await get(service);
-        expect(request).toHaveBeenCalledTimes(1);
-        const [, params] = request.mock.calls[0];
-        expect(params.headers).toEqual({
-            'X-GitHub-Api-Version': API_VERSION,
-        });
-        expect(params.request.signal).toBeInstanceOf(AbortSignal);
+        expect(unreadOf(result)).toBeUndefined();
+        expect(request.mock.calls).toEqual([LIST_CALL]);
+        expect(timeoutSpy).toHaveBeenCalledWith(TIMEOUT_MS);
     });
 
     it('does not call the artifacts API for any repository but the issue own', async () => {
@@ -118,12 +115,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
         } finally {
             fetchSpy.mockRestore();
         }
-        expect(request).toHaveBeenCalledTimes(1);
-        const [route, params] = request.mock.calls[0];
-        expect(isList(route)).toBe(true);
-        expect(params.owner).toBe('acme');
-        expect(params.repo).toBe('web');
-        expect(params.issue_number).toBe(12);
+        expect(request.mock.calls).toEqual([LIST_CALL]);
     });
 
     it.each([403, 500])(
@@ -134,7 +126,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
             });
             const result = await get(service);
             expect(result?.number).toBe(12);
-            expect(artifactsOf(result) ?? []).toEqual([]);
+            expect(artifactsOf(result)).toBeUndefined();
             expect(unreadOf(result)).toEqual([
                 { reason: 'list_failed', status },
             ]);
@@ -246,7 +238,13 @@ describe('GithubService.getIssue: issue artifacts', () => {
             ),
         );
         const result = await get(service);
-        expect(artifactsOf(result)).toHaveLength(100);
+        expect(artifactsOf(result)).toEqual(
+            Array.from({ length: 100 }, (_, i) => ({
+                number: i + 1,
+                name: `a${i + 1}.md`,
+                content: `Rule ${i + 1}.`,
+            })),
+        );
         expect(unreadOf(result)).toEqual([{ reason: 'may_have_more' }]);
     });
 
@@ -269,8 +267,8 @@ describe('GithubService.getIssue: issue artifacts', () => {
         const { service } = serviceWith(issue(), () => []);
         const result = await get(service);
         expect(result?.number).toBe(12);
-        expect(artifactsOf(result) ?? []).toEqual([]);
-        expect(unreadOf(result) ?? []).toEqual([]);
+        expect(artifactsOf(result)).toBeUndefined();
+        expect(unreadOf(result)).toBeUndefined();
     });
 
     it('does not read artifacts of a pull request', async () => {
