@@ -98,8 +98,20 @@ describe('BusinessRulesVerifier.verify', () => {
         });
         await verifier.verify(claim, ctx);
         const prompt = (runner.run.mock.calls as any[])[0][1].prompt as string;
-        expect(prompt).toContain(
-            `## PR diff\n<pr_diff_ffeeddccbbaa9988>\n${diff}\n</pr_diff_ffeeddccbbaa9988>\n`,
+        expect(prompt).toBe(
+            [
+                'Refute the analyzer claim below if the diff actually satisfies the task.',
+                '## Task requirements',
+                't',
+                '## PR diff',
+                '<pr_diff_ffeeddccbbaa9988>',
+                diff,
+                '</pr_diff_ffeeddccbbaa9988>',
+                "## Analyzer's claim (the alleged violation)",
+                'PR never revokes sessions on soft-delete',
+                'Reason: missing_logic',
+                'Submit submitVerdict: keep=true if the violation genuinely holds; keep=false if the diff satisfies the task or the claim is unsupported.',
+            ].join('\n'),
         );
     });
 

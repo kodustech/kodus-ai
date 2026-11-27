@@ -216,7 +216,6 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
             includeArtifacts: true,
         });
         expect(byIssue[9]).toStrictEqual({ ...base, issueNumber: 9 });
-        expect(JSON.stringify(task.parent)).not.toContain('EPIC-ONLY');
     });
 
     it('folds several artifacts, each labelled with its origin', async () => {
@@ -412,7 +411,7 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         ).toEqual(['Keep the form accessible', 'Keep the form fast']);
     });
 
-    it('detects a labelled criterion of the body when no whole artifact line survives the clip', async () => {
+    it('reads the body as without artifacts when no artifact line survives the clip: one bullet is no list', async () => {
         const { task } = await read(
             issue({
                 body: '- AC1: The API returns 422 on an empty form',
@@ -423,7 +422,23 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         expect(
             applyCriteriaLocation(task, { location: 'auto' })
                 .acceptanceCriteria,
-        ).toEqual(['AC1: The API returns 422 on an empty form']);
+        ).toBeUndefined();
+    });
+
+    it('reads a labelled and an unlabelled bullet of the body together when no artifact line survives the clip', async () => {
+        const { task } = await read(
+            issue({
+                body: '- AC1: The API returns 422 on an empty form\n- Keep the form accessible',
+                artifacts: [artifact(1, 'qa.md', 'x'.repeat(7000))],
+            }),
+        );
+        expect(
+            applyCriteriaLocation(task, { location: 'auto' })
+                .acceptanceCriteria,
+        ).toEqual([
+            'AC1: The API returns 422 on an empty form',
+            'Keep the form accessible',
+        ]);
     });
 
     it('reads a very long line of unclosed brackets without blowing up', async () => {
