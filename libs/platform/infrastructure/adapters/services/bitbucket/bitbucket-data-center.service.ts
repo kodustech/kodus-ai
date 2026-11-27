@@ -273,10 +273,27 @@ export class BitbucketDataCenterService implements Omit<
             // Proxies may strip it. The labels endpoint requires authentication
             // without requiring a personal profile for project or repo tokens.
             if (!/^[1-9]\d*$/.test(repos.headers?.['x-auserid'] ?? '')) {
-                const labels = await axiosClient.get('/labels?limit=1');
+                const identity = await axiosClient
+                    .get('/labels?limit=1')
+                    .catch((error: unknown) => {
+                        const status = axios.isAxiosError(error)
+                            ? error.response?.status
+                            : undefined;
+                        // A restricted or missing labels route can still allow user profiles.
+                        if (
+                            status === 403 ||
+                            status === 404 ||
+                            status === 405
+                        ) {
+                            return axiosClient.get(
+                                '/profile/recent/repos?limit=1',
+                            );
+                        }
+                        throw error;
+                    });
                 if (
-                    ![200, 201].includes(labels.status) ||
-                    !Array.isArray(labels.data?.values)
+                    ![200, 201].includes(identity.status) ||
+                    !Array.isArray(identity.data?.values)
                 ) {
                     throw new Error(
                         'Bitbucket Data Center failed to validate the provided token.',

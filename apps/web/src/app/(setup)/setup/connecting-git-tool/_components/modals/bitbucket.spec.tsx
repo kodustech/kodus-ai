@@ -29,26 +29,38 @@ jest.mock("src/core/components/system/git-token-docs", () => ({
 }));
 
 it.each([
-    [
-        400,
-        "Could not connect to Bitbucket Data Center. Check the server URL and credentials, then try again.",
-    ],
-    [
-        500,
-        "Could not save the Bitbucket Data Center connection. Please try again.",
-    ],
-] as const)(
-    "shows a safe Data Center error for HTTP %i and allows retrying the same fields",
-    async (status, expectedMessage) => {
+    {
+        failure: "HTTP 400",
+        status: 400,
+        expectedMessage:
+            "Could not connect to Bitbucket Data Center. Check the server URL and credentials, then try again.",
+    },
+    {
+        failure: "HTTP 500",
+        status: 500,
+        expectedMessage:
+            "Could not confirm the Bitbucket Data Center connection. Please try again.",
+    },
+    {
+        failure: "a network error",
+        status: undefined,
+        expectedMessage:
+            "Could not confirm the Bitbucket Data Center connection. Please try again.",
+    },
+])(
+    "shows a safe Data Center error for $failure and allows retrying the same fields",
+    async ({ status, expectedMessage }) => {
         mockPush.mockClear();
         const message = "Upstream diagnostic with private details";
-        const create = jest.mocked(createCodeManagementIntegration);
-        create.mockRejectedValueOnce(
-            Object.assign(new AxiosError(message), {
+        const create = jest.mocked(createCodeManagementIntegration).mockReset();
+        const error = new AxiosError(message);
+        if (status !== undefined) {
+            Object.assign(error, {
                 status,
                 response: { status, data: { message } },
-            }),
-        );
+            });
+        }
+        create.mockRejectedValueOnce(error);
         create.mockResolvedValueOnce({
             data: { success: true, status: "SUCCESS" },
             statusCode: 201,
@@ -92,5 +104,15 @@ it.each([
                 "/setup/choosing-repositories",
             ),
         );
+        const submission = {
+            integrationType: "BITBUCKET",
+            authMode: "basic",
+            token: "password",
+            organizationAndTeamData: { teamId: "team-1" },
+            username: "reviewer",
+            email: undefined,
+            host: "https://git.example.test",
+        };
+        expect(create.mock.calls).toStrictEqual([[submission], [submission]]);
     },
 );

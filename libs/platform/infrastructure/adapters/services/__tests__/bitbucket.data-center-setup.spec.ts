@@ -356,6 +356,75 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
         ]);
     });
 
+    it.each([403, 404, 405])(
+        'accepts a personal profile when the labels route is unavailable (HTTP %i)',
+        async (status) => {
+            const svc = dataCenter();
+            const page = { status: 200, data: { values: [] } };
+            const get = jest
+                .fn()
+                .mockResolvedValueOnce(page)
+                .mockRejectedValueOnce(
+                    Object.assign(new AxiosError('Labels unavailable'), {
+                        response: { status },
+                    }),
+                )
+                .mockResolvedValueOnce(page);
+            jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+
+            await expect(
+                svc.createAuthIntegration({
+                    organizationAndTeamData: ORG,
+                    host: HOST,
+                    authMode: AuthMode.BASIC,
+                    username: 'reviewer',
+                    token: 'personal-token',
+                }),
+            ).resolves.toEqual({
+                success: true,
+                status: CreateAuthIntegrationStatus.SUCCESS,
+            });
+            expect(get.mock.calls).toStrictEqual([
+                ['/repos?limit=1'],
+                ['/labels?limit=1'],
+                ['/profile/recent/repos?limit=1'],
+            ]);
+        },
+    );
+
+    it('refuses an unauthenticated profile when the labels route is unavailable', async () => {
+        const svc = dataCenter();
+        const get = jest
+            .fn()
+            .mockResolvedValueOnce({ status: 200, data: { values: [] } })
+            .mockRejectedValueOnce(
+                Object.assign(new AxiosError('Labels unavailable'), {
+                    response: { status: 404 },
+                }),
+            )
+            .mockResolvedValueOnce({
+                status: 200,
+                data: '<html>Sign in</html>',
+            });
+        jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+
+        await expect(
+            svc.createAuthIntegration({
+                organizationAndTeamData: ORG,
+                host: HOST,
+                authMode: AuthMode.BASIC,
+                username: 'reviewer',
+                token: 'wrong',
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(get.mock.calls).toStrictEqual([
+            ['/repos?limit=1'],
+            ['/labels?limit=1'],
+            ['/profile/recent/repos?limit=1'],
+        ]);
+        expect(svc.addAccessToken).not.toHaveBeenCalled();
+    });
+
     it('logs only the tenant and status when a provider request fails', async () => {
         const svc = dataCenter();
         const error = Object.assign(new AxiosError('Request failed'), {
