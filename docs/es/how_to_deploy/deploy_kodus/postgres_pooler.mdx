@@ -98,7 +98,9 @@ Configurar la conexión directa también cambia los locks de coordinación de
 Kodus de locks de sesión a filas en la base. Los pods que aún corren sin ella
 no ven los nuevos locks, así que activa el pooler con los pods anteriores
 detenidos: ejecuta `docker compose down` antes, o escala los Deployments de
-api, worker, worker-analytics y webhooks a 0 antes del `helm upgrade`.
+api, worker, worker-analytics y webhooks a 0 antes del `helm upgrade` y de
+vuelta después (a `autoscaling.minReplicas`, 2 por defecto): el HPA no escala
+un Deployment que está en 0.
 
 ### Docker Compose
 

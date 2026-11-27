@@ -97,7 +97,9 @@ Configurar a conexão direta também muda os locks de coordenação da Kodus de
 locks de sessão para linhas no banco. Pods que ainda rodam sem ela não
 enxergam os novos locks, então ligue o pooler com os pods antigos parados:
 rode `docker compose down` antes, ou escale os Deployments de api, worker,
-worker-analytics e webhooks para 0 antes do `helm upgrade`.
+worker-analytics e webhooks para 0 antes do `helm upgrade` e de volta depois
+dele (para `autoscaling.minReplicas`, 2 por padrão): o HPA não sobe um
+Deployment que está em 0.
 
 ### Docker Compose
 

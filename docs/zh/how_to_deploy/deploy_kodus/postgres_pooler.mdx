@@ -88,7 +88,8 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 设置直连后，Kodus 的协调锁也会从会话锁改为数据库中的行。仍在没有直连配置下运行的
 Pod 看不到新的锁，因此请在旧 Pod 停止的情况下启用连接池：先运行
 `docker compose down`，或在 `helm upgrade` 之前把 api、worker、worker-analytics 和
-webhooks 的 Deployment 缩容到 0。
+webhooks 的 Deployment 缩容到 0,升级后再扩回(`autoscaling.minReplicas`,默认 2):
+HPA 不会把处于 0 的 Deployment 扩容。
 
 ### Docker Compose
 

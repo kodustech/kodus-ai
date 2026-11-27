@@ -98,7 +98,9 @@ Setting the direct connection also moves Kodus's coordination locks from
 session locks to rows in the database. Pods still running without it do not
 see the new locks, so turn the pooler on with the old pods stopped: run
 `docker compose down` first, or scale the api, worker, worker-analytics and
-webhooks Deployments to 0 before the `helm upgrade`.
+webhooks Deployments to 0 before the `helm upgrade` and back up after it
+(to `autoscaling.minReplicas`, 2 by default): the HPA does not scale a
+Deployment up from 0.
 
 ### Docker Compose
 

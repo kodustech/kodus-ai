@@ -93,7 +93,8 @@ DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus
 切り替わります。直接接続なしで動いている Pod は新しいロックを認識できないため、
 古い Pod を止めた状態でプーラーを有効にしてください。先に `docker compose down`
 を実行するか、`helm upgrade` の前に api・worker・worker-analytics・webhooks の Deployment を 0 に
-スケールします。
+スケールし、アップグレード後に元に戻します (`autoscaling.minReplicas`、デフォルトは 2)。
+HPA は 0 の Deployment をスケールアップしません。
 
 ### Docker Compose
 
