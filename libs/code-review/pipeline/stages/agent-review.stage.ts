@@ -294,8 +294,14 @@ export function snapLinesToDiff(
 ): Partial<CodeSuggestion> | null {
     if (validRanges.length === 0) return suggestion;
 
-    const start = suggestion.relevantLinesStart;
-    const end = suggestion.relevantLinesEnd;
+    // A model sometimes writes the range backwards (30-19). Both ends are
+    // real lines, only their order is not: measured as given, a reversed
+    // range overlaps no hunk and the finding was dropped as out of diff.
+    const [start, end] =
+        (suggestion.relevantLinesStart ?? 0) >
+        (suggestion.relevantLinesEnd ?? 0)
+            ? [suggestion.relevantLinesEnd, suggestion.relevantLinesStart]
+            : [suggestion.relevantLinesStart, suggestion.relevantLinesEnd];
 
     if (!start || !end) {
         // No lines specified — use the first valid range
@@ -2303,31 +2309,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // they recovered, so a lockfile advisory would never reach the PR.
         // A file moved without a content change is the second: a 100%
         // similarity rename has no hunks at all, and the host rejects the
-        // comment with "could not be resolved". Route both PR-level,
-        // citing file:line: the first covers analyzer findings, the second
-        // covers anything a model or an analyzer found on that file.
-        const withoutPatch = (f: FileChange) => Boolean(f.filename) && !f.patch;
+        // comment with "could not be resolved". A patch can also be there
+        // and still hold no hunk: GitLab sends "Binary files ... differ"
+        // for a binary rename, and a mode-only change comes as GitHub
+        // `changed` with no patch or GitLab `modified` with an empty one.
+        // Route those PR-level, citing file:line, whoever found it. A plain
+        // edit with no patch at all is only withheld (analyzers alone).
         const allChanges = [
             ...changedFiles,
             ...(context.ignoredFileChanges ?? []),
         ];
         const withheldDiffs = new Set(
-            allChanges.filter(withoutPatch).map((f) => f.filename),
-        );
-        const movedWithoutHunks = new Set(
             allChanges
-                .filter(
-                    (f) =>
-                        withoutPatch(f) &&
-                        (f.status === 'renamed' || f.status === 'copied'),
+                .filter((f) => f.filename && !f.patch)
+                .map((f) => f.filename),
+        );
+        const withoutHunks = new Set(
+            allChanges
+                .filter((f) =>
+                    !f.filename
+                        ? false
+                        : typeof f.patch === 'string'
+                          ? !/^@@ /m.test(f.patch)
+                          : ['renamed', 'copied', 'changed'].includes(f.status),
                 )
                 .map((f) => f.filename),
         );
         const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
             (!!s.relevantFile &&
-                (isAnalyzerSuggestion(s)
-                    ? withheldDiffs.has(s.relevantFile)
-                    : movedWithoutHunks.has(s.relevantFile))) ||
+                (withoutHunks.has(s.relevantFile) ||
+                    (isAnalyzerSuggestion(s) &&
+                        withheldDiffs.has(s.relevantFile)))) ||
             (s.label === 'kody_rules' &&
                 (!s.relevantFile ||
                     s.fileAnchored === true ||
@@ -2535,6 +2547,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             s.severity,
                         ) as SeverityLevel,
                         brokenKodyRulesIds: s.brokenKodyRulesIds,
+                        // A custom agent's finding keeps its agent: the
+                        // comment's tag, the agent's status line and its
+                        // decision history all read it from here.
+                        ...(s.customAgent && { customAgent: s.customAgent }),
                         deliveryStatus: DeliveryStatus.NOT_SENT,
                     })),
                 );
