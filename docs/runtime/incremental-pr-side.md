@@ -361,7 +361,13 @@ the benefit is the web and API apps only, and continuing is the owner's call (D1
   buildkitd (`microvm/build.go:1-40`, `env_run.go:53-57`). The export that costs 20 to 31 minutes is a docker-gvisor
   transport between two stores; the VM path was never run on this repository (`fork-from-checkpoint.md`). Protocol and
   recipe changes are shared, so an in-VM variant can follow.
-- **The base side when main moved past the bake**, and **resets** (fork-from-checkpoint's subject).
+- **The base side when main moved past the bake**, and **resets** (fork-from-checkpoint's subject). The template is no longer
+  rebuilt on every main push (host-providers.md 8.2.2: its key is the build inputs), so "main moved past the bake" is the
+  ordinary case, not an exception. The side's build runs on the template's disk, where the build state and exported cache of
+  the last setup are (§8.2.1; build-cache.md section 1), so unchanged layers hit; this plan's incremental path, when built,
+  applies to the PR side as written and does not change that. Whether the warm build over a template many commits behind
+  fits its boot wait is not measured; the freshness bound (14 days or 100 main commits by default) is a guess to tighten
+  from the first numbers.
 
 ## 8. Build plan
 

@@ -39,13 +39,17 @@ Everything below is inside these four.
    R6): only the default branch of a repository in an environment, coalesced per environment, at most
    `RUNTIME_PUSH_SETUP_DAILY_LIMIT` (12) setups per environment per UTC day, GitHub only today; a manual "Set up again"
    still works when the day is spent. The setup runs and bakes; the template rebuild pass finds a
-   new bake fingerprint (digest of every repository's commit and the recipe, `bake-probe.ts:21-30`) and builds the
-   environment template (`template-rebuild.ts:43-61`, `TemplateBuildTrigger.onSetupFinished`).
+   template key no template holds (the recipe and the build inputs: lockfiles, manifests, Dockerfiles; the commit's own
+   digest for a multi-repository environment or when the inputs could not be read, `bake-probe.ts`, host-providers.md
+   8.2.2) and builds the environment template (`TemplateBuildTrigger.onSetupFinished`). A main commit that changes only app
+   source keeps the template, and `TemplateBuildTrigger.onMainKept` asks for its baseline all the same.
 2. When the template turns `ready` (`runtime_env_templates`), the trigger also enqueues a **baseline suite run** for
    `(environment, template sha)`: a `SuiteRequested{kind: baseline}` command on the outbox.
 3. The engine plans shards from stored durations (section 6), asks the fleet for N perRun hosts, one per shard, all
-   from the template just built. **No build is needed**: the template is main, built. Prep is the host boot (10 to 20 s,
-   proven live) plus services up from the bake.
+   from the template. **When the template was built at this commit no build is needed**: the template is main, built. Prep
+   is the host boot (10 to 20 s, proven live) plus services up from the bake. When the template is behind (a source-only
+   push kept it), each host builds the commit over the template's cache: slower than a bake boot, bounded by the freshness
+   bound (host-providers.md 8.2.2).
 4. Each shard runs its specs; the engine stores the per-spec results as the baseline for that main sha (section 7) and
    updates per-spec durations. Failures on main are recorded as such (`baseline_failed`), never re-run here.
 5. Coalescing: at most one baseline queued per environment. A newer main sha replaces a queued, not started one; a

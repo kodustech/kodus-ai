@@ -169,6 +169,11 @@ the pull time on calcom. Those are the first numbers to take with the flag on.
 
 ## 6. Open
 
+- The environment template is no longer rebuilt on every main push (host-providers.md 8.2.2), so a Run host's build runs over
+  a template that can be many main commits behind. It uses the state and the exported cache the template's disk holds
+  (section 1); a state the disk floor evicted is still shown on the environment page. Not measured: that build's time
+  against the template's age.
+
 - The export adds time to every seeding setup (mode=max); measure it on calcom before production.
 - Cache mounts stay on the cell: a cold state still recompiles what a cache mount held.
 - The hub matches an eviction to the cell of the environment's last setup; with several cells, a Run placed on another

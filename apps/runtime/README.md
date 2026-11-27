@@ -250,6 +250,8 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_FLEET_HUB_PUBLIC_URL` | `https://localhost:<hub port>` (required in production) | runtime-fleet: the hub URL a new host registers at (its bootstrap file). |
 | `RUNTIME_FLEET_SYSTEM_DATABASE_URL` | the Runtime database name + `_fleet` | runtime-fleet: its own DBOS system database; must differ from `RUNTIME_DATABASE_URL`. |
 | `RUNTIME_FLEET_RECONCILE_MS` | 15000 | runtime-fleet: the reconcile interval (1 s to 5 min). |
+| `RUNTIME_FLEET_TEMPLATE_MAX_AGE_DAYS` | 14 | runtime-fleet: a ready environment template older than this is rebuilt although its build inputs did not change (0 turns the bound off). |
+| `RUNTIME_FLEET_TEMPLATE_MAX_MAIN_COMMITS` | 100 | runtime-fleet: a ready environment template this many main commits behind is rebuilt anyway (0 turns the bound off). |
 | `RUNTIME_FLEET_FAKE_PROVIDER` | 0 | Dev only: the in-process fake provider for `fake` pools; refused in the production image. |
 | `RUNTIME_BOAT_API_KEY` | unset | runtime-fleet: the boat API key; unset, boat pools are not scalable. From the secret store, never logged. |
 | `RUNTIME_BOAT_API_URL` | `https://boat.dev/api/v1` | runtime-fleet: the boat API base. |

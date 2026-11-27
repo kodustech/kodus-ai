@@ -279,7 +279,7 @@ The runtime state is three tables in the Runtime database, created by new `RUNTI
 | `runtime_cell_sessions` + `pool_id`, `bound_key`, `cordoned_at` | hub (at hello, from the cell row) | worker | as above, for the directory |
 | `runtime_pool_demand` | worker (directory, when no bound cell exists); runtime-fleet (host and failure) | runtime-fleet, worker | pool, bound key, org, environment, size MB, since, `expires_at` (2 min, refreshed while the Run waits), host id, failure |
 | `runtime_fleet_tokens` | hub (minted for the fleet, burned at registration) | hub | token hash, pool, host, bound key, expiry, use |
-| `runtime_env_templates` | runtime-fleet (template step) | runtime-fleet (create `from`) | org, environment, fingerprint, provider snapshot name, state, replaced at |
+| `runtime_env_templates` | runtime-fleet (template step) | runtime-fleet (create `from`), API (read-only: the environment page) | org, environment, fingerprint, input key, provider snapshot name, state, main sha, main commits behind, replaced at |
 
 Who edits:
 
@@ -589,7 +589,7 @@ On boat, the host image and the environment's warm state are one artifact: a **s
 | --- | --- | --- |
 | Host recipe | `cell-host.sh install` (kodus-installer): the microVM kit, the cell release, units, sysctls, state disk, nftables base | Release pipeline; the same script on every provider |
 | boat cell base | The recipe on a boat base sandbox, `cell preflight` passing, saved as `kodus-cell-<release>-<kit>`. Never enrolled | Template step, once per release |
-| **boat environment template** | A setup host created `from` the cell base, enrolled with a `kcf_` token bound to `template:<org>/<env>`, that ran the environment's setup on the **default branch only** (S-52: never PR code): the baked images, the seeded data and, if the spike allows it, the microVM memory snapshot. Then sealed, once its bake has recorded its images (the cell refuses `cell.seal` while it bakes), with the cell stopped, identity, token file and `/tmp` removed, and saved as `kodus-env-<org-hash>-<env-hash>-<fingerprint>-<base-hash>` | Template step (`apps/runtime/src/fleet/template/`), per environment, build fingerprint and cell base |
+| **boat environment template** | A setup host created `from` the cell base, enrolled with a `kcf_` token bound to `template:<org>/<env>`, that ran the environment's setup on the **default branch only** (S-52: never PR code): the baked images, the seeded data and, if the spike allows it, the microVM memory snapshot. Then sealed, once its bake has recorded its images (the cell refuses `cell.seal` while it bakes), with the cell stopped, identity, token file and `/tmp` removed, and saved as `kodus-env-<org-hash>-<env-hash>-<fingerprint>-<base-hash>` | Template step (`apps/runtime/src/fleet/template/`), per environment, template key (§8.2.2) and cell base |
 | AWS AMI, bare-metal image | The recipe by Packer, Image Builder or PXE | Later, with the `pooled` loop |
 | Shared bake registry ([shared-baked-environments.md](shared-baked-environments.md)) | An environment's OCI images by digest | Stays for static and `pooled` pools; boat pools do not use it |
 
@@ -637,6 +637,54 @@ Rules:
   (outside this repository) needs the same step before it starts the cell.
 - A template never holds an identity: the seal step removes the key, the certificate and the token file before the
   save, and a host made from it registers with its own token.
+
+#### 8.2.2 The template's key, staleness and freshness
+
+A template used to be keyed by the digest of every repository's commit and the recipe, so any main push built it again
+from scratch (1 h 17 min on a large monorepo). Gitpod restores the main prebuild and checks the PR out on top, keeping the
+stale files, and falls back to a plain clone when the restore fails
+(`components/content-service/pkg/initializer/prebuild.go`); Codespaces splits a heavy `onCreate` from a cheap
+`updateContent`. The template now does the first half and the Run host the second.
+
+- **The key** (`bakeFingerprintOf`, `libs/runtime/run/build-inputs.ts` `templateKeyOf`) of an environment of one repository
+  is the digest of the recipe (it covers the compose files and Dockerfiles the recipe carries) and the digest of the
+  **build inputs** at the default-branch commit: lockfiles, package manifests (a `package.json` without its `version`),
+  Dockerfiles, and the compose files the recipe names. The cell base is the other half of a template's identity and was
+  already in its row and its name. The product reads the inputs (it holds the repository credentials;
+  `build-inputs.reader.ts`) and sends one digest on the setup command (`buildInputsDigest`), which the setup record keeps.
+  A main push that changes only app source gives the same key, so the template stays and the commit's setup runs as before.
+- **Falls back to the commit.** When the product cannot tell (no listing on the platform, a Git failure, a listed file it
+  cannot read, no input files, more than 300), or for a multi-repository environment (its bake is keyed by every
+  repository's commit, `setupRefsDigest`), the key is the old one. A wrong answer can only cost a rebuild; "cannot read"
+  is never "unchanged".
+- **A stale template still serves.** `readyName` never looked at the commit: a ready template on the pool's cell base
+  serves whatever main is now. The Run host's build (the PR side, and the main side of a suite) runs on the template's
+  disk: the build state and exported cache under the template cell's id (§8.2.1; build-cache.md section 1), so unchanged
+  layers hit and only what main changed is built. The template's baked image is for its own commit and is not used for
+  another one.
+- **Freshness bound.** The rebuild pass (`TemplateRebuildPass`) rebuilds a ready template of an unchanged key when it is
+  `RUNTIME_FLEET_TEMPLATE_MAX_AGE_DAYS` old (default 14) or `RUNTIME_FLEET_TEMPLATE_MAX_MAIN_COMMITS` main commits behind
+  (default 100); 0 turns a bound off. The commits are the distinct main commits the pass has seen in a default-branch
+  setup since the template's own (`noteMain`; pushes coalesced into one setup count once, so it undercounts). The
+  rebuild is a row of its own (its fingerprint is a hash of the key and a nonce; `input_key` holds the key), so the older
+  template keeps serving until the new one is promoted and then is replaced like any other; it starts from the older
+  template, as every build does (§8.2), so it is incremental. A failed rebuild backs off 30 minutes like any build.
+- **Baselines.** A template kept across a main commit still gets the baseline suite run of that commit
+  (`TemplateBuildTrigger.onMainKept`), while a ready template exists on a boat pool.
+- **On the environment page.** The environment view carries `template: { mainSha, builtAt, commitsBehind }` and the setup
+  card says which main commit the template holds, its age and how many main commits came after.
+- **Rolling out.** A template built before this has no `input_key` (its fingerprint is its key) and a key made from the
+  commit; the first setup after the release gives another key, so each environment rebuilds once.
+
+Decided items this touches (read; none of them is reopened, two are narrowed):
+
+| Item | Where | How it stands |
+| --- | --- | --- |
+| "The template is main, built. No build is needed" (sharded hosts of a baseline or PR suite start from it) | e2e-suites.md section 2.1 step 3, decided 2 | **Narrowed.** The template is main at its own commit; a host's build brings the newer commit in over the template's cache (a warm build, not a bake boot). "Main baseline once per main commit" (decided 1) is kept by `onMainKept`. |
+| A template is built when a setup records a new bake fingerprint of every repository's commit and the recipe | e2e-suites.md section 2.1 step 1 | **Narrowed**, to the key above; a multi-repository environment keeps it. |
+| Apply the changed files over main's baked image is rejected (a compiled frontend would serve main's old output) | monorepo-speed-and-targeting.md Decided 2, reopened gated in incremental-pr-side.md | **Not touched.** Nothing is applied over an image: the side runs its own build, over the template's cache. incremental-pr-side.md (not built yet) lists "the base side when main moved past the bake" as out of scope; this section makes that case routine and answers it with the ordinary build. A measurement of that build on a template many commits behind is still to take. |
+| A preview's state is never carried to another sha (persistent-state D3) | persistent-state.md | **Not touched.** That is preview state; a template holds the default branch's build state and seed data, which were always carried to the next build (§8.2 "A build starts from the environment's previous template"). |
+| A template holds the default branch only (S-52) and the build must report the requested fingerprint | §8.2, template AGENTS.md | **Kept.** The bake is still the default branch's head at build time, and must report the key. |
 
 #### 8.2.1 A Run host uses the template's bake
 

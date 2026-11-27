@@ -53,6 +53,7 @@ Imported by:
 - [`apps/runtime/src/e2e`](../e2e/AGENTS.md)
 - [`apps/runtime/src/edge`](../edge/AGENTS.md)
 - [`apps/runtime/src/fleet`](../fleet/AGENTS.md)
+- [`apps/runtime/src/fleet/template`](../fleet/template/AGENTS.md)
 - [`apps/runtime/src/hub`](../hub/AGENTS.md)
 - [`apps/runtime/src/hub/claims`](../hub/claims/AGENTS.md)
 - [`apps/runtime/src/hub/http`](../hub/http/AGENTS.md)

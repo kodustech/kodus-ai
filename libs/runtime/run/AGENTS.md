@@ -40,7 +40,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 
 ## Module map
 
-Files (23, tests apart): `boot-failure.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `leaf-changes.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`, `suite-publish.ts`, `suite-verdict.ts`
+Files (24, tests apart): `boot-failure.ts`, `build-inputs.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `leaf-changes.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`, `suite-publish.ts`, `suite-verdict.ts`
 
 Imports these Runtime modules:
 
