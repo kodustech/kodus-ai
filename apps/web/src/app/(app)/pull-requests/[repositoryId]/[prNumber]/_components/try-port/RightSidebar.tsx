@@ -343,7 +343,13 @@ function IssueRow({
                     )}
                 </div>
                 <p
-                    className={`line-clamp-2 text-sm leading-snug transition-colors ${
+                    // A PR-level finding has no card in the diff to open, so
+                    // selecting it unfolds its full text here instead.
+                    className={`${
+                        active && !issue.file
+                            ? "whitespace-pre-wrap"
+                            : "line-clamp-2"
+                    } text-sm leading-snug transition-colors ${
                         active
                             ? "text-[var(--accent)]"
                             : "text-[var(--text)] group-hover:text-[var(--accent)]"

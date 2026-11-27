@@ -466,7 +466,9 @@ function ReviewLayout({
               ? `file-${issue.file}`
               : null;
         if (issue.id) setActiveIssueId(issue.id);
-        if (!targetId) return;
+        // A PR-level finding has no anchor in the diff; selecting it unfolds
+        // its text in the rail.
+        if (!targetId || !issue.file) return;
         let tries = 0;
         const tryScroll = () => {
             const el = document.getElementById(targetId);

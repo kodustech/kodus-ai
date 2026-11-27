@@ -201,13 +201,16 @@ describe("adaptForTryDiffViewer", () => {
         });
 
         expect(issues).toEqual([
-            expect.objectContaining({
+            {
                 id: "pr-level",
                 file: "",
                 line: 0,
+                endLine: undefined,
                 severity: "high",
+                category: "kody_rules",
                 message: "`src/moved.ts:19` Session token is logged.",
-            }),
+                suggestion: undefined,
+            },
         ]);
     });
 });
