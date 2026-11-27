@@ -163,3 +163,43 @@ func TestMachineHealthCountsTheClaimsOOMKillsAndAStoppedHolder(t *testing.T) {
 		t.Fatalf("a stopped holder read as running: %+v err=%v", h, err)
 	}
 }
+
+// A ready claim is never settled under what its services declared together:
+// a service that declared mem_limit may grow to it, whatever the claim held
+// when it settled (a worker pool that had not started yet).
+func TestSettleNeverLowersTheCeilingUnderWhatServicesDeclared(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		working    int64
+		declaredMB int
+		wantMB     int
+		lowered    bool
+	}{
+		{"nothing declared settles to the 2 GiB floor", 100 << 20, 0, 2048, true},
+		{"declared above the floor keeps the declared ceiling", 100 << 20, 3072, 3072, true},
+		{"declared the whole claim is not lowered at all", 100 << 20, 4096, 4096, false},
+		{"what the claim holds still wins over a smaller declaration", 3 << 30, 1024, 5632, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d, _, limits := resizingDriver(t)
+			_, w := readyWorkload(t, d)
+			d.mu.Lock()
+			d.machineLocked(w.MachineID).memFloorMB = c.declaredMB
+			d.mu.Unlock()
+			limits.usage = claimlimits.Usage{CurrentBytes: c.working}
+			mb, err := d.SettleReady(context.Background(), w)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mb != min(c.wantMB, 4096) {
+				t.Fatalf("settled to %d MB, want %d", mb, min(c.wantMB, 4096))
+			}
+			if c.declaredMB > 0 && mb < c.declaredMB {
+				t.Fatalf("settled to %d MB, under the %d declared", mb, c.declaredMB)
+			}
+			if got := len(limits.lowered) > 0; got != c.lowered {
+				t.Fatalf("lowered=%v, want %v", limits.lowered, c.lowered)
+			}
+		})
+	}
+}

@@ -17,6 +17,10 @@ import (
 // machine: a bake's pin (Driver.pinned) and a claim's adoption of a pool
 // network (Driver.adopted).
 type machineState struct {
+	// memFloorMB is the memory the compose file's services declare together
+	// (mem_limit, deploy.resources.limits.memory): SettleReady never lowers
+	// the claim's ceiling under it. Zero: none declared.
+	memFloorMB int
 	// expires is kodus:expires, which moves (SetExpiry); zero: never set.
 	expires time.Time
 	// size is what the machine's claim asked (MachineSpec.ClaimSize);

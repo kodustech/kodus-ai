@@ -65,7 +65,8 @@ func TestAnImagePastTheBoundFailsTheUpBeforeAnythingStarts(t *testing.T) {
 }
 
 // R3-02: with no claim limits each service got the claim's whole memory.
-// Its services now share it, so what admission counts bounds them.
+// Its services now share it by role (the database a small cap, the app the
+// rest, the sandbox some headroom), so what admission counts bounds them.
 func TestWithoutClaimLimitsAClaimsServicesShareItsMemory(t *testing.T) {
 	r := newGoldenRig(t, goldenCompose, goldenRecipe, func(c *Config) { c.MemLimit = "4g" })
 	if _, err := r.d.Up(context.Background(), driver.UpRequest{Ref: r.ref, Compose: r.file, ProjectDir: r.dir}); err != nil {
@@ -73,8 +74,9 @@ func TestWithoutClaimLimitsAClaimsServicesShareItsMemory(t *testing.T) {
 	}
 	doc := r.docker.rendered[0]
 	for name, s := range doc["services"].(map[string]any) {
-		if got := s.(map[string]any)["mem_limit"]; got != "2048m" {
-			t.Fatalf("%s: mem_limit %v, want half of the claim's 4g", name, got)
+		want := map[string]string{"app": "3174m", "db": "512m"}[name]
+		if got := s.(map[string]any)["mem_limit"]; got != want {
+			t.Fatalf("%s: mem_limit %v, want %s of the claim's 4g", name, got, want)
 		}
 	}
 	if got := r.d.ClaimMemory(driver.ClaimSize{}); got.ReadyMB != 4096 {

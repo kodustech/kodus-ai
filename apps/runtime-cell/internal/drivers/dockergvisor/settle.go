@@ -63,7 +63,10 @@ func (d *Driver) SettleReady(ctx context.Context, ref driver.MachineRef) (int, e
 		return 0, errors.Join(ErrResourceEnforcement, err)
 	}
 	size := int(g.limits.MemoryBytes >> 20)
-	mb := settledMB(u.WorkingSetBytes(), d.readyMB, size)
+	// A service that declared a limit may grow to it: the ceiling never
+	// comes down under what the file declares together.
+	floor := max(d.readyMB, d.peek(ref.MachineID).memFloorMB)
+	mb := settledMB(u.WorkingSetBytes(), floor, size)
 	if mb >= size {
 		return size, nil
 	}

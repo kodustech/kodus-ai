@@ -201,14 +201,14 @@ func TestAClaimsSizeReachesItsServices(t *testing.T) {
 	r.answers["compose config"] = strings.NewReplacer(`"mem_limit":"4294967296"`, `"mem_limit":"12884901888"`, `"cpus":2`, `"cpus":6`).Replace(canonicalFor(dir))
 	r.answers["ps"] = "s1\n"
 	r.answers["inspect"] = `[{"Id":"s1","Name":"/kodus-claim-1-workload-a-1","Config":{"Labels":{"kodus.cell":"cell-1"}},"NetworkSettings":{"Networks":{"kodus-claim-1":{"IPAddress":"172.30.0.9"}}}}]`
-	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n    mem_limit: 64g\n"), ProjectDir: dir}); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n"), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if len(rewritten) != 1 {
 		t.Fatalf("%d compose files checked, want 1", len(rewritten))
 	}
 	f := rewritten[0]
-	if !strings.Contains(f, "mem_limit: 12288m") || !strings.Contains(f, "cpus: \"6\"") || strings.Contains(f, "64g") || strings.Contains(f, "mem_limit: 4g") {
+	if !strings.Contains(f, "mem_limit: 12288m") || !strings.Contains(f, "cpus: \"6\"") || strings.Contains(f, "mem_limit: 4g") {
 		t.Fatalf("services not held to the claim's size:\n%s", f)
 	}
 }

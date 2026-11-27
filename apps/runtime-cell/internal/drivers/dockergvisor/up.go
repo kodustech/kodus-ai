@@ -273,6 +273,15 @@ func (b *projectBoot) build() error {
 	if _, err := sandbox.Apply(b.composeFile, pre); err != nil {
 		return err
 	}
+	if b.sp == nil {
+		declared, err := sandbox.DeclaredMemory(b.composeFile, b.opts)
+		if err != nil {
+			return err
+		}
+		d.mu.Lock()
+		d.machineLocked(ref.MachineID).memFloorMB = int((declared + 1<<20 - 1) >> 20)
+		d.mu.Unlock()
+	}
 	b.started = d.clock.Now()
 	if b.sp != nil {
 		// A spare runs the images the machine's project runs: the claim's
