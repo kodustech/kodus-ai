@@ -141,6 +141,9 @@ anyway. A cell-local client certificate for the agent would remove that edge; it
   the host's CPUs, at least one) is how many image builds the cell runs at once, and a build past it waits for a slot
   (`build.slot.waited` in the cell's log). `-gvisor-claim-builds` (0: 4, the most) is how many of one claim's builds
   run at once under that bound; they share the claim's memory, each at least 2 GB.
+  A claim's services keep the `mem_limit` they declare and share the rest by role (a small capped default for
+  databases and caches, the rest for the app); declared limits over the claim are refused naming the services
+  (`apps/runtime-cell/README.md`, memory of a claim's services).
 
 ## Sizing sandbox capacity
 
