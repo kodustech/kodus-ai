@@ -10,6 +10,7 @@ import {
 import { IPipelineChecksService } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-checks-service.interface';
 import { PipelineObserverContext } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-observer.interface';
 import { CheckStageNames } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import {
     LlmErrorCategory,
     attachClassification,
@@ -289,6 +290,68 @@ describe('CodeReviewPipelineObserver', () => {
             expect.stringContaining('out of credits'),
         );
     });
+
+    it.each([
+        [
+            'lineComments',
+            DeliveryStatus.SENT,
+            CheckConclusion.NEUTRAL,
+            CheckStageNames._pipelineEndPartial,
+        ],
+        [
+            'prLevelCommentResults',
+            DeliveryStatus.SENT,
+            CheckConclusion.NEUTRAL,
+            CheckStageNames._pipelineEndPartial,
+        ],
+        [
+            'lineComments',
+            DeliveryStatus.FAILED,
+            CheckConclusion.SKIPPED,
+            CheckStageNames._pipelineEndSkipped,
+        ],
+        [
+            'prLevelCommentResults',
+            DeliveryStatus.NOT_SENT,
+            CheckConclusion.SKIPPED,
+            CheckStageNames._pipelineEndSkipped,
+        ],
+    ] as const)(
+        'concludes an exhausted primary review when %s records a %s finding',
+        async (channel, deliveryStatus, conclusion, stage) => {
+            context.statusInfo = { status: AutomationStatus.ERROR };
+            context.errors = [
+                {
+                    stage: 'AgentReviewStage',
+                    error: new Error('Org key has no credits'),
+                    severity: 'critical',
+                    metadata: {
+                        errorCategory: LlmErrorCategory.QUOTA_EXCEEDED,
+                        orgOwnedKey: true,
+                    },
+                },
+            ];
+            context[channel] = [
+                {
+                    comment: { path: 'src/user.ts', body: 'Missing check' },
+                    deliveryStatus,
+                },
+            ];
+
+            await observer.onPipelineFinish(
+                context as CodeReviewPipelineContext,
+                observersContext,
+            );
+
+            expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+                observersContext,
+                context,
+                conclusion,
+                stage,
+                '- Org key has no credits',
+            );
+        },
+    );
 
     it('still finalizes as FAILURE when an exhausted quota co-occurs with another critical error (#2191)', async () => {
         context.statusInfo = { status: AutomationStatus.ERROR } as any;

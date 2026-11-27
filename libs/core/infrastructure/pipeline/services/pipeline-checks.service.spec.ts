@@ -495,10 +495,17 @@ describe('PipelineChecksService', () => {
                     const [first, retry] =
                         checksAdapter.updateCheckRun.mock.calls;
                     expect(retry).toEqual(first);
-                    expect(retry[0]).toMatchObject({
+                    expect(retry[0]).toEqual({
                         checkRunId: '123',
+                        organizationAndTeamData:
+                            mockContext.organizationAndTeamData,
+                        repository: { owner: 'owner', name: 'repo' },
                         status: CheckStatus.COMPLETED,
                         conclusion: CheckConclusion.SKIPPED,
+                        output: {
+                            title: 'Code Review Skipped',
+                            summary: 'Review skipped.',
+                        },
                     });
                     expect(mockObserverContext.checkRunId).toBeUndefined();
                     expect(loggerMock.error).not.toHaveBeenCalled();
@@ -512,15 +519,16 @@ describe('PipelineChecksService', () => {
 
                 expect(checksAdapter.updateCheckRun).toHaveBeenCalledTimes(3);
                 expect(mockObserverContext.checkRunId).toBe('123');
-                expect(loggerMock.error).toHaveBeenCalledWith(
-                    expect.objectContaining({
-                        message: 'Failed to finalize check',
-                        error: expect.any(Error),
-                        metadata: expect.objectContaining({
-                            checkRunId: '123',
-                        }),
-                    }),
-                );
+                expect(loggerMock.error).toHaveBeenCalledWith({
+                    message: 'Failed to finalize check',
+                    error: new Error('Check status update was unsuccessful'),
+                    context: PipelineChecksService.name,
+                    metadata: {
+                        checkRunId: '123',
+                        platformType: PlatformType.GITHUB,
+                        conclusion: CheckConclusion.SKIPPED,
+                    },
+                });
             });
         });
     });

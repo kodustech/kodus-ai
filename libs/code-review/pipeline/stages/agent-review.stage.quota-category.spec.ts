@@ -4,6 +4,7 @@ import type { IAutomationExecutionService } from '@libs/automation/domain/automa
 import { CodeReviewPipelineObserver } from '@libs/code-review/infrastructure/observers/code-review-pipeline.observer';
 import { CheckConclusion } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
 import type { IPipelineChecksService } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-checks-service.interface';
+import { CheckStageNames } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
@@ -242,6 +243,8 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
         };
         const bugAgent = (suggestions: (typeof finding)[]) => ({
             agentName: 'kodus-bug-review-agent',
+            agentCategory: 'bug',
+            finishReason: 'stop',
             turnsUsed: 2,
             suggestions,
         });
@@ -249,6 +252,11 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
             agentName: 'kodus-rules-review-agent',
             turnsUsed: 0,
             suggestions: [],
+        };
+        const endStage = {
+            [CheckConclusion.NEUTRAL]: CheckStageNames._pipelineEndPartial,
+            [CheckConclusion.SKIPPED]: CheckStageNames._pipelineEndSkipped,
+            [CheckConclusion.FAILURE]: CheckStageNames._pipelineEndFailure,
         };
         const failedAgent = (agentName: string, status: number) => ({
             agentName,
@@ -310,6 +318,28 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
                 CheckConclusion.SKIPPED,
             ],
             [
+                'only Kody Rules completed a review',
+                [{ ...noMatchingRules, turnsUsed: 2 }],
+                true,
+                402,
+                'critical',
+                CheckConclusion.SKIPPED,
+            ],
+            [
+                'a scoped custom agent returned a finding that was never posted',
+                [
+                    {
+                        ...bugAgent([finding]),
+                        agentName: 'custom-agent:style',
+                        agentCategory: 'custom_agent',
+                    },
+                ],
+                true,
+                402,
+                'critical',
+                CheckConclusion.SKIPPED,
+            ],
+            [
                 'a Kodus-managed key ran out of credits',
                 [bugAgent([])],
                 false,
@@ -361,12 +391,48 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
                     {},
                     context,
                     conclusion,
-                    expect.any(String),
-                    expect.any(String),
+                    endStage[conclusion],
+                    '- Provider request failed',
                 );
                 expect(context.errors).toMatchObject([
                     { substage: 'agent:security', severity },
                 ]);
+            },
+        );
+
+        it.each([
+            [
+                'ran out of steps',
+                { hitHardLimit: true, finishReason: 'max-steps' },
+            ],
+            ['returned without a finish reason', { finishReason: undefined }],
+            [
+                'reported a stop despite hitting its limit',
+                { hitHardLimit: true },
+            ],
+            [
+                'could not verify its finding',
+                { discardedByVerifyError: [finding] },
+            ],
+            [
+                'had the same category as the failed agent',
+                { agentCategory: 'security' },
+            ],
+        ] as const)(
+            'keeps a quota failure critical when the other result %s',
+            async (_case, outcome) => {
+                const { stage } = makeStage({
+                    suggestions: [],
+                    agentResults: [{ ...bugAgent([]), ...outcome }],
+                    failures: [failedAgent('security', 402)],
+                });
+
+                const context = await run(stage, reviewContext(true));
+
+                const quotaFailure = context.errors.find(
+                    (e) => e.substage === 'agent:security',
+                );
+                expect(quotaFailure.severity).toBe('critical');
             },
         );
 

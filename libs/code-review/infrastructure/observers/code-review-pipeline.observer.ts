@@ -23,6 +23,7 @@ import {
 } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-observer.interface';
 import { CheckStageNames } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -193,18 +194,24 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
                     e.metadata?.orgOwnedKey === true,
             )
         ) {
-            // A partial error from another agent (truncated or unverified
-            // results) still needs to show: the review is degraded, not skipped.
-            const otherPartialError = errors.some(
-                (e) => e.severity === 'partial',
-            );
+            // An auxiliary agent can still publish a finding when every
+            // primary agent runs out of credits. The posting stages record delivery.
+            const partialReview =
+                errors.some((e) => e.severity === 'partial') ||
+                [context.lineComments, context.prLevelCommentResults].some(
+                    (comments) =>
+                        comments?.some(
+                            (comment) =>
+                                comment?.deliveryStatus === DeliveryStatus.SENT,
+                        ),
+                );
             await this.pipelineChecksService.finalizeCheck(
                 observerContext,
                 context,
-                otherPartialError
+                partialReview
                     ? CheckConclusion.NEUTRAL
                     : CheckConclusion.SKIPPED,
-                otherPartialError
+                partialReview
                     ? CheckStageNames._pipelineEndPartial
                     : CheckStageNames._pipelineEndSkipped,
                 this.buildPipelineFailureReason(context),

@@ -1475,20 +1475,26 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(f.error) ??
                 classifyLLMError(f.error, resolvedProvider(context, f.error));
 
-            // A clean agent can return no findings. Kody Rules can also
-            // return an empty result without taking a turn if no rule applies.
-            const anotherAgentReviewed =
-                result.suggestions.length > 0 ||
-                result.agentResults?.some((agent) => agent.turnsUsed > 0);
+            // Fulfilled tasks include auxiliary agents and reviewers that
+            // stopped early or lost findings during verification.
+            const completedPrimaryAgents = (result.agentResults ?? []).filter(
+                (agent) =>
+                    CRITICAL_AGENTS.has(agent.agentCategory) &&
+                    agent.finishReason === 'stop' &&
+                    !agent.hitHardLimit &&
+                    !agent.discardedByVerifyError?.length,
+            );
 
             for (const failure of failures) {
                 const errorCategory = classifyFailure(failure).category;
                 const orgOwnedKey = usesOrgOwnedKey(context, failure.error);
                 // A sibling's review still counts when the org's credits run out.
                 const partialQuotaFailure =
-                    anotherAgentReviewed &&
                     errorCategory === LlmErrorCategory.QUOTA_EXCEEDED &&
-                    orgOwnedKey;
+                    orgOwnedKey &&
+                    completedPrimaryAgents.some(
+                        (agent) => agent.agentCategory !== failure.agentName,
+                    );
                 const severity =
                     CRITICAL_AGENTS.has(failure.agentName) &&
                     !partialQuotaFailure
