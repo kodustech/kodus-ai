@@ -1,5 +1,7 @@
 import { Pool } from 'pg';
 
+import { PgTemplateReader } from '@libs/runtime/api/infrastructure/pg-runtime-readers';
+
 import { ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
 import { isolatedDatabase } from '../../testing/isolated-database';
 import { PgTemplateSetupRequester } from './pg-template-setup-requester';
@@ -277,5 +279,20 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         );
         expect(await store.readyOfKey({ organizationId: 'org-j', environmentId: 'env-j', poolId: 'p', cellBase: '', inputKey: fp })).toMatchObject({ mainSha: null, commitsBehind: 0 });
         expect(await store.holds({ organizationId: 'org-j', environmentId: 'env-j', poolId: 'p', fingerprint: fp, cellBase: '' }, new Date())).toBe(true);
+    });
+
+    it("the product reads the environment's newest ready template: its main commit, when it turned ready and how far behind main it is", async () => {
+        const store = new PgTemplateStore(pool);
+        const reader = new PgTemplateReader(pool);
+        const k = { organizationId: 'org-v', environmentId: 'env-v', poolId: 'p', cellBase: '', inputKey: '8'.repeat(64) };
+        expect(await reader.readyFor('org-v', 'env-v')).toBeNull();
+        const row = { organizationId: 'org-v', environmentId: 'env-v', poolId: 'p', fingerprint: k.inputKey, name: templateNameOf('org-v', 'env-v', k.inputKey), cellBase: '' };
+        await store.begin(row);
+        expect(await reader.readyFor('org-v', 'env-v')).toBeNull();
+        await store.promote(row, 'a'.repeat(40));
+        await store.noteMain(k, 'b'.repeat(40));
+        await store.noteMain(k, 'c'.repeat(40));
+        expect(await reader.readyFor('org-v', 'env-v')).toEqual({ mainSha: 'a'.repeat(40), builtAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT/), commitsBehind: 2 });
+        expect(await reader.readyFor('org-other', 'env-v')).toBeNull();
     });
 });

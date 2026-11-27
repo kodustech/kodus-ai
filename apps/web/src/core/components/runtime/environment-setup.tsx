@@ -23,6 +23,7 @@ import {
 import { setupBootPhases } from "@services/runtime/model/boot-phases";
 import {
     buildCacheEvictedWords,
+    templateWords,
     ENVIRONMENT_SECTION,
     environmentSetupMs,
     environmentStatus,
@@ -182,6 +183,7 @@ export const EnvironmentSetupCard = ({
     const status = environmentStatus(env);
     // The cell removed the build cache since this setup: its PRs build cold until a setup again.
     const cacheEvicted = buildCacheEvictedWords(env);
+    const template = templateWords(env);
     const runningStep = setup?.steps.find((s) => s.state === "running");
     const runningMs = useElapsed(runningStep?.startedAt, busy && !!runningStep);
     const repairs = setupRepairNotes(setup);
@@ -206,6 +208,11 @@ export const EnvironmentSetupCard = ({
             {cacheEvicted && (
                 <p role="status" className="text-warning text-sm">
                     {cacheEvicted}
+                </p>
+            )}
+            {template && (
+                <p className="text-text-secondary text-sm" data-testid="environment-template">
+                    {template}
                 </p>
             )}
             <div className="flex flex-wrap items-center gap-3 text-sm">

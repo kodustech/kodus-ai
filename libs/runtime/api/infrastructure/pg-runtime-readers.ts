@@ -9,6 +9,7 @@ import type {
     EnvironmentSetupStatus,
     RunSummaryReader,
     RuntimeBuildStateEvictionReader,
+    RuntimeTemplateReader,
     RuntimeEnvironmentReader,
     RuntimeEnvironmentRef,
     RuntimeEnvironmentSetupReader,
@@ -151,6 +152,20 @@ export class PgBuildStateEvictionReader implements RuntimeBuildStateEvictionRead
             evictedAt: new Date(r.evicted_at).toISOString(),
             ...(r.floor_bytes ? { freeBytes: Number(r.free_bytes ?? 0), floorBytes: Number(r.floor_bytes) } : {}),
         }));
+    }
+}
+
+/** runtime.runtime_env_templates, written by runtime-fleet: the environment's newest ready template, across its pools. */
+export class PgTemplateReader implements RuntimeTemplateReader {
+    constructor(private readonly db: SqlQuery) {}
+
+    async readyFor(organizationId: string, environmentId: string): Promise<{ mainSha?: string; builtAt: string; commitsBehind: number } | null> {
+        const res = await this.db.query(
+            `SELECT main_sha, main_commits_behind, ready_at FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND state = 'ready' AND ready_at IS NOT NULL ORDER BY ready_at DESC LIMIT 1`,
+            [organizationId, environmentId],
+        );
+        const r = res.rows[0] as { main_sha: string | null; main_commits_behind: number | string | null; ready_at: string | Date } | undefined;
+        return r ? { ...(r.main_sha ? { mainSha: r.main_sha } : {}), builtAt: new Date(r.ready_at).toISOString(), commitsBehind: Number(r.main_commits_behind ?? 0) } : null;
     }
 }
 

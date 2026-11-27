@@ -969,6 +969,16 @@ export interface RuntimeBuildStateEvictionReader {
 export const RUNTIME_BUILD_STATE_EVICTION_READER = Symbol.for('RuntimeApi.BuildStateEvictionReader');
 
 /**
+ * The environment's newest ready template, as runtime-fleet records it (runtime_env_templates): the main commit it was built
+ * at, when it turned ready, and how many main commits the fleet has seen since. Ids, hashes and times only. Null when none.
+ */
+export interface RuntimeTemplateReader {
+    readyFor(organizationId: string, environmentId: string): Promise<{ mainSha?: string; builtAt: string; commitsBehind: number } | null>;
+}
+
+export const RUNTIME_TEMPLATE_READER = Symbol.for('RuntimeApi.TemplateReader');
+
+/**
  * The agent runner of an org's Runtime work (ADR-057): the harness on the
  * org's LLM_TASK.runtime BYOK slot, resolved like the gateway resolves it. The
  * key stays in the slot until LLM.run builds the model; it never leaves the API.

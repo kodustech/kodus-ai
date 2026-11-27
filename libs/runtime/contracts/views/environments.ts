@@ -93,6 +93,13 @@ export interface RuntimeEnvironmentView {
      * free space it keeps (why the cache was not kept), when the cell said so.
      */
     buildCache?: { state: 'evicted'; evictedAt: string; cellId: string; reason: 'disk_floor'; freeBytes?: number; floorBytes?: number };
+    /**
+     * The environment's ready template (docs/runtime/host-providers.md §8.2.2): what its Run hosts start from. It stays while
+     * main moves past `mainSha` (the commit its setup booted, absent for one built before it was recorded); the side's build
+     * brings the newer code in on top. `builtAt`: when it turned ready; `commitsBehind`: the main commits the Runtime has seen since.
+     * Absent: no ready template, or this Runtime does not build them.
+     */
+    template?: { mainSha?: string; builtAt: string; commitsBehind: number };
     metrics: {
         bootRate7d?: number;
         readyP50Ms?: number;

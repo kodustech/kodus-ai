@@ -129,6 +129,7 @@ import {
     RUNTIME_SUITE_SHADOW_READER,
     RUNTIME_TEMPLATE_SETUP_READER,
     RUNTIME_BUILD_STATE_EVICTION_READER,
+    RUNTIME_TEMPLATE_READER,
     RUNTIME_LESSON_READER,
     RUNTIME_ORG_REPOSITORIES,
     type RuntimeApiConfig,
@@ -171,7 +172,7 @@ import {
     TypeOrmRuntimeSettingsStore,
 } from './infrastructure/typeorm-runtime-product.stores';
 import { TypeOrmRuntimeLlmBudgetStore } from './infrastructure/typeorm-llm-budget.store';
-import { PgBuildStateEvictionReader, PgEnvironmentSetupReader, PgLessonReader, ProjectionEnvironmentReader, ReadOnlyRunProjectionStore } from './infrastructure/pg-runtime-readers';
+import { PgBuildStateEvictionReader, PgEnvironmentSetupReader, PgLessonReader, PgTemplateReader, ProjectionEnvironmentReader, ReadOnlyRunProjectionStore } from './infrastructure/pg-runtime-readers';
 import { PgRuntimeCellReader, PgRuntimeCellTokenReader, PgSandboxCellFactsReader } from './infrastructure/pg-runtime-cell.reader';
 import { loadDashboardUrl, loadPushSetupConfig, loadRuntimeApiConfig, loadWebhookReconcilerConfig } from './infrastructure/runtime-api.config';
 import { RuntimeReadDb } from './infrastructure/runtime-read-db';
@@ -412,6 +413,11 @@ const useCases = [
             provide: RUNTIME_BUILD_STATE_EVICTION_READER,
             inject: [RuntimeReadDb],
             useFactory: (db: RuntimeReadDb) => new PgBuildStateEvictionReader(db),
+        },
+        {
+            provide: RUNTIME_TEMPLATE_READER,
+            inject: [RuntimeReadDb],
+            useFactory: (db: RuntimeReadDb) => new PgTemplateReader(db),
         },
         {
             provide: RUNTIME_LESSON_READER,

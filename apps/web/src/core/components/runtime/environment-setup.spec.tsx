@@ -117,6 +117,22 @@ describe("EnvironmentSetupCard, repairs of Kody's setup file", () => {
     });
 });
 
+describe("EnvironmentSetupCard, the environment template", () => {
+    it("shows the main commit the ready template holds, and nothing when the environment has no ready template", () => {
+        const withTemplate = {
+            ...env({}),
+            template: { mainSha: "abcdef0123456789", builtAt: at, commitsBehind: 4 },
+        } as RuntimeEnvironment;
+        const { unmount } = render(<EnvironmentSetupCard detailed env={withTemplate} />);
+        const line = screen.getByTestId("environment-template");
+        expect(line).toHaveTextContent("main abcdef0");
+        expect(line).toHaveTextContent("4 main commits since");
+        unmount();
+        render(<EnvironmentSetupCard detailed env={env({})} />);
+        expect(screen.queryByTestId("environment-template")).toBeNull();
+    });
+});
+
 describe("EnvironmentSetupCard, the step that runs now", () => {
     it("marks the running step of a setup in progress as the section's live point (Watch the steps lands there), and none once it ended", () => {
         const { rerender } = render(

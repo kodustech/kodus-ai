@@ -23,6 +23,7 @@ import { effectivePoolSize } from '../../domain/pool';
 import {
     RUNTIME_API_CONFIG,
     RUNTIME_BUILD_STATE_EVICTION_READER,
+    RUNTIME_TEMPLATE_READER,
     RUNTIME_CLOCK,
     RUNTIME_EGRESS_READER,
     RUNTIME_ENVIRONMENT_SETUP_READER,
@@ -34,6 +35,7 @@ import {
     listRunSummaries,
     type RunSummaryReader,
     type RuntimeBuildStateEvictionReader,
+    type RuntimeTemplateReader,
     type RuntimeEgressReader,
     type RuntimeEnvironmentSetupReader,
     type RuntimeApiConfig,
@@ -187,7 +189,16 @@ export class EnvironmentViewBuilder {
         @Optional()
         @Inject(RUNTIME_BUILD_STATE_EVICTION_READER)
         private readonly evictions?: RuntimeBuildStateEvictionReader,
+        @Optional()
+        @Inject(RUNTIME_TEMPLATE_READER)
+        private readonly templates?: RuntimeTemplateReader,
     ) {}
+
+    /** The environment's ready template: the main commit it holds and how old it is. A read that fails says nothing (the screen loses a line, never the environment). */
+    private async templateOf(env: EnvironmentSource): Promise<RuntimeEnvironmentView['template']> {
+        if (!this.templates) return undefined;
+        return (await this.templates.readyFor(env.organizationId, env.environmentId).catch(() => null)) ?? undefined;
+    }
 
     /**
      * The eviction of the build state the environment's last setup left: on
@@ -373,6 +384,7 @@ export class EnvironmentViewBuilder {
         const repositories = await this.repositoriesOf(env, ours);
         const setupBoots = setupBootMetrics(ours?.boots, since);
         const buildCache = await this.buildCacheOf(env, ours);
+        const template = await this.templateOf(env);
         const state = effectiveState(env, ours);
         return {
             environmentId: env.environmentId,
@@ -457,6 +469,7 @@ export class EnvironmentViewBuilder {
                 : {}),
             ...(latest?.cellOwner ? { cellOwner: latest.cellOwner } : {}),
             ...(buildCache ? { buildCache } : {}),
+            ...(template ? { template } : {}),
             metrics: {
                 ...(attempted.length ? { bootRate7d: booted.length / attempted.length } : {}),
                 ...(readyP50Ms !== undefined ? { readyP50Ms } : {}),

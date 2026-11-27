@@ -17,6 +17,7 @@ import {
     setupActionLabel,
     setupRepairNotes,
     setupStepTitle,
+    templateWords,
 } from "./environment";
 
 const at = "2026-10-31T00:00:00Z";
@@ -703,3 +704,36 @@ describe("recipeReauthorWords (the recipe card)", () => {
         expect(recipeReauthorWords({ reauthor: { version: 2, from: 1, reason, outcome: "unchanged" } })).toBe(`Setup file kept as it was under author v2, whose rule is: ${reason}.`);
     });
 });
+
+describe("the environment template line", () => {
+    const now = Date.parse("2026-11-27T12:00:00Z");
+    const t = (over: Partial<NonNullable<Parameters<typeof templateWords>[0]>["template"]> = {}) => ({
+        template: { mainSha: "abcdef0123456789", builtAt: "2026-11-24T12:00:00Z", commitsBehind: 0, ...over },
+    });
+
+    it("is nothing while the environment has no ready template", () => {
+        expect(templateWords(undefined, now)).toBeUndefined();
+        expect(templateWords({}, now)).toBeUndefined();
+    });
+    it("names the main commit the template holds and its age in days", () => {
+        const words = templateWords(t(), now)!;
+        expect(words).toContain("main abcdef0");
+        expect(words).toContain("built 3 days ago");
+        expect(words).not.toContain("since");
+    });
+    it.each([
+        ["2026-11-27T11:30:00Z", "built less than an hour ago"],
+        ["2026-11-27T07:00:00Z", "built 5 hours ago"],
+        ["2026-11-27T11:00:00Z", "built 1 hour ago"],
+        ["2026-11-25T13:00:00Z", "built 47 hours ago"],
+        ["2026-11-25T12:00:00Z", "built 2 days ago"],
+    ])("says a template built at %s as %s", (builtAt, want) => expect(templateWords(t({ builtAt }), now)).toContain(want));
+    it("says how many main commits came after it, singular and plural", () => {
+        expect(templateWords(t({ commitsBehind: 1 }), now)).toContain(", 1 main commit since.");
+        expect(templateWords(t({ commitsBehind: 12 }), now)).toContain(", 12 main commits since.");
+    });
+    it("says so when the template was built before its main commit was recorded", () => {
+        expect(templateWords(t({ mainSha: undefined }), now)).toContain("main commit not recorded");
+    });
+});
+

@@ -20,7 +20,7 @@ import { machineMinutesBlockerWords } from "./machine-minutes";
 export type EnvironmentStatus = { label: string; tone: Tone; detail?: string };
 
 type EnvironmentLike = Pick<RuntimeEnvironment, "state" | "setup" | "managed"> &
-    Partial<Pick<RuntimeEnvironment, "buildCache">>;
+    Partial<Pick<RuntimeEnvironment, "buildCache" | "template">>;
 
 /** When the cell removed the build cache, as the screen says it (UTC day and minute). */
 const evictedAtWords = (at: string) => {
@@ -53,6 +53,35 @@ export const buildCacheEvictedWords = (
             ? ` The build cache was not kept: the host's volume has ${gigabytes(c.freeBytes ?? 0)} GB free and it needs ${gigabytes(c.floorBytes)} GB; the next Run starts cold.`
             : "";
     return `The build cache of this environment was removed to free disk${when ? ` on ${when}` : ""}.${disk} Pull requests build with no cache, slower and maybe past their boot's wait, until a new setup restores it. Set up again.`;
+};
+
+/** How long ago, as the screen says it: "just now", "5 hours ago", "3 days ago". */
+const agoWords = (iso: string, now: number) => {
+    const ms = now - Date.parse(iso);
+    if (Number.isNaN(ms) || ms < 0) return undefined;
+    const hours = Math.floor(ms / 3_600_000);
+    if (hours < 1) return "less than an hour ago";
+    if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} days ago`;
+};
+
+/**
+ * The environment's ready template: the main commit it holds and its age. The template stays while main moves, and a pull
+ * request builds the newer code on top of it, so the line says how far behind main it is.
+ */
+export const templateWords = (
+    env: Pick<EnvironmentLike, "template"> | undefined,
+    now: number = Date.now(),
+): string | undefined => {
+    const t = env?.template;
+    if (!t) return undefined;
+    const age = agoWords(t.builtAt, now);
+    const behind =
+        t.commitsBehind > 0
+            ? `, ${t.commitsBehind} main commit${t.commitsBehind === 1 ? "" : "s"} since`
+            : "";
+    return `Environment template: ${t.mainSha ? `main ${t.mainSha.slice(0, 7)}` : "main commit not recorded"}${age ? `, built ${age}` : ""}${behind}. It is rebuilt when lockfiles, manifests or Dockerfiles change, or when it gets too old.`;
 };
 
 /**
