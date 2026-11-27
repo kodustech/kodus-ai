@@ -147,19 +147,29 @@ function detectCriteria(task: Task): Task {
     const description = task.description ?? '';
     const own = ownArtifactLink(task);
 
-    // Explicit criteria, wherever they are: a criteria heading in the
-    // description, or in a document read with it, and, when documents were
-    // read, AC-labelled items (`AC1: ...`). They beat the implicit list of
-    // the description's bullets. All places are kept, deduplicated; those
-    // from a document say which.
-    const body = explicitIn(description, !!task.hasArtifacts, own);
-    // Without artifacts the criteria stay as the tracker wrote them.
-    const explicit = withArtifactCriteria(
-        task,
-        task.hasArtifacts ? uniqueCriteria(body) : body,
-    );
-    if (explicit.length) {
-        return { ...task, acceptanceCriteria: explicit };
+    // The body is read exactly as without artifacts: the first criteria
+    // heading with items, else its list when it has two or more items (only
+    // links to the issue's own artifacts are left out). Artifact criteria
+    // are added on top, de-duplicated; they never change what the body says.
+    let section: string[] = [];
+    for (const heading of CRITERIA_HEADINGS) {
+        const text = sectionUnder(description, heading);
+        const items = text ? keepSubstantive(listItems(text), own) : [];
+        if (items.length) {
+            section = items;
+            break;
+        }
+    }
+    if (section.length) {
+        return {
+            ...task,
+            acceptanceCriteria: withArtifactCriteria(task, section),
+        };
+    }
+    // An implicit list of the body yields to criteria the artifacts state.
+    const fromArtifacts = withArtifactCriteria(task, []);
+    if (fromArtifacts.length) {
+        return { ...task, acceptanceCriteria: fromArtifacts };
     }
     const items = keepSubstantive(listItems(description), own);
     return items.length >= 2 ? { ...task, acceptanceCriteria: items } : task;
@@ -188,19 +198,6 @@ function explicitIn(
 
 const criterionKey = (item: string) =>
     normalize(item.replace(CRITERION_LABEL, ''));
-
-/** The items without repeats (by content, ignoring an `AC1:` label), first one wins. */
-function uniqueCriteria(items: string[]): string[] {
-    const seen = new Set<string>();
-    return items.filter((item) => {
-        const key = criterionKey(item);
-        if (!key || seen.has(key)) {
-            return false;
-        }
-        seen.add(key);
-        return true;
-    });
-}
 
 /**
  * `criteria` plus the explicit criteria of the documents read with the task
