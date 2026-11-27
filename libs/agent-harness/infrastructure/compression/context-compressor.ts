@@ -659,9 +659,16 @@ function isReasoningPart(part: unknown): boolean {
         providerOptions?: Record<string, Record<string, unknown> | undefined>;
     };
     if (type !== 'reasoning' && type !== 'redacted-reasoning') return false;
+    // An empty signature is no signature: `withThinkingSignatureRepair`
+    // gives `signature: ''` to the unsigned thinking of Anthropic-compatible
+    // upstreams (DeepSeek, Kimi, GLM, MiniMax), which bind it to nothing and
+    // may require it replayed.
     return ['anthropic', 'bedrock'].some((provider) => {
         const meta = providerOptions?.[provider];
-        return meta?.signature != null || meta?.redactedData != null;
+        return (
+            (typeof meta?.signature === 'string' && meta.signature !== '') ||
+            meta?.redactedData != null
+        );
     });
 }
 

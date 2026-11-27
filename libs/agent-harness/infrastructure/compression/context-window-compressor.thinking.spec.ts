@@ -106,6 +106,27 @@ describe('ContextWindowCompressor — thinking blocks after an edit', () => {
         });
     });
 
+    // Kodus's thinking repair stores `signature: ''` for the unsigned thinking
+    // of Anthropic-compatible upstreams. DeepSeek's Anthropic API asks for it
+    // back on later turns, and nothing binds it to a prefix.
+    it('keeps the unsigned thinking of an Anthropic-compatible upstream', () => {
+        const unsigned = {
+            type: 'reasoning',
+            text: 'deepseek thinking',
+            providerOptions: { anthropic: { signature: '' } },
+        };
+        const original: any[] = [
+            { role: 'user', content: 'head' },
+            { role: 'tool', content: 'long result' },
+            { role: 'assistant', content: [unsigned, reasoning('sig-a')] },
+        ];
+        const edited = [original[0], { role: 'tool', content: 'cut' }, original[2]];
+        expect(withoutThinkingAfterFirstEdit(original, edited)[2]).toEqual({
+            role: 'assistant',
+            content: [unsigned],
+        });
+    });
+
     it('drops thinking signed through Bedrock as well', () => {
         const bedrock = {
             type: 'reasoning',
