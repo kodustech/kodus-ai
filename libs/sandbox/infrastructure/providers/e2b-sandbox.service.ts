@@ -14,7 +14,7 @@ import {
     SandboxInstance,
     SandboxRunOptions,
     SandboxRunResult,
-    sandboxSetupFailure,
+    sandboxSetupDetails,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
@@ -383,9 +383,11 @@ function gitAuthEnvironment(cloneUrl: string, header: string) {
     return key
         ? {
               envs: {
-                  GIT_CONFIG_COUNT: '1',
+                  GIT_CONFIG_COUNT: '2',
                   GIT_CONFIG_KEY_0: key,
                   GIT_CONFIG_VALUE_0: header,
+                  GIT_CONFIG_KEY_1: 'core.hooksPath',
+                  GIT_CONFIG_VALUE_1: '/dev/null',
               },
           }
         : {};
@@ -1333,10 +1335,11 @@ export class E2BSandboxService implements ISandboxProvider {
             )
             .catch((error) => {
                 if (error instanceof CommandExitError)
-                    throw sandboxSetupFailure(
+                    // The egress policy needs the native SDK error; the setup
+                    // metadata contains only the command category and exit code.
+                    Object.assign(
                         error,
-                        'git-fetch',
-                        error.exitCode,
+                        sandboxSetupDetails('git-fetch', error.exitCode),
                     );
                 throw error;
             });
@@ -1345,21 +1348,20 @@ export class E2BSandboxService implements ISandboxProvider {
             context: E2BSandboxService.name,
             metadata: {
                 exitCode: cloneResult.exitCode,
-                stdout: cloneResult.stdout?.slice(0, 500),
-                stderr: cloneResult.stderr?.slice(0, 500),
+                stdoutLength: cloneResult.stdout?.length ?? 0,
+                stderrLength: cloneResult.stderr?.length ?? 0,
             },
         });
 
         if (cloneResult.exitCode !== 0) {
-            throw sandboxSetupFailure(
+            throw Object.assign(
                 new Error(
                     `Git clone failed in E2B sandbox (exit code ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`.slice(
                         0,
                         500,
                     ),
                 ),
-                'git-fetch',
-                cloneResult.exitCode,
+                sandboxSetupDetails('git-fetch', cloneResult.exitCode),
             );
         }
 

@@ -2,7 +2,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import {
     SandboxInstance,
-    sandboxSetupFailure,
+    sandboxSetupDetails,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { shSingleQuote } from '../shell-quote';
 
@@ -82,10 +82,9 @@ export class KodusGraphCli {
                     'exitCode' in error &&
                     typeof error.exitCode === 'number'
                 ) {
-                    throw sandboxSetupFailure(
+                    Object.assign(
                         error,
-                        'graph-install',
-                        error.exitCode,
+                        sandboxSetupDetails('graph-install', error.exitCode),
                     );
                 }
                 throw error;
@@ -93,12 +92,11 @@ export class KodusGraphCli {
 
         signal?.throwIfAborted();
         if (result.exitCode !== 0) {
-            throw sandboxSetupFailure(
+            throw Object.assign(
                 new Error(
-                    `kodus-graph install failed (exit=${result.exitCode}): ${(result.stderr || result.stdout || '').slice(0, 500)}`,
+                    `kodus-graph install failed (exit=${result.exitCode})`,
                 ),
-                'graph-install',
-                result.exitCode,
+                sandboxSetupDetails('graph-install', result.exitCode),
             );
         }
     }

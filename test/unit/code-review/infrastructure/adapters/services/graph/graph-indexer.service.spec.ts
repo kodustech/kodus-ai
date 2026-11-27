@@ -1,3 +1,14 @@
+import * as sandboxContract from '@libs/sandbox/domain/contracts/sandbox.provider';
+jest.mock('@libs/sandbox/domain/contracts/sandbox.provider', () => {
+    const actual = jest.requireActual(
+        '@libs/sandbox/domain/contracts/sandbox.provider',
+    );
+    return {
+        ...actual,
+        sandboxSetupDetails: jest.fn(actual.sandboxSetupDetails),
+    };
+});
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { classifyGraphJobError } from '@libs/code-review/workflow/graph-job-failure';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
@@ -333,6 +344,9 @@ describe('GraphIndexerService', () => {
         it.each(['returned', 'thrown'])(
             'keeps %s CLI install exit status retryable for graph jobs',
             async (mode) => {
+                const setup = jest
+                    .mocked(sandboxContract.sandboxSetupDetails)
+                    .mockClear();
                 const result = {
                     stdout: '',
                     stderr: 'installer disconnected',
@@ -352,8 +366,11 @@ describe('GraphIndexerService', () => {
                 const error = await new KodusGraphCli()
                     .install(mockSandbox)
                     .catch((e) => e);
-                expect(error).toMatchObject({
-                    sandboxSetup: { operation: 'graph-install', exitCode: 1 },
+                expect(setup.mock.calls).toEqual([['graph-install', 1]]);
+
+                expect(error.sandboxSetup).toEqual({
+                    operation: 'graph-install',
+                    exitCode: 1,
                 });
                 expect(classifyGraphJobError(error)).toBe(
                     ErrorClassification.RETRYABLE,

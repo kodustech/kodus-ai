@@ -117,7 +117,7 @@ export class JobProcessorRouterService
                         errorClassification: ErrorClassification.RETRYABLE,
                         lastError: error.message,
                     },
-                    [JobStatus.PROCESSING, JobStatus.FAILED],
+                    JobStatus.PROCESSING,
                     graphAttempt,
                 );
                 if (failed === null) {
@@ -125,6 +125,9 @@ export class JobProcessorRouterService
                     if (
                         current?.status === JobStatus.COMPLETED ||
                         current?.status === JobStatus.CANCELLED ||
+                        (current?.status === JobStatus.FAILED &&
+                            current.errorClassification ===
+                                ErrorClassification.PERMANENT) ||
                         (current?.status === JobStatus.PROCESSING &&
                             current.metadata?.attemptId !== graphAttempt)
                     )

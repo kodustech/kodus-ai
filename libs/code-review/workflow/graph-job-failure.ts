@@ -39,13 +39,18 @@ interface GraphErrorFields {
     statusCode?: number;
     response?: { status?: number; statusCode?: number };
     cause?: unknown;
+    lastError?: unknown;
+    errors?: unknown;
     sandboxSetup?: { operation?: string; exitCode?: number };
 }
 
 export function classifyGraphJobError(error: unknown): ErrorClassification {
     const seen = new Set<unknown>();
     let retryable = false;
-    while (error && typeof error === 'object' && !seen.has(error)) {
+    const pending: unknown[] = [error];
+    while (pending.length) {
+        const error = pending.pop();
+        if (!error || typeof error !== 'object' || seen.has(error)) continue;
         seen.add(error);
         if (
             error instanceof GraphBaselineChangedError ||
@@ -54,12 +59,15 @@ export function classifyGraphJobError(error: unknown): ErrorClassification {
         )
             retryable = true;
         const fields = error as GraphErrorFields;
-        const status =
-            fields.status ??
-            fields.statusCode ??
-            fields.response?.status ??
-            fields.response?.statusCode;
-        if (typeof status === 'number' && status >= 400 && status < 600) {
+        const status = [
+            fields.status,
+            fields.statusCode,
+            fields.response?.status,
+            fields.response?.statusCode,
+        ].find(
+            (value) => typeof value === 'number' && value >= 400 && value < 600,
+        );
+        if (status !== undefined) {
             return status === 408 || status === 429 || status >= 500
                 ? ErrorClassification.RETRYABLE
                 : ErrorClassification.PERMANENT;
@@ -77,7 +85,12 @@ export function classifyGraphJobError(error: unknown): ErrorClassification {
         ) {
             retryable = true;
         }
-        error = fields.cause;
+        // A retry wrapper's last failure is authoritative over earlier attempts.
+        if (Array.isArray(fields.errors)) {
+            for (let i = fields.errors.length - 1; i >= 0; i--)
+                pending.push(fields.errors[i]);
+        }
+        pending.push(fields.cause, fields.lastError);
     }
     return retryable
         ? ErrorClassification.RETRYABLE

@@ -289,7 +289,11 @@ describe('SandboxLeaseManager', () => {
                 '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77',
                 'shared',
             ),
-        ).rejects.toThrow('Only a single-use graph checkout');
+        ).rejects.toEqual(
+            new Error(
+                'Only a single-use graph checkout can be retired immediately',
+            ),
+        );
         expect(leaseRepo.retire).not.toHaveBeenCalled();
     });
 
@@ -1583,18 +1587,21 @@ describe('SandboxLeaseManager', () => {
         expect(result.wasCreated).toBe(false);
         // The sync ran BEFORE the sandbox was handed back — exact command
         // built by syncE2BSandboxRepo for a PR-mode, authenticated GitHub sync.
-        expect(run).toHaveBeenCalledWith(
-            expect.stringContaining(
-                "git fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
-            ),
-            expect.objectContaining({
-                envs: expect.objectContaining({
-                    GIT_CONFIG_COUNT: '1',
+        expect(run.mock.calls[0]).toEqual([
+            "cd /home/user/repo && git fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD && git clean -fd",
+            {
+                timeoutMs: 300000,
+                envs: {
+                    GIT_CONFIG_COUNT: '2',
                     GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
-                    GIT_CONFIG_VALUE_0: expect.any(String),
-                }),
-            }),
-        );
+                    GIT_CONFIG_VALUE_0:
+                        'Authorization: Basic ' +
+                        Buffer.from('x-access-token:token').toString('base64'),
+                    GIT_CONFIG_KEY_1: 'core.hooksPath',
+                    GIT_CONFIG_VALUE_1: '/dev/null',
+                },
+            },
+        ]);
     });
 
     it('joiner WITH cloneParams skips the destructive sync when another consumer is still active', async () => {

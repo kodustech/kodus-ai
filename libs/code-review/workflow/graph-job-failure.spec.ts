@@ -3,6 +3,30 @@ import { classifyGraphJobError } from './graph-job-failure';
 
 it.each([
     [
+        new AggregateError([{ code: 'ENETUNREACH' }, { code: 'ETIMEDOUT' }]),
+        ErrorClassification.RETRYABLE,
+    ],
+    [
+        { lastError: { cause: { statusCode: 429 } } },
+        ErrorClassification.RETRYABLE,
+    ],
+    [
+        {
+            code: 'ECONNRESET',
+            errors: [{ cause: { response: { status: 403 } } }],
+        },
+        ErrorClassification.PERMANENT,
+    ],
+    [
+        { lastError: { status: 400 }, errors: [{ status: 503 }] },
+        ErrorClassification.PERMANENT,
+    ],
+    [
+        { status: 'invalid', response: { status: 503 } },
+        ErrorClassification.RETRYABLE,
+    ],
+
+    [
         { code: 'ENOTFOUND', cause: { response: { status: 400 } } },
         ErrorClassification.PERMANENT,
     ],
@@ -44,6 +68,6 @@ it.each([
 
 it('terminates on a circular provider cause', () => {
     const error = new Error('timeout');
-    error.cause = error;
+    Object.assign(error, { cause: error, lastError: error, errors: [error] });
     expect(classifyGraphJobError(error)).toBe(ErrorClassification.PERMANENT);
 });

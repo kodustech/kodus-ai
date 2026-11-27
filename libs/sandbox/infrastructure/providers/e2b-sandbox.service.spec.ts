@@ -1,3 +1,15 @@
+import { execFileSync } from 'node:child_process';
+import * as sandboxContract from '@libs/sandbox/domain/contracts/sandbox.provider';
+jest.mock('@libs/sandbox/domain/contracts/sandbox.provider', () => {
+    const actual = jest.requireActual(
+        '@libs/sandbox/domain/contracts/sandbox.provider',
+    );
+    return {
+        ...actual,
+        sandboxSetupDetails: jest.fn(actual.sandboxSetupDetails),
+    };
+});
+
 import { PlatformType } from '@libs/core/domain/enums';
 
 // The real `e2b` SDK does not resolve to a usable class under jest (its ESM
@@ -733,7 +745,9 @@ describe('E2B repository provisioning', () => {
                 /GIT_AUTH_HEADER|GIT_CONFIG_VALUE|extraHeader|fixture-token|Authorization:/i,
             );
             expect(opts.envs).toEqual({
-                GIT_CONFIG_COUNT: '1',
+                GIT_CONFIG_COUNT: '2',
+                GIT_CONFIG_KEY_1: 'core.hooksPath',
+                GIT_CONFIG_VALUE_1: '/dev/null',
                 GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
                 GIT_CONFIG_VALUE_0:
                     'Authorization: Basic ' +
@@ -746,6 +760,9 @@ describe('E2B repository provisioning', () => {
     it.each(['returned', 'thrown'])(
         'keeps %s clone exit status retryable for graph jobs',
         async (mode) => {
+            const setup = jest
+                .mocked(sandboxContract.sandboxSetupDetails)
+                .mockClear();
             const result = {
                 stdout: '',
                 stderr: 'fetch disconnected',
@@ -759,8 +776,11 @@ describe('E2B repository provisioning', () => {
                 { commands: { run } } as never,
                 params,
             ).catch((e) => e);
-            expect(error).toMatchObject({
-                sandboxSetup: { operation: 'git-fetch', exitCode: 128 },
+            expect(setup.mock.calls).toEqual([['git-fetch', 128]]);
+
+            expect(error.sandboxSetup).toEqual({
+                operation: 'git-fetch',
+                exitCode: 128,
             });
             expect(classifyGraphJobError(error)).toBe(
                 ErrorClassification.RETRYABLE,
@@ -799,9 +819,24 @@ describe('syncE2BSandboxRepo', () => {
         expect(command).toBe(
             `cd ${REPO_DIR} && git fetch --depth=1 'https://github.com/kodustech/kodus-ai' 'refs/pull/44/head' && git checkout -f FETCH_HEAD && git clean -fd`,
         );
-        expect(opts.envs.GIT_CONFIG_VALUE_0).toBe(
-            `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
-        );
+        expect(
+            execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+                encoding: 'utf8',
+                env: {
+                    PATH: process.env.PATH,
+                    GIT_CONFIG_NOSYSTEM: '1',
+                    GIT_CONFIG_GLOBAL: '/dev/null',
+                    ...opts.envs,
+                },
+            }).trim(),
+        ).toBe('/dev/null');
+        expect(opts.envs).toEqual({
+            GIT_CONFIG_COUNT: '2',
+            GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
+            GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from('x-access-token:tok123').toString('base64')}`,
+            GIT_CONFIG_KEY_1: 'core.hooksPath',
+            GIT_CONFIG_VALUE_1: '/dev/null',
+        });
     });
 
     it('gives the reuse sync 5 min, not the 2-min create fetch budget', async () => {

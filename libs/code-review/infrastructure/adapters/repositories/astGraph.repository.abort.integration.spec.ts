@@ -454,12 +454,18 @@ const run =
             });
         });
 
-        it.each([JobStatus.COMPLETED, JobStatus.PROCESSING])(
-            'an expired graph deadline preserves a %s row owned at completion',
-            async (finalStatus) => {
+        it.each([
+            [JobStatus.COMPLETED, null],
+            [JobStatus.PROCESSING, null],
+            [JobStatus.FAILED, ErrorClassification.PERMANENT],
+            [JobStatus.FAILED, ErrorClassification.RETRYABLE],
+        ] as const)(
+            'an expired graph deadline preserves a %s row with %s classification',
+            async (finalStatus, classification) => {
                 const rows = db.getRepository(WorkflowJobModel);
                 const jobs = new WorkflowJobRepository(rows);
                 const later = randomUUID();
+                let expectedOwner: string;
                 await rows.update(job.jobId, {
                     workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
                     status: JobStatus.PENDING,
@@ -482,18 +488,22 @@ const run =
                             _signal: AbortSignal,
                             attemptId: string,
                         ) => {
+                            expectedOwner =
+                                finalStatus === JobStatus.PROCESSING
+                                    ? later
+                                    : attemptId;
                             await rows.update(job.jobId, {
-                                status: finalStatus,
-                                metadata: {
-                                    attemptId:
-                                        finalStatus === JobStatus.COMPLETED
-                                            ? attemptId
-                                            : later,
-                                },
-                                completedAt:
-                                    finalStatus === JobStatus.COMPLETED
-                                        ? finished
+                                lastError:
+                                    finalStatus === JobStatus.FAILED
+                                        ? 'earlier recorded failure'
                                         : null,
+                                errorClassification: classification,
+                                status: finalStatus,
+                                metadata: { attemptId: expectedOwner },
+                                completedAt:
+                                    finalStatus === JobStatus.PROCESSING
+                                        ? null
+                                        : finished,
                             });
                             committed.open();
                             await new Promise(() => {});
@@ -523,7 +533,7 @@ const run =
                               )) as typeof setTimeout);
                 const consumer = graphConsumer(jobs, unused, router);
                 try {
-                    await consumer.handleAstGraphIncrementalJob(
+                    const delivery = consumer.handleAstGraphIncrementalJob(
                         { jobId: job.jobId },
                         {
                             properties: {
@@ -532,15 +542,26 @@ const run =
                             },
                         } as never,
                     );
+                    if (classification === ErrorClassification.RETRYABLE)
+                        await expect(delivery).rejects.toBeInstanceOf(
+                            RecordedJobFailure,
+                        );
+                    else await delivery;
                 } finally {
                     timer.mockRestore();
                 }
                 const stored = await jobs.findOne(job.jobId);
                 expect(stored.status).toBe(finalStatus);
-                expect(stored.lastError).toBeNull();
-                if (finalStatus === JobStatus.COMPLETED)
-                    expect(stored.completedAt).toEqual(finished);
-                else expect(stored.metadata.attemptId).toBe(later);
+                expect(stored.lastError).toBe(
+                    finalStatus === JobStatus.FAILED
+                        ? 'earlier recorded failure'
+                        : null,
+                );
+                expect(stored.errorClassification).toBe(classification);
+                expect(stored.metadata.attemptId).toBe(expectedOwner);
+                expect(stored.completedAt).toEqual(
+                    finalStatus === JobStatus.PROCESSING ? null : finished,
+                );
             },
         );
 
@@ -812,9 +833,22 @@ const run =
                 } as never);
                 await entered.waiting;
                 const shutdown = consumer.beforeApplicationShutdown('SIGTERM');
-                await expect(delivery).rejects.toMatchObject({
+                const interruptedDelivery = await delivery.catch(
+                    (error) => error,
+                );
+                expect(interruptedDelivery).toBeInstanceOf(ClaimConflictError);
+                expect({
+                    message: interruptedDelivery.message,
+                    classification: interruptedDelivery.errorClassification,
+                    delay: interruptedDelivery.requeueDelayMs,
+                    returnToQueue: interruptedDelivery.returnToQueue,
+                }).toEqual({
+                    message: 'Graph worker is shutting down',
+                    classification: 'CLAIM_HELD',
+                    delay: 20_000,
                     returnToQueue: true,
                 });
+
                 await shutdown;
                 expect(released.mock.calls).toEqual([['ours', { idleMs: 0 }]]);
                 const interrupted = await jobs.findOne(job.jobId);
@@ -1140,7 +1174,8 @@ const run =
                     first,
                 );
                 const middle = commit('b.ts', 'b1');
-                const latest = commit('c.ts', 'c1');
+                commit('c.ts', 'c1');
+                const latest = commit('d.ts', 'd1');
                 await graph.fullRebuild(repoId, [symbol('a.ts', 'a0')], [], {
                     sha: base,
                 });
@@ -1274,14 +1309,14 @@ const run =
                     ...envelope,
                     properties: options,
                 } as never);
-                expect(parsed).toEqual([['a.ts'], ['c.ts']]);
+                expect(parsed).toEqual([['a.ts'], ['c.ts', 'd.ts']]);
                 expect((await jobs.findOne(job.jobId)).status).toBe(
                     JobStatus.COMPLETED,
                 );
                 expect(await readPublishedRevision(repoId)).toEqual({
                     astGraphStatus: AstGraphStatus.READY,
                     astGraphSha: latest,
-                    astGraphNodeCount: 3,
+                    astGraphNodeCount: 4,
                     astGraphEdgeCount: 0,
                 });
                 expect(
@@ -1292,6 +1327,7 @@ const run =
                     ['a.ts', 'a1'],
                     ['b.ts', 'b1'],
                     ['c.ts', 'c1'],
+                    ['d.ts', 'd1'],
                 ]);
             } finally {
                 rmSync(dir, { recursive: true, force: true });

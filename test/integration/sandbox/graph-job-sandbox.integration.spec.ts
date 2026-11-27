@@ -174,6 +174,7 @@ const repositoryId = randomUUID();
                     run: async () => ({ stdout: 'old-checkout', exitCode: 0 }),
                 },
             });
+            const beforeRetry = Date.now();
             await run();
             await waitForSandboxRelease(async () => {
                 expect(await leases.findByPrKey(prKey)).toBeNull();
@@ -181,8 +182,21 @@ const repositoryId = randomUUID();
             const retired = await leases.findByPrKey(
                 `${organizationId}:retired:${abandonedId}`,
             );
-            expect(retired?.sandboxId).toBe(abandonedId);
-            expect(retired?.killAt).toBeInstanceOf(Date);
+            expect({
+                sandboxId: retired?.sandboxId,
+                state: retired?.state,
+                count: retired?.leaseCount,
+                expiry: retired?.expiresAt,
+            }).toEqual({
+                sandboxId: abandonedId,
+                state: 'READY',
+                count: 0,
+                expiry: retired?.killAt,
+            });
+            expect(retired.killAt.getTime()).toBeGreaterThanOrEqual(
+                beforeRetry,
+            );
+            expect(retired.killAt.getTime()).toBeLessThanOrEqual(Date.now());
             const reaper = new SandboxLeaseReaperService(
                 leases,
                 {
