@@ -47,10 +47,32 @@ export const securityViolationRule: BlockerRule = {
             : null,
 };
 
+/** The cell's own wording of a build file the recipe names and the checkout does not have: `openat .kodus/compose.yaml: no such file or directory`. */
+const MISSING_BUILD_FILE = /(?:^|[\s'"(])(\.kodus\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}): no such file or directory/;
+
 export const recipeOutdatedRule: BlockerRule = {
     id: 'recipe_outdated',
-    classify: ({ input }) =>
-        input.kind === 'recipe_outdated'
+    classify: ({ input }) => {
+        const missing = input.kind === 'recipe_outdated' ? MISSING_BUILD_FILE.exec(input.message)?.[1] : undefined;
+        // The recipe is read from the default branch, the build files from the checkout that boots: a pull request branch cut before
+        // the commit that added them has none. Said plainly, since "the recipe doesn't load" sends the dev to a recipe that is fine.
+        if (missing) {
+            return {
+                kind: 'recipe_outdated',
+                signature: input.signature,
+                title: `The checkout has no ${missing}, which the recipe uses`,
+                evidence: evidenceOf({ text: input.message }),
+                fixes: [
+                    {
+                        ...fixRecipe(
+                            `${missing} is not in the checkout that was booted. If the recipe was committed on the default branch after this branch was cut, update the branch with the default branch and run again. If it is not committed there at all, commit it.`,
+                        ),
+                        label: 'Update the branch with the default branch',
+                    },
+                ],
+            };
+        }
+        return input.kind === 'recipe_outdated'
             ? {
                   kind: 'recipe_outdated',
                   signature: input.signature,
@@ -58,7 +80,8 @@ export const recipeOutdatedRule: BlockerRule = {
                   evidence: evidenceOf({ text: input.message }),
                   fixes: [fixRecipe('Open .kodus/workspace.yaml on the default branch and fix the error shown here; the next setup reads it again.')],
               }
-            : null,
+            : null;
+    },
 };
 
 /**

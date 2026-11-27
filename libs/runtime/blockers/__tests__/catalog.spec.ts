@@ -220,6 +220,16 @@ describe('classifyBlocker', () => {
         expect(c.fixes.map((f) => [f.id, f.who])).toEqual([['fix_recipe', 'dev']]);
     });
 
+    it('a build file the recipe names that the checkout does not have says the branch lacks it and must be updated with the default branch, not that the recipe is broken', () => {
+        const c = classifyBlocker({ kind: 'recipe_outdated', signature: 'recipe_load', message: 'compose: openat .kodus/compose.yaml: no such file or directory' });
+        expect(c).toMatchObject({ kind: 'recipe_outdated', signature: 'recipe_load', title: 'The checkout has no .kodus/compose.yaml, which the recipe uses' });
+        expect(c.fixes.map((f) => [f.id, f.who, f.label])).toEqual([['fix_recipe', 'dev', 'Update the branch with the default branch']]);
+        expect(c.fixes[0].detail).toContain('update the branch with the default branch');
+        // Any other recipe refusal keeps its card.
+        expect(classifyBlocker({ kind: 'recipe_outdated', signature: 'recipe_load', message: 'yaml: line 3: mapping values are not allowed here' }).title).toBe("The recipe doesn't load");
+        expect(classifyBlocker({ kind: 'recipe_outdated', signature: 'recipe_load', message: 'compose: openat ../secret: no such file or directory' }).title).toBe("The recipe doesn't load");
+    });
+
     it('a recipe the cell refused for services.needs is a recipe card for the dev, never a retry', () => {
         const c = classifyBlocker({ kind: 'other_repo', signature: 'recipe_needs', message: 'recipe_needs: services.needs (other repositories) is not supported by this cell yet' });
         expect(c).toMatchObject({ kind: 'other_repo', signature: 'recipe_needs', title: 'The recipe needs other repositories, which a host does not boot yet' });
