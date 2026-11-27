@@ -77,6 +77,14 @@ export interface StoredSelectionState {
     reenabledAt?: string;
 }
 
+/** The newest baseline request of an environment: what became of the baseline its latest main commit asked for. */
+export interface StoredBaselineRequest {
+    sha: string;
+    state: 'queued' | 'started' | 'skipped' | 'superseded';
+    /** Why it ended without a run (`no_suite`, `superseded`); absent while queued or started. */
+    reason?: string;
+}
+
 export interface StoredBaselineSummary {
     sha: string;
     specs: number;
@@ -119,6 +127,8 @@ export interface RuntimeSuiteReader {
     liveRunAfter(organizationId: string, environmentId: string, prNumber: number, after: string, withinMs: number): Promise<boolean>;
     selectionState(organizationId: string, environmentId: string): Promise<StoredSelectionState>;
     lastBaseline(organizationId: string, environmentId: string): Promise<StoredBaselineSummary | null>;
+    /** The environment's newest baseline request, or null when no template of it ever asked for one. */
+    lastBaselineRequest(organizationId: string, environmentId: string): Promise<StoredBaselineRequest | null>;
     /** The newest miss since selection was last turned on (`since`, when given). */
     lastMiss(organizationId: string, environmentId: string, since?: string): Promise<StoredSelectionMiss | null>;
     usageOfMonth(organizationId: string, window: { start: Date; end: Date }): Promise<{ rows: StoredSuiteUsageRow[]; savings: StoredSuiteSavings | null }>;

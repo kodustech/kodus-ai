@@ -42,7 +42,8 @@ import { canaryKeyFrom, hubEnvironments, loadRecordedTurns, poolCellOf, RUN_DEPS
 import { RUN_ENGINE_LOCKS, RUN_ENGINE_RETENTION, RUN_ENGINE_STUCK, RUN_ENGINE_WORKFLOW_RETENTION, RunEngineService } from './dbos/run-engine.service';
 import { PgSuiteRuns } from './suite/pg-suite-runs';
 import { PgSuiteSelectionState } from './suite/pg-suite-shadows';
-import { SUITE_RUNS, SUITE_SELECTION_STATE, SUITE_SERVICE } from './suite/suite-service';
+import { PgSuiteBaselineRequests } from '../shared/persistence/suite-baseline-requests';
+import { SUITE_BASELINE_REQUESTS, SUITE_RUNS, SUITE_SELECTION_STATE, SUITE_SERVICE } from './suite/suite-service';
 import { SuiteRunStage } from './suite/suite-stage';
 import { buildSuiteService } from './suite/suite-wiring';
 import { PgStuckSource, StuckDetector } from './maintenance/stuck-detector';
@@ -302,6 +303,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                     },
                 },
                 { provide: SUITE_RUNS, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgSuiteRuns(pool) },
+                { provide: SUITE_BASELINE_REQUESTS, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgSuiteBaselineRequests(pool) },
                 { provide: SUITE_SELECTION_STATE, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgSuiteSelectionState(pool) },
                 {
                     // The e2e suite's workflow body (docs/runtime/e2e-suites.md section 11): the recipe's suite block, the spec list, the engine.

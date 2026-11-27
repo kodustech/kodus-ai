@@ -83,3 +83,14 @@ describe('the suite selection command', () => {
         expect(isRunLaneEvent(RuntimeCommandName.SuiteSelectionChanged)).toBe(false);
     });
 });
+
+describe('RuntimeSuiteBaselineSkipped', () => {
+    const ok = { organizationId: 'org-a', environmentId: 'env-1', mainSha: 'a'.repeat(40), reason: 'no_suite', requestedAt: '2026-11-27T10:00:00.000Z', key: 'k' };
+
+    it('is a control command that carries the commit and the reason, and nothing else', () => {
+        const row = runtimeCommandOutboxMessage(RuntimeCommandName.SuiteBaselineSkipped, ok as any, 'm-1');
+        expect(isRunLaneEvent(RuntimeCommandName.SuiteBaselineSkipped)).toBe(false);
+        expect(row.payload.event_name).toBe('runtime.suite.baseline_skipped');
+        expect(() => runtimeCommandOutboxMessage(RuntimeCommandName.SuiteBaselineSkipped, { ...ok, repoToken: 'x' } as any, 'm-1')).toThrow();
+    });
+});

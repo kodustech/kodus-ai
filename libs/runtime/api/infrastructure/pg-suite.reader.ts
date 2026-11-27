@@ -2,6 +2,7 @@ import type { SqlQuery } from '@libs/runtime/run/adapters/pg-sql';
 
 import type {
     RuntimeSuiteReader,
+    StoredBaselineRequest,
     StoredBaselineSummary,
     StoredSelectionMiss,
     StoredSelectionState,
@@ -133,6 +134,16 @@ export class PgSuiteReader implements RuntimeSuiteReader {
         );
         const x = r.rows[0];
         return x ? { sha: x.main_sha, specs: x.total, passed: x.passed, failed: x.failed, finishedAt: iso(x.finished_at)! } : null;
+    }
+
+    async lastBaselineRequest(organizationId: string, environmentId: string): Promise<StoredBaselineRequest | null> {
+        const r = await this.db.query(
+            `SELECT main_sha, state, reason FROM runtime.runtime_suite_baseline_requests
+              WHERE organization_id = $1 AND environment_id = $2 ORDER BY requested_at DESC, main_sha LIMIT 1`,
+            [organizationId, environmentId],
+        );
+        const x = r.rows[0];
+        return x ? { sha: x.main_sha, state: x.state, ...(x.reason ? { reason: x.reason } : {}) } : null;
     }
 
     async lastMiss(organizationId: string, environmentId: string, since?: string): Promise<StoredSelectionMiss | null> {

@@ -2,7 +2,7 @@ import type { ClassifiedTest } from '@libs/runtime/suite';
 
 import type { RuntimeEnvironmentSuiteView, RuntimeSuiteFailureGroup, RuntimeSuiteFailureView, RuntimeSuiteHostTimeView, RuntimeSuiteRunView, RuntimeSuiteSpecView, RuntimeSuiteUsage, RuntimeSuiteUsageLine } from '@libs/runtime/contracts/views/suite';
 
-import type { StoredBaselineSummary, StoredSelectionMiss, StoredSelectionState, StoredSuiteResultRecord, StoredSuiteRun, StoredSuiteSavings, StoredSuiteUsageRow } from './suite';
+import type { StoredBaselineRequest, StoredBaselineSummary, StoredSelectionMiss, StoredSelectionState, StoredSuiteResultRecord, StoredSuiteRun, StoredSuiteSavings, StoredSuiteUsageRow } from './suite';
 
 // The suite's stored rows as the product's views (docs/runtime/e2e-suites.md sections 10 and 13). Pure: no I/O, no clock. Structured
 // fields only (the web writes the sentences), and a field the rows do not say is absent, never a default that reads as a fact.
@@ -147,6 +147,7 @@ export function environmentSuiteView(i: {
     environmentId: string;
     recipe?: { runner: string; specs: string; command: string; cwd?: string; results?: { junit?: string }; shards?: number; gate: 'default' | 'strict'; baseline: boolean };
     lastBaseline?: StoredBaselineSummary | null;
+    baselineRequest?: StoredBaselineRequest | null;
     selection: StoredSelectionState;
     miss: StoredSelectionMiss | null;
     /** The environment's own switch (null: not set) and the deployment's default. */
@@ -171,6 +172,7 @@ export function environmentSuiteView(i: {
               }
             : {}),
         ...(i.lastBaseline ? { lastBaseline: { ...i.lastBaseline } } : {}),
+        ...(i.baselineRequest ? { baselineRequest: { ...i.baselineRequest } } : {}),
         selection: {
             enabled: !byPerson,
             ...(braked ? { brake: { off: i.selection.off && !byPerson, fullPrsLeft: i.selection.fullPrsLeft, ...(i.miss ? { miss: { prNumber: i.miss.prNumber, specs: [...i.miss.specs] } } : {}) } } : {}),

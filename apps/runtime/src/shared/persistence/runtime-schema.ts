@@ -1320,6 +1320,14 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS cell_base text NOT NULL DEFAULT '';
         ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS retired_snapshot text;`,
     },
+    {
+        version: 62,
+        name: 'why a baseline request ended without a run',
+        // docs/runtime/e2e-suites.md section 2.1: a request ends `started` (its run exists), `skipped` (the recipe at its commit declares
+        // no suite with a baseline) or `superseded` (a newer main commit replaced it while it was queued); `reason` is the code the
+        // environment page turns into words. Null while queued or started. The product reads it with the read-only role.
+        sql: `ALTER TABLE runtime.runtime_suite_baseline_requests ADD COLUMN IF NOT EXISTS reason text;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
@@ -1454,8 +1462,8 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         ['runtime_suite_results', older('recorded_at'), days],
         ['runtime_suite_shards', older('updated_at'), days],
         ['runtime_suite_runs', `finished_at IS NOT NULL AND ${older('updated_at')}`, days],
-        // A baseline request that started is history once its run's rows are gone.
-        ['runtime_suite_baseline_requests', `state = 'started' AND ${older('updated_at')}`, days],
+        // A baseline request that ended (started, skipped or superseded) is history once its run's rows are gone.
+        ['runtime_suite_baseline_requests', `state <> 'queued' AND ${older('updated_at')}`, days],
     ] as const) {
         removed += await deleteInBatches(pool, table, where, value, batch);
     }

@@ -48,6 +48,27 @@ const ask = (over: Partial<Parameters<PgSuiteBaselineRequests['request']>[0]> = 
         expect((await requests.pending(10)).map((r) => `${r.environmentId}:${r.mainSha[0]}`).sort()).toEqual(['env-1:b', 'env-2:c']);
     });
 
+    it('a newer main commit leaves the replaced request in the table as superseded, with that reason, instead of deleting it', async () => {
+        await requests.request(ask({ mainSha: sha('a') }));
+        await requests.request(ask({ mainSha: sha('b') }));
+        const rows = (await pool.query(`SELECT main_sha, state, reason FROM runtime.runtime_suite_baseline_requests ORDER BY main_sha`)).rows.map((r) => `${r.main_sha[0]}:${r.state}:${r.reason}`);
+        expect(rows).toEqual(['a:superseded:superseded', 'b:queued:null']);
+    });
+
+    it('a request the product skipped leaves the queue with its reason, and only the organization\'s own queued request moves', async () => {
+        await requests.request(ask());
+        await requests.markSkipped('org-b', 'env-1', sha('a'), 'no_suite');
+        expect(await requests.pending(10)).toHaveLength(1);
+        await requests.markSkipped('org-a', 'env-1', sha('a'), 'no_suite');
+        expect(await requests.pending(10)).toEqual([]);
+        expect((await pool.query(`SELECT state, reason FROM runtime.runtime_suite_baseline_requests`)).rows).toEqual([{ state: 'skipped', reason: 'no_suite' }]);
+        // A repeat of the command, or one for a request that started, changes nothing.
+        await requests.request(ask({ mainSha: sha('b') }));
+        await requests.markStarted('org-a', 'env-1', sha('b'));
+        await requests.markSkipped('org-a', 'env-1', sha('b'), 'no_suite');
+        expect((await pool.query(`SELECT main_sha, state FROM runtime.runtime_suite_baseline_requests ORDER BY main_sha`)).rows.map((r) => `${r.main_sha[0]}:${r.state}`)).toEqual(['a:skipped', 'b:started']);
+    });
+
     it('a started baseline finishes: the next commit queues beside it, and the started one is no longer pending', async () => {
         await requests.request(ask({ mainSha: sha('a') }));
         await requests.markStarted('org-a', 'env-1', sha('a'));

@@ -30,6 +30,8 @@ export const SUITE_SERVICE = Symbol('SUITE_SERVICE');
 export const SUITE_RUNS = Symbol('SUITE_RUNS');
 /** The environment's selection state (`PgSuiteSelectionState`): what a person's on or off writes. */
 export const SUITE_SELECTION_STATE = Symbol('SUITE_SELECTION_STATE');
+/** The baseline requests (`PgSuiteBaselineRequests`): what the product's skip command ends. */
+export const SUITE_BASELINE_REQUESTS = Symbol('SUITE_BASELINE_REQUESTS');
 
 /** A workflow step: its result is journalled, and a replay of the workflow takes the journalled result. */
 export type SuiteStep = <T>(name: string, fn: () => Promise<T>) => Promise<T>;

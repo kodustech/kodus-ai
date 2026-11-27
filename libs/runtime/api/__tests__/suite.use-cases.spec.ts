@@ -58,6 +58,10 @@ class FakeSuiteReader implements RuntimeSuiteReader {
     async lastBaseline() {
         return { sha: MAIN, specs: 24, passed: 22, failed: 2, finishedAt: '2026-10-29T10:00:00.000Z' };
     }
+    baselineRequest: { sha: string; state: 'queued' | 'started' | 'skipped' | 'superseded'; reason?: string } | null = null;
+    async lastBaselineRequest() {
+        return this.baselineRequest;
+    }
     async lastMiss() {
         return null;
     }
@@ -202,6 +206,14 @@ describe('GET /runtime/environments/:id/suite', () => {
         expect(v.selection).toEqual({ enabled: true });
         // The deployment's default (RUNTIME_SUITE_CI) until the environment says otherwise.
         expect(v.ci).toEqual({ enabled: false, source: 'deployment' });
+        expect(v.baselineRequest).toBeUndefined();
+    });
+
+    it('carries what became of the newest baseline request, so the page can say why there is none', async () => {
+        const w = await world();
+        w.reader.baselineRequest = { sha: MAIN, state: 'skipped', reason: 'no_suite' };
+        const v = await w.environmentSuite.execute({ user: owner, environmentId: 'env-1' });
+        expect(v.baselineRequest).toEqual({ sha: MAIN, state: 'skipped', reason: 'no_suite' });
     });
 
     it('has no recipe section when the recipe declares no suite, and is another organization\'s 404', async () => {

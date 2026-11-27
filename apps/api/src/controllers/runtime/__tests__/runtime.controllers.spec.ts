@@ -315,6 +315,7 @@ describe('Runtime controllers over HTTP', () => {
                                 : null,
                         selectionState: async () => ({ off: false, fullPrsLeft: 0 }),
                         lastBaseline: async () => null,
+                        lastBaselineRequest: async () => null,
                         lastMiss: async () => null,
                         usageOfMonth: async () => ({ rows: [], savings: null }),
                     },

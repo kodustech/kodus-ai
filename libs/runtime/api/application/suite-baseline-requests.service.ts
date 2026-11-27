@@ -5,6 +5,7 @@ import {
     OUTBOX_MESSAGE_REPOSITORY_TOKEN,
     type IOutboxMessageRepository,
 } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
 import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
 import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 
@@ -36,7 +37,7 @@ const PASS_LIMIT = 50;
  * Issues the `runtime.suite.requested` command of the baseline suite runs a template turning ready asked for
  * (docs/runtime/e2e-suites.md section 2.1). The fleet holds no repository credentials, so it records the request (the main commit,
  * and the id its suite run will have); this reads the queued ones, checks the recipe at that commit still declares a suite with
- * a baseline, mints the download tokens and writes the command, sealed to the run's id. The cell revokes a token once it fetched
+ * a baseline (else it puts `runtime.suite.baseline_skipped` on the outbox, so the table's owner ends the request with a reason), mints the download tokens and writes the command, sealed to the run's id. The cell revokes a token once it fetched
  * with it, so the command carries one per claim: the spec listing and each shard (a baseline has no re-run). The worker starts a
  * suite once per run id and marks the request started, which takes it out of the queue; a repeat here only saves minting tokens again.
  */
@@ -86,7 +87,15 @@ export class RuntimeSuiteBaselineRequests {
                 const suite = await suiteOfRecipeAt(this.git, { ...orgTeam, ...repo }, p.mainSha, await this.setups?.get(p.organizationId, p.environmentId));
                 const shards = suite?.baseline ? suite.shards : undefined;
                 if (shards === undefined) {
-                    // No suite at that commit: nothing to run, and nothing minted. Not asked again by this process.
+                    // No suite at that commit: nothing to run, and nothing minted. The table is the Runtime's, so the worker ends the
+                    // request (`skipped`, with the reason the environment page shows); this process does not ask again meanwhile.
+                    await this.outbox.create(
+                        runtimeCommandOutboxMessage(
+                            RuntimeCommandName.SuiteBaselineSkipped,
+                            { organizationId: p.organizationId, environmentId: p.environmentId, mainSha: p.mainSha, reason: 'no_suite', requestedAt: this.now().toISOString(), key: `baseline-skipped:${p.suiteRunId}` },
+                            uuidV5From(sha256(`baseline-skipped:${p.suiteRunId}`)),
+                        ),
+                    );
                     this.handled.add(p.suiteRunId);
                     skipped++;
                     continue;

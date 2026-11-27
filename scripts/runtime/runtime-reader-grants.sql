@@ -61,9 +61,9 @@ BEGIN
       EXECUTE 'GRANT SELECT (setup_key, organization_id, environment_id) ON runtime.runtime_template_setups TO kodus_runtime_reader';
     END IF;
     -- The baseline suite runs a template turning ready asks for (v52): the product reads the queued ones, with no suite run yet,
-    -- and issues the command. Ids, the main commit and the state only, never the bake fingerprint.
+    -- and issues the command; the environment page reads the newest one's state and reason (v62). Never the bake fingerprint.
     IF to_regclass('runtime.runtime_suite_baseline_requests') IS NOT NULL THEN
-      EXECUTE 'GRANT SELECT (suite_run_id, environment_id, organization_id, repository_id, main_sha, state, requested_at) ON runtime.runtime_suite_baseline_requests TO kodus_runtime_reader';
+      EXECUTE 'GRANT SELECT (suite_run_id, environment_id, organization_id, repository_id, main_sha, state, reason, requested_at) ON runtime.runtime_suite_baseline_requests TO kodus_runtime_reader';
     END IF;
     IF to_regclass('runtime.runtime_stops') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (scope, organization_id, cleared_at) ON runtime.runtime_stops TO kodus_runtime_reader';

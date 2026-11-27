@@ -26,6 +26,7 @@ function world(opts: { pending?: any[]; recipe?: string | null; released?: boole
     return { step, outbox, reader, issued };
 }
 const commands = (o: FakeOutbox) => o.rows.filter((r) => r.payload.event_name === 'runtime.suite.requested').map((r) => r.payload.payload);
+const skips = (o: FakeOutbox) => o.rows.filter((r) => r.payload.event_name === 'runtime.suite.baseline_skipped').map((r) => r.payload.payload);
 
 describe('when the fleet is waiting for a baseline suite run of a main commit', () => {
     it('issues one suite_requested of mode baseline under the id the fleet chose, with the repository and sealed tokens bound to that id', async () => {
@@ -45,6 +46,28 @@ describe('when the fleet is waiting for a baseline suite run of a main commit', 
         await w.step.run();
         expect(commands(w.outbox)[0].moreRepoTokens).toHaveLength(3);
         expect(w.issued).toHaveLength(4);
+    });
+
+    it('tells the table owner to end the request as skipped, with the reason no_suite, when the recipe at that commit declares no suite or turns the baseline off, and tells it once', async () => {
+        for (const content of ['version: 1\nservices:\n  compose:\n    public: app\n', recipe('  baseline: false\n'), null]) {
+            const w = world({ recipe: content });
+            await w.step.run();
+            expect(skips(w.outbox)).toEqual([expect.objectContaining({ organizationId: ORG, environmentId: 'env-1', mainSha: SHA, reason: 'no_suite' })]);
+            await w.step.run();
+            expect(skips(w.outbox)).toHaveLength(1);
+        }
+        const requested = world();
+        await requested.step.run();
+        expect(skips(requested.outbox)).toEqual([]);
+    });
+
+    it('does not mark the request handled when the skip cannot be written, so the next pass tells the owner again', async () => {
+        const w = world({ recipe: null });
+        const create = jest.spyOn(w.outbox, 'create').mockRejectedValueOnce(new Error('outbox down'));
+        expect(await w.step.run()).toMatchObject({ skipped: 0, failed: 1 });
+        create.mockRestore();
+        await w.step.run();
+        expect(skips(w.outbox)).toHaveLength(1);
     });
 
     it('issues nothing, and mints nothing, when the recipe at that commit no longer declares a suite or turns the baseline off', async () => {

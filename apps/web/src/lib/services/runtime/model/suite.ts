@@ -286,6 +286,19 @@ const RUNNER_NAME: Record<string, string> = {
     cypress: "Cypress",
 };
 
+/** Why the environment has no baseline on main: what became of the newest one asked for, in words. */
+export const noBaselineText = (
+    request: RuntimeEnvironmentSuite["baselineRequest"],
+): string => {
+    if (!request) return "Waiting for the main template to be built";
+    const at = shortSha(request.sha);
+    if (request.state === "queued") return `Queued for ${at}, not started yet`;
+    if (request.state === "started") return `Running on ${at}`;
+    if (request.state === "superseded")
+        return `${at} was replaced by a newer main commit before it ran`;
+    return `No suite declared at ${at}, so no baseline ran`;
+};
+
 /** "From the recipe": what `.kodus/workspace.yaml` says, read only (the file is where it is edited). */
 export const environmentSuiteFacts = (
     suite: RuntimeEnvironmentSuite,
@@ -310,7 +323,7 @@ export const environmentSuiteFacts = (
             label: "Last baseline on main",
             value: base
                 ? `${shortSha(base.sha)} · ${base.passed} passed, ${base.failed} failed`
-                : "No baseline on main yet",
+                : noBaselineText(suite.baselineRequest),
         },
         {
             label: "Maximum hosts per run",

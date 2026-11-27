@@ -38,6 +38,7 @@ export const RuntimeCommandName = {
     SuiteRequested: 'runtime.suite.requested',
     SuiteRetried: 'runtime.suite.retried',
     SuiteSelectionChanged: 'runtime.suite.selection_changed',
+    SuiteBaselineSkipped: 'runtime.suite.baseline_skipped',
 } as const;
 export type RuntimeCommandEventName = (typeof RuntimeCommandName)[keyof typeof RuntimeCommandName];
 
@@ -544,6 +545,25 @@ export const RuntimeSuiteSelectionChangedSchema = z.strictObject({
 });
 export type RuntimeSuiteSelectionChanged = z.infer<typeof RuntimeSuiteSelectionChangedSchema>;
 
+/** Why a queued baseline request will never run (it ends in the state `skipped`, with this as its reason). */
+export const BASELINE_SKIP_REASONS = ['no_suite'] as const;
+export type BaselineSkipReason = (typeof BASELINE_SKIP_REASONS)[number];
+
+/**
+ * The product found that a queued baseline request cannot run: the recipe at its main commit declares no suite with a baseline
+ * (docs/runtime/e2e-suites.md section 2.1). The request is the Runtime's row, so the product says so here and the worker ends it,
+ * with the reason the environment page shows. Control, not work.
+ */
+export const RuntimeSuiteBaselineSkippedSchema = z.strictObject({
+    organizationId: id,
+    environmentId: id,
+    mainSha: sha,
+    reason: z.enum(BASELINE_SKIP_REASONS),
+    requestedAt: z.iso.datetime(),
+    key: z.string().min(1).max(256),
+});
+export type RuntimeSuiteBaselineSkipped = z.infer<typeof RuntimeSuiteBaselineSkippedSchema>;
+
 /** The payload of each command, by its name. */
 export interface RuntimeCommandPayloads {
     'runtime.run.fork_approved': RuntimeForkApproved;
@@ -563,6 +583,7 @@ export interface RuntimeCommandPayloads {
     'runtime.suite.requested': RuntimeSuiteRequested;
     'runtime.suite.retried': RuntimeSuiteRetried;
     'runtime.suite.selection_changed': RuntimeSuiteSelectionChanged;
+    'runtime.suite.baseline_skipped': RuntimeSuiteBaselineSkipped;
 }
 
 const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
@@ -583,6 +604,7 @@ const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
     [RuntimeCommandName.SuiteRequested]: RuntimeSuiteRequestedSchema,
     [RuntimeCommandName.SuiteRetried]: RuntimeSuiteRetriedSchema,
     [RuntimeCommandName.SuiteSelectionChanged]: RuntimeSuiteSelectionChangedSchema,
+    [RuntimeCommandName.SuiteBaselineSkipped]: RuntimeSuiteBaselineSkippedSchema,
 };
 
 /**

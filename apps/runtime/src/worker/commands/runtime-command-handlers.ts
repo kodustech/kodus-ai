@@ -37,10 +37,11 @@ import {
 import { OrganizationPurgeRequestedHandler } from './organization-purge.handler';
 import type { RunEngine } from './run-engine.port';
 import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler, type SuiteCancelPort } from './run-requested.handler';
-import { SUITE_RUNS, SUITE_SELECTION_STATE } from '../suite/suite-service';
+import { SUITE_BASELINE_REQUESTS, SUITE_RUNS, SUITE_SELECTION_STATE } from '../suite/suite-service';
 import { type LiveSuiteRuns, SuiteCanceller } from '../suite/suite-canceller';
 import { SuiteRequestedHandler, type SuiteStarter } from './suite-requested.handler';
 import { SuiteRetriedHandler, type SuiteRetryRuns } from './suite-retried.handler';
+import { SuiteBaselineSkippedHandler, type SuiteBaselineRequestWrites } from './suite-baseline-skipped.handler';
 import { SuiteSelectionChangedHandler, type SuiteSelectionWrites } from './suite-selection-changed.handler';
 
 /** Every handler the Runtime command consumer routes to, one per event. */
@@ -83,6 +84,8 @@ export interface CommandHandlerDeps {
     suiteRuns?: SuiteRetryRuns;
     /** The environment's selection state: with it `runtime.suite.selection_changed` is handled. */
     suiteSelection?: SuiteSelectionWrites;
+    /** The baseline requests: with it `runtime.suite.baseline_skipped` is handled. */
+    suiteBaselineRequests?: SuiteBaselineRequestWrites;
     /** Cancels the PR's running suites with its Runs (a new head, the PR closed); absent: they end on their own. */
     suiteCancel?: SuiteCancelPort;
     warn?: (msg: string, meta: Record<string, unknown>) => void;
@@ -109,6 +112,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
         ...(deps.suites ? [new SuiteRequestedHandler(deps.suites)] : []),
         ...(deps.suites && deps.suiteRuns ? [new SuiteRetriedHandler(deps.suiteRuns, deps.suites)] : []),
         ...(deps.suiteSelection ? [new SuiteSelectionChangedHandler(deps.suiteSelection)] : []),
+        ...(deps.suiteBaselineRequests ? [new SuiteBaselineSkippedHandler(deps.suiteBaselineRequests)] : []),
         ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence, deps.organizationPurge.cells ?? null)] : []),
     ];
 }
@@ -139,6 +143,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         CELL_DATA_PURGER,
         SUITE_RUNS,
         SUITE_SELECTION_STATE,
+        SUITE_BASELINE_REQUESTS,
     ],
     useFactory: (
         engine: RunEngine,
@@ -160,6 +165,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         cells: CellDataPurger,
         suiteRuns: SuiteRetryRuns & LiveSuiteRuns,
         suiteSelection: SuiteSelectionWrites,
+        suiteBaselineRequests: SuiteBaselineRequestWrites,
     ) => {
         const logger = new Logger('RuntimeCommandConsumer');
         return runtimeCommandHandlers({
@@ -181,6 +187,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
             suites: { start: async (cmd) => (engine.startSuite ? engine.startSuite(cmd) : false) },
             suiteRuns,
             suiteSelection,
+            suiteBaselineRequests,
             // A new head or a closed PR cancels the suites of the PR that are for another head, as it cancels its Runs.
             suiteCancel: new SuiteCanceller(suiteRuns, { cancelSuite: async (id) => void (await engine.cancelSuite?.(id)) }),
             warn: (msg, meta) => logger.warn({ msg, ...meta }),

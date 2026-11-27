@@ -144,10 +144,11 @@ export class GetRuntimeEnvironmentSuiteUseCase {
         const setup = await this.setups.get(env.organizationId, env.environmentId);
         const mainSha = setup?.sha;
         const repo = { organizationId: env.organizationId, teamId: env.teamId, repositoryId: env.repositoryId, repositoryName: env.repositoryName };
-        const [recipe, selection, lastBaseline] = await Promise.all([
+        const [recipe, selection, lastBaseline, baselineRequest] = await Promise.all([
             mainSha ? suiteDeclarationAt(this.git, repo, mainSha, setup) : undefined,
             this.reader.selectionState(env.organizationId, env.environmentId),
             this.reader.lastBaseline(env.organizationId, env.environmentId),
+            this.reader.lastBaselineRequest(env.organizationId, env.environmentId),
         ]);
         const braked = (selection.off && selection.offBy !== 'person') || selection.fullPrsLeft > 0;
         const miss = braked ? await this.reader.lastMiss(env.organizationId, env.environmentId, selection.reenabledAt) : null;
@@ -155,6 +156,7 @@ export class GetRuntimeEnvironmentSuiteUseCase {
             environmentId: env.environmentId,
             ...(recipe ? { recipe: { runner: recipe.runner, specs: recipe.specs, command: recipe.command, ...(recipe.cwd ? { cwd: recipe.cwd } : {}), ...(recipe.results?.junit ? { results: { junit: recipe.results.junit } } : {}), ...(recipe.shards !== undefined ? { shards: recipe.shards } : {}), gate: recipe.gate, baseline: recipe.baseline } } : {}),
             lastBaseline,
+            baselineRequest,
             selection,
             miss,
             ci: { setting: env.suiteCi ?? null, deployment: !!this.config.suiteCi },

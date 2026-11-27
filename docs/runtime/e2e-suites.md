@@ -50,6 +50,10 @@ Everything below is inside these four.
    updates per-spec durations. Failures on main are recorded as such (`baseline_failed`), never re-run here.
 5. Coalescing: at most one baseline queued per environment. A newer main sha replaces a queued, not started one; a
    started one finishes. Baselines of skipped shas do not exist, and section 8.4 says what a PR does then.
+   A request ends in a state with a reason, never silently: `started` (its run exists), `superseded` (a newer main sha
+   replaced it while queued) or `skipped` with `no_suite` (the recipe at its commit declares no suite with a baseline; the
+   product finds that and sends `runtime.suite.baseline_skipped`, the worker ends the row). The environment page says
+   which: waiting for the main template, queued, running, no suite at that commit, or replaced by a newer commit.
 
 ### 2.2 Step by step: a PR
 

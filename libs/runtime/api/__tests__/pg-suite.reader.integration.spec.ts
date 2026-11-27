@@ -128,6 +128,18 @@ const at = (day: number, hour = 10) => new Date(Date.UTC(2026, 10, day, hour));
             expect(await reader.selectionState('org-b', 'env-1')).toEqual({ off: false, fullPrsLeft: 0 });
         });
 
+        it('reads what became of the newest baseline request, with its reason, through the read-only role, and nothing for another organization', async () => {
+            expect(await reader.lastBaselineRequest('org-a', 'env-1')).toBeNull();
+            const ask = (sha: string, state: string, reason: string | null, day: number) =>
+                owner.query(`INSERT INTO runtime.runtime_suite_baseline_requests (environment_id, main_sha, organization_id, repository_id, fingerprint, suite_run_id, state, reason, requested_at) VALUES ('env-1', $1, 'org-a', 'repo-1', 'f', $1, $2, $3, $4)`, [sha, state, reason, at(day)]);
+            await ask('a'.repeat(40), 'superseded', 'superseded', 10);
+            await ask('b'.repeat(40), 'skipped', 'no_suite', 11);
+            expect(await reader.lastBaselineRequest('org-a', 'env-1')).toEqual({ sha: 'b'.repeat(40), state: 'skipped', reason: 'no_suite' });
+            expect(await reader.lastBaselineRequest('org-b', 'env-1')).toBeNull();
+            await ask('c'.repeat(40), 'queued', null, 12);
+            expect(await reader.lastBaselineRequest('org-a', 'env-1')).toEqual({ sha: 'c'.repeat(40), state: 'queued' });
+        });
+
         it('reads the newest baseline with its counts, and the newest miss since selection was turned on', async () => {
             const specs = { 'a.cy.ts': { status: 'passed' }, 'b.cy.ts': { status: 'passed' }, 'c.cy.ts': { status: 'failed' } };
             await owner.query(`INSERT INTO runtime.runtime_suite_baselines (organization_id, environment_id, main_sha, suite_digest, status, specs, finished_at) VALUES ('org-a', 'env-1', $1, 'd', 'complete', $2::jsonb, $3), ('org-a', 'env-1', $4, 'd', 'complete', '{}', $5)`, [SHA, JSON.stringify(specs), at(12), 'b'.repeat(40), at(8)]);

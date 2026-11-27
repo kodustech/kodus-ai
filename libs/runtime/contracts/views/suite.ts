@@ -151,6 +151,8 @@ export interface RuntimeEnvironmentSuiteView {
     };
     /** The newest complete baseline run on main. */
     lastBaseline?: { sha: string; specs: number; passed: number; failed: number; finishedAt: string };
+    /** What became of the newest baseline asked for, said when there is no baseline to show: absent when no template of the environment asked for one yet. `reason` is why it ended without a run. */
+    baselineRequest?: { sha: string; state: 'queued' | 'started' | 'skipped' | 'superseded'; reason?: string };
     selection: {
         /** A person's switch (`suite selection`): false means every PR runs the whole suite. */
         enabled: boolean;

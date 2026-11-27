@@ -423,10 +423,20 @@ describe("the environment settings: facts and the paused banner", () => {
             "e2e/**/*.spec.ts",
             "npx playwright test {specs}",
             "results/*.xml",
-            "No baseline on main yet",
+            "Waiting for the main template to be built",
             "Up to the recipe's default",
             "Strict: anything unconfirmed fails the check too",
         ]);
+    });
+
+    it("says why there is no baseline: waiting for the main template, queued, running, no suite at that commit, or replaced by a newer commit", () => {
+        const text = (baselineRequest: any) =>
+            environmentSuiteFacts(env({ lastBaseline: undefined, baselineRequest })).find((x) => x.label === "Last baseline on main")!.value;
+        expect(text(undefined)).toBe("Waiting for the main template to be built");
+        expect(text({ sha: MAIN, state: "queued" })).toBe(`Queued for ${MAIN.slice(0, 7)}, not started yet`);
+        expect(text({ sha: MAIN, state: "started" })).toBe(`Running on ${MAIN.slice(0, 7)}`);
+        expect(text({ sha: MAIN, state: "skipped", reason: "no_suite" })).toBe(`No suite declared at ${MAIN.slice(0, 7)}, so no baseline ran`);
+        expect(text({ sha: MAIN, state: "superseded", reason: "superseded" })).toBe(`${MAIN.slice(0, 7)} was replaced by a newer main commit before it ran`);
     });
 
     it("tells a pause by the shadow check, with the PR and the spec it missed", () => {
