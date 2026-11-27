@@ -1,6 +1,6 @@
 import { parseRecipe } from './recipe';
 
-// The data-only reset strategy (docs/runtime/persistent-state.md section 9). The cell holds the same
+// The data-only reset strategy (docs/runtime/persistent-state.md section 11). The cell holds the same
 // rules in apps/runtime-cell/internal/recipe (TestDataOnlyReset*), and
 // fixtures/recipes/verdicts.json holds both to the same files.
 

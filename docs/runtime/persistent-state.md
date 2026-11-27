@@ -1,6 +1,6 @@
 # Persistent preview state and the custom agent tool layer
 
-Status: design of 2026-11-22, nothing built. Terms are in [glossary.md](glossary.md). Two features that share one
+Status: design of 2026-11-22; A and B are not built, section 11 (the data-only reset) is. Terms are in [glossary.md](glossary.md). Two features that share one
 idea (disk state that outlives a machine, kept on the cell, never in memory) and one rule (state is per org, and
 what an untrusted run writes is never read back by anything that trusts it):
 
@@ -630,3 +630,56 @@ it is security-sensitive so it gets the most review time, it pays on every revie
 builds the two things A reuses (the cell-held data tree under the work dir with its sweep and budget, and `org.purge`).
 A follows. With two engineers, B and the shared protocol start together and A's cell work starts when `org.purge` lands.
 Both ship off by default (`-gvisor-toollayer`, `-gvisor-preview-state`) and turn on per cell after the QA run in 8.
+
+## 11. Data-only reset (built, off by default per recipe)
+
+The same rule as A and B, applied to a Run's rounds on docker-gvisor: disk only, never memory (D1, U1). It is built
+and opt-in per recipe; A and B above are still design.
+
+**The problem.** `data.reset: recreate` is `compose down -v`, then a full `up`, then the boot steps. A slow app pays
+its whole start again each round: 4 to 7 minutes under gVisor.
+
+**The recipe.** `data.reset: data-only`, and optionally `data.services: [db, cache]` to name the services whose
+volumes are kept. Without the list the cell infers them (`planDataReset`, next to `planGolden`): every image-only,
+non-public service that mounts a named volume or is a known database image. They must depend on each other only.
+`data.services` without `data-only`, the public service, a duplicate or more than 8 names are refused by the worker
+(`recipe.ts`) and the cell (`internal/recipe/validate.go`) with the same text. The recipe stays at `version: 1`: the
+new keys are optional, and a cell that does not know them refuses the recipe as outdated instead of ignoring it.
+
+**What happens.**
+
+| When | Steps |
+|---|---|
+| First boot, after setup, migrate and seed (`RunRecipe`) | stop the data services, copy each mounted volume into a volume named and labelled as a golden copy (so `Destroy` and the reaper remove it), start them, wait for health, restart the app only if it is not healthy |
+| Each `machine.reset` | stop only the data services, copy the copies back over the live volumes in place, start them, wait for health (postgres: it answers over TCP), then a cheap app check; the agent re-applies egress and re-provisions the observer SQL account (`afterSwap`) |
+
+The app check is Docker's own: every app container runs and none reports `unhealthy`. An app that lost its
+connections and says nothing is the case the rollout gate below measures; an app with a healthcheck that touches its
+database is the case that works best.
+
+**Fallbacks, in order.** `data` (restart the app only when the check fails) -> `restart-app` (the same data steps,
+then the app restarted whatever the check said) -> `recreate` (the driver changes nothing more; the agent runs the
+reset it always ran: `Reset`, `Up`, the recipe's steps). Any failed step, and a failed check, moves down one mode.
+The mode that worked is remembered per environment (org and environment tags) in the driver, for six hours, so an
+environment that needs `restart-app` or `recreate` does not pay a failed attempt each round; a success of `data`
+forgets it. A recipe also falls to recreate, without trying, when no copy was taken (the copy failed or was off)
+or the app is instrumented for V8 coverage (only its exit flushes it).
+
+**What it does not keep.** The app's memory and the files of the app's own containers: a recipe whose app holds round
+state in its process, or on its own disk, keeps `recreate`. The copy is per machine, dies with it, and is never read
+by anything that trusts what the Run wrote (the cell restores it into the same machine only).
+
+**Code.** `dockergvisor/datareset.go` (plan, copy, ladder, per-environment memory), `agent/data_reset.go` (the
+reset asks first, then the spare, then recreate; a data-only claim boots no spare), `driver.DataResetter` in
+`driver/driver.go`. Tests: `datareset_test.go` (order and every fallback with a fake, the copy and the restore on
+the in-memory Docker), `agent/data_reset_test.go`, `recipe_test.go` and `recipe-data-reset.spec.ts` (the rules).
+
+**Rollout gate: zero verdict flips against `recreate`.** Per environment, before `data-only` is committed to its
+recipe: run the same PR set twice on a cell that has the feature, once with the recipe as is (`recreate`) and once
+with `data-only` (a recipe override on the claim, never the product's recipe), for at least 20 rounds per
+environment, including a PR with a destructive test and one with a migration. Compare, round by round, the verdict
+of every check (`pass`/`fail`/`inconclusive`) and the evidence's failure signatures. The gate passes only when the
+two runs flip nothing in either direction and no round fell to `recreate` for a reason other than a transient one
+(read `data.reset` logs: `mode`, `why`, `fellBack`). A single flip keeps that environment on `recreate`; the
+reason is read before another try. Production data is never read or altered: the comparison uses the claims'
+own checks.

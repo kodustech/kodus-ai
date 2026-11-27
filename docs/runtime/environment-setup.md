@@ -238,6 +238,11 @@ product with the org's BYOK key, which never reaches the worker.
 - **Golden data:** when the database's data is made by the database alone, the first boot keeps a copy of its
   volumes and each reset restores it instead of running initdb and the seed again (`dockergvisor/golden.go:25-45`,
   data step `up.go:270-320`).
+- **Data-only reset:** `data.reset: data-only` (optional `data.services: [db, cache]`) keeps the app running between
+  rounds: after the first migrated and seeded boot the cell copies the data services' volumes, and each reset stops
+  only those, restores the copy, starts them and checks the app, restarting it only when it lost them. Any failure
+  falls back to restarting the app, then to `recreate`. It suits an app whose round state lives only in its
+  database; see [persistent-state.md](persistent-state.md) section 11.
 
 ## 5. The ready check
 

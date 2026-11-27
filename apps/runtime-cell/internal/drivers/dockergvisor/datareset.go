@@ -18,7 +18,7 @@ import (
 )
 
 // Data-only reset (data.reset: data-only; docs/runtime/persistent-state.md
-// section 9). A reset that recreates the project pays the app's whole start
+// section 11). A reset that recreates the project pays the app's whole start
 // again, 4 to 7 minutes of a slow app under gVisor. When the recipe opts in,
 // the first boot, once its setup, migrate and seed ran, keeps a copy of the
 // data services' volumes (disk only, never memory), and a reset gives them
@@ -487,7 +487,7 @@ func (o *dockerDataOps) awaitData(ctx context.Context) error {
 
 // appHealthy: every app container runs and none reports itself unhealthy.
 // It is the cheap check: a process that lost its connections and does not
-// say so is what the rollout gate (persistent-state.md section 9) measures.
+// say so is what the rollout gate (persistent-state.md section 11) measures.
 func (o *dockerDataOps) appHealthy(ctx context.Context) (bool, error) {
 	running, err := o.state(ctx, "status", "running")
 	if err != nil {
