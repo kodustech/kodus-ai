@@ -438,6 +438,10 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
         );
     });
 
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
     it('records the auto-pause and keeps it out of the plan lock', async () => {
         const stored = withRule({});
 
@@ -499,7 +503,9 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
     });
 
     it('resuming a rule paused by hand stamps resumedAt and leaves lastAutoPause alone', async () => {
-        const previous = { ...autoPause, digestedAt: new Date() };
+        const resumedAt = new Date('2026-11-18T12:00:00Z');
+        jest.useFakeTimers({ now: resumedAt });
+        const previous = { ...autoPause, digestedAt: autoPause.windowEnd };
         const stored = withRule({
             status: KodyRulesStatus.PAUSED,
             lastAutoPause: previous,
@@ -511,7 +517,7 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
             SYSTEM,
         );
 
-        expect(saved.resumedAt).toBeInstanceOf(Date);
+        expect(saved.resumedAt).toEqual(resumedAt);
         expect(saved.lastAutoPause).toEqual(previous);
     });
 

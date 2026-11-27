@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
+import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import {
     IKodyRulesService,
@@ -43,6 +44,10 @@ describe('KodyRulesTools.createKodyRule', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 KodyRulesTools,
+                {
+                    provide: CreateOrUpdateKodyRulesUseCase,
+                    useValue: { scheduleDetectorCompile: jest.fn() },
+                },
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
                     useValue: mockKodyRulesService,
@@ -161,6 +166,7 @@ describe('KodyRulesTools.createKodyRule', () => {
 
 describe('KodyRulesTools.updateKodyRule', () => {
     const baseUrl = 'https://app.kodus.io';
+    const scheduleDetectorCompile = jest.fn();
     let tools: KodyRulesTools;
     let mockKodyRulesService: jest.Mocked<IKodyRulesService>;
     let mockCentralizedConfigPrService: jest.Mocked<CentralizedConfigPrService>;
@@ -168,6 +174,7 @@ describe('KodyRulesTools.updateKodyRule', () => {
     let previousBaseUrl: string | undefined;
 
     beforeEach(async () => {
+        scheduleDetectorCompile.mockClear();
         previousBaseUrl = process.env.API_USER_INVITE_BASE_URL;
         process.env.API_USER_INVITE_BASE_URL = baseUrl;
 
@@ -189,6 +196,10 @@ describe('KodyRulesTools.updateKodyRule', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 KodyRulesTools,
+                {
+                    provide: CreateOrUpdateKodyRulesUseCase,
+                    useValue: { scheduleDetectorCompile },
+                },
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
                     useValue: mockKodyRulesService,
@@ -271,6 +282,7 @@ describe('KodyRulesTools.updateKodyRule', () => {
         const result = await runUpdate();
         const structured = (result as any).structuredContent;
 
+        expect(scheduleDetectorCompile).not.toHaveBeenCalled();
         expect(structured.prUrl).toBe('https://github.com/org/repo/pull/99');
         expect(structured.link).toBe('https://github.com/org/repo/pull/99');
         expect(
@@ -312,6 +324,10 @@ describe('KodyRulesTools rule listings', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 KodyRulesTools,
+                {
+                    provide: CreateOrUpdateKodyRulesUseCase,
+                    useValue: { scheduleDetectorCompile: jest.fn() },
+                },
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
                     useValue: { findByOrganizationId },

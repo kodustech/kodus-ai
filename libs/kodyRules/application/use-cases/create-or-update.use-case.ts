@@ -216,31 +216,11 @@ export class CreateOrUpdateKodyRulesUseCase {
                 });
             }
 
-            // Compile from the saved rule when a PATCH supplies a compile input.
-            // Reference detection above needs the incoming repository and rule text.
-            if (
-                result.uuid &&
-                result.repositoryId &&
-                result.rule &&
-                (kodyRule.rule !== undefined ||
-                    kodyRule.title !== undefined ||
-                    kodyRule.examples !== undefined)
-            ) {
-                this.detectorCompiler
-                    .compileAndSave(
-                        organizationAndTeamData,
-                        result.uuid,
-                        result,
-                    )
-                    .catch((error) => {
-                        this.logger.error({
-                            message: 'Background detector compile failed',
-                            context: CreateOrUpdateKodyRulesUseCase.name,
-                            error: this.normalizeError(error),
-                            metadata: { ruleId: result.uuid },
-                        });
-                    });
-            }
+            this.scheduleDetectorCompile(
+                organizationAndTeamData,
+                kodyRule,
+                result,
+            );
 
             return result;
         } catch (error) {
@@ -258,6 +238,34 @@ export class CreateOrUpdateKodyRulesUseCase {
             });
             throw error;
         }
+    }
+
+    // CLI and MCP patches may omit compile inputs which are present in Mongo.
+    scheduleDetectorCompile(
+        organizationAndTeamData: OrganizationAndTeamData,
+        patch: CreateKodyRuleDto,
+        saved: Partial<IKodyRule> | null,
+    ): void {
+        if (
+            !saved?.uuid ||
+            !saved.repositoryId ||
+            !saved.rule ||
+            (patch.rule === undefined &&
+                patch.title === undefined &&
+                patch.examples === undefined)
+        ) {
+            return;
+        }
+        this.detectorCompiler
+            .compileAndSave(organizationAndTeamData, saved.uuid, saved)
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Background detector compile failed',
+                    context: CreateOrUpdateKodyRulesUseCase.name,
+                    error: this.normalizeError(error),
+                    metadata: { ruleId: saved.uuid },
+                });
+            });
     }
 
     /**

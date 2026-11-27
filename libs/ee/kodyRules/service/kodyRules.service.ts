@@ -117,13 +117,23 @@ import {
 function changedRuleFields(
     previous: Partial<IKodyRule>,
     updated: Partial<IKodyRule>,
+    detectorPatch: Partial<Pick<IKodyRule, 'detector' | 'compileAttempt'>>,
 ): Partial<IKodyRule> {
-    return Object.fromEntries(
-        Object.entries(updated).filter(
-            ([key, value]) =>
-                !isDeepStrictEqual(previous[key as keyof IKodyRule], value),
+    const fields = {
+        ...Object.fromEntries(
+            Object.entries(updated).filter(
+                ([key, value]) =>
+                    key !== 'updatedAt' &&
+                    value !== undefined &&
+                    !isDeepStrictEqual(previous[key as keyof IKodyRule], value),
+            ),
         ),
-    );
+        ...detectorPatch,
+    };
+    // An empty patch reads the current Mongo rule without touching its timestamp.
+    return Object.keys(fields).length
+        ? { ...fields, updatedAt: updated.updatedAt }
+        : {};
 }
 
 function detectorEligibilityPatch(
@@ -990,13 +1000,17 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
-            {
-                ...changedRuleFields(existingRule, updatedRule),
-                ...detectorPatch,
-            },
+            changedRuleFields(existingRule, updatedRule, detectorPatch),
         );
 
-        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
+        if (!updatedKodyRules) {
+            throw new Error('Could not update rule');
+        }
+        const savedRule = updatedKodyRules.rules.find(
+            (rule) => rule.uuid === kodyRule.uuid,
+        );
+
+        if (ruleTextChanged || examplesChanged) {
             this.scheduleSummaryGeneration(
                 organizationAndTeamData,
                 updatedRule,
@@ -1013,17 +1027,11 @@ export class KodyRulesService implements IKodyRulesService {
             repository: { id: updatedRule.repositoryId },
             directory: { id: updatedRule.directoryId },
             oldRule: existingRule,
-            newRule: updatedRule,
+            newRule: savedRule,
             ruleTitle: updatedRule.title,
         });
 
-        if (!updatedKodyRules) {
-            throw new Error('Could not update rule');
-        }
-
-        return updatedKodyRules.rules.find(
-            (rule) => rule.uuid === kodyRule.uuid,
-        );
+        return savedRule;
     }
 
     private async ensureRepositoryCodeReviewConfig(
@@ -1479,13 +1487,17 @@ export class KodyRulesService implements IKodyRulesService {
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
-            {
-                ...changedRuleFields(existingRule, updatedRule),
-                ...detectorPatch,
-            },
+            changedRuleFields(existingRule, updatedRule, detectorPatch),
         );
 
-        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
+        if (!updatedKodyRules) {
+            throw new Error('Could not update rule');
+        }
+        const savedRule = updatedKodyRules.rules.find(
+            (rule) => rule.uuid === kodyRule.uuid,
+        );
+
+        if (ruleTextChanged || examplesChanged) {
             this.scheduleSummaryGeneration(
                 organizationAndTeamData,
                 updatedRule,
@@ -1502,17 +1514,11 @@ export class KodyRulesService implements IKodyRulesService {
             repository: { id: updatedRule.repositoryId },
             directory: { id: updatedRule.directoryId },
             oldRule: existingRule,
-            newRule: updatedRule,
+            newRule: savedRule,
             ruleTitle: updatedRule.title,
         });
 
-        if (!updatedKodyRules) {
-            throw new Error('Could not update rule');
-        }
-
-        return updatedKodyRules.rules.find(
-            (rule) => rule.uuid === kodyRule.uuid,
-        );
+        return savedRule;
     }
 
     async deleteRule(uuid: string, ruleId: string): Promise<boolean> {

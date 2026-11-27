@@ -11,7 +11,7 @@ type AttemptedRule = CompileInput & {
 
 function needsCosmeticRecheck(rule: AttemptedRule): boolean {
     // Older gates declined any mention of formatting. Revisit an unexplained
-    // decline once, and keep an explicit model verdict on subsequent saves.
+    // decline once. A completed model recheck settles it for subsequent saves.
     return (
         rule.compileAttempt?.declineReason === 'cosmetic' &&
         rule.compileAttempt.cosmeticSource !== 'model' &&

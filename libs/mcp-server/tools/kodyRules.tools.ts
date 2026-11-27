@@ -14,6 +14,7 @@ import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import {
     FindMemoriesResult,
@@ -179,6 +180,7 @@ export class KodyRulesTools {
         private readonly kodyRulesService: IKodyRulesService,
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+        private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
     ) {}
 
     getKodyRules(): McpToolDefinition {
@@ -855,9 +857,23 @@ export class KodyRulesTools {
                     const result =
                         await this.kodyRulesService.updateRuleWithLogging(
                             organizationAndTeamData,
-                            mergedRule,
+                            {
+                                ...kodyRule,
+                                ...(!existingRule.repositoryId && {
+                                    repositoryId: mergedRule.repositoryId,
+                                }),
+                                ...(!existingRule.status && {
+                                    status: mergedRule.status,
+                                }),
+                            },
                             userInfo,
                         );
+
+                    this.createOrUpdateKodyRulesUseCase.scheduleDetectorCompile(
+                        organizationAndTeamData,
+                        kodyRule,
+                        result,
+                    );
 
                     const link = buildKodyRuleAppLink({
                         repositoryId: result?.repositoryId,

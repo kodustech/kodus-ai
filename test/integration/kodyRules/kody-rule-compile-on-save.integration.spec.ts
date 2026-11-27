@@ -6,6 +6,7 @@ import {
     ruleCompileHash,
     ruleContextNeedHash,
 } from '@libs/common/utils/kody-rules/compile-hash';
+import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import { KodyRulesRepository } from '@libs/ee/kodyRules/repository/kodyRules.repository';
 import { KodyRuleDetectorCompilerService } from '@libs/ee/kodyRules/service/kody-rule-detector-compiler.service';
 import { KodyRulesService } from '@libs/ee/kodyRules/service/kodyRules.service';
@@ -14,12 +15,14 @@ import { BackfillRuleDetectorsUseCase } from '@libs/kodyRules/application/use-ca
 import {
     IKodyRule,
     KodyRulesStatus,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import {
     KodyRulesModel,
     KodyRulesSchema,
 } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 import { LLM } from '@libs/llm/llm';
+import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
 import { TEAM_CLI_KEY_CAPABILITIES } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
 import { resolveMongoTestGate } from '../mongo-test-uri';
 
@@ -38,6 +41,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
         let rules: KodyRulesService;
         let compiler: KodyRuleDetectorCompilerService;
         let cli: CliKodyRulesController;
+        let mcp: KodyRulesTools;
         let compile: jest.SpiedFunction<
             KodyRuleDetectorCompilerService['compileAndSave']
         >;
@@ -87,6 +91,17 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 save as any,
                 'detectAndSaveReferencesAsync',
             ).mockResolvedValue(undefined);
+            mcp = new KodyRulesTools(
+                rules,
+                {
+                    resolveDirectoryGroupFolderName: async () => undefined,
+                    createMutationPullRequestIfEnabled: async () => ({
+                        mode: 'direct',
+                    }),
+                } as any,
+                undefined,
+                save,
+            );
             cli = new CliKodyRulesController(
                 {
                     validateKey: async () => ({
@@ -121,6 +136,135 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             // The compiler runs in the background. Wait for its writes before the next save.
             await Promise.all(compile.mock.results.map(({ value }) => value));
         }
+
+        async function mcpPatch(uuid: string, kodyRule: Partial<IKodyRule>) {
+            compile.mockClear();
+            await mcp
+                .updateKodyRule()
+                .execute({ organizationId, ruleId: uuid, kodyRule }, undefined);
+            await Promise.all(compile.mock.results.map(({ value }) => value));
+        }
+
+        it('recompiles a partial MCP edit from the saved examples before the next sweep', async () => {
+            const uuid = randomUUID();
+            const examples = [
+                { snippet: 'console.log(x)', isCorrect: false },
+                { snippet: 'logger.info(x)', isCorrect: true },
+            ];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Logging',
+                        rule: 'Use the logger.',
+                        status: KodyRulesStatus.ACTIVE,
+                        detector: { type: 'regex', pattern: 'old' },
+                        examples,
+                    },
+                ],
+            });
+            const rule = 'Use the application logger.';
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console[.]log',
+            });
+            await mcpPatch(uuid, { rule });
+            const saved = await repository.findById(uuid, organizationId);
+            expect(saved.detector?.pattern).toBe('console[.]log');
+            expect(saved.compileAttempt?.sourceHash).toBe(
+                ruleCompileHash({ rule, examples }),
+            );
+            expect(runModel).toHaveBeenCalledTimes(1);
+
+            await mcpPatch(uuid, { severity: 'low' });
+            expect(compile).not.toHaveBeenCalled();
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+
+        it('preserves a compile completed after the MCP lookup during a metadata edit', async () => {
+            const uuid = randomUUID();
+            const rule = 'Use the application logger.';
+            const examples = [{ snippet: 'console.log(x)', isCorrect: false }];
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Logging',
+                        rule,
+                        examples,
+                        status: KodyRulesStatus.ACTIVE,
+                        detector: null,
+                        compileAttempt: null,
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: true,
+                pattern: 'console[.]log',
+            });
+            const lookup = jest
+                .spyOn(rules, 'findById')
+                .mockImplementationOnce(async (id, org) => {
+                    const before = await repository.findById(id, org);
+                    await compiler.compileAndSave(
+                        { organizationId },
+                        uuid,
+                        before,
+                    );
+                    return before;
+                });
+            try {
+                await mcpPatch(uuid, { severity: 'low' });
+                const saved = await repository.findById(uuid, organizationId);
+                expect(saved.detector?.pattern).toBe('console[.]log');
+                expect(saved.compileAttempt?.sourceHash).toBe(
+                    ruleCompileHash({ rule, examples }),
+                );
+                expect(compile).toHaveBeenCalledTimes(1);
+                expect(runModel).toHaveBeenCalledTimes(1);
+            } finally {
+                lookup.mockRestore();
+            }
+        });
+
+        it.each(['createOrUpdate', 'updateRuleWithLogging'] as const)(
+            '%s reads back an undefined-only patch without a Mongo write',
+            async (method) => {
+                const input = {
+                    uuid: randomUUID(),
+                    type: KodyRulesType.STANDARD,
+                    title: 'Logger',
+                    rule: 'Use the application logger.',
+                    severity: KodyRuleSeverity.LOW,
+                    examples: [],
+                    repositoryId,
+                };
+                const updatedAt = new Date('2026-10-01T00:00:00Z');
+                await model.create({
+                    organizationId,
+                    rules: [{ ...input, path: '*.ts', updatedAt }],
+                });
+                const update = jest.spyOn(model, 'findOneAndUpdate');
+                try {
+                    for (let i = 0; i < 2; i++) {
+                        const saved = await rules[method](
+                            { organizationId },
+                            { ...input, path: undefined },
+                            { userId: 'sync', userEmail: 'sync@example.com' },
+                        );
+                        expect(saved.path).toBe('*.ts');
+                        expect(saved.updatedAt).toEqual(updatedAt);
+                    }
+                    expect(update).not.toHaveBeenCalled();
+                } finally {
+                    update.mockRestore();
+                }
+            },
+        );
 
         it('keeps legacy cosmetic declines semantic unless the model explicitly clears the cosmetic flag', async () => {
             const examples = [
@@ -167,20 +311,21 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             const saved = (
                 await repository.findByOrganizationId(organizationId)
             ).rules;
-            expect(
-                runModel.mock.calls.every(([prompt]) =>
-                    prompt.user.includes('"cosmetic": false'),
-                ),
-            ).toBe(true);
+            expect(runModel).toHaveBeenCalledTimes(fixtures.length);
+            for (const [{ user }] of runModel.mock.calls) {
+                expect(user.split('\n').at(-1)).toBe(
+                    'This rule was previously declined as formatting. Include "cosmetic": true for formatting or "cosmetic": false for a substantive rule.',
+                );
+            }
+            runModel.mockClear();
+            expect((await sweep.execute({ organizationId })).processed).toBe(0);
+            expect(runModel).not.toHaveBeenCalled();
             const armed = saved.filter((r) => r.detector).map((r) => r.rule);
             expect(armed).toStrictEqual([substantive]);
             for (const r of saved.filter((r) => r.rule !== substantive)) {
                 expect(r.compileAttempt.declineReason).toBe('cosmetic');
                 expect(r.compileAttempt.cosmeticSource).toBe('model');
             }
-            runModel.mockClear();
-            expect((await sweep.execute({ organizationId })).processed).toBe(0);
-            expect(runModel).not.toHaveBeenCalled();
         });
 
         it.each([
