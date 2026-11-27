@@ -224,10 +224,14 @@ const identifiers = (text?: string) =>
         ) ?? [],
     );
 
-// Rust is the only language whose quotes the literal stripper reads apart:
-// a lifetime's ' would open a string.
+// The languages the stripper reads apart: a Rust lifetime's ' opens no
+// string, and Python's // is division, not a comment.
 const languageOf = (file?: string) =>
-    /\.rs$/i.test(file ?? '') ? 'rust' : undefined;
+    /\.rs$/i.test(file ?? '')
+        ? 'rust'
+        : /\.py$/i.test(file ?? '')
+          ? 'python'
+          : undefined;
 
 const codeIdentifiers = (code?: string, file?: string) =>
     identifiers(code ? withoutCommentsOrStrings(code, languageOf(file)) : '');

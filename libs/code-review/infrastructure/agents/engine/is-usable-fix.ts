@@ -191,7 +191,10 @@ export function withoutCommentsOrStrings(
     code: string,
     language?: string,
 ): string {
-    const rust = (language ?? '').trim().toLowerCase() === 'rust';
+    const lang = (language ?? '').trim().toLowerCase();
+    const rust = lang === 'rust';
+    // Python's // is floor division, and // after a colon is a URL.
+    const slashComments = lang !== 'python';
     let out = '';
     let i = 0;
     while (i < code.length) {
@@ -202,8 +205,11 @@ export function withoutCommentsOrStrings(
             i = end < 0 ? code.length : end + 2;
             out += ' ';
         } else if (
-            atWordStart &&
-            ((c === '/' && code[i + 1] === '/') || c === '#')
+            (slashComments &&
+                c === '/' &&
+                code[i + 1] === '/' &&
+                code[i - 1] !== ':') ||
+            (atWordStart && c === '#')
         ) {
             const end = code.indexOf('\n', i);
             i = end < 0 ? code.length : end;

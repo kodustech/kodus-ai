@@ -425,6 +425,12 @@ describe('withoutCommentsOrStrings', () => {
         ]);
     });
 
+    it('reads a line comment right after code, but not a URL or Python division', () => {
+        expect(names('return value;// dashboard total')).toEqual(['return', 'value']);
+        expect(names('fetch(base + http://host)')).toEqual(['fetch', 'base', 'http', 'host']);
+        expect(names('pages = total//size', 'python')).toEqual(['pages', 'total', 'size']);
+    });
+
     it('ends an unclosed quote at its line', () => {
         expect(names("const it's = 1;\nnext();")).toEqual([
             'const',
