@@ -307,6 +307,14 @@ export interface IPullRequestUser {
 
 export interface ISuggestionByPR {
     id: string;
+    /** The changed file a finding named without a line (#2420): it is posted
+     *  at PR level, and this keeps where it pointed. Absent when it named none. */
+    relevantFile?: string;
+    /** The finding's claim before formatting; what the repeat check of the
+     *  next round compares (#2420). */
+    repeatClaim?: string;
+    /** Every folded file's claim, when the finding spans several files. */
+    repeatClaims?: Array<{ file: string; claim: string }>;
     suggestionContent: string;
     fullExplanation?: string;
     oneSentenceSummary: string;

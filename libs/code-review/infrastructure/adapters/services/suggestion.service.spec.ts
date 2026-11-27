@@ -223,14 +223,18 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
                     suggestion: {
                         id: 's-1',
                         suggestionContent: 'Short body.',
-                        fullExplanation: 'The whole explanation, every sentence of it.',
+                        fullExplanation:
+                            'The whole explanation, every sentence of it.',
                         oneSentenceSummary: 'Title',
                         label: 'kody_rules',
                         severity: 'high',
                     },
                 },
                 deliveryStatus: DeliveryStatus.SENT,
-                codeReviewFeedbackData: { commentId: 10, pullRequestReviewId: null },
+                codeReviewFeedbackData: {
+                    commentId: 10,
+                    pullRequestReviewId: null,
+                },
             },
         ]);
 
@@ -256,11 +260,60 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
                     },
                 },
                 deliveryStatus: DeliveryStatus.SENT,
-                codeReviewFeedbackData: { commentId: 11, pullRequestReviewId: null },
+                codeReviewFeedbackData: {
+                    commentId: 11,
+                    pullRequestReviewId: null,
+                },
             },
         ]);
 
         expect(saved.customAgent).toEqual(agent);
+    });
+
+    // QA M14 on #2420: the next round's repeat check matches on the file and
+    // the claim before formatting, so both are saved.
+    it('keeps the file and the pre-format claim of a line-less rule finding', () => {
+        const [saved] = svc().transformCommentResultsToPrLevelSuggestions([
+            {
+                comment: {
+                    type: 'pr_level',
+                    suggestion: {
+                        id: 's-3',
+                        relevantFile: 'src/CheckinReport.cs',
+                        repeatClaim: 'Lacks the qa2420_ prefix.',
+                        repeatClaims: [
+                            {
+                                file: 'src/CheckinReport.cs',
+                                claim: 'Lacks the qa2420_ prefix.',
+                            },
+                            { file: 'src/Other.cs', claim: 'Other lacks it.' },
+                        ],
+                        suggestionContent:
+                            '`src/CheckinReport.cs` — Rewritten.',
+                        oneSentenceSummary: 'Title',
+                        label: 'kody_rules',
+                        severity: 'high',
+                    },
+                },
+                deliveryStatus: DeliveryStatus.SENT,
+                codeReviewFeedbackData: {
+                    commentId: 12,
+                    pullRequestReviewId: null,
+                },
+            },
+        ]);
+
+        expect(saved).toMatchObject({
+            relevantFile: 'src/CheckinReport.cs',
+            repeatClaim: 'Lacks the qa2420_ prefix.',
+            repeatClaims: [
+                {
+                    file: 'src/CheckinReport.cs',
+                    claim: 'Lacks the qa2420_ prefix.',
+                },
+                { file: 'src/Other.cs', claim: 'Other lacks it.' },
+            ],
+        });
     });
 });
 
@@ -275,7 +328,9 @@ describe('SuggestionService — prioritizeSuggestions fallback', () => {
         s.prioritizeSuggestionsWithKodyRulesControl = jest
             .fn()
             .mockRejectedValue(new Error('kody rules control failed'));
-        s.prioritizeSuggestionsLegacy = jest.fn().mockResolvedValue(legacyResult);
+        s.prioritizeSuggestionsLegacy = jest
+            .fn()
+            .mockResolvedValue(legacyResult);
 
         const result = await s.prioritizeSuggestions(
             { organizationId: 'o', teamId: 't' },

@@ -621,6 +621,21 @@ function plausibleRepeat(
 ): boolean {
     if (isRule(finding) !== isRule(earlier)) return false;
     const file = normalizePath(finding.relevantFile);
+    // One PR-level comment can stand for a rule's line-less findings on
+    // several files (#2420); it names one file, the record keeps them all.
+    if (
+        file &&
+        !finding.relevantLinesStart &&
+        isRule(finding) &&
+        sharesRule(finding, earlier) &&
+        earlier.claims?.some(
+            (c) =>
+                normalizePath(c.file) === file &&
+                c.claim.trim() === finding.suggestionContent?.trim(),
+        )
+    ) {
+        return true;
+    }
     if (file !== normalizePath(earlier.relevantFile)) return false;
     if (!file) {
         // PR-level history has no source anchor. A paraphrase needs a model
@@ -631,6 +646,23 @@ function plausibleRepeat(
             sharesRule(finding, earlier) &&
             !!claim &&
             claim === earlier.suggestionContent?.trim()
+        );
+    }
+    const start = finding.relevantLinesStart;
+    const oldStart = earlier.relevantLinesStart;
+    if (!start && !oldStart) {
+        // A rule finding that names the file and no line is posted PR-level
+        // and stored that way, without lines (#2420). File and rule do not
+        // pin the occurrence (a prefix and a suffix violation share both), so
+        // as for PR-level history only the same claim is held without a verdict.
+        // The posted text is rewritten by the formatter, cited and linked, so
+        // the record keeps the claim as this check saw it.
+        const claim = finding.suggestionContent?.trim();
+        return (
+            isRule(finding) &&
+            sharesRule(finding, earlier) &&
+            !!claim &&
+            claim === earlier.claim?.trim()
         );
     }
     return (

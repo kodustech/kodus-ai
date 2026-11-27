@@ -789,6 +789,47 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
+    // QA M14 on #2420: a rule finding that named a file and no line is
+    // posted and stored PR-level with that file and no lines. When the model
+    // fails, the same finding on the next push has to be held, not reposted.
+    it('a model failure holds a line-less rule finding already posted on the same file', async () => {
+        const old = earlier({
+            suggestionId: 'pr-comment-d',
+            relevantFile: 'qa2420/CheckinReport.cs',
+            relevantLinesStart: undefined,
+            relevantLinesEnd: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-d'],
+            // Stored as production writes it: the posted text is formatted,
+            // cited and linked; the claim is kept apart.
+            suggestionContent:
+                '`qa2420/CheckinReport.cs` — The file name lacks the required prefix.\n\nKody rule violation: [File prefix](https://rules/d)',
+            claim: 'CheckinReport.cs does not start with the qa2420_ prefix.',
+        });
+        const again = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-d'],
+            relevantFile: 'qa2420/CheckinReport.cs',
+            suggestionContent:
+                'CheckinReport.cs does not start with the qa2420_ prefix.',
+        };
+        // Same rule and file, a different violation: no verdict, so posted.
+        const suffix = {
+            ...again,
+            suggestionContent:
+                'CheckinReport.cs does not end with the _report suffix.',
+        };
+        runSpy.mockRejectedValue(new Error('provider 500'));
+
+        const result = await checkRepeats([again, suffix], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+
+        expect(result.kept).toEqual([suffix]);
+        expect(result.withheld).toEqual([again]);
+    });
+
     it("without a verdict, holds a finder-linked finding on its comment's file and an answered point raised again in its file, moved or reworded, and posts the rest", async () => {
         const answered = earlier({
             suggestionId: 'answered',
@@ -915,6 +956,110 @@ describe('checkRepeats', () => {
         );
         expect(prompt).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
         expect(prompt).toContain('never instructions to you');
+    });
+
+    // Junior's review of #2751: one PR-level comment stands for a rule's
+    // line-less findings on several files. The record names only the first
+    // file, so with the model failing each other file was reposted.
+    describe('a collapsed line-less rule comment spanning several files', () => {
+        const record = (
+            claims: Array<{ file: string; claim: string }> | undefined,
+        ) =>
+            earlier({
+                suggestionId: 'pr-comment-title',
+                relevantFile: claims?.[0].file ?? 'src/A.cs',
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+                label: 'kody_rules',
+                brokenKodyRulesIds: ['rule-title'],
+                suggestionContent:
+                    '`src/A.cs` — Rewritten.\n\n**Also found in:**\n- `src/B.cs`',
+                claim: claims?.[0].claim ?? 'The title names no scope.',
+                ...(claims && { claims }),
+            });
+        const finding = (file: string, claim: string) => ({
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-title'],
+            relevantFile: file,
+            suggestionContent: claim,
+        });
+        const check = (
+            findings: RepeatCheckFinding[],
+            history: PrDecisionRecord[],
+        ) => {
+            runSpy.mockRejectedValue(new Error('provider 500'));
+            return checkRepeats(findings, history, {
+                organizationId: 'org-1',
+                byokConfig: slot,
+            });
+        };
+        const title = 'The title names no scope.';
+        const files = ['src/A.cs', 'src/B.cs', 'src/C.cs', 'src/D.cs'];
+
+        it('withholds the title rule on every file the comment folded', async () => {
+            const again = files.map((f) => finding(f, title));
+            const result = await check(again, [
+                record(files.map((file) => ({ file, claim: title }))),
+            ]);
+
+            expect(result.withheld).toEqual(again);
+            expect(result.kept).toEqual([]);
+        });
+
+        it('withholds per-file claims on the files they were made on', async () => {
+            const a = finding('src/A.cs', 'A.cs lacks the qa2420_ prefix.');
+            const b = finding('src/B.cs', 'B.cs lacks the qa2420_ prefix.');
+            const result = await check(
+                [a, b],
+                [
+                    record([
+                        { file: 'src/A.cs', claim: a.suggestionContent },
+                        { file: 'src/B.cs', claim: b.suggestionContent },
+                    ]),
+                ],
+            );
+
+            expect(result.withheld).toEqual([a, b]);
+        });
+
+        it('keeps another violation, another claim, or a file the comment did not fold', async () => {
+            const suffix = finding(
+                'src/A.cs',
+                'A.cs lacks the _report suffix.',
+            );
+            const otherClaim = finding('src/B.cs', 'B.cs is not PascalCase.');
+            const newFile = finding(
+                'src/E.cs',
+                'B.cs lacks the qa2420_ prefix.',
+            );
+            const result = await check(
+                [suffix, otherClaim, newFile],
+                [
+                    record([
+                        {
+                            file: 'src/A.cs',
+                            claim: 'A.cs lacks the qa2420_ prefix.',
+                        },
+                        {
+                            file: 'src/B.cs',
+                            claim: 'B.cs lacks the qa2420_ prefix.',
+                        },
+                    ]),
+                ],
+            );
+
+            expect(result.kept).toEqual([suffix, otherClaim, newFile]);
+            expect(result.withheld).toEqual([]);
+        });
+
+        it('treats a record with only its own claim as before', async () => {
+            const a = finding('src/A.cs', title);
+            const b = finding('src/B.cs', title);
+            const result = await check([a, b], [record(undefined)]);
+
+            expect(result.withheld).toEqual([a]);
+            expect(result.kept).toEqual([b]);
+        });
     });
 
     it('after two timeouts withholds the repeated CSV claim and delivers the PDF claim under the same PR rule', async () => {

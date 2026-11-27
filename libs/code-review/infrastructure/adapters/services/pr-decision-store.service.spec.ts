@@ -95,6 +95,42 @@ describe('decision records read the full explanation', () => {
             } as any).suggestionContent,
         ).toBe('Legacy.');
     });
+
+    // QA M14 on #2420: the repeat check compares a finding with the earlier
+    // comments on its file. A line-less rule finding is stored PR-level, and
+    // without its file the next round reposted it whenever the model failed.
+    it('keeps the file of a PR-level record that named one', () => {
+        expect(
+            toRecordFromPrLevel({
+                id: 'p-3',
+                relevantFile: 'src/CheckinReport.cs',
+                suggestionContent: 'Lacks the prefix.',
+            } as any).relevantFile,
+        ).toBe('src/CheckinReport.cs');
+        expect(
+            toRecordFromPrLevel({
+                id: 'p-5',
+                relevantFile: 'src/CheckinReport.cs',
+                repeatClaim: 'Lacks the prefix.',
+                suggestionContent: '`src/CheckinReport.cs` — Rewritten.',
+            } as any).claim,
+        ).toBe('Lacks the prefix.');
+        const claims = [
+            { file: 'src/A.cs', claim: 'A.' },
+            { file: 'src/B.cs', claim: 'B.' },
+        ];
+        expect(
+            toRecordFromPrLevel({
+                id: 'p-6',
+                relevantFile: 'src/A.cs',
+                repeatClaims: claims,
+                suggestionContent: 'x',
+            } as any).claims,
+        ).toEqual(claims);
+        expect(
+            toRecordFromPrLevel({ id: 'p-4', suggestionContent: 'x' } as any),
+        ).not.toHaveProperty('relevantFile');
+    });
 });
 
 describe('decision records name the custom agent that made them', () => {

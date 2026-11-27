@@ -401,6 +401,11 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
         expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
             /src\/user\.ts:/,
         );
+        // QA M14 on #2420: the posted text is cited and formatted, so the
+        // claim the next round's repeat check compares is kept as it was.
+        expect(result.validSuggestionsByPR[0].repeatClaim).toBe(
+            'this function is far too long',
+        );
     });
 
     // The input that made the first revision's `!isFileAnchored` exemption

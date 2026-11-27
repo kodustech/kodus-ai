@@ -3059,7 +3059,13 @@ ${reviewOptions}
                             },
                             deliveryStatus: DeliveryStatus.SENT,
                             codeReviewFeedbackData: {
-                                commentId: createdComment.id,
+                                // Azure numbers comments within a thread, so
+                                // every new thread's comment is 1; the thread
+                                // id is what tells two PR-level comments apart,
+                                // and what its line comments store too.
+                                commentId:
+                                    createdComment.threadId ??
+                                    createdComment.id,
                                 pullRequestReviewId: null, // PR-level comments do not have review ID
                                 suggestionId: suggestion.id,
                             },
