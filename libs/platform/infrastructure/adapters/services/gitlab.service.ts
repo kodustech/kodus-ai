@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import {
     assertGitServerUrlAllowed,
     gitServerRefusal,
@@ -5581,6 +5582,57 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService getPullRequestDiscussions',
                 error: error,
                 metadata: params,
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            if (!repository?.id || !prNumber) return null;
+
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!gitlabAuthDetail) return null;
+
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+            const discussions = await gitlabAPI.MergeRequestDiscussions.all(
+                repository.id,
+                prNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
+            );
+
+            return answeredThreadRootIds(
+                (discussions ?? []).map((discussion: any) => {
+                    const notes = discussion?.notes ?? [];
+                    return {
+                        // A file-level finding is saved under its first note's
+                        // id, a PR-level one under the discussion id.
+                        rootIds: [notes[0]?.id, discussion?.id],
+                        replies: notes
+                            .slice(1)
+                            .filter((note: any) => note?.system !== true),
+                    };
+                }),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
             });
             return null;
         }

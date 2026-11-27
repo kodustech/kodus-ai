@@ -180,6 +180,67 @@ function stripComments(code: string): string {
         .replace(/(^|\s)#.*$/gm, ' ');
 }
 
+const RUST_CHAR_LITERAL_RE = /'(?:[^'\\]|\\.)'/y;
+
+/** Code with its comments and string literals blanked, so only real code
+ *  names remain. One pass that tracks both states: a quote inside a comment
+ *  (`// don't`) opens no string, a comment marker inside a string opens no
+ *  comment, and an escaped newline continues the string. A ' or " string
+ *  left open ends at its line, so a stray quote cannot swallow the rest. */
+export function withoutCommentsOrStrings(
+    code: string,
+    language?: string,
+): string {
+    const lang = (language ?? '').trim().toLowerCase();
+    const rust = lang === 'rust';
+    // Python's // is floor division, and // after a colon is a URL.
+    const slashComments = lang !== 'python';
+    let out = '';
+    let i = 0;
+    while (i < code.length) {
+        const c = code[i];
+        const atWordStart = i === 0 || /\s/.test(code[i - 1]);
+        if (c === '/' && code[i + 1] === '*') {
+            const end = code.indexOf('*/', i + 2);
+            i = end < 0 ? code.length : end + 2;
+            out += ' ';
+        } else if (
+            (slashComments &&
+                c === '/' &&
+                code[i + 1] === '/' &&
+                code[i - 1] !== ':') ||
+            (atWordStart && c === '#')
+        ) {
+            const end = code.indexOf('\n', i);
+            i = end < 0 ? code.length : end;
+            out += ' ';
+        } else if (c === '"' || c === '`' || c === "'") {
+            if (c === "'" && rust) {
+                RUST_CHAR_LITERAL_RE.lastIndex = i;
+                if (!RUST_CHAR_LITERAL_RE.test(code)) {
+                    out += c;
+                    i++;
+                    continue;
+                }
+            }
+            const triple = c !== '`' && code.startsWith(c.repeat(3), i);
+            const close = triple ? c.repeat(3) : c;
+            let j = i + close.length;
+            while (j < code.length && !code.startsWith(close, j)) {
+                if (code[j] === '\\') j++;
+                else if (code[j] === '\n' && !triple && c !== '`') break;
+                j++;
+            }
+            i = code.startsWith(close, j) ? j + close.length : j;
+            out += ' ';
+        } else {
+            out += c;
+            i++;
+        }
+    }
+    return out;
+}
+
 /**
  * A JS/TS regex literal (`/["']/g`, `/^\d+$/`) is neither a string nor a
  * comment, but its content is just as opaque — the quote characters inside
