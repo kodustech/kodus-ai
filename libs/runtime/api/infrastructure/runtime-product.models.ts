@@ -232,6 +232,27 @@ export class RuntimeFindingIntentModel extends CoreModel {
 }
 
 /**
+ * The last description a pull request's author wrote, as the Runtime read it on the PR's events
+ * (docs/runtime/intent-oracle.md): the Run's intent reads it when the code review replaced the body
+ * with Kody's summary. One row per (org, repository, PR).
+ */
+@Entity('runtime_pr_author_descriptions')
+@Index('UQ_runtime_pr_author_descriptions_pr', ['organizationId', 'repositoryId', 'prNumber'], { unique: true })
+export class RuntimePrAuthorDescriptionModel extends CoreModel {
+    @Column({ name: 'organization_id', type: 'varchar', length: 128 })
+    organizationId: string;
+
+    @Column({ name: 'repository_id', type: 'varchar', length: 128 })
+    repositoryId: string;
+
+    @Column({ name: 'pr_number', type: 'integer' })
+    prNumber: number;
+
+    @Column({ type: 'text' })
+    description: string;
+}
+
+/**
  * A kept check (docs/runtime/kept-checks.md): the probe of a regression a user
  * kept, so every later Run of the repository in that environment plays it.
  * `uuid` is the keptCheckId. One active check per (org, environment,

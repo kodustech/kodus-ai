@@ -63,6 +63,7 @@ import { OrganizationModule } from '@libs/organization/modules/organization.modu
 import { ReleaseTrackRuntimeRelease } from './infrastructure/release-track-runtime-release.gate';
 import { RuntimePullRequestTriggerUseCase } from './application/use-cases/pull-request-trigger.use-case';
 import { RuntimeRunRequestBuilder } from './application/run-request-builder.service';
+import { RuntimePullRequestDescriptions } from './application/pr-author-description.service';
 import { LinkedTasksAdapter } from './infrastructure/linked-tasks.adapter';
 import { RuntimeEnvironmentMembers } from './application/environment-members.service';
 import { EnvironmentRepositoriesUseCase } from './application/use-cases/environment-repositories.use-cases';
@@ -138,6 +139,7 @@ import {
     RUNTIME_FINDING_INTENT_STORE,
     RUNTIME_KEPT_CHECK_RESULTS_READER,
     RUNTIME_KEPT_CHECK_STORE,
+    RUNTIME_PR_AUTHOR_DESCRIPTION_STORE,
     RUNTIME_LLM_SPEND_READER,
     RUNTIME_USAGE_REPORT_READER,
 } from './domain/ports';
@@ -156,6 +158,7 @@ import {
     RuntimeFindingFeedbackModel,
     RuntimeFindingIntentModel,
     RuntimeKeptCheckModel,
+    RuntimePrAuthorDescriptionModel,
     RuntimeRepositorySettingsModel,
     RuntimeSettingsModel,
 } from './infrastructure/runtime-product.models';
@@ -163,6 +166,7 @@ import {
     TypeOrmEnvironmentRepositoryStore,
     TypeOrmFindingFeedbackStore,
     TypeOrmFindingIntentStore,
+    TypeOrmPullRequestAuthorDescriptionStore,
     TypeOrmProductEnvironmentStore,
     TypeOrmRuntimeSettingsStore,
 } from './infrastructure/typeorm-runtime-product.stores';
@@ -318,6 +322,7 @@ const useCases = [
             RuntimeFindingFeedbackModel,
             RuntimeFindingIntentModel,
             RuntimeKeptCheckModel,
+            RuntimePrAuthorDescriptionModel,
             RuntimeRunTargetModel,
             RuntimeExternalSubmissionModel,
             RuntimeExternalMessageModel,
@@ -514,6 +519,7 @@ const useCases = [
         { provide: RUNTIME_FINDING_INTENT_STORE, useClass: TypeOrmFindingIntentStore },
         // Kept checks (docs/runtime/kept-checks.md): the product's list, and each Run's outcomes read from the Runtime (read only).
         { provide: RUNTIME_KEPT_CHECK_STORE, useClass: TypeOrmKeptCheckStore },
+        { provide: RUNTIME_PR_AUTHOR_DESCRIPTION_STORE, useClass: TypeOrmPullRequestAuthorDescriptionStore },
         {
             provide: RUNTIME_KEPT_CHECK_RESULTS_READER,
             inject: [RuntimeReadDb],
@@ -593,6 +599,7 @@ const useCases = [
         { provide: RUNTIME_PLATFORM_RESOLVER, useExisting: CodeManagementService },
         RuntimeRunEnqueuer,
         RuntimeRunRequestBuilder,
+        RuntimePullRequestDescriptions,
         RuntimeEnvironmentMembers,
         RuntimeSetupRequester,
         RuntimeReaderAuthGuard,

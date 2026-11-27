@@ -7,6 +7,8 @@ import { SkippedTriggerReplyPublisher } from '@libs/runtime-publish/application/
 import type { CodeManagementPort } from '@libs/runtime-publish/domain/runtime-publish.ports';
 import { runtimeTriggerOutboxMessage, RuntimeRunCancelRequestedSchema, RuntimeRunRequestedSchema, type RuntimePullRequestObserved } from '@libs/runtime/run';
 
+import { RuntimePullRequestDescriptions } from '../application/pr-author-description.service';
+import type { PullRequestAuthorDescriptionStore, PullRequestKey } from '../domain/ports';
 import { RuntimeRunRequestBuilder } from '../application/run-request-builder.service';
 import { RuntimeRunEnqueuer } from '../application/runtime-run-enqueuer.service';
 import { RuntimePullRequestTriggerUseCase, UNREADABLE_REPOSITORY_WARNING_WINDOW_MS } from '../application/use-cases/pull-request-trigger.use-case';
@@ -62,6 +64,8 @@ async function setup(opts: {
     /** Whether the org may use the Runtime (alpha track and flag); on by default. */
     released?: boolean;
     suiteCi?: { onPullRequest: jest.Mock };
+    /** The PR author's descriptions, shared across setups to replay events before and after the review replaced the body. */
+    descriptions?: RuntimePullRequestDescriptions;
 } = {}) {
     const head = opts.head === undefined ? { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'open' as const } : opts.head;
     const git = {
@@ -86,6 +90,12 @@ async function setup(opts: {
         { get: async () => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, imageId: 'img-1', expose: [] }) },
         config({ runTokenSecret: SECRET }),
         clock,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        opts.descriptions,
     );
     const setupState = opts.setupState === undefined ? 'active' : opts.setupState;
     const pool = { onPullRequest: jest.fn(async (_env: unknown) => undefined) };
@@ -107,6 +117,7 @@ async function setup(opts: {
         ),
         runtimeReleaseGate(opts.released ?? true),
         opts.suiteCi as any,
+        opts.descriptions,
     );
     const requested = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.requested').map((r) => RuntimeRunRequestedSchema.parse(stripType(r.payload.payload)));
     const cancels = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.cancel_requested').map((r) => RuntimeRunCancelRequestedSchema.parse(stripType(r.payload.payload)));
@@ -671,5 +682,70 @@ describe('Runtime PR trigger (PR 2)', () => {
             await s.useCase.execute(event({ event: 'closed' }));
             expect(s.git.repositoryReadAccess).not.toHaveBeenCalled();
         });
+    });
+});
+
+/** The product store of PR author descriptions, in memory. */
+class InMemoryAuthorDescriptions implements PullRequestAuthorDescriptionStore {
+    readonly rows = new Map<string, string>();
+    private id = (k: PullRequestKey) => `${k.organizationId}/${k.repositoryId}/${k.prNumber}`;
+    async remember(k: PullRequestKey, description: string) {
+        this.rows.set(this.id(k), description);
+    }
+    async lastAuthored(k: PullRequestKey) {
+        return this.rows.get(this.id(k)) ?? null;
+    }
+}
+
+describe('the PR author\'s description when the code review replaced it', () => {
+    const AUTHOR = 'Fixes GET /orders/:id so an item with no description returns an empty string, not null.';
+    const KODY_ONLY = '<!-- kody-pr-summary:start -->\nThis PR changes the order item description handling.\n<!-- kody-pr-summary:end -->';
+
+    it("a Run started after the review replaced the body with Kody's summary carries what the author wrote when the PR opened", async () => {
+        const store = new InMemoryAuthorDescriptions();
+        const descriptions = new RuntimePullRequestDescriptions(store);
+        const opened = await setup({ descriptions, setupState: 'setting_up', head: { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'open', description: AUTHOR } });
+        // The environment is not ready yet: no Run, but the author's words are kept.
+        await opened.useCase.execute(event());
+        expect(opened.requested()).toHaveLength(0);
+
+        const later = await setup({ descriptions, head: { headSha: NEW_SHA, baseSha: BASE_SHA, fork: false, state: 'open', description: KODY_ONLY } });
+        await later.useCase.execute(event({ event: 'reopened', headSha: NEW_SHA }));
+        expect(later.requested()).toHaveLength(1);
+        expect(later.requested()[0].pullRequest.description).toBe(AUTHOR);
+    });
+
+    it('a body that is only Kody\'s summary never replaces what the author wrote', async () => {
+        const store = new InMemoryAuthorDescriptions();
+        const descriptions = new RuntimePullRequestDescriptions(store);
+        await descriptions.remember({ organizationId: ORG, repositoryId: REPO, prNumber: 7 }, AUTHOR);
+        await descriptions.remember({ organizationId: ORG, repositoryId: REPO, prNumber: 7 }, KODY_ONLY);
+        expect([...store.rows.values()]).toEqual([AUTHOR]);
+    });
+
+    it('a PR whose author wrote nothing, and nothing was kept, goes with the body as it is', async () => {
+        const descriptions = new RuntimePullRequestDescriptions(new InMemoryAuthorDescriptions());
+        expect(await descriptions.forRun({ organizationId: ORG, repositoryId: REPO, prNumber: 7 }, KODY_ONLY)).toBe(KODY_ONLY);
+    });
+
+    it("another org's kept description is never read", async () => {
+        const store = new InMemoryAuthorDescriptions();
+        const descriptions = new RuntimePullRequestDescriptions(store);
+        await descriptions.remember({ organizationId: 'other-org', repositoryId: REPO, prNumber: 7 }, AUTHOR);
+        expect(await descriptions.forRun({ organizationId: ORG, repositoryId: REPO, prNumber: 7 }, KODY_ONLY)).toBe(KODY_ONLY);
+    });
+
+    it('a store that fails leaves the Run with the body as the Git API answered it', async () => {
+        const failing: PullRequestAuthorDescriptionStore = {
+            remember: async () => {
+                throw new Error('db down');
+            },
+            lastAuthored: async () => {
+                throw new Error('db down');
+            },
+        };
+        const descriptions = new RuntimePullRequestDescriptions(failing);
+        await expect(descriptions.remember({ organizationId: ORG, repositoryId: REPO, prNumber: 7 }, AUTHOR)).resolves.toBeUndefined();
+        expect(await descriptions.forRun({ organizationId: ORG, repositoryId: REPO, prNumber: 7 }, KODY_ONLY)).toBe(KODY_ONLY);
     });
 });

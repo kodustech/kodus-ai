@@ -36,6 +36,7 @@ import {
 } from '../../domain/ports';
 import { RuntimeRunRequestBuilder } from '../run-request-builder.service';
 import { RuntimeSuiteCiTrigger } from '../suite-ci-trigger.service';
+import { RuntimePullRequestDescriptions } from '../pr-author-description.service';
 import { RuntimeRunEnqueuer } from '../runtime-run-enqueuer.service';
 
 /** Coding agents that open PRs under their own account; bots end in [bot]. */
@@ -136,6 +137,10 @@ export class RuntimePullRequestTriggerUseCase {
         @Optional()
         @Inject(RuntimeSuiteCiTrigger)
         private readonly suiteCi?: Pick<RuntimeSuiteCiTrigger, 'onPullRequest'>,
+        // The PR author's description, kept on every event before the code review can replace it (intent-oracle.md).
+        @Optional()
+        @Inject(RuntimePullRequestDescriptions)
+        private readonly descriptions?: Pick<RuntimePullRequestDescriptions, 'remember'>,
     ) {}
 
     /**
@@ -320,6 +325,9 @@ export class RuntimePullRequestTriggerUseCase {
         const repo: Repo | undefined = first ? { repositoryId: ev.repository.id, repositoryName: first.member.repositoryName } : undefined;
         const head = orgTeam && repo ? await this.git.getPullRequestHead({ ...orgTeam, ...repo, prNumber: ev.prNumber }) : null;
         Object.assign(facts, { orgTeam, repo, head });
+        // Read on every event of a repository in an environment, whatever the mode: the `opened` event comes before
+        // the code review can replace the body with Kody's summary, and a Run asked later still reads the author's words.
+        if (head) await this.descriptions?.remember(key, head.description);
         // Someone asked and the PR read came back empty: a connection that cannot read the repository at all
         // is what the admin must fix, before anything the settings or the environment would say.
         if (!head && ev.event === 'comment' && orgTeam && repo && (await this.readAccessOf(orgTeam, repo)) === 'denied') {

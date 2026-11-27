@@ -635,6 +635,24 @@ export interface KeptCheckStore {
 
 export const RUNTIME_KEPT_CHECK_STORE = Symbol.for('RuntimeApi.KeptCheckStore');
 
+/** A pull request of one org: every read and write of the author description store names the org. */
+export interface PullRequestKey {
+    organizationId: string;
+    repositoryId: string;
+    prNumber: number;
+}
+
+/**
+ * The last description a pull request's author wrote (docs/runtime/intent-oracle.md "When the review replaced the
+ * description"): kept from the PR's events so a Run still reads it after the code review replaced the body with
+ * Kody's summary. Another org's row reads as absent and is never written.
+ */
+export interface PullRequestAuthorDescriptionStore {
+    remember(key: PullRequestKey, description: string): Promise<void>;
+    lastAuthored(key: PullRequestKey): Promise<string | null>;
+}
+export const RUNTIME_PR_AUTHOR_DESCRIPTION_STORE = Symbol.for('RuntimeApi.PullRequestAuthorDescriptionStore');
+
 /** The last outcome of one kept check and how many later PRs it failed on (runtime_kept_check_results). */
 export interface KeptCheckResultSummary {
     keptCheckId: string;

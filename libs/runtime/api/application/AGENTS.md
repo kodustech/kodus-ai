@@ -3,6 +3,7 @@
 The application layer of the product's Runtime API: the services the use cases share (building and enqueuing a Run, requesting a setup, access checks, sealing, budgets, costs, the webhook reconciler, the /mcp/env tools, external findings). Nest injectables over the ports of `../domain/`, run in the product API and the product worker. The use cases themselves are in `use-cases/` ([its AGENTS.md](use-cases/AGENTS.md)); Kody's recipe author is in `recipe-author/` ([its AGENTS.md](recipe-author/AGENTS.md)).
 
 ## Owns
+- The PR author's description (docs/runtime/intent-oracle.md decision 10): `pr-author-description.service.ts` `RuntimePullRequestDescriptions`, kept by the PR trigger on every event (`remember`) and read by the Run builder when the body holds only Kody's summary (`forRun`); store `RUNTIME_PR_AUTHOR_DESCRIPTION_STORE` (`runtime_pr_author_descriptions`).
 - The one builder of `RuntimeRunRequested`: `run-request-builder.service.ts` `RuntimeRunRequestBuilder` (diff and repo token from the Git API, Run token signed here, both sealed), used by the PR trigger, Run again, Run on this PR, fork approval and simulate.
 - The one way a Run is enqueued: `runtime-run-enqueuer.service.ts` `RuntimeRunEnqueuer` (the publish target first, then the outbox row).
 - Setup commands: `runtime-setup-requester.service.ts` `RuntimeSetupRequester` (recipe read and refused with the broken rule named, pool size and machine size under the plan).
@@ -41,7 +42,7 @@ The application layer of the product's Runtime API: the services the use cases s
 
 ## Module map
 
-Files (32, tests apart): `asked-runs.ts`, `default-branch-push-setup.service.ts`, `egress-access.service.ts`, `env-tools.service.ts`, `environment-members.service.ts`, `evidence-url.ts`, `external-findings.service.ts`, `external-verification-reconciler.ts`, `failure-context.ts`, `llm-run-budget.ts`, `model-input-bytes.ts`, `pool-controller.service.ts`, `recipe-inference.reader.ts`, `run-access.service.ts`, `run-cost.service.ts`, `run-public-view.ts`, `run-request-builder.service.ts`, `runtime-run-enqueuer.service.ts`, `runtime-setup-requester.service.ts`, `runtime-worker-scope.ts`, `secret-sealer.ts`, `setup-token.ts`, `suite-baseline-requests.service.ts`, `suite-ci-trigger.service.ts`, `suite-inputs.service.ts`, `suite-recipe.ts`, `suite-requester.service.ts`, `suite-retrier.service.ts`, `suite-selection.service.ts`, `suite-shadow-requests.service.ts`, `template-setup-requests.service.ts`, `webhook-reconciler.service.ts`
+Files (33, tests apart): `asked-runs.ts`, `default-branch-push-setup.service.ts`, `egress-access.service.ts`, `env-tools.service.ts`, `environment-members.service.ts`, `evidence-url.ts`, `external-findings.service.ts`, `external-verification-reconciler.ts`, `failure-context.ts`, `llm-run-budget.ts`, `model-input-bytes.ts`, `pool-controller.service.ts`, `pr-author-description.service.ts`, `recipe-inference.reader.ts`, `run-access.service.ts`, `run-cost.service.ts`, `run-public-view.ts`, `run-request-builder.service.ts`, `runtime-run-enqueuer.service.ts`, `runtime-setup-requester.service.ts`, `runtime-worker-scope.ts`, `secret-sealer.ts`, `setup-token.ts`, `suite-baseline-requests.service.ts`, `suite-ci-trigger.service.ts`, `suite-inputs.service.ts`, `suite-recipe.ts`, `suite-requester.service.ts`, `suite-retrier.service.ts`, `suite-selection.service.ts`, `suite-shadow-requests.service.ts`, `template-setup-requests.service.ts`, `webhook-reconciler.service.ts`
 
 Imports these Runtime modules:
 
@@ -53,6 +54,7 @@ Imports these Runtime modules:
 - [`libs/runtime/contracts`](../../contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../environment/AGENTS.md)
 - [`libs/runtime/placement`](../../placement/AGENTS.md)
+- [`libs/runtime/planner`](../../planner/AGENTS.md)
 - [`libs/runtime/probe`](../../probe/AGENTS.md)
 - [`libs/runtime/protocol`](../../protocol/AGENTS.md)
 - [`libs/runtime/redaction`](../../redaction/AGENTS.md)

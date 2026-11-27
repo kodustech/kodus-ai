@@ -32,6 +32,13 @@ The intent oracle checks what the PR says it does.
 
    Anything else stays a regression. A described change is shown on the comment and never fails the check.
 9. **On by default** for an org the Runtime is released to, with an org setting to turn it off.
+10. **When the review replaced the description, the author's words still count.** A code review set to replace the PR's
+    description leaves only Kody's summary in the body, and that summary is never a source (it is written from the diff and
+    states a bug as intended). The PR trigger reads the PR on every event of a repository in an environment, whatever the
+    mode, and keeps the last description its author wrote (`runtime_pr_author_descriptions`, one row per org, repository
+    and PR; a body that is only Kody's summary never replaces it). A Run whose body has no author text left carries the
+    kept one (`libs/runtime/api/application/pr-author-description.service.ts`). A PR the Runtime first read after the
+    review replaced its body has none kept and goes as before.
 
 ## Assertions
 

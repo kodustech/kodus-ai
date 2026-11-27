@@ -44,6 +44,7 @@ import {
     RuntimeFindingFeedbackModel,
     RuntimeFindingIntentModel,
     RuntimeKeptCheckModel,
+    RuntimePrAuthorDescriptionModel,
     RuntimeRepositorySettingsModel,
     RuntimeSettingsModel,
 } from '../../../../runtime/api/infrastructure/runtime-product.models';
@@ -100,6 +101,7 @@ export const ENTITIES = [
     RuntimeFindingFeedbackModel,
     RuntimeFindingIntentModel,
     RuntimeKeptCheckModel,
+    RuntimePrAuthorDescriptionModel,
     RuntimeRunTargetModel,
     RuntimeExternalMessageModel,
     RuntimeExternalSubmissionModel,

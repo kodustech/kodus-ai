@@ -41,6 +41,7 @@ import {
 import { RuntimeEnvironmentMembers } from './environment-members.service';
 import { sealForRuntime } from './secret-sealer';
 import { RuntimeSuiteInputs } from './suite-inputs.service';
+import { RuntimePullRequestDescriptions } from './pr-author-description.service';
 
 /** A branch name the request may carry (what the report says a repository ran from), or nothing. */
 const branchOf = (branch: string | undefined) => (branch && branch.length <= 256 ? { branch } : {});
@@ -100,6 +101,10 @@ export class RuntimeRunRequestBuilder {
         @Optional()
         @Inject(RuntimeSuiteInputs)
         private readonly suiteInputs?: RuntimeSuiteInputs,
+        // Optional: a builder made without it sends the body as the Git API answered it.
+        @Optional()
+        @Inject(RuntimePullRequestDescriptions)
+        private readonly descriptions?: RuntimePullRequestDescriptions,
     ) {}
 
     /** The tasks the PR links, within a budget: a slow or failing tracker never holds up the Run, it only leaves them out. */
@@ -175,6 +180,10 @@ export class RuntimeRunRequestBuilder {
         const pins = members.length > 1 ? await this.pinWorkspace({ ...orgTeam, members, own: own.repositoryId, head, pinned: input.workspace }) : undefined;
         const tokens = await this.mintTokens({ ...orgTeam, ...repo, runId, attempt, prNumber, fork: head.fork });
         const linked = await this.linkedTasksOf({ ...orgTeam, repositoryName: repo.repositoryName, head });
+        // The author's own words, even when the code review replaced the body with Kody's summary (intent-oracle.md).
+        const description = this.descriptions
+            ? await this.descriptions.forRun({ organizationId: env.organizationId, repositoryId: own.repositoryId, prNumber }, head.description)
+            : head.description;
         const workspace = pins ? await this.sealWorkspace({ ...orgTeam, pins, runId }) : undefined;
         const ownMember = members.find((m) => m.repositoryId === own.repositoryId);
         const fullName =
@@ -209,7 +218,7 @@ export class RuntimeRunRequestBuilder {
                 // Untrusted: the intent classifier reads it as data, and the Run keeps one clean line of it for display.
                 ...(head.title ? { title: head.title } : {}),
                 // Untrusted: the intent author reads it as data, to write the checks of what the PR says it does.
-                ...(head.description ? { description: head.description } : {}),
+                ...(description ? { description } : {}),
                 ...linked,
             },
             environment: {

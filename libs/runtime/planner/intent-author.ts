@@ -117,6 +117,12 @@ function withoutKodySummary(body: string): string {
     }
 }
 
+/**
+ * What the PR's author wrote in a description, Kody's summary left out: empty when the body is only that
+ * summary (the code review replaced it, or the author wrote nothing).
+ */
+export const authorTextOf = (description: string | undefined): string => withoutKodySummary(description ?? '').trim();
+
 /** Each text an assertion may quote, by the source it cites. The title is read, never quoted; Kody's own PR summary is never read. */
 export function statedIntentSources(input: Pick<IntentAuthorInput, 'description' | 'linkedTasks'>): Array<{ source: StatedIntent['source']; text: string }> {
     const sources: Array<{ source: StatedIntent['source']; text: string }> = [];

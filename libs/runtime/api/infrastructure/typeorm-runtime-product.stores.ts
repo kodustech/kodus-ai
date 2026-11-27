@@ -22,6 +22,8 @@ import {
     type FindingIntentStore,
     type ProductEnvironment,
     type ProductEnvironmentSettings,
+    type PullRequestAuthorDescriptionStore,
+    type PullRequestKey,
     type SubmittedRecipe,
     type ProductEnvironmentStore,
     type RuntimeRepositorySettingsRecord,
@@ -38,6 +40,7 @@ import {
     RuntimeEnvironmentRepositoryModel,
     RuntimeFindingFeedbackModel,
     RuntimeFindingIntentModel,
+    RuntimePrAuthorDescriptionModel,
     RuntimeRepositorySettingsModel,
     RuntimeSettingsModel,
 } from './runtime-product.models';
@@ -459,5 +462,29 @@ export class TypeOrmFindingIntentStore implements FindingIntentStore {
             .values({ ...where, userId: input.userId, updatedAt: new Date() })
             .orUpdate(['run_id', 'probe_id', 'organization_id', 'user_id', 'updatedAt'], ['run_id', 'probe_id'], { overwriteCondition: { where: SAME_ORG('i') } })
             .execute();
+    }
+}
+
+@Injectable()
+export class TypeOrmPullRequestAuthorDescriptionStore implements PullRequestAuthorDescriptionStore {
+    constructor(
+        @InjectRepository(RuntimePrAuthorDescriptionModel)
+        private readonly repo: Repository<RuntimePrAuthorDescriptionModel>,
+    ) {}
+
+    async remember(key: PullRequestKey, description: string) {
+        const where = { organizationId: key.organizationId, repositoryId: key.repositoryId, prNumber: key.prNumber };
+        // Keyed with the org: one org's PR never overwrites another's under the same repository id.
+        await this.repo
+            .createQueryBuilder('d')
+            .insert()
+            .values({ ...where, description, updatedAt: new Date() })
+            .orUpdate(['description', 'updatedAt'], ['organization_id', 'repository_id', 'pr_number'])
+            .execute();
+    }
+
+    async lastAuthored(key: PullRequestKey) {
+        const m = await this.repo.findOne({ where: { organizationId: key.organizationId, repositoryId: key.repositoryId, prNumber: key.prNumber } });
+        return m?.description ?? null;
     }
 }
