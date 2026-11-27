@@ -880,6 +880,11 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         }
         if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
 
+        kodusConfigYMLfile = this.withoutInvalidConversation(
+            kodusConfigYMLfile,
+            repository,
+        );
+
         const contractErrors = validateRiskApprovalSettings(kodusConfigYMLfile);
         let settingsError = contractErrors.length
             ? `Invalid code review settings in kodus-config.yml: ${contractErrors.map((error) => error.instancePath).join(', ')}`
@@ -911,6 +916,50 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         }
 
         return kodusConfigYMLfile;
+    }
+
+    /**
+     * `conversation.implicitReplies` (#2576) is only meaningful as a boolean.
+     * Any other value (a quoted "false", YAML 1.1 `no`, `0`, an empty key) is
+     * rejected by the file schema, yet the reply gate counted it as "on" over a
+     * stored off and the centralized sync stored it as-is. Drop it, so the file
+     * behaves as if the key were missing and the stored setting applies.
+     */
+    private withoutInvalidConversation(
+        file: KodusConfigFile,
+        repository: { id: string; name: string },
+    ): KodusConfigFile {
+        const conversation: unknown = file.conversation;
+        if (conversation === undefined) return file;
+
+        const block =
+            conversation !== null &&
+            typeof conversation === 'object' &&
+            !Array.isArray(conversation)
+                ? (conversation as Record<string, unknown>)
+                : undefined;
+        if (
+            block &&
+            (block.implicitReplies === undefined ||
+                typeof block.implicitReplies === 'boolean')
+        ) {
+            return file;
+        }
+
+        this.logger.warn({
+            message:
+                'Ignoring an invalid conversation.implicitReplies in kodus-config.yml: the stored setting applies',
+            context: CodeBaseConfigService.name,
+            metadata: {
+                repository,
+                value: block ? block.implicitReplies : conversation,
+            },
+        });
+
+        const { conversation: _, ...rest } = file;
+        if (!block) return rest as KodusConfigFile;
+        const { implicitReplies: __, ...validConversation } = block;
+        return { ...rest, conversation: validConversation } as KodusConfigFile;
     }
 
     private async getConfigurationFile(

@@ -246,4 +246,32 @@ describe('CreateOrUpdateCodeReviewParameterDto — conversation.implicitReplies'
         // asserting the key is what pins the declaration.
         expect(JSON.stringify(response)).toContain('answerEveryone');
     });
+
+    // Implicit conversion turned these strings into `true`: the request
+    // returned 201 and erased a stored opt-out. `0` was stored as `false`.
+    it.each([['false'], ['no'], ['off'], ['true'], [0], [1], [null]])(
+        'rejects a non-boolean implicitReplies (%j)',
+        async (value) => {
+            await expect(
+                through({ conversation: { implicitReplies: value } }),
+            ).rejects.toThrow();
+        },
+    );
+
+    it.each([[null], [[{ implicitReplies: false }]], ['off']])(
+        'rejects a conversation block that is not an object (%j)',
+        async (conversation) => {
+            await expect(through({ conversation })).rejects.toThrow();
+        },
+    );
+
+    it('keeps an opt-in as the boolean true', async () => {
+        const result = await through({
+            conversation: { implicitReplies: true },
+        });
+
+        expect(result.configValue.conversation).toEqual({
+            implicitReplies: true,
+        });
+    });
 });
