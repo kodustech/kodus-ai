@@ -370,4 +370,71 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
         expect(res.shardsErrored).toBe(3);
         expect(res.providerRefusal).toBeUndefined();
     });
+
+    // Retries and gateways wrap the provider error: the flag can sit inside a
+    // RetryError's `errors`, an AggregateError, or several causes down.
+    it('finds a moderation flag however the error is wrapped', async () => {
+        const flagged = () =>
+            new APICallError({
+                message: 'flagged',
+                url: 'https://openrouter.ai/api/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode: 403,
+                responseBody: JSON.stringify({
+                    error: { code: 403, message: 'flagged', metadata: { reasons: ['violence'] } },
+                }),
+                isRetryable: false,
+            });
+        const deep = () => {
+            let err: any = flagged();
+            for (let i = 0; i < 6; i++) {
+                const outer: any = new Error(`wrap ${i}`);
+                outer.statusCode = 403;
+                outer.cause = err;
+                err = outer;
+            }
+            return err;
+        };
+        const aggregate = () => {
+            const err: any = new AggregateError([new Error('first try'), flagged()], 'all attempts failed');
+            err.statusCode = 403;
+            return err;
+        };
+        for (const wrapped of [deep, aggregate]) {
+            const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+                async () => {
+                    throw wrapped();
+                },
+            );
+
+            const res = await judgeKodyRulesSharded({
+                changedFiles: files,
+                rules,
+                runJudge,
+                concurrency: 1,
+            });
+
+            expect(runJudge).toHaveBeenCalledTimes(files.length);
+            expect(res.providerRefusal).toBeUndefined();
+        }
+    });
+
+    it('does not loop on an error that wraps itself', async () => {
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                const err: any = refusal(401, 'Incorrect API key provided');
+                err.cause = err;
+                throw err;
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(res.providerRefusal).toBe('AUTH_INVALID');
+    });
 });

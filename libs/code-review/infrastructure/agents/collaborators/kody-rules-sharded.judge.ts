@@ -410,30 +410,42 @@ function isProviderRefusal(info: ClassifiedErrorInfo, err: unknown): boolean {
     return !flaggedByModeration(err);
 }
 
-function flaggedByModeration(err: unknown, depth = 0): boolean {
-    if (!err || typeof err !== 'object' || depth > 3) return false;
-    const e = err as {
-        data?: unknown;
-        responseBody?: unknown;
-        cause?: unknown;
-        lastError?: unknown;
-    };
-    for (const body of [e.data, parseJson(e.responseBody)]) {
-        const metadata = (body as { error?: { metadata?: unknown } } | undefined)
-            ?.error?.metadata as
-            | { reasons?: unknown; flagged_input?: unknown }
-            | undefined;
-        if (
-            Array.isArray(metadata?.reasons) ||
-            typeof metadata?.flagged_input === 'string'
-        ) {
-            return true;
+/**
+ * Whether the error, or any error it wraps (`cause`, a RetryError's
+ * `lastError` and `errors`, an AggregateError's `errors`), carries a
+ * moderation flag. Walks every wrapper once, however deep.
+ */
+function flaggedByModeration(err: unknown): boolean {
+    const seen = new Set<object>();
+    const queue: unknown[] = [err];
+    while (queue.length) {
+        const next = queue.shift();
+        if (!next || typeof next !== 'object' || seen.has(next)) continue;
+        seen.add(next);
+        const e = next as {
+            data?: unknown;
+            responseBody?: unknown;
+            cause?: unknown;
+            lastError?: unknown;
+            errors?: unknown;
+        };
+        for (const body of [e.data, parseJson(e.responseBody)]) {
+            const metadata = (
+                body as { error?: { metadata?: unknown } } | undefined
+            )?.error?.metadata as
+                | { reasons?: unknown; flagged_input?: unknown }
+                | undefined;
+            if (
+                Array.isArray(metadata?.reasons) ||
+                typeof metadata?.flagged_input === 'string'
+            ) {
+                return true;
+            }
         }
+        queue.push(e.cause, e.lastError);
+        if (Array.isArray(e.errors)) queue.push(...e.errors);
     }
-    return (
-        flaggedByModeration(e.cause, depth + 1) ||
-        flaggedByModeration(e.lastError, depth + 1)
-    );
+    return false;
 }
 
 function parseJson(value: unknown): unknown {
