@@ -388,6 +388,8 @@ export interface IKodyRuleCompileAttempt {
     outcome: 'compiled' | 'declined';
     /** Why, when declined — the same vocabulary `CompileResult` reports. */
     declineReason?: string;
+    /** Which decision declined a cosmetic rule. Older attempts lack this field. */
+    cosmeticSource?: 'gate' | 'model';
     /** Model marker that ran it ('byok' | 'system'). */
     model?: string;
 }

@@ -1,9 +1,22 @@
 import { createHash } from 'crypto';
+import type { IKodyRuleCompileAttempt } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { isCosmeticRule } from './is-cosmetic-rule';
 
 type CompileInput = { rule?: string; examples?: unknown[] };
 type AttemptedRule = CompileInput & {
-    compileAttempt?: { sourceHash?: string };
+    title?: string;
+    compileAttempt?: Partial<IKodyRuleCompileAttempt>;
 };
+
+function needsCosmeticRecheck(rule: AttemptedRule): boolean {
+    // Older gates declined any mention of formatting. Revisit an unexplained
+    // decline once, and keep an explicit model verdict on subsequent saves.
+    return (
+        rule.compileAttempt?.declineReason === 'cosmetic' &&
+        rule.compileAttempt.cosmeticSource !== 'model' &&
+        !isCosmeticRule(rule)
+    );
+}
 
 function hashCompileInput(
     rule: CompileInput,
@@ -52,6 +65,7 @@ export function compileAttemptIsCurrent(rule: AttemptedRule): boolean {
     // Older CLI attempts used the field order persisted on that rule.
     return (
         !!stored &&
+        !needsCosmeticRecheck(rule) &&
         (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
     );
 }
@@ -109,12 +123,17 @@ export function ruleContextNeedHash(rule: { rule?: string }): string {
  * An `author` need is current by definition: the rule's owner outranks the
  * classifier, and a prompt version has no business overriding a human.
  */
-export function contextNeedIsCurrent(rule: {
-    rule?: string;
-    contextNeed?: { sourceHash?: string; source?: string };
-}): boolean {
+export function contextNeedIsCurrent(
+    rule: AttemptedRule & {
+        contextNeed?: { sourceHash?: string; source?: string; need?: string };
+    },
+): boolean {
     const stored = rule?.contextNeed;
     if (!stored) return false;
     if (stored.source === 'author') return true;
-    return !!stored.sourceHash && stored.sourceHash === ruleContextNeedHash(rule);
+    // A local decline used to store diff-only without consulting the model.
+    if (stored.need === 'diff-only' && needsCosmeticRecheck(rule)) return false;
+    return (
+        !!stored.sourceHash && stored.sourceHash === ruleContextNeedHash(rule)
+    );
 }

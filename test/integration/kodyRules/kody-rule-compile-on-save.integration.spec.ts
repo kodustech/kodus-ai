@@ -32,6 +32,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
         let model: Model<KodyRulesModel>;
         let repository: KodyRulesRepository;
         let rules: KodyRulesService;
+        let compiler: KodyRuleDetectorCompilerService;
         let cli: CliKodyRulesController;
         let compile: jest.SpiedFunction<
             KodyRuleDetectorCompilerService['compileAndSave']
@@ -57,7 +58,7 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 undefined,
                 undefined,
             );
-            const compiler = new KodyRuleDetectorCompilerService(
+            compiler = new KodyRuleDetectorCompilerService(
                 { resolveTaskSlot: jest.fn() } as any,
                 undefined,
                 rules,
@@ -155,16 +156,26 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             ).rules;
             expect(editCalls).toBe(ids.length);
             for (const saved of edited) {
-                expect(saved).toMatchObject({
-                    compileAttempt: {
-                        outcome: 'declined',
-                        sourceHash: ruleCompileHash({ rule }),
-                    },
-                    contextNeed: {
-                        need: 'full-file',
-                        sourceHash: ruleContextNeedHash({ rule }),
-                    },
-                    fileScope: { extensions: ['.ts', '.js'] },
+                expect(saved.compileAttempt).toStrictEqual({
+                    outcome: 'declined',
+                    declineReason: 'not-mechanical',
+                    sourceHash: ruleCompileHash({ rule }),
+                    model: 'system',
+                    attemptedAt: expect.any(Date),
+                });
+                expect(saved.contextNeed).toStrictEqual({
+                    need: 'full-file',
+                    sourceHash: ruleContextNeedHash({ rule }),
+                    source: 'compiler',
+                    model: 'system',
+                    inferredAt: expect.any(Date),
+                });
+                expect(saved.fileScope).toStrictEqual({
+                    extensions: ['.ts', '.js'],
+                    sourceHash: createHash('sha256').update(rule).digest('hex'),
+                    source: 'compiler',
+                    model: 'system',
+                    inferredAt: expect.any(Date),
                 });
             }
 
@@ -243,9 +254,9 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             } finally {
                 interleaved.mockRestore();
             }
-            expect(
-                await repository.findById(uuid, organizationId),
-            ).toMatchObject({ contextNeed, fileScope });
+            const saved = await repository.findById(uuid, organizationId);
+            expect(saved.contextNeed).toEqual(contextNeed);
+            expect(saved.fileScope).toEqual(fileScope);
         });
 
         it('disarms a detector on a cosmetic title edit and keeps ordinary renames free', async () => {
@@ -276,22 +287,25 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
             expect(compiled.detector?.pattern).toBe('console\\.log\\(');
             runModel.mockClear();
 
-            await patch(uuid, { title: 'Logger policy', rule });
-            expect(
-                await repository.findById(uuid, organizationId),
-            ).toMatchObject({
-                detector: compiled.detector,
-                compileAttempt: compiled.compileAttempt,
+            await patch(uuid, {
+                title: 'Log messages containing single quotes',
+                rule,
             });
+            const renamed = await repository.findById(uuid, organizationId);
+            expect(renamed.detector).toEqual(compiled.detector);
+            expect(renamed.compileAttempt).toStrictEqual(
+                compiled.compileAttempt,
+            );
             await patch(uuid, { title: 'Semicolons' });
-            expect(
-                await repository.findById(uuid, organizationId),
-            ).toMatchObject({
-                detector: null,
-                compileAttempt: {
-                    outcome: 'declined',
-                    declineReason: 'cosmetic',
-                },
+            const cosmetic = await repository.findById(uuid, organizationId);
+            expect(cosmetic.detector).toBeNull();
+            expect(cosmetic.compileAttempt).toStrictEqual({
+                outcome: 'declined',
+                declineReason: 'cosmetic',
+                cosmeticSource: 'gate',
+                sourceHash: ruleCompileHash({ rule, examples }),
+                model: 'system',
+                attemptedAt: expect.any(Date),
             });
             expect(runModel).not.toHaveBeenCalled();
 
@@ -314,6 +328,116 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
                 (await repository.findById(uuid, organizationId)).detector,
             ).toBeNull();
             expect(runModel).not.toHaveBeenCalled();
+        });
+
+        it('classifies a cosmetic rename with missing context once and retries an empty response', async () => {
+            const uuid = randomUUID();
+            const rule = 'Check the policy against the full file.';
+            await model.create({
+                organizationId,
+                rules: [{ uuid, repositoryId, title: 'Review policy', rule }],
+            });
+            runModel.mockResolvedValueOnce(null).mockResolvedValueOnce({
+                mechanical: true,
+                pattern: 'policy',
+                contextNeed: 'full-file',
+                extensions: ['.ts'],
+            });
+
+            await patch(uuid, { title: 'Semicolons' });
+            const empty = await repository.findById(uuid, organizationId);
+            expect(empty.contextNeed).toBeUndefined();
+            expect(empty.compileAttempt).toBeNull();
+            await patch(uuid, { rule });
+            const classified = await repository.findById(uuid, organizationId);
+            expect(classified.contextNeed).toEqual({
+                need: 'full-file',
+                source: 'compiler',
+                sourceHash: ruleContextNeedHash({ rule }),
+                inferredAt: expect.any(Date),
+                model: 'system',
+            });
+            expect(classified.fileScope?.extensions).toEqual(['.ts']);
+            expect(classified.detector).toBeUndefined();
+            expect(classified.compileAttempt.declineReason).toBe('cosmetic');
+
+            await patch(uuid, { rule });
+            const repeated = await repository.findById(uuid, organizationId);
+            expect(repeated.compileAttempt).toEqual(classified.compileAttempt);
+            expect(repeated.contextNeed).toEqual(classified.contextNeed);
+            expect(repeated.fileScope).toEqual(classified.fileScope);
+            expect(runModel).toHaveBeenCalledTimes(2);
+        });
+
+        it('rechecks a legacy cosmetic decline once and reuses a model-confirmed decline', async () => {
+            const uuid = randomUUID();
+            const rule =
+                'Use double quotes in all translation catalog entries.';
+            const sourceHash = ruleCompileHash({ rule });
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Translation catalog',
+                        rule,
+                        compileAttempt: {
+                            outcome: 'declined',
+                            declineReason: 'cosmetic',
+                            sourceHash,
+                        },
+                        contextNeed: {
+                            need: 'diff-only',
+                            source: 'compiler',
+                            sourceHash: ruleContextNeedHash({ rule }),
+                        },
+                    },
+                ],
+            });
+            runModel.mockResolvedValue({
+                mechanical: false,
+                cosmetic: true,
+                contextNeed: 'full-file',
+            });
+            await patch(uuid, { rule });
+            const rechecked = await repository.findById(uuid, organizationId);
+            expect(rechecked.compileAttempt.cosmeticSource).toBe('model');
+            expect(rechecked.contextNeed.need).toBe('full-file');
+            await patch(uuid, { rule });
+            expect(
+                (await repository.findById(uuid, organizationId))
+                    .compileAttempt,
+            ).toEqual(rechecked.compileAttempt);
+            expect(runModel).toHaveBeenCalledTimes(1);
+        });
+
+        it('disarms a stored cosmetic detector when its context classification fails', async () => {
+            const uuid = randomUUID();
+            await model.create({
+                organizationId,
+                rules: [
+                    {
+                        uuid,
+                        repositoryId,
+                        title: 'Semicolons',
+                        rule: 'Avoid unnecessary semicolons.',
+                        detector: { type: 'regex', pattern: ';' },
+                    },
+                ],
+            });
+            runModel.mockRejectedValueOnce(new Error('provider unavailable'));
+            const stored = await repository.findById(uuid, organizationId);
+            const result = await compiler.compileAndSave(
+                { organizationId },
+                uuid,
+                stored,
+            );
+            const reloaded = await repository.findById(uuid, organizationId);
+            expect(result.declineReason).toBe('cosmetic');
+            expect(reloaded.detector).toBeNull();
+            expect(reloaded.contextNeed).toBeUndefined();
+            expect(reloaded.compileAttempt).toBeUndefined();
         });
 
         it('preserves the detector and attempt when a CLI patch omits examples and recompiles an explicit clear', async () => {
@@ -381,12 +505,15 @@ const gate = resolveMongoTestGate('kodus_test_kodyrules', false);
 
             await patch(uuid, { examples: [] });
             expect(runModel).toHaveBeenCalledTimes(1);
-            expect(
-                await repository.findById(uuid, organizationId),
-            ).toMatchObject({
-                examples: [],
-                detector: null,
-                compileAttempt: { declineReason: 'no-usable-examples' },
+            const cleared = await repository.findById(uuid, organizationId);
+            expect(cleared.examples).toEqual([]);
+            expect(cleared.detector).toBeNull();
+            expect(cleared.compileAttempt).toStrictEqual({
+                outcome: 'declined',
+                declineReason: 'no-usable-examples',
+                sourceHash: ruleCompileHash({ rule, examples: [] }),
+                model: 'system',
+                attemptedAt: expect.any(Date),
             });
         });
 

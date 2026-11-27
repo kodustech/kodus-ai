@@ -938,6 +938,7 @@ export class KodyRulesService implements IKodyRulesService {
         if (
             examplesChanged &&
             compileAttemptIsCurrent({
+                title: existingRule.title,
                 rule: existingRule.rule,
                 examples: existingRule.examples,
                 compileAttempt: updatedRule.compileAttempt,

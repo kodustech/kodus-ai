@@ -25,6 +25,7 @@ import {
 import { IKodyRuleDetectorCompiler } from '@libs/kodyRules/domain/contracts/kody-rule-detector-compiler.contract';
 import {
     IKodyRule,
+    IKodyRuleCompileAttempt,
     KodyRuleContextNeed,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import {
@@ -87,7 +88,8 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
         // detector; the context need has its own key, versioned by the
         // classifier prompt, and a corrected prompt has to be able to reach a
         // rule nobody edited.
-        if (compileAttemptIsCurrent(rule) && contextNeedIsCurrent(rule)) {
+        const hasCurrentContext = contextNeedIsCurrent(rule);
+        if (compileAttemptIsCurrent(rule) && hasCurrentContext) {
             return {
                 compiled: !!rule.detector,
                 declineReason: rule.compileAttempt?.declineReason,
@@ -133,39 +135,59 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                 return rawOutput;
             });
 
-            const { detector, declineReason } = await compileRuleDetector(
-                rule,
-                runCompiler,
-                // Marker: a resolved non-managed BYOK slot vs the managed/
-                // env-default path (`resolveTaskSlot` returns undefined
-                // for a managed/BLOCKED config).
-                { modelName: taskByok ? 'byok' : 'system' },
-            );
+            const { detector, declineReason, cosmeticSource } =
+                await compileRuleDetector(
+                    rule,
+                    runCompiler,
+                    // Marker: a resolved non-managed BYOK slot vs the managed/
+                    // env-default path (`resolveTaskSlot` returns undefined
+                    // for a managed/BLOCKED config).
+                    { modelName: taskByok ? 'byok' : 'system' },
+                );
 
             const orgId = organizationAndTeamData.organizationId;
             const model = taskByok ? 'byok' : 'system';
+            // The local cosmetic gate skips the model. A missing or stale
+            // context still needs one classification for semantic review.
+            if (cosmeticSource === 'gate' && !hasCurrentContext) {
+                try {
+                    await runCompiler(rule);
+                } catch (error) {
+                    // The detector can still be disarmed. Leave the inference open for retry.
+                    this.logger.warn({
+                        message: `Could not classify context for cosmetic rule ${ruleUuid}`,
+                        context: KodyRuleDetectorCompilerService.name,
+                        error,
+                    });
+                }
+            }
             // The language scope is saved from the RAW output, before the
             // detector gate — so it lands on semantic rules too. It used to be
             // written only as part of a surviving detector, which meant the
             // 92,5% of the fleet with no detector had no scope at all and were
             // judged against every file in the PR regardless of the language
             // the rule names.
-            const [contextNeed, fileScope] = await Promise.all([
-                this.saveContextNeed(
-                    orgId,
-                    ruleUuid,
-                    rule,
-                    normalizeContextNeed(rawOutput?.contextNeed),
-                    model,
-                ),
-                this.saveFileScope(
-                    orgId,
-                    ruleUuid,
-                    rule,
-                    normalizeDetectorExtensions(rawOutput?.extensions),
-                    model,
-                ),
-            ]);
+            const [contextNeed, fileScope] = rawOutput
+                ? await Promise.all([
+                      this.saveContextNeed(
+                          orgId,
+                          ruleUuid,
+                          rule,
+                          normalizeContextNeed(rawOutput.contextNeed),
+                          model,
+                      ),
+                      this.saveFileScope(
+                          orgId,
+                          ruleUuid,
+                          rule,
+                          normalizeDetectorExtensions(rawOutput.extensions),
+                          model,
+                      ),
+                  ])
+                : ([
+                      rule.contextNeed?.need,
+                      rule.fileScope?.extensions,
+                  ] as const);
 
             if (detector) {
                 await this.kodyRulesService.updateRuleDetector(
@@ -208,11 +230,14 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                 context: KodyRuleDetectorCompilerService.name,
                 metadata: { ruleUuid, declineReason },
             });
-            await this.saveCompileAttempt(orgId, ruleUuid, rule, {
-                outcome: 'declined',
-                declineReason,
-                model,
-            });
+            if (rawOutput || hasCurrentContext) {
+                await this.saveCompileAttempt(orgId, ruleUuid, rule, {
+                    outcome: 'declined',
+                    declineReason,
+                    ...(cosmeticSource && { cosmeticSource }),
+                    model,
+                });
+            }
             return { compiled: false, declineReason, contextNeed, fileScope };
         } catch (error) {
             this.logger.warn({
@@ -244,9 +269,6 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
         // Keyed on the rule text AND the classifier's version, so rewriting
         // the context-need prompt re-asks the fleet once instead of leaving
         // every existing rule frozen on the old prompt's verdict.
-        const sourceHash = ruleContextNeedHash(rule);
-        const stored = rule.contextNeed;
-
         // An author outranks the compiler's guess about their own rule, and an
         // unchanged rule text REUSES what is stored — whatever this run inferred.
         // KRC-12 makes the hash the sole trigger for re-inference: keying on the
@@ -254,8 +276,8 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
         // settled need for a rule nobody had edited, so the same text could flip
         // between reviews and take the customer's rule in and out of scope with
         // no author action.
-        if (stored?.source === 'author' || stored?.sourceHash === sourceHash) {
-            return stored.need;
+        if (contextNeedIsCurrent(rule)) {
+            return rule.contextNeed.need;
         }
 
         try {
@@ -264,7 +286,7 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                 ruleUuid,
                 {
                     need,
-                    sourceHash,
+                    sourceHash: ruleContextNeedHash(rule),
                     source: 'compiler',
                     inferredAt: new Date(),
                     model,
@@ -362,11 +384,10 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
         organizationId: string,
         ruleUuid: string,
         rule: Partial<IKodyRule>,
-        attempt: {
-            outcome: 'compiled' | 'declined';
-            declineReason?: string;
-            model: string;
-        },
+        attempt: Pick<
+            IKodyRuleCompileAttempt,
+            'outcome' | 'declineReason' | 'cosmeticSource' | 'model'
+        >,
     ): Promise<void> {
         try {
             await this.kodyRulesService.updateRuleCompileAttempt(
@@ -378,6 +399,9 @@ export class KodyRuleDetectorCompilerService implements IKodyRuleDetectorCompile
                     outcome: attempt.outcome,
                     declineReason: attempt.declineReason,
                     model: attempt.model,
+                    ...(attempt.cosmeticSource && {
+                        cosmeticSource: attempt.cosmeticSource,
+                    }),
                 },
             );
         } catch (error) {

@@ -13,26 +13,34 @@ import type { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.inte
  * judgment a weak BYOK model gets wrong, and the whole T0 safety argument rests
  * on the gate not trusting the model.
  */
-const COSMETIC_RULE_PATTERNS: RegExp[] = [
-    /\bsemi-?colons?\b/i,
-    /\b(single|double)[- ]quot/i,
-    /\bquote (style|marks)\b/i,
-    /\bblank lines?\b/i,
-    /\bempty lines?\b/i,
-    /\btrailing (whitespace|space|comma)\b/i,
-    /\bindent(ation|ing)?\b/i,
-    /\bline length\b/i,
-    /\bmax(imum)?[- ]len\b/i,
-    /\bbrace (style|placement)\b/i,
-    /\bstatements? per line\b/i,
-    /\btabs? (vs\.?|or) spaces?\b/i,
+const FORMATTING_DIRECTIVE =
+    /^(?:(?:always|never|do not|don't)\s+)?(?:use|avoid|prefer|require|omit|remove|trim|leave|keep|enforce|write|limit|no)\s+/i;
+
+const FORMATTING_SUBJECTS = [
+    /^(?:unnecessary |trailing )?semi-?colons?(?: at the end of (?:each |every )?(?:lines?|statements?))?$/i,
+    /^(?:(?:single|double)[- ](?:quotes?|quoted strings?)|quote (?:style|marks))(?: for (?:strings?|attribute values))?$/i,
+    /^(?:(?:one|two|\d+) )?(?:extra |consecutive )?(?:blank|empty) lines?(?: between (?:functions|methods|classes|statements))?$/i,
+    /^trailing (?:whitespace|spaces?|commas?)(?: at the end of (?:each )?lines?)?$/i,
+    /^(?:indentation|indent(?:ing)? with (?:tabs|spaces|(?:two|four|\d+) spaces)|(?:two|four|\d+) spaces for indentation)(?:, never tabs)?$/i,
+    /^(?:(?:maximum |max[- ])?line length|max(?:imum)?[- ]len)(?: (?:to|under|of|at most) \d+(?: characters)?)?$/i,
+    /^brace (?:style|placement)$/i,
+    /^(?:(?:one|a single|1) )?statements? per line$/i,
+    /^tabs? (?:vs\.?|or|instead of) spaces?$/i,
 ];
 
-/**
- * True when the rule is linter-owned formatting. Reads title + body: the title
- * alone is often too terse ("Semicolons"), the body alone too discursive.
- */
-export function isCosmeticRule(rule: Partial<IKodyRule>): boolean {
-    const text = `${rule.title ?? ''}\n${rule.rule ?? ''}`;
-    return COSMETIC_RULE_PATTERNS.some((rx) => rx.test(text));
+function hasFormattingSubject(text?: string): boolean {
+    // A later example or a formatting term inside a security instruction
+    // doesn't establish the rule's subject. Defer ambiguous prose to the model.
+    const instruction = (text ?? '').trim().split(/[!?\n]|\.(?:\s|$)/, 1)[0];
+    const subject = instruction
+        .trim()
+        .replace(FORMATTING_DIRECTIVE, '')
+        .replace(/\s+in (?:[\w+#-]+ )?files?$/i, '');
+    return FORMATTING_SUBJECTS.some((pattern) => pattern.test(subject));
+}
+
+export function isCosmeticRule(
+    rule: Partial<Pick<IKodyRule, 'title' | 'rule'>>,
+): boolean {
+    return hasFormattingSubject(rule.title) || hasFormattingSubject(rule.rule);
 }

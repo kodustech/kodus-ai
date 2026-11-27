@@ -26,6 +26,7 @@
 import { z } from 'zod';
 import {
     IKodyRule,
+    IKodyRuleCompileAttempt,
     IKodyRuleDetector,
     KodyRuleContextNeed,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -202,6 +203,7 @@ export interface CompileOptions {
 export interface CompileResult {
     /** the safe-to-ship detector, or null when the rule stays semantic. */
     detector: DetectorPlan | null;
+    cosmeticSource?: IKodyRuleCompileAttempt['cosmeticSource'];
     /** why it was declined/downgraded (for observability). */
     declineReason?:
         | 'not-mechanical'
@@ -312,12 +314,20 @@ export async function compileRuleDetector(
     // LLM call so a linter-owned rule costs nothing to reject, and independently
     // of whether the model remembered to set `cosmetic`.
     if (isCosmeticRule(rule)) {
-        return { detector: null, declineReason: 'cosmetic' };
+        return {
+            detector: null,
+            declineReason: 'cosmetic',
+            cosmeticSource: 'gate',
+        };
     }
 
     const out = await runCompiler(rule);
     if (out?.cosmetic === true) {
-        return { detector: null, declineReason: 'cosmetic' };
+        return {
+            detector: null,
+            declineReason: 'cosmetic',
+            cosmeticSource: 'model',
+        };
     }
     if (!out || out.mechanical !== true || !out.pattern) {
         return { detector: null, declineReason: 'not-mechanical' };
