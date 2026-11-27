@@ -3759,11 +3759,14 @@ export class GithubService
         }
     }
 
-    /** HTTP 429, or 403 with no quota left or a secondary rate limit. */
+    /**
+     * HTTP 429, or 403 with no quota left or a `retry-after` header (GitHub's
+     * secondary rate limit). Structured fields only: message text is
+     * attacker-influenced and never decides anything.
+     */
     private isRateLimitError(error: unknown): boolean {
-        const { status, message, response } = (error ?? {}) as {
+        const { status, response } = (error ?? {}) as {
             status?: unknown;
-            message?: unknown;
             response?: { headers?: Record<string, unknown> };
         };
         if (status === 429) {
@@ -3772,11 +3775,10 @@ export class GithubService
         if (status !== 403) {
             return false;
         }
-        const remaining = response?.headers?.['x-ratelimit-remaining'];
+        const headers = response?.headers ?? {};
         return (
-            String(remaining) === '0' ||
-            (typeof message === 'string' &&
-                /secondary rate limit/i.test(message))
+            String(headers['x-ratelimit-remaining']) === '0' ||
+            headers['retry-after'] !== undefined
         );
     }
 

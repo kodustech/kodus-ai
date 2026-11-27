@@ -78,11 +78,13 @@ describe('GithubService.getIssue: issue artifacts', () => {
         expect(request.mock.calls[0][0]).toBe(
             'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts',
         );
-        expect(request.mock.calls[0][1]).toMatchObject({
+        expect(request.mock.calls[0][1]).toEqual({
             owner: 'acme',
             repo: 'web',
             issue_number: 12,
             per_page: 100,
+            headers: { 'X-GitHub-Api-Version': API_VERSION },
+            request: { signal: expect.any(AbortSignal) },
         });
     });
 
@@ -171,13 +173,10 @@ describe('GithubService.getIssue: issue artifacts', () => {
             }),
         ],
         [
-            'a 403 naming a secondary rate limit',
-            Object.assign(
-                new Error('You have exceeded a secondary rate limit'),
-                {
-                    status: 403,
-                },
-            ),
+            'a 403 with a retry-after header (secondary rate limit)',
+            Object.assign(httpError(403), {
+                response: { headers: { 'retry-after': '60' } },
+            }),
         ],
     ])(
         'rethrows %s, as getIssue does for the issue itself',
@@ -188,6 +187,19 @@ describe('GithubService.getIssue: issue artifacts', () => {
             await expect(get(service)).rejects.toBe(error);
         },
     );
+
+    it('does not trust a message that claims a secondary rate limit', async () => {
+        const { service } = serviceWith(issue(), () => {
+            throw Object.assign(
+                new Error('You have exceeded a secondary rate limit'),
+                { status: 403 },
+            );
+        });
+        const result = await get(service);
+        expect(unreadOf(result)).toEqual([
+            { reason: 'list_failed', status: 403 },
+        ]);
+    });
 
     it('still reports a 403 with quota left as unread', async () => {
         const { service } = serviceWith(issue(), () => {
