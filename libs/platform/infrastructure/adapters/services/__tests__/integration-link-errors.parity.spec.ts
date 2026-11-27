@@ -1,6 +1,10 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
+import { AddressInfo } from 'net';
+import * as http from 'http';
+
 import { GatewayAddressRefusedError } from '@libs/llm/gateway-address-guard';
 import axios from 'axios';
+import pino from 'pino';
 
 import { AzureReposService } from '../azureRepos/azureRepos.service';
 import { BitbucketCloudService } from '../bitbucket/bitbucket-cloud.service';
@@ -24,10 +28,27 @@ const hostStatus = (status: number) =>
     Object.assign(new Error(`Request failed with status code ${status}`), {
         response: { status },
     });
+/** axios's shape for a failed DNS lookup: the code, with its config and request. */
 const unreachable = () =>
     Object.assign(new Error('getaddrinfo ENOTFOUND git.example.test'), {
         code: 'ENOTFOUND',
+        config: {},
+        request: {},
     });
+/** pg's shape when the database refuses the pool: no HTTP client involved. */
+const databaseDown = () =>
+    Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:5432'), {
+        code: 'ECONNREFUSED',
+        syscall: 'connect',
+        port: 5432,
+    });
+
+/** What the logger writes for an error, through its real serializer. */
+const { deepSanitize } = jest.requireActual('@libs/core/log/logger') as {
+    deepSanitize: (value: unknown) => unknown;
+};
+const serialized = (err: unknown) =>
+    JSON.stringify(deepSanitize(pino.stdSerializers.err(err as Error)));
 
 const ADDRESS_REFUSAL =
     'Git server host "git.example.test" resolves to a private or reserved address; the call was not sent.';
@@ -65,6 +86,9 @@ const logs = (svc: any) => [
 /** One way to drive each provider's link, and the hooks to make it fail. */
 type Harness = {
     provider: string;
+    /** The service's class name and the named fields its link logs. */
+    context: string;
+    metadata: Record<string, unknown>;
     make: () => any;
     link: (svc: any) => Promise<unknown>;
     /** Makes the first call to the host fail with `err`. */
@@ -76,6 +100,12 @@ type Harness = {
 const harnesses: Harness[] = [
     {
         provider: 'GitLab',
+        context: 'GitlabService',
+        metadata: {
+            organizationAndTeamData: ORG,
+            authMode: 'token',
+            host: 'https://git.example.test',
+        },
         make: () => service(GitlabService),
         link: (svc) =>
             svc.createAuthIntegration({
@@ -99,6 +129,8 @@ const harnesses: Harness[] = [
     },
     {
         provider: 'Bitbucket Cloud',
+        context: 'BitbucketCloudService',
+        metadata: { organizationAndTeamData: ORG, host: undefined },
         make: () => service(BitbucketCloudService),
         link: (svc) =>
             svc.createAuthIntegration({
@@ -123,6 +155,11 @@ const harnesses: Harness[] = [
     },
     {
         provider: 'Bitbucket Data Center',
+        context: 'BitbucketDataCenterService',
+        metadata: {
+            organizationAndTeamData: ORG,
+            host: 'https://bitbucket.example.test',
+        },
         make: () => service(BitbucketDataCenterService),
         link: (svc) =>
             svc.createAuthIntegration({
@@ -147,6 +184,11 @@ const harnesses: Harness[] = [
     },
     {
         provider: 'Azure Repos',
+        context: 'AzureReposService',
+        metadata: {
+            organizationAndTeamData: ORG,
+            orgUrl: 'https://dev.azure.example.test/acme',
+        },
         make: () => service(AzureReposService),
         link: (svc) =>
             svc.createAuthIntegration({
@@ -168,6 +210,11 @@ const harnesses: Harness[] = [
     },
     {
         provider: 'Forgejo',
+        context: 'ForgejoService',
+        metadata: {
+            organizationAndTeamData: ORG,
+            host: 'https://git.example.test',
+        },
         make: () => service(ForgejoService),
         link: (svc) =>
             svc.createAuthIntegration({
@@ -210,11 +257,35 @@ describe.each(harnesses)('$provider createAuthIntegration', (h) => {
         expect(thrown).toBe(fault);
         expect(svc.logger.warn).not.toHaveBeenCalled();
         expect(svc.logger.error).toHaveBeenCalledTimes(1);
-        expect(svc.logger.error.mock.calls[0][0]).toMatchObject({
+        expect(svc.logger.error.mock.calls[0][0]).toEqual({
             message: `Failed to create ${h.provider} integration`,
+            context: h.context,
             error: fault,
+            metadata: h.metadata,
         });
         expect(JSON.stringify(logs(svc))).not.toContain(PAT);
+    });
+
+    it('leaves a database connection failure after the host to the exception filter', async () => {
+        const svc = h.make();
+        const down = databaseDown();
+        h.faultAfterHost(svc, down);
+
+        const thrown = await h.link(svc).catch((e) => e);
+
+        // Not "could not reach the host": the git host answered.
+        expect(thrown).toBe(down);
+        expect(svc.logger.warn).not.toHaveBeenCalled();
+        expect(svc.logger.error.mock.calls).toEqual([
+            [
+                {
+                    message: `Failed to create ${h.provider} integration`,
+                    context: h.context,
+                    error: down,
+                    metadata: h.metadata,
+                },
+            ],
+        ]);
     });
 
     it('refuses in words when the host does not accept the credentials', async () => {
@@ -229,8 +300,13 @@ describe.each(harnesses)('$provider createAuthIntegration', (h) => {
         );
         expect(svc.logger.error).not.toHaveBeenCalled();
         expect(svc.logger.warn).toHaveBeenCalledTimes(1);
-        expect(svc.logger.warn.mock.calls[0][0]).toMatchObject({
+        expect(svc.logger.warn.mock.calls[0][0]).toEqual({
             message: `${h.provider} integration refused`,
+            context: h.context,
+            metadata: {
+                ...h.metadata,
+                reason: `${h.provider} did not accept the credentials (401). Check the token and try again.`,
+            },
         });
         expect(JSON.stringify(logs(svc))).not.toContain(PAT);
     });
@@ -256,36 +332,79 @@ describe.each(harnesses)('$provider createAuthIntegration', (h) => {
         expect(thrown).toBeInstanceOf(BadRequestException);
         expect((thrown as HttpException).message).toBe(ADDRESS_REFUSAL);
         expect(svc.logger.error).not.toHaveBeenCalled();
-        expect(svc.logger.warn).toHaveBeenCalledTimes(1);
+        expect(svc.logger.warn.mock.calls).toEqual([
+            [
+                {
+                    message: `${h.provider} integration refused`,
+                    context: h.context,
+                    metadata: { ...h.metadata, reason: ADDRESS_REFUSAL },
+                },
+            ],
+        ]);
     });
 });
 
 describe('GitLab OAuth link', () => {
-    afterEach(() => jest.restoreAllMocks());
+    const CODE = 'gl-oauth-code-0000';
+    const SECRET = 'gloas-client-secret-0000';
+    const saved = { ...process.env };
+    let server: http.Server;
 
-    it('treats a 401 to the token exchange as a fault in Kodus credentials, logged once as an error', async () => {
-        // The exchange authenticates with Kodus's OAuth client secret: GitLab
-        // answers a wrong or rotated one with 401 invalid_client.
+    beforeAll(async () => {
+        // GitLab's answer to a wrong or rotated client secret.
+        server = http.createServer((_req, res) => {
+            res.writeHead(401, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid_client' }));
+        });
+        await new Promise<void>((resolve) =>
+            server.listen(0, '127.0.0.1', resolve),
+        );
+        const { port } = server.address() as AddressInfo;
+        process.env.API_GITLAB_TOKEN_URL = `http://127.0.0.1:${port}/oauth/token`;
+        process.env.GLOBAL_GITLAB_CLIENT_ID = 'gitlab-client-id';
+        process.env.GLOBAL_GITLAB_CLIENT_SECRET = SECRET;
+    });
+
+    afterAll(async () => {
+        process.env = saved;
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
+
+    it('treats a 401 to the token exchange as a fault in Kodus credentials, logged once without the code or the secret', async () => {
         const svc = service(GitlabService);
-        const rejected = Object.assign(hostStatus(401), { request: {} });
-        jest.spyOn(axios, 'post').mockRejectedValueOnce(rejected);
 
         const thrown = await svc
             .createAuthIntegration({
                 authMode: 'oauth',
-                code: 'gl-oauth-code',
+                code: CODE,
                 organizationAndTeamData: ORG,
             })
             .catch((e: unknown) => e);
 
-        expect(thrown).toBe(rejected);
+        expect(axios.isAxiosError(thrown)).toBe(true);
+        expect(
+            (thrown as { response?: { status?: number } }).response?.status,
+        ).toBe(401);
         expect(svc.logger.warn).not.toHaveBeenCalled();
-        expect(svc.logger.error).toHaveBeenCalledTimes(1);
-        expect(svc.logger.error.mock.calls[0][0]).toMatchObject({
-            message: 'Failed to create GitLab integration',
-            error: rejected,
-        });
-        expect(JSON.stringify(logs(svc))).not.toContain('gl-oauth-code');
+        expect(svc.logger.error.mock.calls).toEqual([
+            [
+                {
+                    message: 'Failed to create GitLab integration',
+                    context: 'GitlabService',
+                    error: thrown,
+                    metadata: {
+                        organizationAndTeamData: ORG,
+                        authMode: 'oauth',
+                        host: undefined,
+                    },
+                },
+            ],
+        ]);
+        // The exception filter logs the same error.
+        const written = serialized(thrown);
+        expect(written).toContain('oauth/token');
+        expect(written).not.toContain(CODE);
+        expect(written).not.toContain(SECRET);
     });
 });
 

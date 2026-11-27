@@ -580,6 +580,21 @@ describe('GitHub installation linking', () => {
             expect(thrown).toBeInstanceOf(BadRequestException);
             expect(thrown.message).toBe(refused.message);
             expect(svc.logger.error).not.toHaveBeenCalled();
+            expect(svc.logger.warn.mock.calls).toEqual([
+                [
+                    {
+                        message: 'GitHub integration refused',
+                        context: 'GithubService',
+                        metadata: {
+                            organizationAndTeamData:
+                                base.organizationAndTeamData,
+                            authMode: 'token',
+                            host: undefined,
+                            reason: refused.message,
+                        },
+                    },
+                ],
+            ]);
         });
 
         it('refuses a PAT GitHub does not accept in words, logged as a warning', async () => {

@@ -115,9 +115,10 @@ describe('toIntegrationLinkError', () => {
                 'GitHub',
             ) as HttpException;
 
+            const status = (err as { status?: number }).status ?? 403;
             expect(mapped).toBeInstanceOf(ServiceUnavailableException);
-            expect(mapped.message).toMatch(
-                /^GitHub is rate-limiting Kodus \((403|429)\)\. Try again in a few minutes\.$/,
+            expect(mapped.message).toBe(
+                `GitHub is rate-limiting Kodus (${status}). Try again in a few minutes.`,
             );
             expect(mapped.cause).toBe(err);
         },
@@ -164,7 +165,7 @@ describe('toIntegrationLinkError', () => {
         'EAI_AGAIN',
         'ENETUNREACH',
     ])('answers a transient network failure (%s) with a worded 503', (code) => {
-        const err = fail({ code });
+        const err = fail({ code, request: {} });
         const mapped = toIntegrationLinkError(err, 'GitLab') as HttpException;
 
         expect(mapped).toBeInstanceOf(ServiceUnavailableException);
@@ -196,7 +197,7 @@ describe('toIntegrationLinkError', () => {
     it.each(['ENOTFOUND', 'ECONNREFUSED', 'EHOSTUNREACH', 'CERT_HAS_EXPIRED'])(
         'turns an unreachable host (%s) into a worded 400',
         (code) => {
-            const err = fail({ code });
+            const err = fail({ code, request: {} });
             const mapped = toIntegrationLinkError(
                 err,
                 'Forgejo',
@@ -237,6 +238,7 @@ describe('toIntegrationLinkError', () => {
         const err = fail(
             {
                 status: 500,
+                request: {},
                 cause: fail({ cause: fail({ code: 'ENOTFOUND' }) }),
             },
             'getaddrinfo ENOTFOUND ghes.example.test',
@@ -245,8 +247,28 @@ describe('toIntegrationLinkError', () => {
         const mapped = toIntegrationLinkError(err, 'GitHub') as HttpException;
 
         expect(mapped).toBeInstanceOf(BadRequestException);
-        expect(mapped.message).toContain('(ENOTFOUND)');
+        expect(mapped.message).toBe(
+            'Kodus could not reach the GitHub host (ENOTFOUND). Check the URL and that the host is reachable from Kodus.',
+        );
     });
+
+    it.each([
+        // pg's shape when the database refuses the pool: no request, no config.
+        [
+            'a database refusing the connection',
+            fail({ code: 'ECONNREFUSED', syscall: 'connect', port: 5432 }),
+        ],
+        ['a database timing out', fail({ code: 'ETIMEDOUT' })],
+        [
+            'a network code under a wrapper with no request',
+            fail({ cause: fail({ code: 'ENOTFOUND' }) }, 'save failed'),
+        ],
+    ])(
+        'leaves %s to the exception filter: no HTTP client reported it',
+        (_name, err) => {
+            expect(toIntegrationLinkError(err, 'GitLab')).toBe(err);
+        },
+    );
 
     it.each([
         [

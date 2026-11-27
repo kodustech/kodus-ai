@@ -1399,17 +1399,29 @@ export class GitlabService implements Omit<
 
     async authenticateWithCodeOauth(params: any): Promise<any> {
         try {
-            const tokenResponse = await axios.post(
-                process.env.API_GITLAB_TOKEN_URL,
-                {
-                    client_id: process.env.GLOBAL_GITLAB_CLIENT_ID,
-                    client_secret: process.env.GLOBAL_GITLAB_CLIENT_SECRET,
-                    code: params.code,
-                    grant_type: 'authorization_code',
-                    redirect_uri: process.env.GLOBAL_GITLAB_REDIRECT_URL,
-                },
-                { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
-            );
+            const tokenResponse = await axios
+                .post(
+                    process.env.API_GITLAB_TOKEN_URL,
+                    {
+                        client_id: process.env.GLOBAL_GITLAB_CLIENT_ID,
+                        client_secret: process.env.GLOBAL_GITLAB_CLIENT_SECRET,
+                        code: params.code,
+                        grant_type: 'authorization_code',
+                        redirect_uri: process.env.GLOBAL_GITLAB_REDIRECT_URL,
+                    },
+                    { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
+                )
+                .catch((exchangeError: unknown) => {
+                    // The body carries the user's authorization code, which log
+                    // redaction keeps (`code` is also GitHub's installation id).
+                    if (
+                        axios.isAxiosError(exchangeError) &&
+                        exchangeError.config
+                    ) {
+                        exchangeError.config.data = undefined;
+                    }
+                    throw exchangeError;
+                });
 
             if (!tokenResponse || !tokenResponse.data) {
                 throw new BadRequestException(

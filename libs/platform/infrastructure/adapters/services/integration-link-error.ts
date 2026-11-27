@@ -46,6 +46,7 @@ type ErrorLike = {
     message?: unknown;
     headers?: Headers;
     request?: unknown;
+    config?: unknown;
     response?: { status?: unknown; headers?: Headers };
     cause?: unknown;
 };
@@ -66,10 +67,22 @@ export function causeChain(err: unknown): ErrorLike[] {
     return chain;
 }
 
+/**
+ * A network code counts only when an HTTP client reported it (octokit and
+ * bitbucket set `request`, axios `config` and `request`): the same code from
+ * a database driver is our infrastructure failing, not the git host.
+ */
 function networkCode(
     chain: ErrorLike[],
     codes: Set<string>,
 ): string | undefined {
+    if (
+        !chain.some(
+            (link) => link.request !== undefined || link.config !== undefined,
+        )
+    ) {
+        return undefined;
+    }
     for (const link of chain) {
         if (typeof link.code === 'string' && codes.has(link.code)) {
             return link.code;
