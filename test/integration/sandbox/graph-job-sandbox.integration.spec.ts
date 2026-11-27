@@ -22,6 +22,7 @@ import {
 } from '@libs/sandbox/infrastructure/repositories/schemas/sandbox-lease.model';
 import { SandboxLeaseManager } from '@libs/sandbox/infrastructure/services/sandbox-lease-manager.service';
 import { resolveMongoTestGate } from '../mongo-test-uri';
+import { waitForSandboxRelease } from './wait-for-sandbox-release';
 
 const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test_graph_job');
 const organizationId = randomUUID();
@@ -174,7 +175,9 @@ const repositoryId = randomUUID();
                 },
             });
             await run();
-            expect(await leases.findByPrKey(prKey)).toBeNull();
+            await waitForSandboxRelease(async () => {
+                expect(await leases.findByPrKey(prKey)).toBeNull();
+            });
             const retired = await leases.findByPrKey(
                 `${organizationId}:retired:${abandonedId}`,
             );
@@ -256,8 +259,10 @@ const repositoryId = randomUUID();
         expect(provider.createSandboxWithRepo).not.toHaveBeenCalled();
         await run();
         expect(provider.createSandboxWithRepo).toHaveBeenCalledTimes(1);
+        await waitForSandboxRelease(async () => {
+            expect(await leases.findByPrKey(prKey)).toBeNull();
+        });
         expect(Sandbox.kill).toHaveBeenCalledTimes(1);
-        expect(await leases.findByPrKey(prKey)).toBeNull();
     });
 
     it.each([AstGraphBuildJobProcessor, AstGraphIncrementalJobProcessor])(
@@ -325,50 +330,50 @@ const repositoryId = randomUUID();
         Object.assign(exporter, { collections: { logs } });
         try {
             addLogProcessor(exporter);
-            const succeeded = graphJob(AstGraphBuildJobProcessor);
-            await succeeded.run();
-            const failed = graphJob(AstGraphIncrementalJobProcessor);
-            (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
-                new Error('provider unavailable'),
-            );
-            await failed.run();
-            const unclaimed = graphJob(AstGraphBuildJobProcessor);
-            jest.spyOn(leases, 'claimCleanup').mockResolvedValueOnce(null);
-            await unclaimed.run();
-
-            await exporter.flush();
-            for (const [prKey, source, message] of [
-                [
-                    succeeded.prKey,
-                    'AST-GRAPH-JOB',
-                    `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${sandbox.sandboxId}" prKey="${succeeded.prKey}"`,
-                ],
-                [
-                    failed.prKey,
-                    'AST-GRAPH-INCR',
-                    `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${sandbox.sandboxId}" prKey="${failed.prKey}"`,
-                ],
-                [
-                    unclaimed.prKey,
-                    'AST-GRAPH-JOB',
-                    `SandboxLeaseManager: single-use release lost the cleanup claim, leaving the sandbox to its holder prKey="${unclaimed.prKey}"`,
-                ],
-            ] as const) {
+            const check = async (
+                task: ReturnType<typeof graphJob>,
+                source: string,
+                outcome: string,
+            ) => {
+                await task.run();
                 const filter = {
                     'metadata.organizationId': organizationId,
-                    'attributes.prKey': prKey,
+                    'attributes.prKey': task.prKey,
                     'attributes.sandboxId': sandbox.sandboxId,
                 };
-                expect(await logs.countDocuments({ ...filter, message })).toBe(
-                    1,
-                );
+                const message = `SandboxLeaseManager: ${outcome} prKey="${task.prKey}"`;
+                await waitForSandboxRelease(async () => {
+                    await exporter.flush();
+                    expect(
+                        await logs.countDocuments({ ...filter, message }),
+                    ).toBe(1);
+                });
                 expect(
                     await logs.countDocuments({
                         ...filter,
                         message: `[${source}] Sandbox cleaned up for org/repo`,
                     }),
                 ).toBe(1);
-            }
+            };
+            await check(
+                graphJob(AstGraphBuildJobProcessor),
+                'AST-GRAPH-JOB',
+                `killed single-use sandbox immediately sandboxId="${sandbox.sandboxId}"`,
+            );
+            (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+                new Error('provider unavailable'),
+            );
+            await check(
+                graphJob(AstGraphIncrementalJobProcessor),
+                'AST-GRAPH-INCR',
+                `immediate kill failed, idle-kill cron retries sandboxId="${sandbox.sandboxId}"`,
+            );
+            jest.spyOn(leases, 'claimCleanup').mockResolvedValueOnce(null);
+            await check(
+                graphJob(AstGraphBuildJobProcessor),
+                'AST-GRAPH-JOB',
+                'single-use release lost the cleanup claim, leaving the sandbox to its holder',
+            );
         } finally {
             removeLogProcessor(exporter);
             await logs.drop();

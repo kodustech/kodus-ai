@@ -12,6 +12,7 @@ import {
 import { SandboxLeaseManager } from '@libs/sandbox/infrastructure/services/sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services/sandbox-lease-reaper.service';
 import { resolveMongoTestGate } from '../../../../../test/integration/mongo-test-uri';
+import { waitForSandboxRelease } from '../../../../../test/integration/sandbox/wait-for-sandbox-release';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -708,7 +709,9 @@ const run =
                         apiKey: 'fixture-api-key',
                     });
                     expect(await leaseRepo.findByPrKey(retiredKey)).toBeNull();
-                    expect(await leaseRepo.findByPrKey(prKey)).toBeNull();
+                    await waitForSandboxRelease(async () => {
+                        expect(await leaseRepo.findByPrKey(prKey)).toBeNull();
+                    });
                 } finally {
                     await mongoConnection.dropDatabase();
                     await mongoConnection.close();
