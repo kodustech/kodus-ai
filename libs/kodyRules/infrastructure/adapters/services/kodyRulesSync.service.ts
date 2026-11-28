@@ -290,8 +290,13 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
+        // Spared from the delete: the record a rename is re-keying. In
+        // centralized-config mode that re-key lands later through a PR, so
+        // the record can still sit on the old path when this runs.
+        keepUuid?: string;
     }): Promise<void> {
-        const { organizationAndTeamData, repositoryId, sourcePath } = params;
+        const { organizationAndTeamData, repositoryId, sourcePath, keepUuid } =
+            params;
         let toDelete: Partial<IKodyRule>[];
         try {
             const entity = await this.kodyRulesService.findByOrganizationId(
@@ -303,7 +308,10 @@ export class KodyRulesSyncService {
                 entity,
                 repositoryId,
                 sourcePath,
-            ).filter((r) => r.status !== KodyRulesStatus.DELETED);
+            ).filter(
+                (r) =>
+                    r.status !== KodyRulesStatus.DELETED && r.uuid !== keepUuid,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Failed to load rules for soft-delete by sourcePath',
@@ -719,11 +727,15 @@ export class KodyRulesSyncService {
         } = params;
 
         if (this.shouldIgnoreFile(content)) {
-            await this.deleteRuleBySourcePath({
-                organizationAndTeamData,
-                repositoryId: repository.id,
-                sourcePath: previousPath ?? filePath,
-            });
+            // A rename retires the old path and the new one alike.
+            for (const sourcePath of [previousPath, filePath]) {
+                if (!sourcePath) continue;
+                await this.deleteRuleBySourcePath({
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    sourcePath,
+                });
+            }
             return { outcome: 'removed' };
         }
 
@@ -742,12 +754,39 @@ export class KodyRulesSyncService {
         });
 
         if (converted.kind === 'skipped') {
-            if (converted.reason === NOT_A_RULE_TEMPLATE) {
+            const keepsRule = converted.reason === NOT_A_RULE_TEMPLATE;
+            if (keepsRule) {
+                // The kept rule follows a rename to its new file, so a later
+                // edit, @kody-ignore or deletion of that file reaches it.
+                if (
+                    previousPath &&
+                    existing?.uuid &&
+                    existing.status !== KodyRulesStatus.DELETED
+                ) {
+                    await this.moveRuleSource({
+                        organizationAndTeamData,
+                        ruleId: existing.uuid,
+                        sourcePath: filePath,
+                    });
+                }
                 await this.flagUnparsableSource({
                     organizationAndTeamData,
                     rule: existing,
                     sourcePath: filePath,
                 });
+            }
+            // A rename leaves nothing behind on the old path, and the new path
+            // keeps at most the rule kept above. Otherwise (disabled via
+            // frontmatter, for example) nothing replaced the old rule.
+            if (previousPath) {
+                for (const sourcePath of [previousPath, filePath]) {
+                    await this.deleteRuleBySourcePath({
+                        organizationAndTeamData,
+                        repositoryId: repository.id,
+                        sourcePath,
+                        keepUuid: keepsRule ? existing?.uuid : undefined,
+                    });
+                }
             }
             return { outcome: 'skipped', reason: converted.reason };
         }
@@ -780,6 +819,25 @@ export class KodyRulesSyncService {
                   dto,
                   this.systemUserInfo,
               );
+
+        // A rename re-keys the newest old-path record in place (above).
+        // Any other record still on the old path would stay live for a file
+        // that no longer exists. The new path did not exist before this
+        // merge, so any record already on it is stale too (e.g. left by an
+        // earlier rename that lost track of its old path). The record kept
+        // is the re-keyed one, or the one just created; in centralized mode
+        // the write is deferred and only the re-keyed uuid is known.
+        if (previousPath) {
+            const keepUuid = existing?.uuid ?? this.getRuleId(result);
+            for (const sourcePath of [previousPath, filePath]) {
+                await this.deleteRuleBySourcePath({
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    sourcePath,
+                    keepUuid,
+                });
+            }
+        }
 
         // In centralized PR mode the mutation returns PR metadata, not the
         // entity; fall back to the known uuid or look the rule up again.
@@ -1193,6 +1251,37 @@ export class KodyRulesSyncService {
             '<!-- The sections below are files referenced via @file from the content above; treat them as part of the same guidance. -->',
             ...sections,
         ].join('\n');
+    }
+
+    /**
+     * Re-points a kept rule at its file's new path. Only `sourcePath` changes:
+     * `createOrUpdate` merges the update over the stored rule, so its text,
+     * status and detector stay as they were.
+     */
+    private async moveRuleSource(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        ruleId: string;
+        sourcePath: string;
+    }): Promise<void> {
+        const { organizationAndTeamData, ruleId, sourcePath } = params;
+        try {
+            await this.kodyRulesService.createOrUpdate(
+                organizationAndTeamData,
+                { uuid: ruleId, sourcePath } as CreateKodyRuleDto,
+                this.systemUserInfo,
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to move a kept rule to its renamed file',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleId,
+                    sourcePath,
+                },
+            });
+        }
     }
 
     /**
