@@ -265,6 +265,18 @@ type TestByokInput = {
 
 const TEST_TIMEOUT_MS = 15_000;
 
+/** A response body as text, for the classifier; undefined when it has none
+ *  or can't be written (a cycle). */
+function bodyText(body: unknown): string | undefined {
+    if (body === undefined || body === null) return undefined;
+    if (typeof body === 'string') return body;
+    try {
+        return JSON.stringify(body);
+    } catch {
+        return undefined;
+    }
+}
+
 @Injectable()
 export class TestByokConnectionUseCase {
     private readonly logger = createLogger(TestByokConnectionUseCase.name);
@@ -1010,7 +1022,12 @@ export class TestByokConnectionUseCase {
         if (sdk) {
             const providerMessage =
                 this.extractProviderMessage(sdk.body) ?? sdk.message;
-            return this.fromHttpStatus(sdk.status, providerMessage, latencyMs);
+            return this.fromHttpStatus(
+                sdk.status,
+                providerMessage,
+                latencyMs,
+                sdk.body,
+            );
         }
 
         if (axios.isAxiosError(err)) {
@@ -1020,7 +1037,12 @@ export class TestByokConnectionUseCase {
             );
 
             if (typeof status === 'number') {
-                return this.fromHttpStatus(status, providerMessage, latencyMs);
+                return this.fromHttpStatus(
+                    status,
+                    providerMessage,
+                    latencyMs,
+                    err.response?.data,
+                );
             }
 
             if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
@@ -1045,7 +1067,12 @@ export class TestByokConnectionUseCase {
                 };
             }
 
-            return this.fromHttpStatus(status, providerMessage, latencyMs);
+            return this.fromHttpStatus(
+                status,
+                providerMessage,
+                latencyMs,
+                err.response?.data,
+            );
         }
 
         // An aborted probe is our own timeout, not a provider fault — say so
@@ -1084,6 +1111,9 @@ export class TestByokConnectionUseCase {
         status: number | undefined,
         providerMessage: string | undefined,
         latencyMs: number,
+        /** The provider's response body, which may name what the message
+         *  does not (Google's per-minute quotaId, RetryInfo). */
+        responseBody?: unknown,
     ): TestByokResult {
         const base = { latencyMs, httpStatus: status, providerMessage };
 
@@ -1130,6 +1160,9 @@ export class TestByokConnectionUseCase {
             classifyLLMError({
                 statusCode: 429,
                 message: providerMessage ?? '',
+                // The body as the review's error carries it: Google names a
+                // per-minute window there, not always in the message.
+                responseBody: bodyText(responseBody),
             }).category === LlmErrorCategory.QUOTA_EXCEEDED
         ) {
             return {
