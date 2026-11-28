@@ -803,6 +803,12 @@ describe('buildE2BRemoteCommands', () => {
                 ['cat;rm -rf / --token=SECRET', 'cat'],
                 [`${'p'.repeat(60)} arg`, 'p'.repeat(40)],
                 ['  grep|head', 'grep'],
+                // An inline assignment carries its value: the program is
+                // what runs after it (#2744 QA).
+                ['API_TOKEN=abc123 seq 1 3000000', 'seq'],
+                ['A=1 B="two words" git log -p', 'git'],
+                ['env -i TOKEN=s3cret PATH=/bin cat big.json', 'cat'],
+                ['TOKEN=only', ''],
             ];
             for (const [command, program] of cases) {
                 const { run } = backgroundRun(exitError(big, '', -1), [big]);

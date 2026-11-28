@@ -176,9 +176,25 @@ function headOf(text: string, max: number): string {
     return lastLine > 0 ? head.slice(0, lastLine) : head;
 }
 
-/** First word of a shell command, without its arguments. */
+/** `NAME=value` before a command, the value quoted or not. */
+const INLINE_ASSIGNMENT =
+    /^[A-Za-z_][A-Za-z0-9_]*=(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s;|&<>()'"])*\s*/;
+/** `env` and its flags, when a command follows. */
+const ENV_PREFIX = /^env(?:\s+-[A-Za-z-]+)*\s+/;
+
+/**
+ * The program a shell command runs, without its arguments. Inline
+ * assignments (`API_TOKEN=… seq`, `env -i TOKEN=… cat`) come first and carry
+ * their values, so they are skipped, never returned (#2744).
+ */
 function programOf(command: string): string {
-    return (command.trim().split(/[\s;|&<>()]+/)[0] ?? '').slice(0, 40);
+    let rest = command.trim();
+    for (;;) {
+        const prefix = INLINE_ASSIGNMENT.exec(rest) ?? ENV_PREFIX.exec(rest);
+        if (!prefix) break;
+        rest = rest.slice(prefix[0].length);
+    }
+    return (rest.split(/[\s;|&<>()]+/)[0] ?? '').slice(0, 40);
 }
 
 export interface BuildE2BRemoteCommandsOptions {
