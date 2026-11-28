@@ -1,12 +1,10 @@
 import type { CommandReviewFeedbackTarget } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
 
 /**
- * Thrown when a user-issued `@kody review` cannot start because another run
- * already holds the PR — either the distributed lock or an in-flight
- * execution row.
- *
- * Only command origins throw. An automation losing the same race is
- * genuinely redundant and is still dropped, quietly.
+ * Thrown when a review cannot start because another run already holds the
+ * PR, either the distributed lock or an in-flight execution row. Both a
+ * user-issued `@kody review` and a push throw; `fromCommand` tells them
+ * apart once the retry window runs out (#1700, #2561).
  *
  * Returning instead of throwing is what made the request vanish (#1700):
  * the caller chain ignores the returned string and marks the job COMPLETED,
@@ -31,10 +29,14 @@ export class PrReviewInProgressError extends Error {
      */
     readonly holderVisibleUntil?: Date;
 
+    /** False for a push: giving up on it posts nothing to the PR. */
+    readonly fromCommand: boolean;
+
     constructor(params: {
         gate: 'lock' | 'execution';
         target: CommandReviewFeedbackTarget;
         holderVisibleUntil?: Date;
+        fromCommand?: boolean;
         message?: string;
     }) {
         super(
@@ -44,6 +46,7 @@ export class PrReviewInProgressError extends Error {
         this.gate = params.gate;
         this.target = params.target;
         this.holderVisibleUntil = params.holderVisibleUntil;
+        this.fromCommand = params.fromCommand ?? true;
     }
 }
 

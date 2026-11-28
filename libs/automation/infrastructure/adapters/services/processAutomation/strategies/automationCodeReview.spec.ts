@@ -106,10 +106,14 @@ describe('AutomationCodeReviewService', () => {
             },
         );
 
-        it('still drops an automation-triggered run quietly', async () => {
+        // #2561: a dropped push leaves the new head unreviewed.
+        it('hands a push back for retry too, marked as not a command', async () => {
             await expect(
                 service.run!(makePayload({ origin: undefined })),
-            ).resolves.toBeDefined();
+            ).rejects.toMatchObject({
+                name: 'PrReviewInProgressError',
+                fromCommand: false,
+            });
         });
 
         // Recomputing the deadline from "now" on every retry would let it
@@ -173,10 +177,14 @@ describe('AutomationCodeReviewService', () => {
             expect(error.target.pullRequest).toEqual({ number: 42 });
         });
 
-        it('still drops an automation-triggered run quietly', async () => {
+        // #2561: a dropped push leaves the new head unreviewed.
+        it('hands a push back for retry too, marked as not a command', async () => {
             await expect(
                 service.run!(makePayload({ origin: undefined })),
-            ).resolves.toBeDefined();
+            ).rejects.toMatchObject({
+                name: 'PrReviewInProgressError',
+                fromCommand: false,
+            });
         });
 
         it('releases the lock it acquired', async () => {

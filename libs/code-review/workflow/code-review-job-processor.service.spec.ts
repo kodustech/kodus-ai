@@ -129,6 +129,26 @@ describe('CodeReviewJobProcessorService', () => {
             expect(prReviewDeferralService.defer).not.toHaveBeenCalled();
         });
 
+        it('gives up on a push without posting to the PR', async () => {
+            runCodeReviewAutomationUseCase.execute.mockRejectedValue(
+                new PrReviewInProgressError({
+                    gate: 'lock',
+                    target: TARGET,
+                    fromCommand: false,
+                }),
+            );
+
+            await service.process('job-1');
+
+            expect(
+                codeReviewHandlerService.notifyCommandReviewRefused,
+            ).not.toHaveBeenCalled();
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+            );
+        });
+
         it('still settles even if the PR comment cannot be posted', async () => {
             codeReviewHandlerService.notifyCommandReviewRefused.mockRejectedValue(
                 new Error('provider unreachable'),

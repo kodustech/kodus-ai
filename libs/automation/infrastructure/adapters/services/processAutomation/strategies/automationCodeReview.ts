@@ -214,14 +214,12 @@ export class AutomationCodeReviewService implements Omit<
             // Recomputing it per retry would let it slide forever, leaving
             // MAX_DEFERRALS as the only stop — safe today only because the
             // lock's TTL is short enough that this path stops firing after a
-            // minute. Only commands defer, so only they pay for the lookup.
-            const lockHolder = this.isCommandOrigin(origin)
-                ? await this.getActiveExecution(
-                      teamAutomationId,
-                      pullRequest?.number,
-                      repository?.id,
-                  )
-                : null;
+            // minute.
+            const lockHolder = await this.getActiveExecution(
+                teamAutomationId,
+                pullRequest?.number,
+                repository?.id,
+            );
 
             this.refuseCommand(
                 'lock',
@@ -373,10 +371,9 @@ export class AutomationCodeReviewService implements Omit<
 
     /**
      * Both refusal paths drop the run before the pipeline, which is where
-     * every other piece of user feedback is posted. An automation losing
-     * the race is genuinely redundant and stays dropped; a person who typed
-     * `@kody review` gets their request handed back to the job processor to
-     * retry once the PR frees up (#1700).
+     * every other piece of user feedback is posted. Both commands (#1700)
+     * and pushes (#2561) are handed back to the job processor to retry
+     * once the PR frees up.
      */
     /**
      * When the run holding this PR stops being visible to the gate.
@@ -411,13 +408,12 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
         } = payload;
 
-        if (!this.isCommandOrigin(origin)) {
-            return;
-        }
-
+        // Pushes defer too: dropping one leaves the new head unreviewed
+        // (#2561). Only a command is answered on the PR if it gives up.
         throw new PrReviewInProgressError({
             gate,
             holderVisibleUntil,
+            fromCommand: this.isCommandOrigin(origin),
             target: {
                 organizationAndTeamData,
                 repository: { id: repository?.id, name: repository?.name },
