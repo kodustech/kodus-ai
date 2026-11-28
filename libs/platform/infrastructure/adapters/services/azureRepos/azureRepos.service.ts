@@ -1669,6 +1669,7 @@ export class AzureReposService implements Omit<
                             projectId,
                             repositoryId: repository.id,
                             filePath: change.item?.path || change?.originalPath,
+                            originalPath: change.originalPath,
                             baseCommitId,
                             targetCommitId: headSha,
                             changeType: change.changeType,
@@ -1877,6 +1878,7 @@ export class AzureReposService implements Omit<
                     projectId,
                     repositoryId: repository.id,
                     filePath,
+                    originalPath: change.originalPath,
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
@@ -4380,6 +4382,7 @@ export class AzureReposService implements Omit<
                             projectId,
                             repositoryId: repository.id,
                             filePath: change.item?.path || change?.originalPath,
+                            originalPath: change.originalPath,
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
@@ -4506,6 +4509,8 @@ export class AzureReposService implements Omit<
         projectId: string;
         repositoryId: string;
         filePath: string;
+        /** Path in the base commit, when the file was renamed. */
+        originalPath?: string;
         baseCommitId: string | null; // Can be null for new files
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
@@ -4548,6 +4553,9 @@ export class AzureReposService implements Omit<
             this.azureReposRequestHelper.mapAzureStatusToFileChangeStatus(
                 changeType,
             );
+        // A renamed file does not exist at its new path in the base commit.
+        const basePath =
+            status === 'renamed' ? params.originalPath || filePath : filePath;
 
         try {
             // Get original content (only if not an added file and baseCommitId exists)
@@ -4559,7 +4567,7 @@ export class AzureReposService implements Omit<
                             token,
                             projectId,
                             repositoryId,
-                            filePath,
+                            filePath: basePath,
                             commitId: baseCommitId,
                         });
                     originalFileContent = originalFile.content;
@@ -4568,17 +4576,17 @@ export class AzureReposService implements Omit<
                     // Or if the commit doesn't contain the file path (shouldn't happen for 'edit'/'delete' if baseCommitId is correct)
                     if (error.status === 404) {
                         this.logger.warn({
-                            message: `Original file content not found for path "${filePath}" at commit "${baseCommitId}". Treating as added file content for diff.`,
+                            message: `Original file content not found for path "${basePath}" at commit "${baseCommitId}". Treating as added file content for diff.`,
                             context: this._generateFileDiffForAzure.name,
-                            metadata: { filePath, baseCommitId },
+                            metadata: { filePath: basePath, baseCommitId },
                         });
                         originalFileContent = ''; // Treat as empty for diff if base is not found
                     } else {
                         this.logger.error({
-                            message: `Failed to get original file content for path "${filePath}" at commit "${baseCommitId}"`,
+                            message: `Failed to get original file content for path "${basePath}" at commit "${baseCommitId}"`,
                             context: this._generateFileDiffForAzure.name,
                             error: error,
-                            metadata: { filePath, baseCommitId },
+                            metadata: { filePath: basePath, baseCommitId },
                         });
                         throw error; // Rethrow other errors
                     }
