@@ -35,9 +35,14 @@ const header = (headers: unknown, name: string): string | undefined => {
     return value === undefined ? undefined : String(value);
 };
 
+// Gitbeaker gives up with these and no status: after its 502 retries, or on
+// its own request timeout.
+const GIVE_UP_NAMES = new Set(['GitbeakerRetryError', 'GitbeakerTimeoutError']);
+
 const isNetworkFailure = (error: ErrorLike | undefined): boolean =>
     !!error &&
     (NETWORK_CODES.has(error.code ?? '') ||
+        GIVE_UP_NAMES.has(error.name ?? '') ||
         (error.code ?? '').startsWith('UND_ERR_') ||
         error.name === 'AbortError' ||
         error.name === 'TimeoutError' ||

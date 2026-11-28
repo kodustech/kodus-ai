@@ -49,6 +49,11 @@ describe('isTransientProviderError', () => {
                 }),
             ),
         ).toBe(true);
+        for (const name of ['GitbeakerRetryError', 'GitbeakerTimeoutError']) {
+            const gaveUp = new Error('gave up');
+            gaveUp.name = name;
+            expect(isTransientProviderError(gaveUp)).toBe(true);
+        }
         expect(
             isTransientProviderError(
                 new TypeError(
