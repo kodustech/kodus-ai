@@ -12,6 +12,7 @@ export const FEATURE_KEYS = {
     deterministicEvidence: 'deterministic-evidence',
     customAgents: 'custom-agents',
     conditionalPrApproval: 'conditional-pr-approval',
+    kodyRuntime: 'kody-runtime',
     ultraReview: 'ultra-review',
 } as const;
 

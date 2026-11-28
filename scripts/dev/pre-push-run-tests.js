@@ -102,9 +102,26 @@ async function isPostgresReachable() {
     }
 }
 
+/**
+ * git writes the refs being pushed to the hook's stdin. Read it all first: a
+ * test process that inherited the pipe and closed it left git writing to a
+ * closed pipe, so the push died of SIGPIPE (exit 141) after every test passed.
+ */
+function drainStdin() {
+    if (process.stdin.isTTY) return Promise.resolve();
+    return new Promise((resolve) => {
+        process.stdin.on('data', () => {});
+        process.stdin.on('end', resolve);
+        process.stdin.on('error', resolve);
+        setTimeout(resolve, 5_000).unref();
+    });
+}
+
 async function main() {
+    await drainStdin();
     const startTime = Date.now();
     const jestArgs = [];
+    let full = true;
 
     const base = mergeBase();
     const files = base ? changedFiles(base) : [];
@@ -125,6 +142,7 @@ async function main() {
             `[pre-push] Running tests affected since ${BASE_REF} (${base.slice(0, 9)}).`,
         );
         jestArgs.push(`--changedSince=${base}`, '--passWithNoTests');
+        full = false;
     }
 
     // git exports GIT_DIR and friends to the hook it runs. Any spec that spawns
@@ -149,18 +167,18 @@ async function main() {
         env.SKIP_INTEGRATION = 'true';
     }
 
-    const child = spawn('pnpm', ['run', 'test', ...jestArgs], {
-        stdio: 'inherit',
-        shell: process.platform === 'win32',
-        env,
-    });
-
-    child.on('error', (error) => {
-        console.error('[pre-push] Failed to start tests:', error.message);
-        process.exit(1);
-    });
-
-    child.on('close', (code) => {
+    // The full suite no longer fits one process's heap (it ran out at 6 GB),
+    // which is why CI shards it (tests.yml, 4 shards). Here the shards run one
+    // after the other, each in a fresh process; the first failure stops. 8 by
+    // default: a quarter of the suite still ran out of heap on a laptop.
+    const shards = full ? Math.max(1, Number(process.env.PRE_PUSH_SHARDS) || 8) : 1;
+    let code = 0;
+    for (let i = 1; i <= shards && code === 0; i++) {
+        const args = shards > 1 ? [...jestArgs, `--shard=${i}/${shards}`] : jestArgs;
+        if (shards > 1) console.log(`[pre-push] Shard ${i}/${shards}.`);
+        code = await runTests(args, env);
+    }
+    {
         const durationSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
 
         if (code === 0) {
@@ -174,6 +192,23 @@ async function main() {
             `[pre-push] Tests failed in ${durationSeconds}s. Push was blocked.`,
         );
         process.exit(code || 1);
+    }
+}
+
+/** `pnpm run test` with these jest args; resolves with its exit code. */
+function runTests(jestArgs, env) {
+    return new Promise((resolve) => {
+        const child = spawn('pnpm', ['run', 'test', ...jestArgs], {
+            // Never the hook's stdin (git's refs pipe): see drainStdin.
+            stdio: ['ignore', 'inherit', 'inherit'],
+            shell: process.platform === 'win32',
+            env,
+        });
+        child.on('error', (error) => {
+            console.error('[pre-push] Failed to start tests:', error.message);
+            resolve(1);
+        });
+        child.on('close', (code) => resolve(code ?? 1));
     });
 }
 

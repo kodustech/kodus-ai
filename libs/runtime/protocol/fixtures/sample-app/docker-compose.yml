@@ -1,0 +1,26 @@
+services:
+    app:
+        build: .
+        environment:
+            DATABASE_URL: postgres://shop:shop@db:5432/shop
+        ports:
+            - '3000'
+        depends_on:
+            db:
+                condition: service_healthy
+        healthcheck:
+            test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+            interval: 2s
+            retries: 30
+    db:
+        image: pgvector/pgvector:pg16
+        environment:
+            POSTGRES_USER: shop
+            POSTGRES_PASSWORD: shop
+            POSTGRES_DB: shop
+        volumes:
+            - ./db/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U shop -d shop']
+            interval: 2s
+            retries: 30

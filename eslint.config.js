@@ -48,6 +48,21 @@ module.exports = tseslint.config(
         },
     },
     {
+        // Kody Runtime: a promise is awaited or handed off with its error
+        // handled (`void p.catch(...)`), never dropped.
+        files: [
+            'apps/runtime/**/*.ts',
+            'libs/runtime/**/*.ts',
+            'libs/runtime-publish/**/*.ts',
+            'apps/api/src/controllers/runtime/**/*.ts',
+            'apps/worker/src/runtime-external-maintenance/**/*.ts',
+        ],
+        rules: {
+            '@typescript-eslint/no-floating-promises': 'error',
+            '@typescript-eslint/no-misused-promises': 'error',
+        },
+    },
+    {
         ignores: [
             '**/node_modules/**',
             '**/dist/**',

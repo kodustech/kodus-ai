@@ -1,0 +1,608 @@
+import type { FailureBundle } from '@libs/runtime/protocol';
+
+import { isolationUnavailable } from '@libs/runtime/environment/isolation-blocker';
+
+import { classifyBlocker, matchedBlockerLine, notReadyWaited } from '../catalog';
+
+const bundle = (over: Partial<FailureBundle> = {}): FailureBundle => ({
+    services: [],
+    ports: [],
+    disk: [],
+    deniedEgress: [],
+    redactions: 0,
+    truncated: false,
+    collectedAt: '2026-11-03T12:00:00.000Z',
+    ...over,
+});
+const logs = (name: string, ...logTail: string[]) => bundle({ services: [{ name, state: 'exited', logTail }] });
+const composeUp = (b: FailureBundle) => ({
+    kind: 'toolchain',
+    signature: 'compose_up',
+    message: 'compose up: exit 1',
+    bundle: b,
+});
+
+describe('classifyBlocker', () => {
+    it('reads a missing env var from the logs and offers a test value through the recipe', () => {
+        const c = classifyBlocker(composeUp(logs('api', 'booting', 'Error: Missing required environment variable: STRIPE_SECRET_KEY')));
+        expect(c).toMatchObject({
+            kind: 'missing_env',
+            signature: 'missing_env:STRIPE_SECRET_KEY',
+            evidence: { service: 'api' },
+        });
+        expect(c.fixes[0]).toMatchObject({
+            action: 'set_env',
+            who: 'dev',
+            recipeChange: {
+                path: ['env', 'STRIPE_SECRET_KEY'],
+                value: 'kodus-test-value',
+            },
+        });
+        expect(c.evidence.lines[0]).toContain('STRIPE_SECRET_KEY');
+    });
+
+    it('gives a URL var a fake URL, never something that looks like a secret', () => {
+        const c = classifyBlocker(composeUp(logs('api', 'DATABASE_URL is not set')));
+        expect(c.fixes[0].recipeChange?.value).toBe('http://kodus-fake.invalid');
+    });
+
+    it('never reads a reverse DNS lookup, or a host the log does not name next to an error that names another cause, as why a build stopped', () => {
+        // A Next.js example's build (demo-nextjs): the resolver was denied a PTR lookup while pnpm 11 stopped on its own error.
+        const pnpm = {
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'compose_up: dockergvisor: build app: step [dependencies 4/4] RUN pnpm install --frozen-lockfile failed\n  Error: ERR_PNPM_IGNORED_BUILDS\n  ERROR: process "/bin/sh -c pnpm install --frozen-lockfile" did not complete successfully: exit code: 1',
+            bundle: bundle({ deniedEgress: [{ host: '9.137.213.10.in-addr.arpa', port: 53, at: '2026-11-12T01:52:00.000Z' }, { host: 'telemetry.example.dev', port: 443, at: '2026-11-12T01:51:00.000Z' }] }),
+        };
+        const c = classifyBlocker(pnpm);
+        expect(c.signature).not.toMatch(/^external_service:egress:/);
+        expect(c.kind).not.toBe('external_service');
+        // A host the failing line names is still the cause.
+        const named = classifyBlocker({ ...pnpm, message: 'npm ERR! request to https://registry.example.dev/x failed, reason: getaddrinfo ENOTFOUND registry.example.dev', bundle: bundle({ deniedEgress: [{ host: 'registry.example.dev', port: 443, at: '2026-11-12T01:52:00.000Z' }] }) });
+        expect(named.signature).toBe('external_service:egress:registry.example.dev');
+        // Only a reverse lookup denied, and nothing else: no host to approve either.
+        const ptr = classifyBlocker(composeUp(bundle({ deniedEgress: [{ host: '1.0.0.10.in-addr.arpa', port: 53, at: '2026-11-12T01:52:00.000Z' }] })));
+        expect(ptr.signature).not.toMatch(/in-addr\.arpa/);
+    });
+
+    it('turns a blocked outbound host into a one-click approval, before reading the logs', () => {
+        const c = classifyBlocker(
+            composeUp(
+                bundle({
+                    deniedEgress: [
+                        {
+                            host: 'API.Segment.io.',
+                            port: 443,
+                            at: '2026-11-03T12:00:00.000Z',
+                        },
+                    ],
+                    services: [
+                        {
+                            name: 'api',
+                            state: 'exited',
+                            logTail: ['FOO is not set'],
+                        },
+                    ],
+                }),
+            ),
+        );
+        expect(c).toMatchObject({
+            kind: 'external_service',
+            signature: 'external_service:egress:api.segment.io',
+        });
+        expect(c.fixes[0]).toMatchObject({
+            action: 'approve_host',
+            who: 'one_click',
+            host: 'api.segment.io',
+        });
+    });
+
+    it('ignores a denied host that is not a host name', () => {
+        const c = classifyBlocker(
+            composeUp(
+                bundle({
+                    deniedEgress: [
+                        {
+                            host: 'evil"<b>',
+                            port: 443,
+                            at: '2026-11-03T12:00:00.000Z',
+                        },
+                    ],
+                }),
+            ),
+        );
+        expect(c.fixes.some((f) => f.action === 'approve_host')).toBe(false);
+    });
+
+    it.each([
+        ['error app@1.0.0: The engine "node" is incompatible with this module. Expected version ">=22". Got "18.19.0"', 'toolchain:node', 'pin_version'],
+        ['go: go.mod requires go >= 1.23 (running go 1.21)', 'toolchain:go', 'pin_version'],
+        ['src/x.c:1:10: fatal error: libpq-fe.h: No such file or directory', 'native_dep:libpq-fe.h', 'add_packages'],
+        ['FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory', 'resources:memory:api', 'bump_machine'],
+        ['QueryFailedError: relation "users" does not exist', 'seed_data:schema', 'add_seed_step'],
+        ['Error: connect ECONNREFUSED 127.0.0.1:5432', 'external_service:localhost:5432', 'use_mock'],
+        ['Error: getaddrinfo ENOTFOUND billing.internal', 'external_service:billing.internal', 'use_mock'],
+        ['dial tcp: lookup billing.internal on 10.213.68.128:53: no such host', 'external_service:billing.internal', 'use_mock'],
+        ['curl: (6) Could not resolve host: billing.internal', 'external_service:billing.internal', 'use_mock'],
+        [
+            'github.com/Masterminds/semver/v3@v3.4.0: verifying module: github.com/Masterminds/semver/v3@v3.4.0: Get "https://sum.golang.org/lookup/github.com/!masterminds/semver/v3@v3.4.0": dial tcp: lookup sum.golang.org on 10.213.68.128:53: no such host',
+            'platform:go_checksum_db',
+            'retry_setup',
+        ],
+    ])('reads %s', (line, signature, action) => {
+        const c = classifyBlocker(composeUp(logs('api', line)));
+        expect(c.signature).toBe(signature);
+        expect(c.fixes[0].action).toBe(action);
+    });
+
+    it('takes the newest matching line', () => {
+        const c = classifyBlocker(composeUp(logs('api', 'OLD_VAR is not set', 'later', 'NEW_VAR is not set')));
+        expect(c.signature).toBe('missing_env:NEW_VAR');
+    });
+
+    it("offers only a retry for a failure on Kodus's side", () => {
+        const c = classifyBlocker({
+            kind: 'platform',
+            signature: 'repo_fetch',
+            message: 'download: 502',
+        });
+        expect(c.title).toBe('Kodus failed while downloading the repository');
+        expect(c.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+    });
+
+    it('points a ready check that never answered at a port that does not listen', () => {
+        const c = classifyBlocker({
+            kind: 'not_ready',
+            signature: 'setup:not_ready:web:3000/health',
+            message: 'GET /health on web:3000 failed (unreachable)',
+            bundle: bundle({
+                ports: [{ service: 'web', port: 3000, listening: false }],
+            }),
+        });
+        expect(c).toMatchObject({
+            kind: 'platform',
+            signature: 'platform:not_listening:web:3000',
+        });
+        expect(c.fixes[0].action).toBe('fix_listen_address');
+    });
+
+    it('offers more time for a ready check that timed out on a listening port', () => {
+        const c = classifyBlocker({
+            kind: 'not_ready',
+            signature: 'setup:not_ready:web:3000/health',
+            message: 'GET /health on web:3000 answered 503',
+        });
+        expect(c.fixes[0]).toMatchObject({
+            action: 'raise_health_timeout',
+            recipeChange: { path: ['health_timeout'], value: '180s' },
+        });
+    });
+
+    it('proposes a longer wait than the one the setup already waited, and none past the most', () => {
+        const at = (message: string) => classifyBlocker({ kind: 'not_ready', signature: 'setup:not_ready:grafana:3000/api/health', message });
+        // Kodus waited 300 s: the fix never lowers it.
+        expect(at('GET /api/health on grafana:3000 failed (vm_unhealthy) after 300 s').fixes[0]).toMatchObject({
+            action: 'raise_health_timeout',
+            recipeChange: { path: ['health_timeout'], value: '600s' },
+        });
+        expect(at('GET /api/health on grafana:3000 failed (vm_unhealthy) after 900 s').fixes.map((f) => f.action)).toEqual(['retry_setup']);
+    });
+
+    it("proposes no longer wait when the setup claim's ceiling, not health_timeout, ended it", () => {
+        const c = classifyBlocker({ kind: 'not_ready', signature: 'setup:not_ready:grafana:3000/api/health', message: `GET /api/health on grafana:3000 failed (vm_unhealthy)${notReadyWaited(180, true)}` });
+        expect(c.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+        expect(c.title).toContain('machine time ran out');
+    });
+
+    it('keeps the cell kind and the last service line when no rule reads the logs', () => {
+        const c = classifyBlocker(composeUp(logs('api', 'something odd happened')));
+        expect(c).toMatchObject({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            title: 'The project failed to build or start',
+            evidence: { service: 'api', lines: ['something odd happened'] },
+        });
+    });
+
+    it('offers nothing to apply for a security violation', () => {
+        expect(
+            classifyBlocker({
+                kind: 'security_violation',
+                signature: 'credential_exfiltration',
+                message: 'x',
+            }).fixes,
+        ).toEqual([]);
+    });
+
+    it('no recipe and nothing to infer one from is a recipe card for the dev, never "run the setup again"', () => {
+        const c = classifyBlocker({ kind: 'no_recipe', signature: 'setup:no_recipe', message: 'There is no compose file and no Dockerfile at the repository root.' });
+        expect(c).toMatchObject({ kind: 'recipe_outdated', signature: 'setup:no_recipe', title: 'Kodus found nothing to boot this repository from' });
+        expect(c.fixes.map((f) => [f.id, f.who])).toEqual([['fix_recipe', 'dev']]);
+    });
+
+    it('a build file the recipe names that the checkout does not have says the branch lacks it and must be updated with the default branch, not that the recipe is broken', () => {
+        const c = classifyBlocker({ kind: 'recipe_outdated', signature: 'recipe_load', message: 'compose: openat .kodus/compose.yaml: no such file or directory' });
+        expect(c).toMatchObject({ kind: 'recipe_outdated', signature: 'recipe_load', title: 'The checkout has no .kodus/compose.yaml, which the recipe uses' });
+        expect(c.fixes.map((f) => [f.id, f.who, f.label])).toEqual([['fix_recipe', 'dev', 'Update the branch with the default branch']]);
+        expect(c.fixes[0].detail).toContain('update the branch with the default branch');
+        // Any other recipe refusal keeps its card.
+        expect(classifyBlocker({ kind: 'recipe_outdated', signature: 'recipe_load', message: 'yaml: line 3: mapping values are not allowed here' }).title).toBe("The recipe doesn't load");
+        expect(classifyBlocker({ kind: 'recipe_outdated', signature: 'recipe_load', message: 'compose: openat ../secret: no such file or directory' }).title).toBe("The recipe doesn't load");
+    });
+
+    it('a recipe the cell refused for services.needs is a recipe card for the dev, never a retry', () => {
+        const c = classifyBlocker({ kind: 'other_repo', signature: 'recipe_needs', message: 'recipe_needs: services.needs (other repositories) is not supported by this cell yet' });
+        expect(c).toMatchObject({ kind: 'other_repo', signature: 'recipe_needs', title: 'The recipe needs other repositories, which a host does not boot yet' });
+        expect(c.fixes.map((f) => [f.id, f.who])).toEqual([['fix_recipe', 'dev']]);
+    });
+
+    it.each([
+        ['toolchain', 'recipe_setup', 'toolchain', 'setup'],
+        ['seed_data', 'recipe_migrate', 'seed_data', 'data.migrate'],
+        ['seed_data', 'recipe_seed', 'seed_data', 'data.seed'],
+    ])('a failed recipe step (%s %s) names the key and leads with fixing it', (kind, signature, view, key) => {
+        const c = classifyBlocker({ kind, signature, message: `${key}: "npm run x" exited 1: boom` });
+        expect(c).toMatchObject({ kind: view, signature, title: `The recipe's ${key} failed` });
+        expect(c.fixes.map((f) => f.id)).toEqual(['fix_recipe', 'retry_setup']);
+    });
+});
+
+describe('a denied package registry', () => {
+    const at = '2026-11-04T17:00:00Z';
+    it('offers to allow it, never a fake: a build installs from it', () => {
+        const r = classifyBlocker(composeUp(bundle({ deniedEgress: [{ host: 'proxy.golang.org', port: 53, at }] })));
+        expect(r.signature).toBe('external_service:egress:proxy.golang.org');
+        expect(r.fixes.map((f) => f.action)).toEqual(['approve_host']);
+    });
+    // Seen on the dev cell with directus (11/2026): the build's apt-get could not resolve the Debian
+    // mirror, no request was ever made, and the card said "toolchain" without naming the host.
+    it('reads a registry the build could not resolve as blocked, and offers to allow it', () => {
+        const message = [
+            'compose_up: dockergvisor: build app: exit status 1: #6 [builder 2/10] RUN apt-get update && apt-get install -y python3 make g++',
+            "#6 0.412 Err:1 http://deb.debian.org/debian bookworm InRelease",
+            "#6 0.412   Temporary failure resolving 'deb.debian.org'",
+            "#6 0.901 W: Failed to fetch http://deb.debian.org/debian/dists/bookworm/InRelease  Temporary failure resolving 'deb.debian.org'",
+            '#6 0.955 E: Unable to locate package python3',
+        ].join('\n');
+        const r = classifyBlocker({ kind: 'toolchain', signature: 'compose_up', message, bundle: bundle() });
+        expect(r.kind).toBe('external_service');
+        expect(r.signature).toBe('external_service:egress:deb.debian.org');
+        expect(r.fixes.map((f) => f.action)).toEqual(['approve_host']);
+        expect(r.evidence.lines).toEqual(['the machine could not resolve deb.debian.org: it is not an allowed host']);
+    });
+    it('names the host Corepack downloads Yarn from (twenty on cell-dev-1)', () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'Error: Error when performing the request to https://repo.yarnpkg.com/4.9.2/packages/yarnpkg-cli/bin/yarn.js\ngetaddrinfo EAI_AGAIN repo.yarnpkg.com',
+            bundle: bundle(),
+        });
+        expect(r.signature).toBe('external_service:egress:repo.yarnpkg.com');
+        expect(r.fixes.map((f) => f.action)).not.toContain('use_mock');
+    });
+    it('leaves a host that is not a package registry to the other rules', () => {
+        const r = classifyBlocker({ kind: 'toolchain', signature: 'compose_up', message: 'curl: (6) Could not resolve host: api.example.com', bundle: bundle() });
+        expect(r.signature).not.toContain('external_service:egress:');
+    });
+    it('names the host denied last, the one the build failed on, and never a host a tool only phones home to', () => {
+        // The calcom build on the dev cell: five denials the build did without, then the font it could not fetch.
+        const deniedEgress = [
+            { host: '_http._tcp.deb.debian.org', port: 53, at: '2026-11-11T10:45:32Z' },
+            { host: 'telemetry.vercel.com', port: 53, at: '2026-11-11T10:45:57Z' },
+            { host: 'opencollective.com', port: 53, at: '2026-11-11T10:51:43Z' },
+            { host: 'checkpoint.prisma.io', port: 53, at: '2026-11-11T10:52:48Z' },
+            { host: 'telemetry.nextjs.org', port: 53, at: '2026-11-11T10:57:13Z' },
+            { host: 'fonts.googleapis.com', port: 53, at: '2026-11-11T10:57:29Z' },
+        ];
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'next/font: error:\nFailed to fetch `Inter` from Google Fonts.\nerror: failed to solve: process "/bin/sh -c yarn build" did not complete successfully: exit code: 1',
+            bundle: bundle({ deniedEgress }),
+        });
+        expect(r.signature).toBe('external_service:egress:fonts.googleapis.com');
+        expect(r.fixes.filter((f) => f.action === 'approve_host').map((f) => f.host)).toEqual(['fonts.googleapis.com']);
+    });
+    it('reads a build that was only denied telemetry by its own error, not as a blocked host', () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: "Cannot find module '/app/packages/next/node_modules/@next/polyfill-nomodule/dist/polyfill-nomodule.js'\nERR_PNPM_RECURSIVE_RUN_FIRST_FAIL",
+            bundle: bundle({ deniedEgress: [{ host: 'telemetry.nextjs.org', port: 53, at }, { host: 'telemetry.vercel.com', port: 53, at }] }),
+        });
+        expect(r.signature).not.toContain('external_service:egress:');
+    });
+    it('puts a denied host the log names before one denied later, and keeps a phone-home host the log names', () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'request to https://checkpoint.prisma.io/check failed, reason: getaddrinfo EAI_AGAIN checkpoint.prisma.io',
+            bundle: bundle({
+                deniedEgress: [
+                    { host: 'checkpoint.prisma.io', port: 53, at: '2026-11-11T10:00:00Z' },
+                    { host: 'api.example.com', port: 443, at: '2026-11-11T10:05:00Z' },
+                ],
+            }),
+        });
+        expect(r.signature).toBe('external_service:egress:checkpoint.prisma.io');
+        expect(r.fixes.filter((f) => f.action === 'approve_host').map((f) => f.host)).toEqual(['checkpoint.prisma.io', 'api.example.com']);
+    });
+    it('keeps the fake for an API the app calls', () => {
+        const r = classifyBlocker(composeUp(bundle({ deniedEgress: [{ host: 'api.stripe.com', port: 443, at }] })));
+        expect(r.fixes.map((f) => f.action)).toEqual(['approve_host', 'use_mock']);
+    });
+});
+
+describe('a cell with no prepared image of the environment', () => {
+    it('asks for the setup again and blames nothing in the repository', () => {
+        const r = classifyBlocker({ kind: 'platform', signature: 'environment_not_prepared', message: 'the cell that took this Run has no prepared image of the environment; the environment has to be set up again' });
+        expect(r).toMatchObject({ kind: 'platform', signature: 'environment_not_prepared', title: 'The host that ran this has no prepared image of the environment' });
+        expect(r.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+    });
+});
+
+describe("a PR not started because its cell evicted the environment's build cache", () => {
+    // Behavior: the Run page says the cache is gone and that a setup restores it, never that the repository failed.
+    it('asks for the setup again and blames nothing in the repository', () => {
+        const r = classifyBlocker({ kind: 'platform', signature: 'build_state_evicted', message: "the cell removed this environment's build cache to free disk at 2026-11-13T07:31:31.000Z" });
+        expect(r).toMatchObject({ kind: 'platform', signature: 'build_state_evicted', title: "The host removed this environment's build cache to free disk" });
+        expect(r.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+        expect(r.fixes[0].detail).toContain('Your repository is not the cause');
+    });
+});
+
+describe('a host on the platform deny list', () => {
+    it('says no approval opens it and points at the mirror, never "allow"', () => {
+        const r = classifyBlocker(composeUp(bundle({ deniedEgress: [{ host: 'storage.googleapis.com', port: 53, at: '2026-11-04T17:00:00Z', platform: true }] })));
+        expect(r.signature).toBe('external_service:platform_denied:storage.googleapis.com');
+        expect(r.fixes.map((f) => f.action)).toEqual(['fix_recipe']);
+        expect(r.fixes[0].detail).toContain('GOPROXY');
+    });
+});
+
+describe('an entry the cell refuses to unpack', () => {
+    it("names the entry and why, as the repository's to change", () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'repo_refused',
+            message: 'repo_refused: tarball: extractor: exit status 1: tarball: refused "o-r-abc/config/link": symlink to a path outside the root',
+        });
+        expect(r.title).toBe('Kodus refuses to unpack config/link from the repository');
+        expect(r.evidence.lines[0]).toBe('config/link: symlink to a path outside the root');
+        expect(r.fixes.map((f) => f.action)).toEqual(['fix_recipe']);
+    });
+
+    it('a boot past the ceiling asks for a lighter recipe, never "run it again"; a lost cell is Kodus\'s to retry', () => {
+        const slow = classifyBlocker({ kind: 'resources', signature: 'boot_timeout', message: 'the boot did not finish in 40 min, the most a setup waits' });
+        expect(slow.title).toBe('The boot takes longer than a setup waits');
+        expect(slow.fixes.map((f) => f.action)).toEqual(['fix_recipe']);
+        expect(slow.fixes[0].detail).toContain('development build');
+        const lost = classifyBlocker({ kind: 'platform', signature: 'cell_lost', message: 'the cell disconnected while the claim was booting' });
+        expect(lost.title).toBe('Kodus failed while keeping the host connected during the boot');
+        expect(lost.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+    });
+
+    it("a build killed at its memory limit names the limit and points to the environment's machine size, a lighter build, then a new setup", () => {
+        const oom = classifyBlocker({
+            kind: 'resources',
+            signature: 'out_of_memory',
+            message: 'driver: the workload ran out of memory: build grafana passed 12g (docker run: exit status 137: )',
+        });
+        expect(oom.title).toBe('The build ran out of memory (12 GB)');
+        expect(oom.fixes.map((f) => f.action)).toEqual(['bump_machine', 'fix_recipe', 'retry_setup']);
+        expect(oom.fixes[0]).toMatchObject({ who: 'settings', label: 'Give the environment a larger machine' });
+        expect(oom.fixes[0].detail).toContain('Machine size');
+        expect(oom.fixes[0].detail).toContain('Large 16 GB');
+        // A self-hosted cell's own bounds stay on the card.
+        expect(oom.fixes[0].detail).toContain('-gvisor-mem-limit');
+        expect(oom.fixes[0].detail).toContain('-gvisor-mem-max');
+        expect(oom.fixes[1].detail).toContain('--mount=type=cache');
+        expect(oom.fixes[2].detail).toContain('larger machine size');
+        // A claim's own size reaches the title as the cell wrote it (12288m), in GB.
+        const sized = classifyBlocker({ kind: 'resources', signature: 'out_of_memory', message: 'driver: the workload ran out of memory: build api passed 12288m (exit status 137)' });
+        expect(sized.title).toBe('The build ran out of memory (12 GB)');
+        expect(classifyBlocker({ kind: 'resources', signature: 'out_of_memory', message: 'build api passed 1536m' }).title).toBe('The build ran out of memory (1536m)');
+    });
+
+    it("a cell too old for Kody's build files says so, with nothing in the repository to change", () => {
+        const old = classifyBlocker({
+            kind: 'platform',
+            signature: 'authored_files_unsupported',
+            message: "this cell's build is older than the build files Kody writes with its recipe (its hello names no authoredFiles); the claim was not started",
+        });
+        expect(old).toMatchObject({ kind: 'platform', signature: 'authored_files_unsupported', title: 'This host is too old for the build files Kody wrote' });
+        expect(old.fixes.map((f) => [f.action, f.label])).toEqual([['retry_setup', 'Update the host, then run it again']]);
+        expect(old.fixes[0].detail).toContain('your repository is not the cause');
+    });
+
+    it("a checkout that already has a path of Kody's build files, or a .kodus link, names it and never offers to replace it", () => {
+        const planted = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'authored_files',
+            message: 'authored_files: authored file .kodus/Dockerfile.kody: is already in the checkout with other content; Kody never replaces a repository file',
+        });
+        expect(planted).toMatchObject({ kind: 'toolchain', signature: 'authored_files', title: "Kody's build files could not be written: it already has .kodus/Dockerfile.kody" });
+        expect(planted.fixes[0]).toMatchObject({ action: 'fix_recipe', who: 'dev' });
+        expect(planted.fixes[0].detail).toContain('Remove or rename .kodus/Dockerfile.kody');
+        const link = classifyBlocker({ kind: 'toolchain', signature: 'authored_files', message: 'authored_files: authored file .kodus: is a symbolic link in the checkout' });
+        expect(link.title).toBe("Kody's build files could not be written: its .kodus is not a plain directory");
+        // A path that is not one Kody writes never reaches the title (S-23).
+        const odd = classifyBlocker({ kind: 'toolchain', signature: 'authored_files', message: 'authored_files: authored file ../../etc/passwd<script>: x' });
+        expect(odd.title).toBe("Kody's build files could not be written: it already has a path Kody writes");
+    });
+
+    it('a machine size above what the cell grants says asked and max, and asks for a size the cell grants', () => {
+        const big = classifyBlocker({
+            kind: 'resources',
+            signature: 'size_unavailable',
+            message: 'size_unavailable: driver: the machine size is above what this cell grants: asked 16384 MB / 8 CPUs, this cell grants at most 8192 MB / 4 CPUs',
+        });
+        expect(big).toMatchObject({ kind: 'resources', signature: 'size_unavailable', title: 'No host grants this machine size' });
+        expect(big.evidence?.lines?.join(' ')).toContain('asked 16384 MB / 8 CPUs, this cell grants at most 8192 MB / 4 CPUs');
+        expect(big.fixes.map((f) => [f.action, f.label])).toEqual([
+            ['bump_machine', 'Choose a machine size a host grants'],
+            ['use_own_cell', 'Run it on a host of your own'],
+        ]);
+        expect(big.fixes[0].detail).toContain('Machine size');
+        expect(big.fixes[0].detail).toContain('-gvisor-mem-max');
+        expect(big.fixes[0].detail).toContain('older than machine sizes');
+    });
+
+    it('a size no connected cell grants (the routing refused it) gets the same card, its evidence naming the largest grant', () => {
+        const routed = classifyBlocker({
+            kind: 'resources',
+            signature: 'size_unavailable',
+            message: 'asked 16384 MB / 8 CPUs, and no connected cell that may serve this organization grants it: the largest any of them grants is 8192 MB / 4 CPUs; the claim was not started',
+        });
+        expect(routed).toMatchObject({ kind: 'resources', signature: 'size_unavailable', title: 'No host grants this machine size' });
+        expect(routed.evidence?.lines?.join(' ')).toContain('the largest any of them grants is 8192 MB / 4 CPUs');
+        expect(routed.fixes.map((f) => f.action)).toEqual(['bump_machine', 'use_own_cell']);
+    });
+
+    it("a Run side whose other side's backend no cell runs now is a capacity card that says to run it again, not to change the repository", () => {
+        const card = classifyBlocker({ kind: 'capacity', signature: 'backend_unavailable', message: "the Run's other side ran on firecracker (microvm)" });
+        expect(card).toMatchObject({ kind: 'capacity', signature: 'backend_unavailable', title: 'No host runs the backend the other side of this Run ran on' });
+        expect(card.fixes[0].detail).toContain('one backend');
+    });
+
+    it('an isolation no connected cell gives is a capacity card that points at a cell that gives it, never at a retry on a lower one', () => {
+        const vm = classifyBlocker(isolationUnavailable('vm').blockers[0]);
+        expect(vm).toMatchObject({ kind: 'capacity', signature: 'isolation_unavailable', title: 'No host gives the isolation this environment asks for' });
+        expect(vm.evidence?.lines?.join(' ')).toContain('virtual machine');
+        expect(vm.fixes.map((f) => f.action)).toEqual(['use_own_cell']);
+    });
+
+    it("the cell's own build failures: builder died and image refused are platform, a large image is resources, a refused compose is the recipe's", () => {
+        const died = classifyBlocker({ kind: 'platform', signature: 'builder_failed', message: 'step 7 stopped: builder exited 2 with no failed step' });
+        expect(died).toMatchObject({ kind: 'platform', title: 'The image builder stopped before the build finished' });
+        expect(died.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+        expect(classifyBlocker({ kind: 'platform', signature: 'image_load', message: 'image names another tag' })).toMatchObject({ kind: 'platform' });
+        expect(classifyBlocker({ kind: 'resources', signature: 'image_too_large', message: 'image is 40 GB' })).toMatchObject({ kind: 'resources' });
+        expect(classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message: 'services.db.container_name refused' })).toMatchObject({ kind: 'toolchain', title: 'The host refused the compose project before building it' });
+    });
+
+    it('a compose file whose declared memory does not fit the machine size is a resources card naming the way out; any other refusal stays the recipe\'s', () => {
+        const message =
+            "compose refused: services: the services declare 6144m of memory together (web 4096m, db 2048m), over the environment's machine size of 4g: declare less or choose a larger machine size";
+        const c = classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message });
+        expect(c).toMatchObject({ kind: 'resources', title: 'The memory the services declare does not fit the environment' });
+        expect(c.fixes.map((f) => f.action)).toEqual(['bump_machine', 'fix_recipe']);
+        expect(c.fixes[1].detail).toContain('mem_limit');
+    });
+
+    it('a service the kernel killed for memory is named, and the card offers a larger machine size or a declared mem_limit', () => {
+        const c = classifyBlocker(
+            composeUp(logs('api', "api exited with code 137: the kernel killed it for memory (OOM): raise the environment's machine size or declare mem_limit for api")),
+        );
+        expect(c).toMatchObject({ kind: 'resources', signature: 'resources:memory:api', title: 'The api service ran out of memory' });
+        expect(c.fixes.map((f) => f.action)).toEqual(['bump_machine', 'fix_recipe', 'retry_setup']);
+        expect(c.fixes[1].detail).toContain('Declare mem_limit for the api service');
+    });
+
+    it('a boot no cell took is a platform card: nothing booted, check the cell, run it again', () => {
+        const none = classifyBlocker({ kind: 'cell_unavailable', signature: 'cell_unavailable', message: 'no cell is connected for this organization' });
+        expect(none).toMatchObject({ kind: 'platform', title: 'No host was connected to boot this environment' });
+        expect(none.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+        expect(none.fixes[0].detail).toContain('Nothing booted');
+    });
+
+    it("an org at its cap on shared cells names the cap, and says to wait or use its own cell", () => {
+        const capped = classifyBlocker({
+            kind: 'resources',
+            signature: 'org_capacity',
+            message: 'this organization already holds 8 machines on shared Kodus cells, the most it may hold at once (cap 8); the claim was not started',
+        });
+        expect(capped).toMatchObject({ kind: 'resources', signature: 'org_capacity', title: 'Your organization is using all 8 machines it may hold on shared Kodus hosts' });
+        expect(capped.fixes.map((f) => [f.action, f.who])).toEqual([
+            ['retry_setup', 'one_click'],
+            ['use_own_cell', 'settings'],
+        ]);
+        expect(capped.fixes[0].label).toBe('Wait, then run it again');
+        expect(capped.fixes[1].detail).toContain('host of your organization');
+        expect(classifyBlocker({ kind: 'resources', signature: 'org_capacity', message: 'capped' }).title).toBe(
+            'Your organization is using all the machines it may hold on shared Kodus hosts',
+        );
+    });
+
+    it("an org out of today's machine minutes is its own card that says to wait for the reset, never to change the repository", () => {
+        const out = classifyBlocker({
+            kind: 'resources',
+            signature: 'machine_minutes_exhausted',
+            message: 'the organization used 100 of its 100 machine minutes today (UTC) and this machine may run up to 60; nothing was started',
+        });
+        expect(out).toMatchObject({ kind: 'resources', signature: 'machine_minutes_exhausted' });
+        expect(out.title).toMatch(/machine minutes/);
+        expect(out.fixes.map((f) => [f.action, f.who])).toEqual([['retry_setup', 'one_click']]);
+        expect(out.fixes[0].detail).toMatch(/reset/);
+    });
+
+    it('every eligible cell full is its own card, not a full cell nor a Kodus step that failed', () => {
+        const full = classifyBlocker({ kind: 'resources', signature: 'no_capacity', message: 'every cell that may serve this organization is full; the claim was not started' });
+        expect(full).toMatchObject({ kind: 'resources', signature: 'no_capacity', title: 'Every host that can run this environment is full' });
+        expect(full.fixes.map((f) => f.action)).toEqual(['retry_setup', 'use_own_cell']);
+        expect(full.fixes[0].detail).toContain('Nothing booted');
+    });
+});
+
+describe('fixes made in Kodus settings', () => {
+    it("are `settings`, not the repository's `dev`: the machine size and an own cell, on every card that offers them", () => {
+        const cards = [
+            { kind: 'resources', signature: 'out_of_memory', message: 'driver: the workload ran out of memory: build app passed 4g (docker run: exit status 137: )' },
+            { kind: 'resources', signature: 'org_capacity', message: 'capped' },
+            { kind: 'resources', signature: 'no_capacity', message: 'full' },
+            { kind: 'resources', signature: 'size_unavailable', message: 'asked 16 GB' },
+        ].map((b) => classifyBlocker(b));
+        const fixes = cards.flatMap((c) => c.fixes);
+        const inSettings = fixes.filter((f) => f.action === 'bump_machine' || f.action === 'use_own_cell');
+        expect(new Set(inSettings.map((f) => f.action))).toEqual(new Set(['bump_machine', 'use_own_cell']));
+        expect(inSettings.every((f) => f.who === 'settings')).toBe(true);
+        expect(fixes.filter((f) => f.who === 'settings')).toEqual(inSettings);
+    });
+});
+
+describe('repository fixes the build log names', () => {
+    it('reads a lockfile out of date', () => {
+        const r = classifyBlocker(composeUp(logs('boot output', '47.79 ➤ YN0028: │ The lockfile would have been modified by this install, which is explicitly forbidden.')));
+        expect(r.signature).toBe('toolchain:lockfile_outdated:yarn');
+        expect(r.fixes[0].detail).toContain('commit the updated lockfile');
+    });
+    it('reads a Go module the mirror does not serve', () => {
+        const r = classifyBlocker(composeUp(logs('boot output', 'go: example.com/new@v1.2.0: reading http://mirror.cell.internal:8080/go/example.com/new/@v/v1.2.0.info: 410 Gone', '\texample.com/new@v1.2.0 is not pinned by this claim\'s go.sum')));
+        expect(r.signature).toBe('toolchain:go_module_not_pinned:example.com/new');
+    });
+});
+
+describe('an image with too many layers', () => {
+    const overlayRefused = (n: number) =>
+        `#${n} ERROR: failed to mount /tmp/buildkit-mount123: mount source: "overlay", target: "/tmp/buildkit-mount123", fstype: overlay, flags: 0, data: "lowerdir=/home/user/.local/share/buildkit/runc-overlayfs/snapshots/snapshots/12/fs,index=off", err: invalid argument`;
+    it('reads the overlay mount a long layer chain makes the host refuse as an image to flatten', () => {
+        const r = classifyBlocker(composeUp(logs('boot output', overlayRefused(40))));
+        expect(r.kind).toBe('toolchain');
+        expect(r.signature).toBe('toolchain:image_layers');
+        expect(r.title).toContain('too many layers');
+        expect(r.fixes[0].action).toBe('fix_recipe');
+        expect(r.fixes[0].detail).toContain('Merge');
+    });
+    it('does not read another invalid argument as the layer limit', () => {
+        const r = classifyBlocker(composeUp(logs('boot output', 'mount source: "tmpfs", target: "/x", fstype: tmpfs, flags: 0, data: "size=1", err: invalid argument')));
+        expect(r.signature).not.toBe('toolchain:image_layers');
+    });
+});
+
+describe('matchedBlockerLine', () => {
+    it('is the line of a multi-line reason that holds the match classifyBlocker read, in its rule order', () => {
+        const message = ['compose up: exit 1', 'lookup billing.internal: no such host', 'OLD_VAR is not set', 'NEW_VAR is not set', '#9 ERROR: exit code: 1'].join('\n');
+        expect(matchedBlockerLine({ message })).toBe('OLD_VAR is not set');
+        expect(classifyBlocker({ kind: 'unknown', signature: 'compose_up', message }).signature).toBe('missing_env:OLD_VAR');
+    });
+
+    it('reads the bundle newest first when the reason holds no cause, as classifyBlocker does', () => {
+        const input = composeUp(logs('api', 'OLD_VAR is not set', 'later', 'NEW_VAR is not set'));
+        expect(matchedBlockerLine(input)).toBe('NEW_VAR is not set');
+        expect(classifyBlocker(input).signature).toBe('missing_env:NEW_VAR');
+    });
+
+    it('is undefined when no rule reads any line', () => {
+        expect(matchedBlockerLine({ message: 'compose up: exit 1\n#9 ERROR: exit code: 1' })).toBeUndefined();
+    });
+});

@@ -1,3 +1,4 @@
+import { KODY_CHECK_RUN_NAME } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
 import {
     CheckConclusion,
     CheckStatus,
@@ -63,7 +64,7 @@ describe('ForgejoChecksService', () => {
                 repository: mockRepository,
                 headSha: 'abc123def456',
                 status: CheckStatus.IN_PROGRESS,
-                name: 'kodus-code-review',
+                name: KODY_CHECK_RUN_NAME,
                 output: {
                     title: 'Code Review In Progress',
                     summary: 'Analyzing changes...',

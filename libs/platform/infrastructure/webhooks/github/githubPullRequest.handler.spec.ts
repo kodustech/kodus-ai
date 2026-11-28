@@ -3,6 +3,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { OUTBOX_MESSAGE_REPOSITORY_TOKEN } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import { RUNTIME_PULL_REQUEST_GATE_TOKEN } from '@libs/runtime-publish/domain/pull-request-observation-gate';
 import { GenerateIssuesFromPrClosedUseCase } from '@libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
 import { ChatWithKodyFromGitUseCase } from '@libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case';
@@ -32,6 +33,8 @@ describe('GitHubPullRequestHandler', () => {
     let enqueueCodeReviewJobUseCase: { execute: jest.Mock };
     let enqueueImplementationCheckUseCase: { execute: jest.Mock };
     let outboxRepository: { create: jest.Mock };
+    let runtimeGate: { shouldRecord: jest.Mock };
+    let chatWithKodyFromGitUseCase: { execute: jest.Mock };
     let carryReviewCheckToMergeQueueUseCase: { execute: jest.Mock };
     let syncAllRepositoriesUseCase: { syncInstallation: jest.Mock };
 
@@ -98,6 +101,8 @@ describe('GitHubPullRequestHandler', () => {
         outboxRepository = {
             create: jest.fn().mockResolvedValue(undefined),
         };
+        runtimeGate = { shouldRecord: jest.fn().mockResolvedValue(true) };
+        chatWithKodyFromGitUseCase = { execute: jest.fn() };
         carryReviewCheckToMergeQueueUseCase = {
             execute: jest.fn().mockResolvedValue({ carried: true }),
         };
@@ -118,7 +123,7 @@ describe('GitHubPullRequestHandler', () => {
                 },
                 {
                     provide: ChatWithKodyFromGitUseCase,
-                    useValue: {},
+                    useValue: chatWithKodyFromGitUseCase,
                 },
                 {
                     provide: CodeManagementService,
@@ -143,6 +148,10 @@ describe('GitHubPullRequestHandler', () => {
                 {
                     provide: OUTBOX_MESSAGE_REPOSITORY_TOKEN,
                     useValue: outboxRepository,
+                },
+                {
+                    provide: RUNTIME_PULL_REQUEST_GATE_TOKEN,
+                    useValue: runtimeGate,
                 },
                 {
                     provide: CarryReviewCheckToMergeQueueUseCase,
@@ -359,6 +368,187 @@ describe('GitHubPullRequestHandler', () => {
                     }),
                 }),
             );
+        });
+    });
+    describe('Kody Runtime push to the default branch (R6)', () => {
+        const SHA = 'a'.repeat(40);
+        const pushRows = () =>
+            outboxRepository.create.mock.calls
+                .map(([row]) => row)
+                .filter((row) => row?.payload?.event_name === 'runtime.default_branch_push.observed');
+        const params = (patch: Record<string, unknown> = {}, repository: Record<string, unknown> = {}) => ({
+            platformType: PlatformType.GITHUB,
+            event: 'push',
+            correlationId: 'corr-1',
+            payload: {
+                ref: 'refs/heads/main',
+                after: SHA,
+                repository: { id: 12345, name: 'test-repo', full_name: 'org/test-repo', default_branch: 'main', fork: false, ...repository },
+                ...patch,
+            },
+        });
+
+        it('takes a push to the default branch', () => {
+            expect(handler.canHandle(params() as any)).toBe(true);
+        });
+
+        it('records the push for the Runtime in the outbox, with the branch and the commit', async () => {
+            await handler.execute(params() as any);
+            const [row] = pushRows();
+            expect(row.payload.payload).toMatchObject({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repository: { id: '12345', name: 'test-repo', fullName: 'org/test-repo' },
+                branch: 'main',
+                headSha: SHA,
+            });
+            expect(carryReviewCheckToMergeQueueUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['another branch', { ref: 'refs/heads/feature' }, {}],
+            ['a tag', { ref: 'refs/tags/main' }, {}],
+            ['a deletion', { deleted: true }, {}],
+            ['a fork', {}, { fork: true }],
+        ])('records nothing for %s', async (_label, payload, repository) => {
+            expect(handler.canHandle(params(payload, repository) as any)).toBe(false);
+            await handler.execute(params(payload, repository) as any);
+            expect(pushRows()).toHaveLength(0);
+        });
+
+        it('records nothing for a repository that is in no Runtime environment', async () => {
+            runtimeGate.shouldRecord.mockResolvedValue(false);
+            await handler.execute(params() as any);
+            expect(pushRows()).toHaveLength(0);
+        });
+
+        it('does not fail the event when the outbox cannot take the row', async () => {
+            outboxRepository.create.mockRejectedValue(new Error('down'));
+            await expect(handler.execute(params() as any)).resolves.toBeUndefined();
+        });
+    });
+
+    describe('Kody Runtime trigger (PR 2)', () => {
+        const runtimeRows = () =>
+            outboxRepository.create.mock.calls
+                .map(([row]) => row)
+                .filter((row) => row?.payload?.event_name === 'runtime.pull_request.observed');
+
+        it('records each pull request event for the Runtime trigger in the outbox', async () => {
+            const payload: any = makeGitHubPullRequestWebhookPayload('opened');
+            payload.pull_request.head.sha = 'a'.repeat(40);
+            payload.pull_request.draft = false;
+            payload.pull_request.labels = [{ name: 'runtime' }];
+            payload.pull_request.user = { login: 'dev', type: 'User' };
+            await handler.execute({ event: 'pull_request', platformType: PlatformType.GITHUB, payload } as any);
+
+            const [row] = runtimeRows();
+            expect(row.routingKey).toBe('workflow.jobs.created.RUNTIME_TRIGGER');
+            expect(row.payload.payload).toMatchObject({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repository: { id: '12345', name: 'test-repo', fullName: 'org/test-repo' },
+                prNumber: 42,
+                event: 'opened',
+                headSha: 'a'.repeat(40),
+                draft: false,
+                labels: ['runtime'],
+                author: { login: 'dev', isBot: false },
+            });
+        });
+
+        const comment = (body: string, action = 'created') => ({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action,
+                issue: { number: 42, pull_request: {} },
+                comment: { id: 778, body },
+                repository: { id: 12345, name: 'test-repo', full_name: 'org/test-repo' },
+                sender: { id: 9, login: 'maria', type: 'User' },
+            },
+        });
+
+        it('`@kody runtime` goes to the Runtime trigger, never to a review or the chat', async () => {
+            await handler.execute(comment('@kody runtime') as any);
+
+            expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
+            expect(chatWithKodyFromGitUseCase.execute).not.toHaveBeenCalled();
+            const [row] = runtimeRows();
+            expect(row.payload.payload).toMatchObject({ event: 'comment', prNumber: 42, commenter: { id: '9', login: 'maria' } });
+        });
+
+        it('writes nothing for a repository without a Runtime environment', async () => {
+            runtimeGate.shouldRecord.mockResolvedValue(false);
+            const payload: any = makeGitHubPullRequestWebhookPayload('opened');
+            await handler.execute({ event: 'pull_request', platformType: PlatformType.GITHUB, payload } as any);
+            await handler.execute(comment('@kody runtime') as any);
+
+            expect(runtimeGate.shouldRecord).toHaveBeenCalledWith({ organizationId: 'org-1', repositoryId: '12345' });
+            expect(runtimeRows()).toHaveLength(0);
+            expect(enqueueCodeReviewJobUseCase.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('writes no Runtime row when the gate is not provided (Runtime off)', async () => {
+            const outbox = { create: jest.fn() };
+            const handler = new GitHubPullRequestHandler(
+                { execute: jest.fn() } as any,
+                { getContext: jest.fn().mockResolvedValue({ organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' } }) } as any,
+                {} as any,
+                { getCommitsForPullRequestForCodeReview: jest.fn().mockResolvedValue([]) } as any,
+                { execute: jest.fn() } as any,
+                { emit: jest.fn() } as any,
+                { execute: jest.fn().mockResolvedValue('job') } as any,
+                { execute: jest.fn() } as any,
+                outbox as any,
+                carryReviewCheckToMergeQueueUseCase as any,
+            );
+            await handler.execute({ event: 'pull_request', platformType: PlatformType.GITHUB, payload: makeGitHubPullRequestWebhookPayload('opened') } as any);
+
+            expect(outbox.create.mock.calls.filter(([row]) => row?.payload?.event_name === 'runtime.pull_request.observed')).toHaveLength(0);
+        });
+
+        it('on a repository with no Runtime environment, `@kody runtime` stays a chat mention as before the Runtime', async () => {
+            runtimeGate.shouldRecord.mockResolvedValue(false);
+            await handler.execute(comment('@kody runtime what does this do?') as any);
+
+            expect(runtimeRows()).toHaveLength(0);
+            expect(chatWithKodyFromGitUseCase.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('with the Runtime off, `@kody runtime` stays a chat mention as before the Runtime', async () => {
+            const chat = { execute: jest.fn() };
+            const handler = new GitHubPullRequestHandler(
+                { execute: jest.fn() } as any,
+                { getContext: jest.fn().mockResolvedValue({ organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' } }) } as any,
+                chat as any,
+                { getCommitsForPullRequestForCodeReview: jest.fn().mockResolvedValue([]) } as any,
+                { execute: jest.fn() } as any,
+                { emit: jest.fn() } as any,
+                { execute: jest.fn().mockResolvedValue('job') } as any,
+                { execute: jest.fn() } as any,
+                { create: jest.fn() } as any,
+                carryReviewCheckToMergeQueueUseCase as any,
+            );
+            await handler.execute(comment('@kody runtime') as any);
+
+            expect(chat.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('a gate failure never blocks the review', async () => {
+            runtimeGate.shouldRecord.mockRejectedValue(new Error('db down'));
+            const payload: any = makeGitHubPullRequestWebhookPayload('opened');
+            await handler.execute({ event: 'pull_request', platformType: PlatformType.GITHUB, payload } as any);
+
+            expect(runtimeRows()).toHaveLength(0);
+            expect(enqueueCodeReviewJobUseCase.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('an edited `@kody runtime` comment does not ask again', async () => {
+            await handler.execute(comment('@kody runtime', 'edited') as any);
+
+            expect(runtimeRows()).toHaveLength(0);
+            expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
         });
     });
     describe('merge queue pushes', () => {

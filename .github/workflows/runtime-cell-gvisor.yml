@@ -1,0 +1,156 @@
+name: "Runtime cell: conformance on gVisor"
+
+# The backend conformance suite (apps/runtime-cell/test/conformance) on the
+# docker-gvisor backend, the one the dev cell runs. runtime-cell.yml runs only
+# the fake target, which skips every boundary behaviour: a driver change could
+# pass CI with no boundary test on any backend (architecture review
+# 2026-11-14, T1). This job installs runsc on a GitHub-hosted Ubuntu runner
+# (gVisor's systrap platform needs no KVM), registers it with Docker, builds
+# the sandbox tool image and runs test/gvisoregress's conformance test.
+#
+# It runs as root (sudo): the driver shapes each sandbox's network on its host
+# veth (tc) and reads the sandboxes' cgroups. It needs the internet: the
+# allowed host and the secret hosts go through the cell's egress.
+#
+# It fails when the test is skipped as a whole (a missing variable) and when
+# the target skips a behaviour it does not declare (conformance.Target.MaySkip:
+# gVisor declares only the P3 snapshot behaviours).
+#
+# The `regress` job runs the rest of test/gvisoregress on the same runner
+# shape: build under the sandbox, bake and pool reuse, the default branch's
+# build cache for a PR, egress, exec deadlines, a trusted build with its
+# secrets as placeholders (builder-image/ built here) and a bake generation
+# that survives a driver restart. Every test must run: a skip fails the job.
+on:
+    schedule:
+        - cron: "23 3 * * *"
+    workflow_dispatch:
+    # A driver change runs the boundary suite before it merges, not the next night.
+    pull_request:
+        paths:
+            - "apps/runtime-cell/internal/drivers/**"
+            - "apps/runtime-cell/test/conformance/**"
+            - "apps/runtime-cell/test/gvisoregress/**"
+            - "apps/runtime-cell/sandbox-image/**"
+            - ".github/workflows/runtime-cell-gvisor.yml"
+
+permissions:
+    contents: read
+
+concurrency:
+    group: runtime-cell-gvisor-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    conformance:
+        name: conformance suite on runsc
+        runs-on: ubuntu-24.04
+        timeout-minutes: 60
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Set up Go
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache-dependency-path: apps/runtime-cell/go.sum
+
+            # gVisor's signed apt repository (https://gvisor.dev/docs/user_guide/install/),
+            # then `runsc install` adds the runtime to /etc/docker/daemon.json.
+            - name: Install runsc and register it with Docker
+              shell: bash
+              run: |
+                  curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+                  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" |
+                      sudo tee /etc/apt/sources.list.d/gvisor.list >/dev/null
+                  sudo apt-get update -q
+                  sudo apt-get install -y -q runsc
+                  sudo runsc install
+                  sudo systemctl restart docker
+                  runsc --version
+                  docker info --format '{{json .Runtimes}}' | grep -q runsc
+                  docker run --rm --runtime=runsc alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc uname -a
+
+            - name: Build the sandbox tool image
+              run: docker buildx build --load -t kodus-runtime-sandbox:ci -f apps/runtime-cell/sandbox-image/Dockerfile apps/runtime-cell
+
+            - name: Conformance on gVisor
+              shell: bash
+              working-directory: apps/runtime-cell
+              env:
+                  KODY_E2E_GVISOR: "1"
+                  KODY_E2E_SANDBOX_IMAGE: kodus-runtime-sandbox:ci
+              run: |
+                  sudo -E env "PATH=$PATH" go test -count=1 -timeout 45m -v -run 'TestGVisorKeepsTheConformanceBehaviours$' ./test/gvisoregress/ | tee "$RUNNER_TEMP/conformance.log"
+                  # A test skipped as a whole passes go test: it must have run.
+                  grep -q '^--- PASS: TestGVisorKeepsTheConformanceBehaviours' "$RUNNER_TEMP/conformance.log"
+
+            - name: Keep the log
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: gvisor-conformance
+                  path: ${{ runner.temp }}/conformance.log
+                  if-no-files-found: ignore
+
+    regress:
+        name: test/gvisoregress on runsc
+        runs-on: ubuntu-24.04
+        timeout-minutes: 120
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Set up Go
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache-dependency-path: apps/runtime-cell/go.sum
+
+            # gVisor's signed apt repository (https://gvisor.dev/docs/user_guide/install/),
+            # then `runsc install` adds the runtime to /etc/docker/daemon.json.
+            - name: Install runsc and register it with Docker
+              shell: bash
+              run: |
+                  curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+                  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" |
+                      sudo tee /etc/apt/sources.list.d/gvisor.list >/dev/null
+                  sudo apt-get update -q
+                  sudo apt-get install -y -q runsc
+                  sudo runsc install
+                  sudo systemctl restart docker
+                  runsc --version
+                  docker info --format '{{json .Runtimes}}' | grep -q runsc
+                  docker run --rm --runtime=runsc alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc uname -a
+
+            - name: Build the sandbox tool image
+              run: docker buildx build --load -t kodus-runtime-sandbox:ci -f apps/runtime-cell/sandbox-image/Dockerfile apps/runtime-cell
+
+            - name: Build the trusted builder image
+              run: docker buildx build --load -t kodus-runtime-builder:ci apps/runtime-cell/builder-image
+
+            - name: gvisoregress
+              shell: bash
+              working-directory: apps/runtime-cell
+              env:
+                  KODY_E2E_GVISOR: "1"
+                  KODY_E2E_SANDBOX_IMAGE: kodus-runtime-sandbox:ci
+                  KODY_E2E_TRUSTED_BUILDER: kodus-runtime-builder:ci
+              run: |
+                  set -o pipefail
+                  sudo -E env "PATH=$PATH" go test -count=1 -timeout 110m -v -skip 'TestGVisorKeepsTheConformanceBehaviours$' ./test/gvisoregress/ | tee "$RUNNER_TEMP/gvisoregress.log"
+                  # go test passes a skipped test: every one must have run.
+                  if grep -E '^\s*--- SKIP' "$RUNNER_TEMP/gvisoregress.log"; then echo "a gvisoregress test was skipped" >&2; exit 1; fi
+
+            - name: Keep the log
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: gvisoregress
+                  path: ${{ runner.temp }}/gvisoregress.log
+                  if-no-files-found: ignore

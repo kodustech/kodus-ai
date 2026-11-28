@@ -3735,18 +3735,28 @@ export class ForgejoService implements Omit<
         repository: { name: string };
         commentId: number;
         body: string;
+        /** Throw the failure (with its HTTP status) instead of answering null. */
+        failOnError?: boolean;
     }): Promise<any | null> {
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return null;
+            if (!authDetail) {
+                if (params.failOnError)
+                    throw new Error('Forgejo authentication unavailable');
+                return null;
+            }
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'updateIssueComment',
             );
-            if (!repoInfo) return null;
+            if (!repoInfo) {
+                if (params.failOnError)
+                    throw new Error('Forgejo repository unavailable');
+                return null;
+            }
 
             const client = this.createForgejoClient(authDetail);
             const result = await issueEditComment({
@@ -3757,6 +3767,10 @@ export class ForgejoService implements Omit<
                     id: params.commentId,
                 },
                 body: { body: params.body },
+                // The client answers an HTTP error with `{ error }` unless
+                // told to throw; thrown, it carries `response.status`, which
+                // tells a deleted comment (404) from an outage.
+                throwOnError: params.failOnError === true,
             });
 
             return result.data;
@@ -3766,6 +3780,7 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
+            if (params.failOnError) throw error;
             return null;
         }
     }

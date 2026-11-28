@@ -1,0 +1,22 @@
+# Dev only: the stack opened by the VM's public address instead of localhost (self-hosted mode:
+# the LLM is the org's BYOK), with the GitHub PAT as the Runtime's repository download token.
+# Rendered by scripts/runtime/dev-boat-up.sh. Do not edit the rendered copy; re-run the script.
+services:
+    web:
+        environment:
+            ALLOWED_DEV_ORIGINS: @@PUBLIC_HOST@@
+            NEXTAUTH_URL: http://@@PUBLIC_HOST@@:3000
+            WEB_HOSTNAME_API: @@PUBLIC_HOST@@
+    kodus-api:
+        environment:
+            API_CLOUD_MODE: 'false'
+            NEXTAUTH_URL: http://@@PUBLIC_HOST@@:3000
+            API_FRONTEND_URL: http://@@PUBLIC_HOST@@:3000
+            API_URL: http://@@PUBLIC_HOST@@:3001
+            API_GITHUB_CODE_MANAGEMENT_WEBHOOK: http://@@PUBLIC_HOST@@:3332/github/webhook
+            RUNTIME_DEV_ALLOW_PAT_DOWNLOAD: 'true'
+    worker:
+        environment:
+            API_CLOUD_MODE: 'false'
+            API_GITHUB_CODE_MANAGEMENT_WEBHOOK: http://@@PUBLIC_HOST@@:3332/github/webhook
+            RUNTIME_DEV_ALLOW_PAT_DOWNLOAD: 'true'

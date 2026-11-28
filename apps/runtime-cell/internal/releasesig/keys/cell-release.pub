@@ -1,0 +1,9 @@
+# The public keys a cell release must be signed with (S-17 (a),
+# docs/runtime/isolation-p3-snapshots.md), one "kodus-cell-release-key
+# <base64>" line each. Compiled into the cell (releasesig.Pinned) and copied
+# into the installer, which passes it to `cell update -keys`.
+#
+# Empty until the release owner makes the key pair
+# (scripts/sign-release.sh generate): with no key pinned, `cell update`
+# refuses every release. The private half goes only into the release
+# workflow's secret RUNTIME_CELL_RELEASE_SIGNING_KEY, never into this tree.

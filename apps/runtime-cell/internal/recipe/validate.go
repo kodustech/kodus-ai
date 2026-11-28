@@ -1,0 +1,386 @@
+package recipe
+
+import (
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+)
+
+// Bounds on the lists a recipe carries.
+const (
+	MaxComposeFiles = 8
+	MaxProfiles     = 16
+	MaxPublic       = 16
+	MaxExposed      = 32
+	MaxDataServices = 8
+	maxHealthLen    = 512
+)
+
+var (
+	envName      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	profileName  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+	serviceName  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+	healthPath   = regexp.MustCompile(`^/[A-Za-z0-9._~/?=&%-]*$`)
+	secretName   = regexp.MustCompile(`(?i)(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|ACCESS_?KEY|CREDENTIAL)`)
+	secretValue  = regexp.MustCompile(`(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9_-]{16,}|sk_live_|AKIA[0-9A-Z]{16}|xox[abpr]-|-----BEGIN)`)
+	exposedKinds = map[string]bool{"http": true, "postgres": true, "mysql": true, "grpc": true}
+	// testValues are the values Kodus writes when a fix gives a variable a
+	// test value (libs/runtime/blockers/catalog.ts testValueFor): they name
+	// themselves, so a name that looks like a secret may hold one, and an
+	// app that only needs SESSION_SECRET set boots without a secret on the
+	// machine (ADR-008). Any other value under such a name is refused.
+	testValues = map[string]bool{protocol.TestValue: true, protocol.TestURLValue: true}
+)
+
+// The env names a recipe never sets, because they change what runs rather
+// than what the app is configured with: which program a name resolves to
+// (PATH), what the dynamic linker or a language runtime loads before the
+// program (LD_*, DYLD_*, NODE_OPTIONS, JAVA_TOOL_OPTIONS, ...), what a shell
+// runs on start (BASH_ENV, ENV), and how docker and compose read the project
+// (DOCKER_*, COMPOSE_*), which the cell decides. None of them is app
+// configuration, and a driver that hands the env to a process on the cell
+// (local-docker gives it to setup, migrate and seed) must not pass them, so
+// every cell refuses them here, before any driver sees the recipe.
+//
+// controlEnvJSON is a byte-identical copy of
+// libs/runtime/protocol/recipe-control-env.json, which the worker reads too;
+// control_env_test.go fails when they differ.
+//
+//go:embed recipe-control-env.json
+var controlEnvJSON []byte
+
+type controlEnvList struct {
+	Prefixes []string `json:"prefixes"`
+	Names    []string `json:"names"`
+	Cases    struct {
+		Refused []string `json:"refused"`
+		Allowed []string `json:"allowed"`
+	} `json:"cases"`
+}
+
+var controlEnv = mustControlEnv(controlEnvJSON)
+
+func mustControlEnv(b []byte) controlEnvList {
+	var l controlEnvList
+	if err := json.Unmarshal(b, &l); err != nil {
+		panic(fmt.Sprintf("recipe: recipe-control-env.json: %v", err))
+	}
+	if len(l.Prefixes) == 0 || len(l.Names) == 0 {
+		panic("recipe: recipe-control-env.json: empty list")
+	}
+	return l
+}
+
+func isControlEnv(name string) bool {
+	n := strings.ToUpper(name)
+	if slices.Contains(controlEnv.Names, n) {
+		return true
+	}
+	for _, p := range controlEnv.Prefixes {
+		if strings.HasPrefix(n, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// validate holds the rules every cell enforces. Each check is its own
+// function so a rule reads, and is tested, on its own.
+func (r *Recipe) validate() error {
+	for _, check := range []func(*Recipe) error{
+		checkVersion,
+		refuseCopiedFiles,
+		checkComposeFiles,
+		checkProfiles,
+		checkPublic,
+		refuseSecretsInEnv,
+		checkExposedPorts,
+		checkHealth,
+		checkData,
+		checkSuite,
+	} {
+		if err := check(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkVersion(r *Recipe) error {
+	if r.Version != 1 {
+		return fmt.Errorf("version must be 1, got %d", r.Version)
+	}
+	return nil
+}
+
+// files.copy brings files from the developer's machine (Runo's .env): in a
+// cell nothing comes from anyone's machine.
+func refuseCopiedFiles(r *Recipe) error {
+	if r.Files != nil && len(r.Files.Copy) > 0 {
+		return errors.New("files.copy is refused in a cell: env files never go to the machine; use a fake")
+	}
+	return nil
+}
+
+func checkComposeFiles(r *Recipe) error {
+	files := r.Services.Compose.Files
+	if len(files) > MaxComposeFiles {
+		return fmt.Errorf("services.compose.files: at most %d files", MaxComposeFiles)
+	}
+	for _, f := range files {
+		if err := insideRepo("services.compose.files", f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkProfiles(r *Recipe) error {
+	ps := r.Services.Compose.Profiles
+	if len(ps) > MaxProfiles {
+		return fmt.Errorf("services.compose.profiles: at most %d", MaxProfiles)
+	}
+	for _, p := range ps {
+		if !profileName.MatchString(p) {
+			return fmt.Errorf("services.compose.profiles: bad profile %q", p)
+		}
+	}
+	return nil
+}
+
+// Runo's rules for public and public_port, so a recipe one tool takes the
+// other takes too.
+func checkPublic(r *Recipe) error {
+	c := r.Services.Compose
+	if len(c.Public) > MaxPublic {
+		return fmt.Errorf("services.compose.public: at most %d services", MaxPublic)
+	}
+	seen := map[string]bool{}
+	for _, s := range c.Public {
+		if !serviceName.MatchString(s) {
+			return fmt.Errorf("services.compose.public: bad service %q", s)
+		}
+		if seen[s] {
+			return fmt.Errorf("services.compose.public: %s twice", s)
+		}
+		seen[s] = true
+	}
+	if c.PublicPort != 0 {
+		if len(c.Public) > 1 {
+			return errors.New("services.compose.public_port cannot be used with a list of public services")
+		}
+		if c.PublicPort < 1 || c.PublicPort > 65535 {
+			return fmt.Errorf("services.compose.public_port: bad port %d", c.PublicPort)
+		}
+	}
+	return nil
+}
+
+var (
+	testLiteralShape = regexp.MustCompile(`^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)+$`)
+	testLiteralWord  = regexp.MustCompile(`^[A-Za-z]+$`)
+	// testLiteralMarkers is held to TEST_LITERAL_MARKERS in libs/runtime/protocol/recipe.ts.
+	testLiteralMarkers = map[string]bool{"test": true, "tests": true, "e2e": true, "fake": true, "dummy": true, "mock": true, "fixture": true, "fixtures": true, "example": true, "sample": true}
+)
+
+// isTestLiteral says whether a value under a secret-looking name is an
+// obviously-test literal ("e2e-admin-token-only"): short words joined by - _
+// or ., one of them a test marker, no long mixed letter and digit run, and
+// nothing a known secret pattern matches. A real credential is random and has
+// none of that shape. Held to isTestLiteral in libs/runtime/protocol/recipe.ts.
+func isTestLiteral(v string) bool {
+	if len(v) < 4 || len(v) > 64 || secretValue.MatchString(v) || !testLiteralShape.MatchString(v) {
+		return false
+	}
+	marked := false
+	for _, p := range strings.FieldsFunc(v, func(r rune) bool { return r == '-' || r == '_' || r == '.' }) {
+		if len(p) > 16 || (len(p) > 8 && !testLiteralWord.MatchString(p)) {
+			return false
+		}
+		if testLiteralMarkers[strings.ToLower(p)] {
+			marked = true
+		}
+	}
+	return marked
+}
+
+func refuseSecretsInEnv(r *Recipe) error {
+	return validateEnvironment(r.Services.Compose.Env, "services.compose.env")
+}
+
+func validateEnvironment(env map[string]string, prefix string) error {
+	for k, v := range env {
+		if !envName.MatchString(k) {
+			return fmt.Errorf("%s: bad name %q", prefix, k)
+		}
+		if isControlEnv(k) {
+			return fmt.Errorf("%s.%s changes what runs, not how the app is configured; a recipe never sets it", prefix, k)
+		}
+		if (secretName.MatchString(k) && !testValues[v] && !isTestLiteral(v)) || secretValue.MatchString(v) {
+			return fmt.Errorf("%s.%s looks like a secret; secrets never go in the recipe", prefix, k)
+		}
+		if strings.ContainsAny(v, "\n\r") {
+			return fmt.Errorf("%s.%s has a newline", prefix, k)
+		}
+	}
+	return nil
+}
+
+func checkExposedPorts(r *Recipe) error {
+	if len(r.Services.Expose) > MaxExposed {
+		return fmt.Errorf("services.expose: at most %d entries", MaxExposed)
+	}
+	seen := map[string]bool{}
+	for i, e := range r.Services.Expose {
+		key := e.Service + "/" + strconv.Itoa(e.Port)
+		switch {
+		case e.Service == "":
+			return fmt.Errorf("services.expose[%d]: service required", i)
+		case e.Port < 1 || e.Port > 65535:
+			return fmt.Errorf("services.expose[%d]: bad port %d", i, e.Port)
+		case !exposedKinds[e.Kind]:
+			return fmt.Errorf("services.expose[%d]: kind %q is not http, postgres, mysql or grpc", i, e.Kind)
+		case seen[key]:
+			return fmt.Errorf("services.expose[%d]: %s twice", i, key)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// The health path is asked on the public service's http port, so both
+// must be there.
+func checkHealth(r *Recipe) error {
+	h := r.Services.Compose.Health
+	if h == "" {
+		return nil
+	}
+	if !healthPath.MatchString(h) || len(h) > maxHealthLen {
+		return fmt.Errorf("services.compose.health %q must be a path", h)
+	}
+	if _, ok := r.PublicHTTP(); !ok {
+		return errors.New("services.compose.health needs services.compose.public with an http entry in services.expose")
+	}
+	return nil
+}
+
+func checkData(r *Recipe) error {
+	if s := r.Data.Seed; s.SQL != "" {
+		if err := insideRepo("data.seed.sql", s.SQL); err != nil {
+			return err
+		}
+	}
+	switch r.Data.Reset {
+	case "", ResetRecreate, ResetReseed, ResetSnapshot, ResetDataOnly:
+	default:
+		return fmt.Errorf("data.reset %q is not %s, %s, %s or %s", r.Data.Reset, ResetRecreate, ResetReseed, ResetSnapshot, ResetDataOnly)
+	}
+	if err := checkDataServices(r); err != nil {
+		return err
+	}
+	return checkInPlace(r)
+}
+
+// MaxInPlacePostgres and MaxInPlaceDatabases bound data.in_place.postgres.
+const (
+	MaxInPlacePostgres  = 8
+	MaxInPlaceDatabases = 8
+	// maxInPlaceDatabaseName leaves room for the suffix of the golden copy
+	// (_kodus_golden, 13 bytes) under Postgres' 63-byte identifier limit.
+	maxInPlaceDatabaseName = 50
+)
+
+var (
+	inPlaceDatabase = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	inPlaceDir      = regexp.MustCompile(`^/[A-Za-z0-9._/-]+$`)
+	inPlaceProject  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+)
+
+// checkInPlace holds data.in_place to data-only (the only strategy that
+// reads it) and to values that are safe to put in a command.
+func checkInPlace(r *Recipe) error {
+	ip := r.Data.InPlace
+	if !ip.Off && len(ip.Postgres) == 0 && ip.Firebase == nil {
+		return nil
+	}
+	if r.Data.Reset != ResetDataOnly {
+		return errors.New("data.in_place needs data.reset: data-only")
+	}
+	if len(ip.Postgres) > MaxInPlacePostgres {
+		return fmt.Errorf("data.in_place.postgres: at most %d services", MaxInPlacePostgres)
+	}
+	seen := map[string]bool{}
+	for _, p := range ip.Postgres {
+		switch {
+		case !serviceName.MatchString(p.Service):
+			return fmt.Errorf("data.in_place.postgres: bad service %q", p.Service)
+		case seen[p.Service]:
+			return fmt.Errorf("data.in_place.postgres: %s twice", p.Service)
+		case slices.Contains(r.Services.Compose.Public, p.Service):
+			return fmt.Errorf("data.in_place.postgres: %s is the public service", p.Service)
+		case len(p.Databases) > MaxInPlaceDatabases:
+			return fmt.Errorf("data.in_place.postgres: %s names more than %d databases", p.Service, MaxInPlaceDatabases)
+		}
+		seen[p.Service] = true
+		for _, db := range p.Databases {
+			if !inPlaceDatabase.MatchString(db) || len(db) > maxInPlaceDatabaseName {
+				return fmt.Errorf("data.in_place.postgres: bad database %q", db)
+			}
+		}
+	}
+	if f := ip.Firebase; f != nil {
+		switch {
+		case !serviceName.MatchString(f.Service):
+			return fmt.Errorf("data.in_place.firebase: bad service %q", f.Service)
+		case !inPlaceDir.MatchString(f.ImportDir) || strings.Contains(f.ImportDir, ".."):
+			return fmt.Errorf("data.in_place.firebase.import_dir: %q must be an absolute path inside the service", f.ImportDir)
+		case f.Project != "" && !inPlaceProject.MatchString(f.Project):
+			return fmt.Errorf("data.in_place.firebase.project: bad project %q", f.Project)
+		case slices.Contains(r.Data.Services, f.Service):
+			return fmt.Errorf("data.in_place.firebase: %s is a data service; the emulators are part of the app", f.Service)
+		}
+	}
+	return nil
+}
+
+// checkDataServices holds data.services to its strategy: only data-only
+// reads it, and it never names the public service (the app is what stays up).
+func checkDataServices(r *Recipe) error {
+	if r.Data.Services == nil {
+		return nil
+	}
+	if r.Data.Reset != ResetDataOnly {
+		return errors.New("data.services needs data.reset: data-only")
+	}
+	if n := len(r.Data.Services); n < 1 || n > MaxDataServices {
+		return fmt.Errorf("data.services: between 1 and %d services", MaxDataServices)
+	}
+	seen := map[string]bool{}
+	for _, s := range r.Data.Services {
+		switch {
+		case !serviceName.MatchString(s):
+			return fmt.Errorf("data.services: bad service %q", s)
+		case seen[s]:
+			return fmt.Errorf("data.services: %s twice", s)
+		case slices.Contains(r.Services.Compose.Public, s):
+			return fmt.Errorf("data.services: %s is the public service", s)
+		}
+		seen[s] = true
+	}
+	return nil
+}
+
+func insideRepo(field, p string) error {
+	if p == "" || !filepath.IsLocal(p) {
+		return fmt.Errorf("%s: %q must be a path inside the repo", field, p)
+	}
+	return nil
+}

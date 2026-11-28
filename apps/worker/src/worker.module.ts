@@ -14,6 +14,7 @@ import { ReviewResponseMonitorService } from '@libs/core/infrastructure/metrics/
 import { WebhookFailureMonitorService } from '@libs/core/infrastructure/metrics/webhook-failure-monitor.service';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
+import { OUTBOX_RELAY_HEALTH_TOKEN } from '@libs/core/workflow/domain/contracts/outbox-relay-health.contract';
 import { OutboxRelayService } from '@libs/core/workflow/infrastructure/outbox-relay.service';
 import { WorkflowJobRetentionService } from '@libs/core/workflow/infrastructure/workflow-job-retention.service';
 import { isSecurityScanSliceProcess } from '@libs/core/workflow/infrastructure/security-scan-runtime';
@@ -36,6 +37,12 @@ import { TeamModule } from '@libs/organization/modules/team.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
+import { isKodyRuntimeEnabled } from '@libs/runtime-publish/runtime-feature';
+import { RuntimePublishModule } from '@libs/runtime-publish/runtime-publish.module';
+import { RuntimePullRequestGateModule } from '@libs/runtime-publish/runtime-pull-request-gate.module';
+import { RuntimeTriggerModule } from '@libs/runtime/api/runtime-trigger.module';
+import { RuntimeExternalMaintenanceModule } from './runtime-external-maintenance/maintenance.module';
+import { isExternalMaintenanceEnabled } from './runtime-external-maintenance/maintenance.cron';
 
 import { AnalyticsClassifierCron } from './cron/analytics-classifier.cron';
 import { AnalyticsIngestionCron } from './cron/analytics-ingestion.cron';
@@ -130,11 +137,30 @@ export class WorkerModule {
                     WorkflowModule.register({ type: 'worker' }),
                     ...jobImports,
                     SelfHostedBeaconModule,
+                    // Kody Runtime, only where it is on (RUNTIME_ENABLED): publishes
+                    // the Runtime's comment and check with the product's Git
+                    // credentials (ADR-052), turns pull request events into Runs
+                    // (PR 2), and lets the webhook handlers record those events
+                    // for repositories with a Runtime environment. Off, nothing
+                    // consumes the Runtime queues and no outbox row is written;
+                    // the queues themselves are declared by the shared topology
+                    // (RabbitMQDLQInitializer) on every deployment, and the
+                    // Runtime's retry topology only where it is on, on a
+                    // channel of its own.
+                    ...(isKodyRuntimeEnabled(process.env)
+                        ? [RuntimePublishModule, RuntimeTriggerModule, RuntimePullRequestGateModule, ...(isExternalMaintenanceEnabled(process.env) ? [RuntimeExternalMaintenanceModule] : [])]
+                        : []),
                 ],
                 providers: [
                     WorkerDrainService,
                     WorkerHealthGuardService,
                     OutboxRelayService,
+                    // Read by the health probe (main.ts): a dead relay loop
+                    // makes the worker unhealthy.
+                    {
+                        provide: OUTBOX_RELAY_HEALTH_TOKEN,
+                        useExisting: OutboxRelayService,
+                    },
                     ErrorRateMonitorService,
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,

@@ -1,0 +1,621 @@
+{
+    "__doc": [
+        "Labels for the kr-* test pull requests that Kody Runtime ran on (our own repositories under Wellington01: forks of open-source projects and the small kr-shop apps; no customer code).",
+        "A case is one pull request head. acts: the diff changes what the app answers, so a right Run reports it; false: the change is equivalent, a comment, or out of reach, so a right Run reports nothing.",
+        "reaches: probes that exercise the changed code, mount prefix included (method, a path regex, an optional request media type, or kind browser). prefix: a regex every http probe path of the case must match to reach the app's API at all.",
+        "accept: the verdicts a right plan can end in. files: per changed code file, serves = the routes the file itself declares or serves (as declared, before any mount), reaches = the subset the diff's lines reach. A file with no route of its own serves nothing.",
+        "excludeRuns: Runs whose outcome measures something other than the planner, with why, each named by score.js runKey (a digest of the Run id's first 8 characters, a label and not a secret; the ids stay in the export).",
+        "intended: the case's change is what the PR means (a reworded text, a renamed field): a right Run reports it as the PR's intended change (a finding with intent intended), never as a regression.",
+        "accept on the comment cases lists nothing_to_test first: since planner-eval.md fix 1 a diff whose every change is a comment, layout or documentation ends there before anything boots; the older verdicts stay accepted for the Runs made before it, and the stability line shows whether the cases now end in one verdict."
+    ],
+    "excludeRuns": {
+        "a3c2c3a6c71e": "kr-shop-billing#1 on kr-shop's environment, before the fix that boots a member with its environment's setup: the probes hit kr-shop's app (404 on both sides)",
+        "2f7a9266c4e7": "kr-shop-billing#2, the same member-setup bug",
+        "4b8112c0f936": "kr-shop-billing#3, the same member-setup bug (multi-repo V3)",
+        "87fbafb49e9a": "kr-nextjs#2: the PR side did not boot because its build could not push to the claim's registry (connection refused on the cell), so the Run ended 'regression' with no probe run: it measures the cell",
+        "ad0387f74583": "kr-nextjs#2: every round of the browser probe lost transport on both sides (vmHealth ok), so the probe was inconclusive: it measures the cell's browser path, not the plan",
+        "a94c5339a7f5": "kr-nextjs#2: the same browser transport loss, the same plan reused",
+        "cd4b9ea7b283": "kr-nextjs#2: the same browser transport loss (vmHealth ok), the same plan reused",
+        "30e3cbd8b50e": "kr-nextjs#2: the same browser transport loss, the same plan reused",
+        "046e0ff1842a": "kr-nextjs#2: the same browser transport loss; the cell refused the HMR socket (url not http(s): scheme ws)"
+    },
+    "cases": [
+        {
+            "id": "shop-1-qty-rename",
+            "repo": "kr-shop",
+            "pr": 1,
+            "heads": ["f38ef027", "45b3b1e1"],
+            "acts": true,
+            "change": "renames quantity to qty in the order query and the page script; the button text changes",
+            "checks": "Probes GET /orders/<id> and the orders page, and reports the regressions.",
+            "reaches": [
+                { "method": "GET", "path": "^/orders/[^/]+$" },
+                { "kind": "browser" }
+            ],
+            "accept": ["regression"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "GET /orders",
+                        "GET /orders/:id",
+                        "POST /orders"
+                    ],
+                    "reaches": ["GET /orders/:id"]
+                }
+            }
+        },
+        {
+            "id": "shop-2-qty-zero",
+            "repo": "kr-shop",
+            "pr": 2,
+            "heads": ["fc22dd41"],
+            "acts": true,
+            "change": "POST /orders accepts quantity 0 (was refused with 400)",
+            "checks": "Probes POST /orders with quantity 0 and reports 400 to 201 as a regression.",
+            "reaches": [{ "method": "POST", "path": "^/orders$" }],
+            "accept": ["regression"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "GET /orders",
+                        "GET /orders/:id",
+                        "POST /orders"
+                    ],
+                    "reaches": ["POST /orders"]
+                }
+            }
+        },
+        {
+            "id": "shop-3-qty-equivalent",
+            "repo": "kr-shop",
+            "pr": 3,
+            "heads": ["a1c64165"],
+            "acts": false,
+            "change": "quantity < 1 becomes quantity <= 0 for an integer: the same rule",
+            "checks": "Probes POST /orders and reports no regression for an equivalent validation.",
+            "reaches": [{ "method": "POST", "path": "^/orders$" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "GET /orders",
+                        "GET /orders/:id",
+                        "POST /orders"
+                    ],
+                    "reaches": ["POST /orders"]
+                }
+            }
+        },
+        {
+            "id": "shop-4-preview-added",
+            "repo": "kr-shop",
+            "pr": 4,
+            "heads": ["3602cbe4"],
+            "acts": true,
+            "change": "adds POST /orders/preview, which calls billing, and the billing service to the recipe",
+            "checks": "Probes the new POST /orders/preview and reports it as a new endpoint, not a regression.",
+            "reaches": [{ "method": "POST", "path": "^/orders/preview$" }],
+            "accept": ["no_regressions", "partly_tested"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "GET /orders",
+                        "GET /orders/:id",
+                        "POST /orders",
+                        "POST /orders/preview"
+                    ],
+                    "reaches": ["POST /orders/preview"]
+                }
+            }
+        },
+        {
+            "id": "shop-5-billing-contract",
+            "repo": "kr-shop",
+            "pr": 5,
+            "heads": ["c5011516"],
+            "acts": true,
+            "change": "the preview sends lines instead of items to billing, which refuses it",
+            "checks": "Probes POST /orders/preview and reports the total that stops coming back.",
+            "reaches": [{ "method": "POST", "path": "^/orders/preview$" }],
+            "accept": ["regression"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "GET /orders",
+                        "GET /orders/:id",
+                        "POST /orders",
+                        "POST /orders/preview"
+                    ],
+                    "reaches": ["POST /orders/preview"]
+                }
+            }
+        },
+        {
+            "id": "shop-6-preview-refactor",
+            "repo": "kr-shop",
+            "pr": 6,
+            "heads": ["8ad8790a"],
+            "acts": false,
+            "change": "extracts the billing call of the preview into a helper; same answers",
+            "checks": "Probes POST /orders/preview, which alone calls the helper, and reports no regression.",
+            "reaches": [{ "method": "POST", "path": "^/orders/preview$" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "GET /orders",
+                        "GET /orders/:id",
+                        "POST /orders",
+                        "POST /orders/preview"
+                    ],
+                    "reaches": ["POST /orders/preview"]
+                }
+            }
+        },
+        {
+            "id": "billing-1-cents-refactor",
+            "repo": "kr-shop-billing",
+            "pr": 1,
+            "heads": ["d9f7d5c4"],
+            "acts": false,
+            "change": "moves the cents arithmetic of previewTotal into two helpers; same totals",
+            "checks": "Probes POST /invoices/preview via invoice.js and reports no regression.",
+            "reaches": [{ "method": "POST", "path": "^/invoices/preview$" }],
+            "accept": ["no_regressions"],
+            "files": { "invoice.js": { "serves": [], "reaches": [] } }
+        },
+        {
+            "id": "billing-2-qty-zero",
+            "repo": "kr-shop-billing",
+            "pr": 2,
+            "heads": ["850afaff"],
+            "acts": true,
+            "change": "previewTotal accepts quantity 0 (was 400)",
+            "checks": "Probes POST /invoices/preview with quantity 0 via invoice.js and reports the regression.",
+            "reaches": [{ "method": "POST", "path": "^/invoices/preview$" }],
+            "accept": ["regression"],
+            "files": { "invoice.js": { "serves": [], "reaches": [] } }
+        },
+        {
+            "id": "billing-3-partner-echo",
+            "repo": "kr-shop-billing",
+            "pr": 3,
+            "heads": ["21f5b703", "7128d71c"],
+            "acts": true,
+            "change": "adds GET /partner/echo (node:http), which calls a partner with a secret",
+            "checks": "Probes the new GET /partner/echo and reports a new endpoint.",
+            "reaches": [{ "method": "GET", "path": "^/partner/echo$" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "POST /invoices/preview",
+                        "GET /partner/echo"
+                    ],
+                    "reaches": ["GET /partner/echo"]
+                }
+            }
+        },
+        {
+            "id": "billing-4-partner-ping",
+            "repo": "kr-shop-billing",
+            "pr": 4,
+            "heads": ["49c53dca", "2d36c2b2"],
+            "acts": true,
+            "change": "adds GET /partner/ping, which sends the secret over plain HTTP",
+            "checks": "Probes the new GET /partner/ping; the Run reports its error or halts on the secret leak.",
+            "reaches": [{ "method": "GET", "path": "^/partner/ping$" }],
+            "accept": ["regression", "partly_tested"],
+            "files": {
+                "server.js": {
+                    "serves": [
+                        "GET /health",
+                        "POST /invoices/preview",
+                        "GET /partner/ping"
+                    ],
+                    "reaches": ["GET /partner/ping"]
+                }
+            }
+        },
+        {
+            "id": "directus-1-trim-null",
+            "repo": "kr-directus",
+            "pr": 1,
+            "heads": ["8a0e4b4e"],
+            "acts": true,
+            "change": "GET /server/info trims project_descriptor, which is null on a fresh install: 500",
+            "checks": "Probes GET /server/info (router mounted at /server) and reports 200 to 500.",
+            "reaches": [{ "method": "GET", "path": "^/server/info$" }],
+            "prefix": "^/server/",
+            "accept": ["regression"],
+            "files": {
+                "api/src/controllers/server.ts": {
+                    "serves": [
+                        "GET /specs/oas",
+                        "GET /specs/graphql/:scope?",
+                        "GET /info",
+                        "GET /health",
+                        "POST /setup"
+                    ],
+                    "reaches": ["GET /info"]
+                }
+            }
+        },
+        {
+            "id": "directus-2-trim-guarded",
+            "repo": "kr-directus",
+            "pr": 2,
+            "heads": ["7b75b4bb"],
+            "acts": false,
+            "change": "the same trim, guarded for a non-string descriptor: same answers",
+            "checks": "Probes GET /server/info and reports no regression.",
+            "reaches": [{ "method": "GET", "path": "^/server/info$" }],
+            "prefix": "^/server/",
+            "accept": ["no_regressions"],
+            "files": {
+                "api/src/controllers/server.ts": {
+                    "serves": [
+                        "GET /specs/oas",
+                        "GET /specs/graphql/:scope?",
+                        "GET /info",
+                        "GET /health",
+                        "POST /setup"
+                    ],
+                    "reaches": ["GET /info"]
+                }
+            }
+        },
+        {
+            "id": "twenty-1-body-limit",
+            "repo": "kr-twenty",
+            "pr": 1,
+            "heads": ["344afac4"],
+            "acts": false,
+            "change": "the text/plain body parser limit 1024kb becomes 1mb: the same 1,048,576 bytes",
+            "checks": "Probes a request with a text/plain body, which runs the changed parser, and reports no regression.",
+            "reaches": [{ "contentType": "^text/plain" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "packages/twenty-server/src/main.ts": {
+                    "serves": [],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "immich-1-comment",
+            "repo": "kr-immich",
+            "pr": 1,
+            "heads": ["4318920d"],
+            "acts": false,
+            "change": "a comment after the ServerController class",
+            "checks": "Plans no probe, or probes under the app's /api prefix only; a comment changes nothing.",
+            "reaches": [],
+            "prefix": "^/api/",
+            "accept": ["nothing_to_test", "partly_tested", "no_regressions"],
+            "files": {
+                "server/src/controllers/server.controller.ts": {
+                    "serves": [
+                        "GET /server/about",
+                        "GET /server/apk-links",
+                        "GET /server/storage",
+                        "GET /server/ping",
+                        "GET /server/version",
+                        "GET /server/version-history",
+                        "GET /server/features",
+                        "GET /server/config",
+                        "GET /server/statistics",
+                        "GET /server/media-types",
+                        "GET /server/license",
+                        "PUT /server/license",
+                        "DELETE /server/license",
+                        "GET /server/version-check"
+                    ],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "immich-2-ping-equivalent",
+            "repo": "kr-immich",
+            "pr": 2,
+            "heads": ["ba0f8096"],
+            "acts": false,
+            "change": "pingServer names the ping answer before returning it: the same answer (opened for planner-eval.md fix 2)",
+            "checks": "Probes GET /api/server/ping under the app's /api prefix and reports no regression.",
+            "reaches": [{ "method": "GET", "path": "^/api/server/ping$" }],
+            "prefix": "^/api/",
+            "accept": ["no_regressions"],
+            "files": {
+                "server/src/controllers/server.controller.ts": {
+                    "serves": [
+                        "GET /server/about",
+                        "GET /server/apk-links",
+                        "GET /server/storage",
+                        "GET /server/ping",
+                        "GET /server/version",
+                        "GET /server/version-history",
+                        "GET /server/features",
+                        "GET /server/config",
+                        "GET /server/statistics",
+                        "GET /server/media-types",
+                        "GET /server/license",
+                        "PUT /server/license",
+                        "DELETE /server/license",
+                        "GET /server/version-check"
+                    ],
+                    "reaches": ["GET /server/ping"]
+                }
+            }
+        },
+        {
+            "id": "calcom-1-comment",
+            "repo": "kr-calcom",
+            "pr": 1,
+            "heads": ["94d578ac"],
+            "acts": false,
+            "change": "a comment at the end of the version route",
+            "checks": "Plans no probe or a smoke of GET /api/version; a comment changes nothing.",
+            "reaches": [],
+            "accept": ["nothing_to_test", "partly_tested", "no_regressions"],
+            "files": {
+                "apps/web/app/api/version/route.ts": {
+                    "serves": ["GET /api/version"],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "nextjs-1-comment",
+            "repo": "kr-nextjs",
+            "pr": 1,
+            "heads": ["d50df334"],
+            "acts": false,
+            "change": "a comment at the end of the home page component",
+            "checks": "Plans no probe; a comment changes nothing.",
+            "reaches": [],
+            "accept": ["nothing_to_test", "partly_tested", "no_regressions"],
+            "files": {
+                "examples/with-docker/app/page.tsx": {
+                    "serves": ["GET /"],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "nextjs-2-page-text",
+            "repo": "kr-nextjs",
+            "pr": 2,
+            "heads": ["1b0ad40e"],
+            "acts": true,
+            "change": "rewords a feature line the home page shows (app/page.tsx), on purpose",
+            "checks": "Probes GET / (the page app/page.tsx draws) and reports the reworded line as the PR's intended change, never as a regression (a Run that asserted main's text said 1 regression).",
+            "reaches": [
+                { "method": "GET", "path": "^/$" },
+                { "kind": "browser" }
+            ],
+            "accept": ["partly_tested"],
+            "intended": true,
+            "files": {
+                "examples/with-docker/app/page.tsx": {
+                    "serves": ["GET /"],
+                    "reaches": ["GET /"]
+                }
+            }
+        },
+        {
+            "id": "remix-1-comment",
+            "repo": "kr-remix",
+            "pr": 1,
+            "heads": ["5d8e9962"],
+            "acts": false,
+            "change": "a comment at the end of the route table",
+            "checks": "Plans no probe; a comment changes nothing.",
+            "reaches": [],
+            "accept": ["nothing_to_test", "partly_tested", "no_regressions"],
+            "files": {
+                "demos/bookstore/app/routes.ts": {
+                    "serves": [
+                        "GET /",
+                        "GET /about",
+                        "GET /search",
+                        "GET /books"
+                    ],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "payload-1-comment",
+            "repo": "kr-payload",
+            "pr": 1,
+            "heads": ["91435ad2"],
+            "acts": false,
+            "change": "a comment at the end of the access endpoint's handler (registered elsewhere)",
+            "checks": "Plans no probe; a comment changes nothing.",
+            "reaches": [],
+            "accept": ["nothing_to_test", "partly_tested", "no_regressions"],
+            "files": {
+                "packages/payload/src/auth/endpoints/access.ts": {
+                    "serves": [],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "grafana-3-comment",
+            "repo": "kr-grafana",
+            "pr": 3,
+            "heads": ["5d49b8ad"],
+            "acts": false,
+            "change": "a comment in pkg/cmd/grafana/main.go",
+            "checks": "Plans no probe; a comment changes nothing.",
+            "reaches": [],
+            "accept": ["nothing_to_test", "partly_tested", "no_regressions"]
+        },
+        {
+            "id": "grafana-4-health-breaks",
+            "repo": "kr-grafana",
+            "pr": 4,
+            "heads": ["523456e9"],
+            "acts": true,
+            "change": "databaseHealthy inverts: GET /api/health answers 503",
+            "checks": "Probes GET /api/health via health.go and reports 200 to 503.",
+            "reaches": [{ "method": "GET", "path": "^/api/health$" }],
+            "accept": ["regression"]
+        },
+        {
+            "id": "grafana-5-health-branch",
+            "repo": "kr-grafana",
+            "pr": 5,
+            "heads": ["a7dc74d4"],
+            "acts": true,
+            "change": "adds a branch field to the health response",
+            "checks": "Probes GET /api/health comparing json and reports the new field.",
+            "reaches": [{ "method": "GET", "path": "^/api/health$" }],
+            "accept": ["regression"]
+        },
+        {
+            "id": "grafana-6-dependency-bump",
+            "repo": "kr-grafana",
+            "pr": 6,
+            "heads": ["f449ba6e"],
+            "acts": false,
+            "change": "go.mod and go.sum bump",
+            "checks": "Plans no probe and names go.mod in cannotProve.",
+            "reaches": [],
+            "accept": ["partly_tested"]
+        },
+        {
+            "id": "grafana-7-recipe-only",
+            "repo": "kr-grafana",
+            "pr": 7,
+            "heads": ["6b7c44af"],
+            "acts": false,
+            "change": "only .kodus/compose.yaml",
+            "checks": "Plans nothing to probe.",
+            "reaches": [],
+            "accept": ["partly_tested", "no_regressions"]
+        },
+        {
+            "id": "grafana-8-cli-text",
+            "repo": "kr-grafana",
+            "pr": 8,
+            "heads": ["cbd3ee29"],
+            "acts": false,
+            "change": "CLI text of reset-admin-password",
+            "checks": "Plans no probe; only the CLI reaches the file.",
+            "reaches": [],
+            "accept": ["partly_tested"]
+        },
+        {
+            "id": "grafana-9-failure-ttl",
+            "repo": "kr-grafana",
+            "pr": 9,
+            "heads": ["c81bdf0a"],
+            "acts": false,
+            "change": "a failed database check is cached for 1 s instead of 5 s",
+            "checks": "Probes GET /api/health via health.go; the healthy path answers the same.",
+            "reaches": [{ "method": "GET", "path": "^/api/health$" }],
+            "accept": ["no_regressions", "partly_tested"]
+        },
+        {
+            "id": "grafana-10-dockerfile",
+            "repo": "kr-grafana",
+            "pr": 10,
+            "heads": ["b567b325"],
+            "acts": false,
+            "change": "only the recipe's Dockerfile and its dockerignore",
+            "checks": "Plans nothing to probe.",
+            "reaches": [],
+            "accept": ["partly_tested", "no_regressions"]
+        },
+        {
+            "id": "grafana-11-cache-ttl",
+            "repo": "kr-grafana",
+            "pr": 11,
+            "heads": ["f8425b6f"],
+            "acts": false,
+            "change": "the health cache TTL goes from 5 s to 3 s",
+            "checks": "Probes GET /api/health via health.go and reports no regression.",
+            "reaches": [{ "method": "GET", "path": "^/api/health$" }],
+            "accept": ["no_regressions"]
+        },
+        {
+            "id": "calcom-2-version-equivalent",
+            "repo": "kr-calcom",
+            "pr": 2,
+            "heads": ["fdcaa909"],
+            "acts": false,
+            "change": "the version route names the version before answering it: the same body (opened for the H1 recount, planner-20261113)",
+            "checks": "Probes GET /api/version and reports no regression.",
+            "reaches": [{ "method": "GET", "path": "^/api/version$" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "apps/web/app/api/version/route.ts": {
+                    "serves": ["GET /api/version"],
+                    "reaches": ["GET /api/version"]
+                }
+            }
+        },
+        {
+            "id": "payload-2-access-equivalent",
+            "repo": "kr-payload",
+            "pr": 2,
+            "heads": ["a62895a6"],
+            "acts": false,
+            "change": "the access handler names its success response before returning it: the same answer (opened for the H1 recount, planner-20261113)",
+            "checks": "Probes GET /api/access (the handler is registered elsewhere, under the REST mount) and reports no regression.",
+            "reaches": [{ "method": "GET", "path": "^/api/access$" }],
+            "prefix": "^/api/",
+            "accept": ["no_regressions"],
+            "files": {
+                "packages/payload/src/auth/endpoints/access.ts": {
+                    "serves": [],
+                    "reaches": []
+                }
+            }
+        },
+        {
+            "id": "remix-2-about-path",
+            "repo": "kr-remix",
+            "pr": 2,
+            "heads": ["c225f561"],
+            "acts": false,
+            "change": "the route table names the about path in a constant: /about is served at the same path (opened for the H1 recount, planner-20261113)",
+            "checks": "Probes GET /about and reports no regression.",
+            "reaches": [{ "method": "GET", "path": "^/about$" }, { "kind": "browser" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "demos/bookstore/app/routes.ts": {
+                    "serves": ["GET /", "GET /about", "GET /search", "GET /books"],
+                    "reaches": ["GET /about"]
+                }
+            }
+        },
+        {
+            "id": "nextjs-3-features-list",
+            "repo": "kr-nextjs",
+            "pr": 3,
+            "heads": ["83999f3f"],
+            "acts": false,
+            "change": "the home page renders its four standalone features from a list: the same HTML (opened for the H1 recount, planner-20261113)",
+            "checks": "Probes GET / and reports no regression; the pair of kr-nextjs#2.",
+            "reaches": [{ "method": "GET", "path": "^/$" }, { "kind": "browser" }],
+            "accept": ["no_regressions"],
+            "files": {
+                "examples/with-docker/app/page.tsx": {
+                    "serves": ["GET /"],
+                    "reaches": ["GET /"]
+                }
+            }
+        }
+    ]
+}

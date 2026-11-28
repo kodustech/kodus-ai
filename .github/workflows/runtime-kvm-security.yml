@@ -1,0 +1,88 @@
+name: "Runtime cell: microVM security suite (KVM)"
+
+# The Firecracker security suite (S-01..S-52), conformance, the reaper, the
+# per-VM limits and test/fcregress need a host with /dev/kvm, root and an XFS
+# state directory: GitHub's hosted runners have none of them. This workflow
+# runs only on a self-hosted runner labelled `kvm` (a bare-metal host, or an
+# instance with nested virtualization), and only when started by hand: there
+# is no such runner yet. What it runs is scripts/runtime/kvm-security-suite.sh,
+# which the KVM test host runs the same way. docs/runtime/isolation-architecture.md
+# ("Security suite on a KVM host") lists what a real CI needs before the
+# schedule below is turned on.
+on:
+    workflow_dispatch:
+        inputs:
+            run:
+                description: "go test -run regex (empty: every fcregress test)"
+                required: false
+                default: ""
+            rebuild_kit:
+                description: "Rebuild the kit with the latest kernel 6.1.y and Firecracker patch first (scripts/runtime/kit-rebuild.sh)"
+                type: boolean
+                default: false
+    # The schedule stays off until a runner labelled [self-hosted, linux, x64,
+    # kvm] exists: a scheduled run with no such runner only queues. Wanted then
+    # (architecture review 2026-11-14, T1; isolation-architecture.md "Security
+    # suite on a KVM host"): the suite nightly, the kit rebuild weekly.
+    # Needed first: an ephemeral (just-in-time) runner registered with that label per job, in a runner group open
+    # only to this workflow on main and closed to public repositories' fork pull requests, on
+    # a bare-metal or nested-virtualization instance (c8i/m8i: /dev/kvm), root
+    # (passwordless sudo), Docker with buildx (the kit build), nftables and
+    # iproute2, an XFS state disk with reflink at /mnt/xfs/kody-e2e (instance
+    # NVMe or a dedicated EBS volume; a loop file needs direct I/O), internet
+    # egress, and demo-shop's checkouts for KODY_E2E_KRSHOP_*. Until then the
+    # KVM test host runs the same script by hand; it is not a runner.
+    # schedule:
+    #     - cron: "41 2 * * *"   # nightly: security suite, conformance, fcregress
+    #     - cron: "17 4 * * 1"   # weekly: kit rebuild and promotion test
+
+permissions:
+    contents: read
+
+concurrency:
+    # One run per host: the suite owns the host's VMM cgroups, taps and namespaces.
+    group: runtime-kvm-security
+    cancel-in-progress: false
+
+jobs:
+    suite:
+        name: security suite and fcregress on KVM
+        # The runner is root on the host. Only main of this repository runs here: a dispatch on another branch
+        # (code nobody reviewed) or from a fork never reaches it. The runner group, open only to this workflow
+        # on main, is what holds against other workflows (isolation-architecture.md, "Security suite on a KVM host").
+        if: github.repository == 'kodustech/kodus-ai' && github.ref == 'refs/heads/main'
+        runs-on: [self-hosted, linux, x64, kvm]
+        timeout-minutes: 120
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - name: Set up Go
+              uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+              with:
+                  go-version-file: apps/runtime-cell/go.mod
+                  cache-dependency-path: apps/runtime-cell/go.sum
+
+            - name: Kit rebuild and promotion test
+              if: ${{ inputs.rebuild_kit }}
+              run: sudo -E env "PATH=$PATH" scripts/runtime/kit-rebuild.sh -o "$RUNNER_TEMP/kit-candidate"
+
+            - name: Security suite, conformance and fcregress
+              if: ${{ !inputs.rebuild_kit }}
+              env:
+                  RUN_REGEX: ${{ inputs.run }}
+              run: sudo -E env "PATH=$PATH" scripts/runtime/kvm-security-suite.sh -o "$RUNNER_TEMP/kvm-suite" ${RUN_REGEX:+-r "$RUN_REGEX"}
+
+            - name: Keep the logs
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: kvm-security-suite
+                  path: |
+                      ${{ runner.temp }}/kvm-suite/summary.txt
+                      ${{ runner.temp }}/kvm-suite/fcregress.log
+                      ${{ runner.temp }}/kit-candidate/promotion.json
+                      ${{ runner.temp }}/kit-candidate/suite/summary.txt
+                  if-no-files-found: ignore

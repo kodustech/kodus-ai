@@ -1,6 +1,16 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
+/**
+ * The Kody Runtime's integration suites (real Postgres, the Go cell, local
+ * HTTP fixtures) run in their own project, jest.integration.config.ts: in
+ * band, after a globalSetup that builds the Go cell once, and each opted in
+ * by its own variable (RUNTIME_IT_DATABASE_URL, RUNTIME_IT_GO_CELL=1). The
+ * default run leaves them out, so it stays fast and never compiles the cell
+ * or boots containers next to the unit suites (review T3).
+ */
+export const RUNTIME_INTEGRATION_SPECS = '<rootDir>/(apps/runtime|libs/runtime|libs/runtime-publish)/.+\\.integration\\.spec\\.ts$';
+
 export default {
     preset: 'ts-jest',
     testEnvironment: 'node',
@@ -279,6 +289,7 @@ export default {
     // the same module run normally.
     testPathIgnorePatterns: [
         '/node_modules/',
+        RUNTIME_INTEGRATION_SPECS,
         '<rootDir>/apps/mcp-manager/test/e2e/',
         '<rootDir>/.stryker-tmp/',
         // Eval fixtures are snapshots of reviewed repositories, read as data

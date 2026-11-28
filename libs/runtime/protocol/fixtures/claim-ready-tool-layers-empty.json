@@ -1,0 +1,27 @@
+{
+  "name": "claim-ready-tool-layers-empty",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-sbx-1",
+    "type": "claim.ready",
+    "body": {
+      "manifest": {
+        "services": [],
+        "expose": [],
+        "imageId": "sandbox",
+        "seedSha": "none"
+      },
+      "observer": {
+        "id": "claim-sbx-1-observer",
+        "state": "ready"
+      },
+      "toolLayers": []
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

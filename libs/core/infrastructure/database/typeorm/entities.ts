@@ -38,6 +38,20 @@ import { SSOTestSessionModel } from '@libs/ee/sso/repositories/ssoTestSession.mo
 import { NotificationDeliveryModel } from '../../../../notifications/infrastructure/repositories/schemas/notification-delivery.model';
 import { UserNotificationModel } from '../../../../notifications/infrastructure/repositories/schemas/user-notification.model';
 import { RoutingRuleModel } from '../../../../notifications/infrastructure/repositories/schemas/routing-rule.model';
+import {
+    RuntimeEnvironmentModel,
+    RuntimeEnvironmentRepositoryModel,
+    RuntimeFindingFeedbackModel,
+    RuntimeFindingIntentModel,
+    RuntimeKeptCheckModel,
+    RuntimePrAuthorDescriptionModel,
+    RuntimeRepositorySettingsModel,
+    RuntimeSettingsModel,
+} from '../../../../runtime/api/infrastructure/runtime-product.models';
+import { RuntimeRunTargetModel } from '../../../../runtime-publish/infrastructure/runtime-run-target.model';
+import { RuntimeExternalMessageModel, RuntimeExternalSubmissionModel } from '../../../../runtime/api/infrastructure/runtime-external-finding.models';
+import { RUNTIME_PRODUCT_STATE_MODELS } from '../../../../runtime/api/infrastructure/runtime-product-state.models';
+import { RUNTIME_PUBLICATION_MODELS } from '../../../../runtime-publish/infrastructure/runtime-publication.models';
 
 export const ENTITIES = [
     TeamModel,
@@ -80,4 +94,17 @@ export const ENTITIES = [
     NotificationDeliveryModel,
     UserNotificationModel,
     RoutingRuleModel,
+    RuntimeEnvironmentModel,
+    RuntimeEnvironmentRepositoryModel,
+    RuntimeSettingsModel,
+    RuntimeRepositorySettingsModel,
+    RuntimeFindingFeedbackModel,
+    RuntimeFindingIntentModel,
+    RuntimeKeptCheckModel,
+    RuntimePrAuthorDescriptionModel,
+    RuntimeRunTargetModel,
+    RuntimeExternalMessageModel,
+    RuntimeExternalSubmissionModel,
+    ...RUNTIME_PRODUCT_STATE_MODELS,
+    ...RUNTIME_PUBLICATION_MODELS,
 ];

@@ -1,0 +1,85 @@
+src/app/(app)/issues/_components/data-table.tsx(67,55): error TS2339: Property 'align' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/issues/_components/data-table.tsx(158,79): error TS2339: Property 'align' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/issues/_components/filters/item.tsx(61,50): error TS2339: Property 'filters' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/issues/_components/filters/item.tsx(78,55): error TS2339: Property 'filters' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/issues/_components/filters/item.tsx(108,57): error TS2339: Property 'filters' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/issues/_components/filters/item.tsx(114,40): error TS2339: Property 'name' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/issues/_components/security-scan/format.spec.ts(113,39): error TS2345: Argument of type '{ reproduced?: undefined; executed?: undefined; } | { reproduced: boolean; executed?: undefined; } | { executed: boolean; reproduced?: undefined; }' is not assignable to parameter of type 'Pick<{ path: string; content: string; command: string; executed: boolean; exitCode?: number | undefined; reproduced?: boolean | undefined; output?: string | undefined; }, "executed" | "reproduced" | "exitCode">'.
+  Type '{ reproduced?: undefined; executed?: undefined; }' is not assignable to type 'Pick<{ path: string; content: string; command: string; executed: boolean; exitCode?: number | undefined; reproduced?: boolean | undefined; output?: string | undefined; }, "executed" | "reproduced" | "exitCode">'.
+    Types of property 'executed' are incompatible.
+      Type 'undefined' is not assignable to type 'boolean'.
+src/app/(app)/issues/_constants/index.ts(10,69): error TS2339: Property 'name' does not exist on type 'ColumnMeta<IssueListItem, unknown>'.
+src/app/(app)/library/kody-rules/page.tsx(42,37): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(app)/settings/code-review/[repositoryId]/agents/[agentId]/_components/knowledge-card.spec.tsx(19,5): error TS2352: Conversion of type '{ path: string; kind: "skill"; found: true; issues: KnowledgeValidationIssue[]; linkedTo: never[]; }' to type 'KnowledgeItemReport' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'kodyRuleSource' is missing in type '{ path: string; kind: "skill"; found: true; issues: KnowledgeValidationIssue[]; linkedTo: never[]; }' but required in type 'KnowledgeItemReport'.
+src/app/(app)/settings/code-review/_components/external-references-badge.tsx(61,25): error TS2322: Type '"destructive"' is not assignable to type '"error" | "success" | "primary" | "primary-dark" | "secondary" | "helper" | "tertiary" | "cancel" | "in-progress" | null | undefined'.
+src/app/(app)/settings/code-review/_components/external-references-badge.tsx(71,42): error TS2322: Type 'string | { fileName?: string | undefined; message?: string | undefined; errorType?: string | undefined; attemptedPaths?: string[] | undefined; timestamp?: string | undefined; }' is not assignable to type 'ReactNode'.
+  Type '{ fileName?: string | undefined; message?: string | undefined; errorType?: string | undefined; attemptedPaths?: string[] | undefined; timestamp?: string | undefined; }' is not assignable to type 'ReactNode'.
+src/app/(app)/settings/code-review/_components/external-references-badge.tsx(86,21): error TS2322: Type '"outline"' is not assignable to type '"error" | "success" | "primary" | "primary-dark" | "secondary" | "helper" | "tertiary" | "cancel" | "in-progress" | null | undefined'.
+src/app/(auth)/components/register-page-content.tsx(531,45): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Object literal may only specify known properties, and 'async' does not exist in type 'ParseContext<$ZodIssue>'.
+src/app/api/proxy/billing/route.spec.ts(101,22): error TS2493: Tuple type '[host: string, port: string, path: string]' of length '3' has no element at index '3'.
+src/app/api/proxy/billing/route.spec.ts(108,22): error TS2493: Tuple type '[host: string, port: string, path: string]' of length '3' has no element at index '3'.
+src/app/layout.tsx(25,24): error TS2304: Cannot find name 'Metadata'.
+src/core/components/page-boundary.tsx(68,21): error TS2322: Type '((error: Error) => void) | undefined' is not assignable to type '((error: unknown, info: ErrorInfo) => void) | undefined'.
+  Type '(error: Error) => void' is not assignable to type '(error: unknown, info: ErrorInfo) => void'.
+    Types of parameters 'error' and 'error' are incompatible.
+      Type 'unknown' is not assignable to type 'Error'.
+src/core/components/system/cardsGroup/modals/clone-select-team.tsx(41,37): error TS2551: Property 'PROJECT_MANAGEMENT' does not exist on type '{ readonly CODE_MANAGEMENT: "codeManagement"; }'. Did you mean 'CODE_MANAGEMENT'?
+src/core/components/system/cardsGroup/modals/clone-select-team.tsx(43,37): error TS2339: Property 'COMMUNICATION' does not exist on type '{ readonly CODE_MANAGEMENT: "codeManagement"; }'.
+src/core/components/system/select-pull-requests-server-search.tsx(160,74): error TS2345: Argument of type 'PullRequest' is not assignable to parameter of type 'PullRequest'.
+  Property 'lastActivityAt' is optional in type 'PullRequest' but required in type 'PullRequest'.
+src/core/components/ui/data-table.tsx(121,74): error TS2339: Property 'align' does not exist on type 'ColumnMeta<TData, unknown>'.
+src/core/components/ui/data-table.tsx(204,65): error TS2339: Property 'peek' does not exist on type 'TableMeta<TData>'.
+src/core/components/ui/data-table.tsx(216,59): error TS2339: Property 'align' does not exist on type 'ColumnMeta<TData, unknown>'.
+src/core/components/ui/search-replace-extension.tsx(86,5): error TS2322: Type '(this: { name: string; options: SearchReplaceOptions; storage: any; editor: Editor; type: null; parent: (() => Partial<RawCommands>) | undefined; }) => { ...; }' is not assignable to type '(this: { name: string; options: SearchReplaceOptions; storage: any; editor: Editor; type: null; parent: (() => Partial<RawCommands>) | undefined; }) => Partial<...>'.
+  Type '{ setSearchTerm: (searchTerm: string, caseSensitive?: boolean) => ({ tr, dispatch }: { tr: any; dispatch: any; }) => boolean; clearSearch: () => ({ tr, dispatch }: { tr: any; dispatch: any; }) => boolean; }' has no properties in common with type 'Partial<RawCommands>'.
+src/core/components/ui/search-replace-extension.tsx(90,20): error TS7031: Binding element 'tr' implicitly has an 'any' type.
+src/core/components/ui/search-replace-extension.tsx(90,24): error TS7031: Binding element 'dispatch' implicitly has an 'any' type.
+src/core/components/ui/search-replace-extension.tsx(102,20): error TS7031: Binding element 'tr' implicitly has an 'any' type.
+src/core/components/ui/search-replace-extension.tsx(102,24): error TS7031: Binding element 'dispatch' implicitly has an 'any' type.
+src/core/config/auth.ts(128,15): error TS2322: Type '({ token, user, trigger, session: _session }: { token: JWT; user: User | AdapterUser; account?: Account | null | undefined; profile?: Profile | undefined; trigger?: "signIn" | "signUp" | "update" | undefined; isNewUser?: boolean | undefined; session?: any; }) => Promise<...>' is not assignable to type '(params: { token: JWT; user: User | AdapterUser; account?: Account | null | undefined; profile?: Profile | undefined; trigger?: "signIn" | "signUp" | "update" | undefined; isNewUser?: boolean | undefined; session?: any; }) => Awaitable<...>'.
+  Type 'Promise<{ userId: string; email?: string | null | undefined; status: string; organizationId: string; role: UserRole; iat?: number | undefined; exp?: number | undefined; jti?: string | undefined; ... 5 more ...; refreshToken: string; } | { ...; } | { ...; } | { ...; } | null>' is not assignable to type 'Awaitable<JWT | null>'.
+    Type 'Promise<{ userId: string; email?: string | null | undefined; status: string; organizationId: string; role: UserRole; iat?: number | undefined; exp?: number | undefined; jti?: string | undefined; ... 5 more ...; refreshToken: string; } | { ...; } | { ...; } | { ...; } | null>' is missing the following properties from type 'JWT': userId, status, organizationId, role, and 2 more.
+src/core/utils/clipboard.spec.ts(52,5): error TS2322: Type 'Navigator | undefined' is not assignable to type 'Navigator'.
+  Type 'undefined' is not assignable to type 'Navigator'.
+src/core/utils/clipboard.spec.ts(53,5): error TS2322: Type 'Document | undefined' is not assignable to type 'Document'.
+  Type 'undefined' is not assignable to type 'Document'.
+src/core/utils/clipboard.spec.ts(54,5): error TS2322: Type '(() => Selection | null) | undefined' is not assignable to type '(() => Selection | null) & (() => Selection | null)'.
+  Type 'undefined' is not assignable to type '(() => Selection | null) & (() => Selection | null)'.
+    Type 'undefined' is not assignable to type '() => Selection | null'.
+src/core/utils/clipboard.spec.ts(141,9): error TS2322: Type 'undefined' is not assignable to type 'Navigator'.
+src/core/utils/clipboard.spec.ts(142,9): error TS2322: Type 'undefined' is not assignable to type 'Document'.
+src/core/utils/clipboard.spec.ts(143,9): error TS2322: Type 'undefined' is not assignable to type '(() => Selection | null) & (() => Selection | null)'.
+  Type 'undefined' is not assignable to type '() => Selection | null'.
+src/features/ee/byok/_components/per-repository-overrides.spec.ts(92,25): error TS2322: Type '"check"' is not assignable to type '"run"'.
+src/features/ee/byok/_components/per-repository-overrides.spec.ts(145,25): error TS2353: Object literal may only specify known properties, and 'href' does not exist in type 'CustomAgentModelOverrideEntry'.
+src/features/ee/cockpit/@kodusReviewTab/_components/feedback-section.tsx(128,31): error TS2739: Type '{}' is missing the following properties from type '{ label?: string | number | undefined; payload: TooltipPayload; coordinate: Coordinate | undefined; active: boolean; accessibilityLayer: boolean; activeIndex: TooltipIndex | undefined; }': payload, coordinate, active, accessibilityLayer, activeIndex
+src/features/ee/cockpit/@kodusReviewTab/_components/rate-by-severity-chart.tsx(131,35): error TS2739: Type '{}' is missing the following properties from type '{ label?: string | number | undefined; payload: TooltipPayload; coordinate: Coordinate | undefined; active: boolean; accessibilityLayer: boolean; activeIndex: TooltipIndex | undefined; }': payload, coordinate, active, accessibilityLayer, activeIndex
+src/features/ee/cockpit/@kodusReviewTab/_components/review-operational-outcomes-chart.tsx(233,39): error TS2739: Type '{}' is missing the following properties from type '{ label?: string | number | undefined; payload: TooltipPayload; coordinate: Coordinate | undefined; active: boolean; accessibilityLayer: boolean; activeIndex: TooltipIndex | undefined; }': payload, coordinate, active, accessibilityLayer, activeIndex
+src/features/ee/cockpit/@kodusReviewTab/_components/weekly-implementation-chart.tsx(118,39): error TS2739: Type '{ unit: string; }' is missing the following properties from type '{ label?: string | number | undefined; payload: TooltipPayload; coordinate: Coordinate | undefined; active: boolean; accessibilityLayer: boolean; activeIndex: TooltipIndex | undefined; }': payload, coordinate, active, accessibilityLayer, activeIndex
+src/features/ee/cockpit/@kodusReviewTab/_components/weekly-implementation-chart.tsx(156,39): error TS2739: Type '{ unit: string; }' is missing the following properties from type '{ label?: string | number | undefined; payload: TooltipPayload; coordinate: Coordinate | undefined; active: boolean; accessibilityLayer: boolean; activeIndex: TooltipIndex | undefined; }': payload, coordinate, active, accessibilityLayer, activeIndex
+src/features/ee/cockpit/@teamActivityChart/_components/data-table.tsx(86,75): error TS2339: Property 'align' does not exist on type 'ColumnMeta<Type, unknown>'.
+src/features/ee/cockpit/@teamActivityChart/_components/data-table.tsx(123,55): error TS2339: Property 'align' does not exist on type 'ColumnMeta<Type, unknown>'.
+src/features/ee/cockpit/review-suggestions/_components/suggestions-table.tsx(130,41): error TS2322: Type '{ children: Element; size: "md"; variant: "primary"; leftIcon: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & ButtonProps & RefAttributes<HTMLButtonElement>'.
+  Property 'asChild' does not exist on type 'IntrinsicAttributes & ButtonProps & RefAttributes<HTMLButtonElement>'.
+src/features/ee/subscription/_services/billing/utils.spec.ts(22,7): error TS2451: Cannot redeclare block-scoped variable 'createUrlMock'.
+src/features/ee/subscription/_services/billing/utils.spec.ts(30,7): error TS2451: Cannot redeclare block-scoped variable 'typedFetchMock'.
+src/features/ee/subscription/_services/billing/utils.spec.ts(35,7): error TS2451: Cannot redeclare block-scoped variable 'setServer'.
+src/features/ee/subscription/_services/billing/utils.spec.ts(97,22): error TS2493: Tuple type '[host: string | undefined, port: string | undefined, path: string]' of length '3' has no element at index '3'.
+src/features/ee/subscription/_services/billing/utils.spec.ts(107,22): error TS2493: Tuple type '[host: string | undefined, port: string | undefined, path: string]' of length '3' has no element at index '3'.
+src/lib/services/custom-agents/drafts.spec.ts(620,28): error TS2322: Type '"main"' is not assignable to type 'KnowledgeLinkTarget'.
+src/lib/services/mcp-manager/utils.spec.ts(24,7): error TS2451: Cannot redeclare block-scoped variable 'createUrlMock'.
+src/lib/services/mcp-manager/utils.spec.ts(38,7): error TS2451: Cannot redeclare block-scoped variable 'typedFetchMock'.
+src/lib/services/mcp-manager/utils.spec.ts(43,7): error TS2451: Cannot redeclare block-scoped variable 'setServer'.
+src/lib/services/mcp-manager/utils.spec.ts(126,22): error TS2493: Tuple type '[host: string | undefined, port: string | undefined, path: string]' of length '3' has no element at index '3'.
+../../libs/feature-gate/application/feature-gate.service.ts(66,9): error TS1206: Decorators are not valid here.
+../../libs/runtime/suite/select.ts(1,23): error TS7016: Could not find a declaration file for module 'picomatch'. '/Users/wellingtonsantana/Documents/kodus-git/kodus-ai-kr-base/node_modules/picomatch/index.js' implicitly has an 'any' type.
+  If the 'picomatch' package actually exposes this module, consider sending a pull request to amend 'https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/picomatch'
+../../libs/runtime/suite/spec-list.ts(1,23): error TS7016: Could not find a declaration file for module 'picomatch'. '/Users/wellingtonsantana/Documents/kodus-git/kodus-ai-kr-base/node_modules/picomatch/index.js' implicitly has an 'any' type.
+  If the 'picomatch' package actually exposes this module, consider sending a pull request to amend 'https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/picomatch'
+../../libs/telemetry/application/services/telemetry.service.ts(30,9): error TS1206: Decorators are not valid here.
+../../libs/telemetry/infrastructure/providers/posthog.provider.ts(156,13): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.

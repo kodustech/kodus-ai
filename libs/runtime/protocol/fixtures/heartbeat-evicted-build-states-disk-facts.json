@@ -1,0 +1,27 @@
+{
+  "name": "heartbeat-evicted-build-states-disk-facts",
+  "message": {
+    "v": 1,
+    "id": "8b3e4d5c-6f70-4b82-9cad-1e2f3a4b5c6d",
+    "cellId": "cell-dev-1",
+    "type": "heartbeat",
+    "body": {
+      "claims": [],
+      "freeSlots": 3,
+      "evictedBuildStates": [
+        {
+          "orgId": "org-1",
+          "environmentId": "env-1",
+          "evictedAt": "2026-11-13T07:31:31Z",
+          "rebuildSeconds": 2050,
+          "freeBytes": 8589934592,
+          "floorBytes": 21474836480
+        }
+      ]
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "heartbeat"
+  }
+}

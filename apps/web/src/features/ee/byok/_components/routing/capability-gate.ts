@@ -50,6 +50,7 @@ const TASK_REQUIREMENT: Record<LlmTask, Requirement> = {
     prSummary: null,
     customAgent: "toolCalling",
     securityScan: "toolCalling",
+    runtime: "structuredOutput",
 };
 
 export const capabilityGate = (

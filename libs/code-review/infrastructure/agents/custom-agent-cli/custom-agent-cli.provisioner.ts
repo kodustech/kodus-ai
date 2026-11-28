@@ -26,6 +26,7 @@ import type {
     CustomAgentConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type {
+    PreSealCliInstall,
     SandboxInstance,
     SandboxRunResult,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -54,6 +55,7 @@ import {
     isValidBinaryName,
     isValidDomain,
     planCliInstall,
+    planRuntimeCliInstall,
     type CliSandboxIdentity,
 } from './cli-command';
 
@@ -69,6 +71,12 @@ export interface InstalledCustomAgentCli {
     identity: CliSandboxIdentity;
     /** Absolute path the pinned install produced, inside the CLI user's home. */
     binaryPath: string;
+    /** Runtime sandbox only: runs the script (`<interpreter> <binaryPath>`; the workspace is noexec). */
+    interpreter?: string;
+    /** Runtime sandbox only: the user prefix the CLI runs with as HOME. */
+    home?: string;
+    /** Runtime sandbox only: the read-only tool layer the CLI's files are in, when it came from one (`home` is then a throwaway directory). */
+    prefix?: string;
 }
 
 export interface CustomAgentCliProvisioning {
@@ -156,6 +164,45 @@ function preflight(cli: CliToolConfig): string | null {
     return plan.ok === false ? plan.reason : null;
 }
 
+function cliCandidates(params: {
+    agents: readonly CustomAgentConfig[] | undefined;
+    changedFiles: readonly string[];
+    ignoredFiles?: readonly string[];
+    onlyCustomAgent?: string;
+    riskAssessment?: RiskAssessmentResult;
+}): CustomAgentConfig[] {
+    return selectCustomAgents(
+        params.agents,
+        params.onlyCustomAgent,
+        params.riskAssessment,
+    ).filter(
+        (agent) =>
+            agent?.tools?.cli?.length &&
+            touchesAgentScope(agent, params.changedFiles, params.ignoredFiles),
+    );
+}
+
+/**
+ * The installs the Kody Runtime sandbox must do before its egress seal, one
+ * per CLI of an agent that will run and that can run offline. Passed to the
+ * sandbox when it is created; the provisioner reads their outcome.
+ */
+export function planRuntimeCliInstalls(params: {
+    agents: readonly CustomAgentConfig[] | undefined;
+    changedFiles: readonly string[];
+    ignoredFiles?: readonly string[];
+    onlyCustomAgent?: string;
+    riskAssessment?: RiskAssessmentResult;
+}): PreSealCliInstall[] {
+    return cliCandidates(params).flatMap((agent) =>
+        (agent.tools.cli ?? []).flatMap((cli) => {
+            if (preflight(cli)) return [];
+            const plan = planRuntimeCliInstall(agent.id, cli);
+            return plan.ok ? [plan.install] : [];
+        }),
+    );
+}
+
 export async function provisionCustomAgentClis(params: {
     sandbox: SandboxInstance | undefined;
     agents: readonly CustomAgentConfig[] | undefined;
@@ -177,15 +224,7 @@ export async function provisionCustomAgentClis(params: {
 
     // The agents the orchestrator will dispatch: the same selection, so a
     // CLI is installed exactly for an agent that runs.
-    const candidates = selectCustomAgents(
-        params.agents,
-        params.onlyCustomAgent,
-        params.riskAssessment,
-    ).filter(
-        (agent) =>
-            agent?.tools?.cli?.length &&
-            touchesAgentScope(agent, params.changedFiles, params.ignoredFiles),
-    );
+    const candidates = cliCandidates(params);
     if (!candidates.length) return result;
 
     // Without the isolated sandbox, or on a review that must not run them,
@@ -193,8 +232,8 @@ export async function provisionCustomAgentClis(params: {
     // without them silently.
     const skipReason =
         params.skipReason ??
-        (!sandbox || sandbox.type !== 'e2b'
-            ? 'needs the isolated (E2B) sandbox; this review ran without it'
+        (!sandbox || (sandbox.type !== 'e2b' && sandbox.type !== 'runtime')
+            ? 'needs an isolated sandbox (E2B or the Kody Runtime); this review ran without one'
             : sandbox.privilegesDropped !== true
               ? NOT_LOCKED_DOWN
               : undefined);
@@ -265,6 +304,40 @@ export async function provisionCustomAgentClis(params: {
         }),
     );
     if (!toInstall.length) return result;
+
+    // The runtime sandbox has no root and no network after its checkout: the
+    // CLIs were installed into a user prefix before its seal; read the outcome.
+    if (sandbox.type === 'runtime') {
+        for (const { agent, cli } of toInstall) {
+            const plan = planRuntimeCliInstall(agent.id, cli);
+            if (plan.ok === false) {
+                fail(agent, cli, plan.reason);
+                continue;
+            }
+            const done = sandbox.cliInstalls?.[plan.install.id];
+            if (!done) {
+                fail(
+                    agent,
+                    cli,
+                    'it was not installed before the sandbox was sealed',
+                );
+            } else if (!done.binaryPath) {
+                fail(agent, cli, done.error ?? 'install failed');
+            } else {
+                (result.byAgentId[agent.id] ??= []).push({
+                    agentId: agent.id,
+                    agentName: agent.name,
+                    cli,
+                    identity: cliSandboxIdentity(agent.id, cli.name),
+                    binaryPath: done.binaryPath,
+                    interpreter: done.interpreter,
+                    home: done.home,
+                    ...(done.prefix ? { prefix: done.prefix } : {}),
+                });
+            }
+        }
+        return result;
+    }
 
     // Re-checked on every review, before anything is installed: a resumed
     // sandbox must still be in the state its creation recorded.

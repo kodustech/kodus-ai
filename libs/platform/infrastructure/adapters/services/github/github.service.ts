@@ -20,6 +20,14 @@ import {
 } from '../integration-link-error';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { extractDiffHunks } from './extract-diff-hunks';
+import {
+    DOWNLOAD_TOKEN_PERMISSIONS,
+    downloadTokenProblem,
+    numericRepositoryId,
+    RepositoryDownloadTokenError,
+    type RepositoryDownloadToken,
+    devPatDownloadAllowed,
+} from './repository-download-token';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
@@ -130,6 +138,7 @@ import {
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import {
     isDeniedStatus,
+    providerErrorStatus,
     RepositoryAccessDiagnosis,
     summarizeProviderError,
     UNKNOWN_REPOSITORY_ACCESS,
@@ -226,6 +235,31 @@ const PULL_REQUEST_AUTHORS_REPO_CONCURRENCY = 10;
 
 /** GitHub said the App installation is uninstalled or suspended. */
 export class InstallationUnavailableError extends Error {}
+
+/** Whether the error is that answer, itself or as the response of the HTTP error that wraps it. */
+function isInstallationUnavailable(error: unknown): boolean {
+    if (error instanceof InstallationUnavailableError) return true;
+    const wrapped = error as { getResponse?: () => unknown } | undefined;
+    return wrapped?.getResponse?.() instanceof InstallationUnavailableError;
+}
+
+/**
+ * Whether GitHub's answer to minting an installation token refuses the
+ * installation itself: 404 (uninstalled) or 403 (suspended, or a permission
+ * the App was not granted), never a 403 that is a rate limit.
+ */
+function isInstallationRefusal(error: unknown): boolean {
+    const status = providerErrorStatus(error);
+    if (status === 404) return true;
+    if (status !== 403) return false;
+    const e = error as { message?: unknown; response?: { headers?: Record<string, unknown> } };
+    const headers = e?.response?.headers ?? {};
+    const rateLimited =
+        String(headers['x-ratelimit-remaining']) === '0' ||
+        headers['retry-after'] !== undefined ||
+        /rate limit/i.test(String(e?.message ?? ''));
+    return !rateLimited;
+}
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
@@ -3211,6 +3245,126 @@ export class GithubService
             );
 
         return installationAuthentication.token;
+    }
+
+    /**
+     * Download token of the Kody Runtime cell (ADR-002, ADR-052): an
+     * installation token for this one repository with contents:read only.
+     * GitHub fixes an installation token's lifetime at 1 h, the shortest
+     * there is. Minted outside the installation-token cache on purpose: that
+     * cache holds the whole-installation token, which must never reach the
+     * cell, and this narrow token must never be served from it.
+     *
+     * GitHub App installations only: a PAT cannot be narrowed to one
+     * repository, so token auth is refused. An answer wider than asked is
+     * revoked and refused. The token is never logged.
+     */
+    async issueRepositoryDownloadToken(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<RepositoryDownloadToken> {
+        const { organizationAndTeamData } = params;
+        const repositoryId = numericRepositoryId(params.repositoryId);
+        if (repositoryId === null) {
+            throw new RepositoryDownloadTokenError(
+                'invalid_repository_id',
+                'A repository download token needs the numeric GitHub repository id',
+            );
+        }
+
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        if (githubAuthDetail?.authMode !== AuthMode.OAUTH) {
+            // Dev stacks connected with a PAT only (RUNTIME_DEV_ALLOW_PAT_DOWNLOAD):
+            // the PAT itself, unscoped, reaches the dev cell. Never in production.
+            if (devPatDownloadAllowed(process.env) && githubAuthDetail?.authToken) {
+                this.logger.warn({
+                    message: 'Runtime download token is the organization PAT (dev only, not scoped to the repository)',
+                    context: GithubService.name,
+                    metadata: { organizationId: organizationAndTeamData.organizationId, repositoryId },
+                });
+                return {
+                    token: decrypt(githubAuthDetail.authToken),
+                    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+                };
+            }
+            throw new RepositoryDownloadTokenError(
+                'unsupported_auth',
+                'A repository download token needs a GitHub App installation; a personal access token cannot be scoped to one repository',
+            );
+        }
+        const installationId = Number(githubAuthDetail.installationId);
+        if (!Number.isSafeInteger(installationId) || installationId <= 0) {
+            throw new RepositoryDownloadTokenError(
+                'no_installation',
+                'No GitHub App installation for this organization',
+            );
+        }
+
+        const appOctokit = this.createOctokitInstance();
+        const response = await appOctokit
+            .request('POST /app/installations/{installation_id}/access_tokens', {
+                installation_id: installationId,
+                repository_ids: [repositoryId],
+                permissions: { ...DOWNLOAD_TOKEN_PERMISSIONS },
+            })
+            .catch((error: unknown) => {
+                // GitHub refused this installation (removed, suspended, or not
+                // granted what is asked): no retry changes it, an admin does.
+                // Anything else (5xx, network, a rate limit, the App's own
+                // credentials) stays the error it is, and is retried.
+                if (isInstallationRefusal(error)) {
+                    throw new RepositoryDownloadTokenError(
+                        'no_installation',
+                        'GitHub refused the App installation of this organization (removed, suspended or without contents:read)',
+                    );
+                }
+                throw error;
+            });
+
+        const problem = downloadTokenProblem(response?.data, repositoryId);
+        if (problem) {
+            const token = (response?.data as { token?: unknown })?.token;
+            if (typeof token === 'string' && token) {
+                await this.revokeInstallationToken(token);
+            }
+            this.logger.error({
+                message:
+                    'GitHub answered the repository download token wider than asked; refused',
+                context: GithubService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    repositoryId,
+                    problem,
+                },
+            });
+            throw new RepositoryDownloadTokenError(
+                'unexpected_scope',
+                `Refused the repository download token: ${problem}`,
+            );
+        }
+
+        return {
+            token: response.data.token,
+            expiresAt: response.data.expires_at,
+        };
+    }
+
+    /** Best effort: a revoked token is dead even if the caller dropped it. */
+    private async revokeInstallationToken(token: string): Promise<void> {
+        try {
+            await new Octokit({
+                auth: token,
+                request: { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
+            }).request('DELETE /installation/token');
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not revoke a refused installation token',
+                context: GithubService.name,
+                metadata: { status: (error as { status?: number })?.status },
+            });
+        }
     }
 
     private async getInstallationAuthentication(
@@ -8858,6 +9012,142 @@ This is an experimental feature that generates committable changes. Review the d
         }
     }
 
+    /**
+     * The default branch and the SHA at its head, straight from the API (no
+     * cache: the Runtime setup boots exactly this commit). Null on 404.
+     */
+    async getDefaultBranchHead(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+    }): Promise<{ branch: string; sha: string } | null> {
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            params.organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            params.organizationAndTeamData,
+            githubAuthDetail,
+        );
+        const owner = await this.ownerFor(
+            params.repository,
+            githubAuthDetail,
+            octokit,
+        );
+        const repo = params.repository.name;
+        try {
+            const { data: info } = await octokit.rest.repos.get({
+                owner,
+                repo,
+            });
+            const branch = info?.default_branch;
+            if (!branch) return null;
+            const { data } = await octokit.rest.repos.getBranch({
+                owner,
+                repo,
+                branch,
+            });
+            const sha = data?.commit?.sha;
+            return sha ? { branch, sha } : null;
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) return null;
+            throw error;
+        }
+    }
+
+    /**
+     * How `head` stands against `base` by the compare API (`base...head`): the true merge base of the two, and how many commits
+     * `base` has that `head` does not (`behind_by`). One call, one commit listed: the count and the merge base are the answer, the
+     * commit list is never read. Null when the commits are not there or the answer names no merge base.
+     */
+    async compareCommits(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        base: string;
+        head: string;
+    }): Promise<{ mergeBase: string; behindBy: number } | null> {
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            params.organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            params.organizationAndTeamData,
+            githubAuthDetail,
+        );
+        const owner = await this.ownerFor(
+            params.repository,
+            githubAuthDetail,
+            octokit,
+        );
+        try {
+            const { data } = await octokit.rest.repos.compareCommitsWithBasehead(
+                {
+                    owner,
+                    repo: params.repository.name,
+                    basehead: `${params.base}...${params.head}`,
+                    per_page: 1,
+                },
+            );
+            const mergeBase = data?.merge_base_commit?.sha;
+            if (!mergeBase) return null;
+            const behind = Number(data.behind_by);
+            return {
+                mergeBase,
+                behindBy: Number.isFinite(behind) && behind > 0 ? behind : 0,
+            };
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) return null;
+            throw error;
+        }
+    }
+
+    /** One file at an exact commit (no fallback to another ref). Null on 404 or a directory. */
+    async getFileContentAtRef(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        path: string;
+        ref: string;
+        maxBytes: number;
+    }): Promise<string | null> {
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            params.organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            params.organizationAndTeamData,
+            githubAuthDetail,
+        );
+        const owner = await this.ownerFor(
+            params.repository,
+            githubAuthDetail,
+            octokit,
+        );
+        let data: any;
+        try {
+            ({ data } = await octokit.rest.repos.getContent({
+                owner,
+                repo: params.repository.name,
+                path: params.path,
+                ref: params.ref,
+            }));
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) return null;
+            throw error;
+        }
+        if (!data || Array.isArray(data) || data.type !== 'file') return null;
+        if (typeof data.size === 'number' && data.size > params.maxBytes) {
+            throw new Error(
+                `${params.path} is ${data.size} bytes, more than ${params.maxBytes}`,
+            );
+        }
+        const text = Buffer.from(
+            String(data.content ?? ''),
+            data.encoding === 'base64' ? 'base64' : 'utf8',
+        ).toString('utf8');
+        if (Buffer.byteLength(text) > params.maxBytes) {
+            throw new Error(
+                `${params.path} is larger than ${params.maxBytes} bytes`,
+            );
+        }
+        return text;
+    }
+
     async diagnoseRepositoryAccess(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };
@@ -8971,8 +9261,10 @@ This is an experimental feature that generates committable changes. Review the d
             }
         } catch (error) {
             // A 401/403/404 before any repository call (resolving the owner,
-            // building the client) still means the token cannot read.
-            if (isDeniedStatus(error)) {
+            // building the client) still means the token cannot read. So does
+            // an App GitHub said is uninstalled or suspended (instanceOctokit
+            // wraps that answer in a BadRequestException).
+            if (isDeniedStatus(error) || isInstallationUnavailable(error)) {
                 result.read = 'denied';
             }
             result.error = summarizeProviderError(error);

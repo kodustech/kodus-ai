@@ -1,0 +1,23 @@
+# Prometheus in agent mode on a cell host (docs/runtime/observability.md part 8, "Metrics, cells").
+# The cell only dials out: this agent scrapes the cell's loopback /metrics and remote-writes through an
+# outbound SSH forward (127.0.0.1:9091 here → the write-only gate on the central Prometheus's host).
+# Run it as: prometheus --agent --config.file=cell-agent.yml --storage.agent.path=<dir> --web.listen-address=127.0.0.1:9098
+# The agent's WAL keeps samples while the forward is down and sends them when it is back.
+global:
+  scrape_interval: 15s
+  external_labels:
+    # Edit per host: the cell's id as the hub knows it.
+    cell: cell-dev-1
+scrape_configs:
+  - job_name: runtime-cell
+    static_configs:
+      # The cell agent's -metrics-addr (default 127.0.0.1:9466). Add the injector's -metrics-addr
+      # (e.g. 127.0.0.1:9467) when it is on.
+      - targets: ["127.0.0.1:9466"]
+        labels: { service: runtime-cell }
+    relabel_configs:
+      # Every cell host scrapes 127.0.0.1: name the instance after the cell, as the alerts group by it.
+      - target_label: instance
+        replacement: cell-dev-1
+remote_write:
+  - url: http://127.0.0.1:9091/api/v1/write

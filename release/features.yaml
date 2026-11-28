@@ -90,6 +90,15 @@ features:
             credit balance you top up as you go.
         documentation_url: how_to_use/en/byok#kodus-credits
 
+    kody-runtime:
+        name: "Kody Runtime"
+        stage: alpha
+        audience: [cloud, self-hosted]
+        description: >-
+            Kody boots your app for a pull request, runs the changed entry
+            points against the base and the head, and reports what it saw
+            break on the PR instead of guessing from the diff.
+
     ultra-review:
         name: "Ultra review"
         stage: alpha

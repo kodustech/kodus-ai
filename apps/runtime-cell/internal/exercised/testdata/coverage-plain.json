@@ -1,0 +1,48 @@
+{
+ "result": [
+  {
+   "scriptId": "1",
+   "url": "file:///app/src/plain.js",
+   "functions": [
+    {
+     "functionName": "",
+     "ranges": [
+      {
+       "startOffset": 0,
+       "endOffset": 132,
+       "count": 1
+      }
+     ],
+     "isBlockCoverage": true
+    },
+    {
+     "functionName": "ran",
+     "ranges": [
+      {
+       "startOffset": 0,
+       "endOffset": 35,
+       "count": 1
+      }
+     ],
+     "isBlockCoverage": true
+    },
+    {
+     "functionName": "never",
+     "ranges": [
+      {
+       "startOffset": 37,
+       "endOffset": 89,
+       "count": 0
+      }
+     ],
+     "isBlockCoverage": true
+    }
+   ]
+  },
+  {
+   "scriptId": "2",
+   "url": "node:internal/main",
+   "functions": []
+  }
+ ]
+}

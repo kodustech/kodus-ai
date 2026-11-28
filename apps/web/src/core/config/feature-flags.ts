@@ -15,6 +15,10 @@ export const FEATURE_FLAGS = {
      *  closed, so without this the toggles save but nothing would run. */
     deterministicEvidence: "deterministic-evidence",
     conditionalPrApproval: "conditional-pr-approval",
+    /** Kody Runtime — released by the org's release track (alpha), not a
+     *  flag service. Hides its nav, routes, PR list column and settings; the
+     *  API answers 404 to the same orgs. */
+    kodyRuntime: "kody-runtime",
     /** Deep scan — private alpha. Gates the menu entry, the page and its
      *  routing card; the API refuses the scans themselves. */
     deepScan: "deep-scan",
@@ -24,3 +28,13 @@ export const FEATURE_FLAGS = {
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS];
+
+/**
+ * Whether a nav entry, palette page or tab behind `flag` is shown: always
+ * without a flag, else only when the org's flag (from the app layout) is on.
+ * Flags not loaded, or a check that failed, hide it.
+ */
+export const isReleasedTo = (
+    flag: keyof typeof FEATURE_FLAGS | undefined,
+    flags: Partial<Record<keyof typeof FEATURE_FLAGS, boolean | undefined>>,
+): boolean => !flag || flags[flag] === true;

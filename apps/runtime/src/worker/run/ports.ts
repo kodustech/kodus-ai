@@ -1,0 +1,237 @@
+import type { KeptCheckOutcome } from '@libs/runtime/contracts/kept-check';
+import type { ForkApprovalTokens } from '@libs/runtime/contracts/runtime-commands';
+import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
+import type { ExercisedRequest, ExercisedResult } from '@libs/runtime/protocol/messages';
+import type { RunProjectionStore, RunStreamEvent, RuntimePublishRequested, RuntimeRunRequested, SuiteStageResult } from '@libs/runtime/run';
+import type { RuntimeMetrics } from '@libs/runtime/telemetry';
+
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
+import type { RuntimeAgent } from '../agent/runtime-agent';
+import type { Canary, CanaryVault } from '../canary/canary';
+import type { StatedIntentAuthor } from '../intent/intent-author';
+import type { FindingIntentClassifier } from '../intent/intent-classifier';
+import type { EvidenceUploads } from './run-evidence';
+
+/** One durable step: DBOS.runStep in production, a direct call in unit tests. */
+export type StepRunner = <T>(name: string, fn: () => Promise<T>) => Promise<T>;
+
+/** Events of the Run stream; the hub writes them (ADR-047). `key` makes a retried append a no-op. */
+export interface RunEventSink {
+    append(orgId: string, runId: string, event: RunStreamEvent, key?: string): Promise<void>;
+}
+
+/**
+ * RuntimePublishRequested on workflow.exchange with routing key
+ * workflow.jobs.created.RUNTIME_PUBLISH (ADR-052); the product binds it to
+ * workflow.jobs.runtime_publish.queue (libs/runtime/run/run-messages.ts).
+ */
+export interface PublishRequester {
+    request(msg: RuntimePublishRequested): Promise<void>;
+}
+
+/**
+ * The claims of a Run, as the hub recorded them (read-only: the hub is the
+ * only writer of runtime_claims), so cancel, timeout and the reaper can release them.
+ */
+export interface RunClaims {
+    /** Claims of the org's Run not yet released. */
+    forRun(organizationId: string, runId: string): Promise<{ claimId: string; side: string }[]>;
+    /**
+     * The Run is over: its demand for perRun hosts (`runtime_pool_demand`, the worker's own rows) ends now instead of lapsing
+     * on its 120 s lifetime, so the fleet retires the hosts as soon as no claim holds them. Idempotent.
+     */
+    endDemand?(organizationId: string, runId: string): Promise<void>;
+    /** Outbound requests the proxy denied for these claims of the org during the test. */
+    egressBlocked(organizationId: string, claimIds: string[]): Promise<{ host: string; port: number; phase: string }[]>;
+    /**
+     * Every outbound request the proxy denied a claim of this Run of the org,
+     * any phase, with the claim's side, oldest first (the hub's
+     * runtime_egress_events, written from the cell's egress.blocked: the
+     * proxy's record, never a log line). What tells a PR boot the proxy
+     * stopped from one the PR broke.
+     */
+    deniedEgressOfRun(organizationId: string, runId: string): Promise<{ side: string; host: string }[]>;
+    /** Security violations the cell reported on these claims of the org (the hub records them): side and alert kind. */
+    securityViolations(organizationId: string, claimIds: string[]): Promise<{ claimId: string; side: string; signature: string }[]>;
+    /**
+     * The hard ceiling the hub gave the claim's boot round (runtime_claims.hard_expires_at), of the
+     * org's claim only; undefined when the hub has recorded no round of it yet (a first acquire).
+     */
+    hardExpiryOf?(organizationId: string, claimId: string): Promise<string | undefined>;
+}
+
+/**
+ * The cell leg of the purge (docs/runtime/persistent-state.md D13): every connected cell that may hold data of the
+ * organization at rest (tool layers today, a preview's kept state later) is asked to remove it, and says so.
+ * cellsPending counts the cells that have not yet: asked now and not answered, refused while a claim of the
+ * organization is live on them, or unreachable. Idempotent: a cell that already acknowledged is not asked again.
+ */
+export interface CellDataPurger {
+    purge(organizationId: string): Promise<{ cellsPending: number; cellsPurged: number }>;
+}
+
+/** Ends a claim through the hub (no Run context needed: the reaper uses it too). */
+export interface ClaimReleaser {
+    release(ref: { claimId: string; organizationId: string; runId?: string | null }, correlationId?: string): Promise<void>;
+}
+
+/** A Run's claims kept leased until stop() (lease-keeper.ts). */
+export interface LeaseHold {
+    stop(): void;
+}
+
+/** Keeps claims leased (claim.renew) while their Run works; outside the DBOS journal. */
+export interface ClaimLeases {
+    keep(claimIds: string[]): LeaseHold;
+}
+
+/** Fork PRs wait for a maintainer, bound to the head SHA (ADR-030, ADR-057). */
+/** What an approval delivers to the waiting gate: the approved head and, from the product, fresh sealed tokens. */
+export interface ForkApprovalMessage {
+    headSha: string;
+    tokens?: ForkApprovalTokens;
+}
+
+export interface ForkApprovals {
+    has(runId: string, headSha: string): Promise<boolean>;
+    /** Waits durably for an approval message; resolves with the approved head, or null on timeout. */
+    wait(runId: string): Promise<ForkApprovalMessage | null>;
+}
+
+/**
+ * The worker's structured log of a Run: `msg` is a dotted event name, the
+ * fields ids and numbers. Never a token, repository content or model text.
+ */
+export type RunLogEvent = { msg: string } & Record<string, unknown>;
+
+export interface RunLog {
+    info(event: RunLogEvent): void;
+    warn(event: RunLogEvent): void;
+}
+
+import type { PastPlans } from './plan-reuse';
+import type { StabilityRecord } from '@libs/runtime/gate';
+
+/** One probe's outcome in a Run, as the runtime_stability history keeps it (ADR-050). */
+export interface StabilityOutcome {
+    probeKey: string;
+    /** The probe's index in the plan: one Run may play the same shape twice. */
+    probeIndex: number;
+    normalizerVersion: string;
+    /** Fields that varied between this Run's healthy base rounds; never the PR's (S-36). */
+    unstableFields: string[];
+    verdict: StabilityRecord['verdict'];
+    baseRounds: number;
+    prRounds: number;
+}
+
+/**
+ * The versioned stability history, org-scoped and by environment and probe shape
+ * (runtime_stability, §8, 90 days). Both calls run inside a step of the Run.
+ */
+export interface StabilityHistory {
+    /** The records of each key within retention, newest first, at most a bounded number per key. */
+    read(scope: { orgId: string; environmentId: string }, probeKeys: string[]): Promise<Record<string, StabilityRecord[]>>;
+    /** Idempotent per Run and probe index: a retried step writes nothing twice. */
+    record(scope: { orgId: string; environmentId: string; runId: string }, outcomes: StabilityOutcome[]): Promise<void>;
+}
+
+/** One Run's outcome of one kept check, as runtime_kept_check_results keeps it: ids and codes only. */
+export interface KeptCheckResultRow {
+    keptCheckId: string;
+    outcome: KeptCheckOutcome['outcome'];
+    staleReason?: KeptCheckOutcome['staleReason'];
+    /** The PR the check was kept from: the metric counts failures on other PRs only. */
+    sourcePrNumber: number;
+}
+
+/**
+ * Each Run's outcomes of the repository's kept checks (docs/runtime/kept-checks.md §4),
+ * org-scoped, by environment and repository. Written in one step per Run.
+ */
+export interface KeptCheckResults {
+    /** Idempotent per (org, Run, kept check): a retried step writes nothing twice. */
+    record(scope: { orgId: string; environmentId: string; repositoryId: string; runId: string; prNumber: number }, rows: KeptCheckResultRow[]): Promise<void>;
+}
+
+/** The repository's e2e suite as a stage of a Run (docs/runtime/e2e-suites.md section 10.2). */
+export interface SuiteStage {
+    /**
+     * Runs the suite the Run's request carries (`req.suite`) through the same engine as CI mode, inside the Run's workflow
+     * with its step runner, and says how it ended. `deadlineAt` is when the suite must be over so the Run keeps its own 45 minutes; `canaries` are the Run's, watched in the artifacts the suite keeps; `cancellationSignal` (read inside the step that runs the engine) aborts when the Run is stopped, which stops the suite and releases what it holds. Throws only a cancellation; anything else the stage turns into `unavailable`.
+     */
+    run(req: RuntimeRunRequested, step: StepRunner, opts?: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined; canaries?: readonly Canary[] }): Promise<SuiteStageResult>;
+}
+
+export interface RunDeps {
+    step: StepRunner;
+    env: EnvironmentRuntime;
+    agent: RuntimeAgent;
+    /** Runs apart from the agent, without its exploration context (§4). */
+    intent: FindingIntentClassifier;
+    /**
+     * Writes intent probes from the PR's text (docs/runtime/intent-oracle.md), never from its code;
+     * absent: no intent probe, the Run compares with the base only.
+     */
+    intentAuthor?: StatedIntentAuthor;
+    /**
+     * The Run's canaries (ADR-043): every claim.acquire hands them to the cell, which plants them
+     * in the workload (claim.acquire canaries), and every boundary is checked for them.
+     */
+    canaries: CanaryVault;
+    projection: RunProjectionStore;
+    events: RunEventSink;
+    publisher: PublishRequester;
+    /** The repository's e2e suite as a stage of the Run; absent: a request's `suite` section is ignored. */
+    suite?: SuiteStage;
+    claims: RunClaims;
+    metrics: RuntimeMetrics;
+    now: () => Date;
+    /** The pause between rounds of a claim waiting for room on a cell (ADR-070); a timer when absent. */
+    sleep?: (ms: number) => Promise<void>;
+    /** Read inside the acquire step so each DBOS step receives its own cancellation signal. */
+    cancellationSignal?: () => AbortSignal | undefined;
+    /** The evidence object store (RUNTIME_EVIDENCE_DIR); without it the Run keeps no evidence. */
+    evidence?: Pick<EvidenceStore, 'put'> & Partial<Pick<EvidenceStore, 'get' | 'takeUpload'>>;
+    /** Where cells upload a round's artifacts with grants; absent: the cell's artifacts read "not captured". */
+    evidenceUploads?: EvidenceUploads;
+    /** Renews the Run's claims while it works; absent: the claims keep the lease of their acquire. */
+    leases?: ClaimLeases;
+    /** Where a release that failed is reported (it is retried by the reaper). */
+    onReleaseFailed?: (claimId: string, e: Error) => void;
+    /** One line per phase and one canonical line at the end (run.phase, run.finished); absent: silent. */
+    log?: RunLog;
+    /**
+     * RUNTIME_ROUND_SNAPSHOTS=1: each side's acquire step also takes the claim's round snapshot
+     * once it is ready, and the Run's resets go back to it (cells that keep snapshots only).
+     */
+    roundSnapshots?: boolean;
+    /**
+     * RUNTIME_CAPACITY_WAIT_MAX_MS: the longest a side waits for room on a host before the Run
+     * ends timed_out with the no_capacity card; absent: the Run's queue budget (30 min).
+     */
+    capacityWaitMaxMs?: number;
+    /**
+     * RUNTIME_QUEUE_TIMEOUT_MS: how long a Run may wait in the queue before it ends timed_out;
+     * QUEUE_TIMEOUT_MS when absent. A Run reads the value its start step checkpointed (runQueueTimeoutOf).
+     */
+    queueTimeoutMs?: number;
+    /**
+     * RUNTIME_EXERCISED_LINES_THRESHOLD_PERCENT: the share (percent) of the measured changed lines
+     * the PR side must run for a green Run to stay green; absent: DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT.
+     * The request's exercisedLinesThresholdPercent (the org's setting) wins over it.
+     */
+    exercisedLinesThresholdPercent?: number;
+    /**
+     * claim.exercised on the PR claim after the probes (feature exercisedLines): how many of the
+     * named changed lines ran. undefined: the cell gave no answer (no feature, a nack, a timeout,
+     * a malformed body); the Run then says "not measured" and keeps its verdict. Absent: never asked.
+     */
+    requestExercised?: (claim: Claim, request: ExercisedRequest) => Promise<ExercisedResult | undefined>;
+    /** Earlier Runs' accepted plans, for a Run of the same head (plan-reuse.ts); absent: every Run plans. */
+    pastPlans?: PastPlans;
+    /** The probes' stability history (ADR-050); absent: every probe starts with the table's default and nothing is recorded. */
+    stability?: StabilityHistory;
+    /** Where each Run's kept-check outcomes go (runtime_kept_check_results); absent: they stay on the Run only. */
+    keptCheckResults?: KeptCheckResults;
+}

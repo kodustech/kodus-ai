@@ -24,6 +24,7 @@ import { TruncateStart } from "@components/ui/truncate-start";
 import {
     AlertTriangleIcon,
     BotIcon,
+    FlaskConicalIcon,
     ChevronsUpDownIcon,
     FileTextIcon,
     GitPullRequestIcon,
@@ -426,6 +427,11 @@ const AGENT_CARDS: AgentCard[] = [
         task: "securityScan",
         Icon: ShieldAlertIcon,
         title: "Deep scan",
+    },
+    {
+        task: "runtime",
+        Icon: FlaskConicalIcon,
+        title: "Kody Runtime",
     },
 ];
 

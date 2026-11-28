@@ -2,6 +2,10 @@ import * as http from 'http';
 import { INestApplicationContext } from '@nestjs/common';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    IOutboxRelayHealth,
+    OUTBOX_RELAY_HEALTH_TOKEN,
+} from '@libs/core/workflow/domain/contracts/outbox-relay-health.contract';
 
 type ProbeLogger = Pick<ReturnType<typeof createLogger>, 'warn'>;
 
@@ -26,6 +30,19 @@ export interface HealthProbeOptions {
      * don't want to flap unhealthy during that window.
      */
     startupGraceMs?: number;
+    /**
+     * Fail the probe when the outbox relay loop (OUTBOX_RELAY_HEALTH_TOKEN)
+     * is missing, not running, or has not finished a cycle within
+     * `outboxRelayStallMs`. Set only on a code-review worker where the
+     * Kody Runtime is on (health-probe-options.ts).
+     */
+    requireOutboxRelay?: boolean;
+    /**
+     * How long a relay cycle may go unfinished before the relay counts as
+     * stalled. An idle cycle takes at most 3 s and a busy one is bounded by
+     * the 15 s publish timeout, so this only fires on a wedged loop.
+     */
+    outboxRelayStallMs?: number;
     /** Injected in tests; defaults to the worker logger. */
     logger?: ProbeLogger;
 }
@@ -50,6 +67,7 @@ const DEFAULT_WORKER_CHANNELS = [
     'channel-ast-graph-incremental',
 ];
 
+const DEFAULT_OUTBOX_RELAY_STALL_MS = 120_000;
 /** The security-scan role consumes only the deep scan's channel. */
 export const SECURITY_SCAN_WORKER_CHANNELS = ['channel-security-scan'];
 
@@ -80,14 +98,21 @@ interface HealthStatus {
  *      ChannelWrapper; if the lib is downgraded, this probe needs to
  *      be adapted again.
  *
- *   3. Connection alive, consumers registered, but the worker is wedged
+ *   3. Connection alive, but the outbox relay loop is dead or stalled
+ *      (requireOutboxRelay). Nothing the worker enqueues reaches the broker:
+ *      rows stay READY in the outbox table. The relay reports its own
+ *      liveness; a cycle skipped because the broker is down still counts as
+ *      finished, so this only flags the loop itself.
+ *
+ *   4. Connection alive, consumers registered, but the worker is wedged
  *      (event loop pinned, all jobs stuck). That's out of scope for
  *      this probe — would need a liveness signal from the handler
  *      itself (e.g. "last ack timestamp > N ago"). Tracked separately.
  *
  * Failing this probe causes ECS to mark the task unhealthy and start a
- * new one, which is the right call for cases 1 and 2: both are
- * unrecoverable without reconnecting at the AMQP library level.
+ * new one. Case 1 usually heals on its own (amqp-connection-manager
+ * reconnects and re-runs every channel setup), and the probe turns healthy
+ * again when it does; cases 2 and 3 need the restart.
  */
 export function startHealthProbe(opts: HealthProbeOptions): http.Server {
     const {
@@ -96,13 +121,51 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
         requireAmqp,
         requiredChannels = DEFAULT_WORKER_CHANNELS,
         startupGraceMs = 60_000,
+        requireOutboxRelay = false,
+        outboxRelayStallMs = DEFAULT_OUTBOX_RELAY_STALL_MS,
         logger = createLogger('WorkerHealthProbe'),
     } = opts;
     const bootTs = Date.now();
 
+    const evaluateOutboxRelay = (): HealthStatus | undefined => {
+        let relay: IOutboxRelayHealth | undefined;
+        try {
+            relay = appContext.get<IOutboxRelayHealth>(
+                OUTBOX_RELAY_HEALTH_TOKEN,
+                { strict: false },
+            );
+        } catch {
+            relay = undefined;
+        }
+
+        if (typeof relay?.getLiveness !== 'function') {
+            return { ok: false, status: 'outbox_relay_not_resolved' };
+        }
+
+        const liveness = relay.getLiveness();
+        if (liveness.state !== 'running') {
+            return { ok: false, status: `outbox_relay_${liveness.state}` };
+        }
+
+        const msSinceLastCycle = Date.now() - (liveness.lastCycleAt ?? 0);
+        if (msSinceLastCycle > outboxRelayStallMs) {
+            return {
+                ok: false,
+                status: 'outbox_relay_stalled',
+                details: { msSinceLastCycle, outboxRelayStallMs },
+            };
+        }
+
+        return undefined;
+    };
+
     const evaluate = (): HealthStatus => {
+        const relayFailure = requireOutboxRelay
+            ? evaluateOutboxRelay()
+            : undefined;
+
         if (!requireAmqp) {
-            return { ok: true, status: 'ok_no_amqp' };
+            return relayFailure ?? { ok: true, status: 'ok_no_amqp' };
         }
 
         let amqp: AmqpConnection | undefined;
@@ -119,6 +182,10 @@ export function startHealthProbe(opts: HealthProbeOptions): http.Server {
         const connected = amqp.managedConnection?.isConnected?.() === true;
         if (!connected) {
             return { ok: false, status: 'amqp_disconnected' };
+        }
+
+        if (relayFailure) {
+            return relayFailure;
         }
 
         // Still inside startup grace — a worker just-booted won't have

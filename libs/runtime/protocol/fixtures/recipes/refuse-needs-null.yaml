@@ -1,0 +1,9 @@
+# An empty needs is a null, not a list.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: api
+  expose:
+    - { service: api, port: 3000, kind: http }
+  needs:

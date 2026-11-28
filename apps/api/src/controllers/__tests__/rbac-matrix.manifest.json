@@ -1837,6 +1837,842 @@
     }
   },
   {
+    "key": "runtime-audit.controller.ts#list",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/audit",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#addRepository",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/repositories",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#applyBlockerFix",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/blockers/fixes",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#createEnvironment",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#getEnvironment",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:id",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#getEnvironmentSuite",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:id/suite",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#listBlockers",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:id/blockers",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#listEnvironments",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#listLessons",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:id/lessons",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#listRepositories",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:id/repositories",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#listStatuses",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#promoteLesson",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/lessons/:lessonId/promote",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#proposeInferredRecipe",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/recipe/propose",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#removeRepository",
+    "httpMethod": "DELETE",
+    "urlPath": "/runtime/environments/:id/repositories/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#requestSetup",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/setup",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#resumeSuiteSelection",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/suite/selection/resume",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#retireLesson",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/lessons/:lessonId/retire",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#simulateRun",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/simulate",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#updateEnvironmentSettings",
+    "httpMethod": "PATCH",
+    "urlPath": "/runtime/environments/:id/settings",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#updateRepository",
+    "httpMethod": "PATCH",
+    "urlPath": "/runtime/environments/:id/repositories/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-kept-checks.controller.ts#keep",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/kept-checks",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-kept-checks.controller.ts#list",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/kept-checks",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-kept-checks.controller.ts#remove",
+    "httpMethod": "DELETE",
+    "urlPath": "/runtime/kept-checks/:id",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-ops.controller.ts#clearGlobalRuntimeStop",
+    "httpMethod": "POST",
+    "urlPath": "/internal/runtime/ops/stop/clear",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-ops.controller.ts#revokeManagedCell",
+    "httpMethod": "POST",
+    "urlPath": "/internal/runtime/ops/cells/:id/revoke",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-ops.controller.ts#stopRuntimeGlobally",
+    "httpMethod": "POST",
+    "urlPath": "/internal/runtime/ops/stop",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#approveEgressHost",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/egress-approvals",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#clearOrgRuntimeStop",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/stop/clear",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#createCellRegistrationToken",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/cells/registration-tokens",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#getOrgEgress",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/egress",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#listCellRegistrationTokens",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/cells/registration-tokens",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#listCells",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/cells",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#purgeOrganizationRuntimeData",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/organization-data/purge",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#revokeCell",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/cells/:id/revoke",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#revokeCellRegistrationToken",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/cells/registration-tokens/:id/revoke",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#revokeEgressHost",
+    "httpMethod": "DELETE",
+    "urlPath": "/runtime/environments/:id/egress-approvals/:host",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#stopOrgRuntime",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/stop",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-org-admin.controller.ts#updateOrgEgressSettings",
+    "httpMethod": "PUT",
+    "urlPath": "/runtime/egress/settings",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#forEnvironment",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:environmentId/previews",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#forRun",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:runId/previews",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#get",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/previews/:previewId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#grant",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/previews/:previewId/grant",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#open",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/runs/:runId/previews",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#openEnvironment",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:environmentId/previews",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-previews.controller.ts#stop",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/previews/:previewId/stop",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-pull-request-runs.controller.ts#list",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/pull-request-runs",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-pull-request-runs.controller.ts#request",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/pull-request-runs/request",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#approveForkRun",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/runs/:id/approvals",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#getEvidenceUrl",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id/evidence/:stepId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#getReproduction",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id/findings/:probeId/reproduce",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#getRun",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#getSuite",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id/suite",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#getSuiteArtifact",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id/suite/artifacts",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#listRuns",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#retrySuite",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/runs/:id/suite/retry",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#runAgain",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/runs",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#setFindingFeedback",
+    "httpMethod": "PUT",
+    "urlPath": "/runtime/runs/:id/findings/:probeId/feedback",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#setFindingIntent",
+    "httpMethod": "PUT",
+    "urlPath": "/runtime/runs/:id/findings/:probeId/intent",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-secrets.controller.ts#audit",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/secrets/audit",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-secrets.controller.ts#create",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/secrets",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-secrets.controller.ts#list",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/secrets",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-secrets.controller.ts#remove",
+    "httpMethod": "DELETE",
+    "urlPath": "/runtime/secrets/:secretId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-secrets.controller.ts#update",
+    "httpMethod": "PATCH",
+    "urlPath": "/runtime/secrets/:secretId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#exportUsage",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings/usage/export",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#getHealth",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings/health",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#getMachineMinutes",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings/machine-minutes",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#getPreviewSettings",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings/preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#getSettings",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#getSpeed",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings/health/speed",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#getUsage",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/settings/usage",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#updateMachineMinutes",
+    "httpMethod": "PATCH",
+    "urlPath": "/runtime/settings/machine-minutes",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#updateOrgSettings",
+    "httpMethod": "PATCH",
+    "urlPath": "/runtime/settings",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#updatePreviewSettings",
+    "httpMethod": "PUT",
+    "urlPath": "/runtime/settings/preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-settings.controller.ts#updateRepositorySettings",
+    "httpMethod": "PUT",
+    "urlPath": "/runtime/settings/repositories/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "sandbox-capacity.controller.ts#get",
+    "httpMethod": "GET",
+    "urlPath": "/sandbox-capacity",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "sandbox-capacity.controller.ts#update",
+    "httpMethod": "PUT",
+    "urlPath": "/sandbox-capacity",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "securityScans.controller.ts#cancel",
     "httpMethod": "POST",
     "urlPath": "/security-scans/:id/cancel",
@@ -2049,6 +2885,17 @@
     "key": "ssoConfig.controller.ts#startConnectionTest",
     "httpMethod": "POST",
     "urlPath": "/sso-config/test/start",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "team-cli-key-repositories.controller.ts#setRepositories",
+    "httpMethod": "PUT",
+    "urlPath": "/teams/:teamId/cli-keys/:keyId/repositories",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

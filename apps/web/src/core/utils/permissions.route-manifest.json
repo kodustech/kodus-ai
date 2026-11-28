@@ -152,6 +152,14 @@
     }
   },
   {
+    "route": "/organization/runtime",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "route": "/organization/sso",
     "expected": {
       "billing_manager": "deny",
@@ -181,6 +189,102 @@
       "billing_manager": "deny",
       "repo_admin": "allow",
       "contributor": "deny"
+    }
+  },
+  {
+    "route": "/runtime",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/environments",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/environments/x",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/environments/x/health",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/environments/x/preview",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/runs",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/runs/x",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/runs/x/preview",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/settings",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/settings/cells",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/settings/health",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/runtime/settings/usage",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
     }
   },
   {
@@ -257,6 +361,14 @@
   },
   {
     "route": "/settings/code-review/x/kody-rules/x",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/kody-runtime",
     "expected": {
       "billing_manager": "allow",
       "repo_admin": "allow",

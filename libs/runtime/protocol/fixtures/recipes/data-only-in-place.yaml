@@ -1,0 +1,18 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: web
+    health: /health
+  expose:
+    - { service: web, port: 8080, kind: http }
+data:
+  reset: data-only
+  services: [db]
+  in_place:
+    postgres:
+      - { service: db, databases: [shop, shop_audit] }
+    firebase:
+      service: emulators
+      import_dir: /firebase/golden
+      project: demo-shop

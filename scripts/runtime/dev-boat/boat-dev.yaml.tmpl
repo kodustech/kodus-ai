@@ -1,0 +1,27 @@
+# Rendered by scripts/runtime/dev-boat-up.sh. Editing the rendered file does nothing until
+# `runtime-fleet apply` runs (the script does it); the base name lives at the top of the script.
+kind: HostClass
+name: boat-large-cell
+provider: boat
+boat:
+  type: large
+  ttlSeconds: 7200
+  base: @@BOAT_CELL_BASE@@
+---
+kind: HostPool
+name: boat-dev
+scope: kodus
+provider: boat
+hostClass: boat-large-cell
+lifecycle: perRun
+labels:
+  backend: docker-gvisor
+  isolation: sandboxed-container
+  arch: x86_64
+  tenancy: run
+weight: 100
+admission: { allowOrgs: [@@ORGS@@] }
+perRun: { registrationTimeoutSeconds: 600, maxRunMinutes: 120 }
+health: { maxConsecutiveFailures: 3 }
+price: { usdPerHostHour: 0.072, source: list }
+@@IMAGE_STORE@@

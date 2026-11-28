@@ -126,6 +126,7 @@ const TASK_LABEL: Record<LlmTask, string> = {
     conversation: 'the Chat model',
     customAgent: 'the Custom Agents model',
     securityScan: 'the Deep scan model',
+    runtime: 'the Kody Runtime model',
 };
 
 /**

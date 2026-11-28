@@ -340,6 +340,9 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
         // Enrichment (#1821), inline zod schema.
         'libs/code-review/infrastructure/agents/engine/enrich-content.ts', // RESULT_ZOD — all-required
+        // Kody Runtime's BYOK model turn: LLM.run in LOOP mode with tools and no
+        // structured schema; the scan matches the word in its comments.
+        'libs/runtime/api/infrastructure/byok-model-turn.provider.ts',
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {

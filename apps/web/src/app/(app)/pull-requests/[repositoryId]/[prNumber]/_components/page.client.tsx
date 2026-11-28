@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import NextLink from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Skeleton } from "@components/ui/skeleton";
+import { usePermission } from "@services/permissions/hooks";
+import { Action, ResourceType } from "@services/permissions/types";
 import {
     useInfinitePullRequestExecutions,
     usePullRequestFiles,
@@ -12,11 +14,14 @@ import {
     type PullRequestExecution,
     type PullRequestFile,
 } from "@services/pull-requests";
+import { mainRunOf } from "@services/runtime/model/pull-request-runs";
 import { ArrowLeftIcon } from "lucide-react";
 // Review screen — ported from the `try` app: a max-w page that scrolls as a
 // whole, with sticky left (file tree) and right (issues/metadata) rails and a
 // center column carrying the PR header + diff.
 import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { isReleasedTo } from "src/core/config/feature-flags";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { DiffViewer } from "./diff-viewer";
@@ -27,6 +32,8 @@ import {
     type ReviewRunStatus,
 } from "./review-run-status";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
+import { PrRuntimeCard, usePrRuntime } from "./runtime-card";
+import { PrRuntimeTab } from "./runtime-tab";
 import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
 import { CommitsList } from "./try-port/CommitsList";
 import { FileTree, type FileTreeMode } from "./try-port/FileTree";
@@ -302,6 +309,7 @@ export function ReviewPageClient({
                 patchesLoading={filesLoading}
                 patchesError={filesError}
                 prNumber={prNumber}
+                repositoryId={repositoryId}
                 prUrl={prExecution?.url}
                 repositoryName={
                     suggestionsData?.data?.repositoryFullName ??
@@ -352,6 +360,7 @@ function ReviewLayout({
     patchesLoading,
     patchesError,
     prNumber,
+    repositoryId,
     prUrl,
     repositoryName,
 }: {
@@ -364,10 +373,36 @@ function ReviewLayout({
     patchesLoading: boolean;
     patchesError?: Error | null;
     prNumber: number;
+    repositoryId: string;
     prUrl?: string;
     repositoryName?: string;
 }) {
     const { state, dispatch, navigateFile } = useReviewStore();
+    // The Kody Runtime tab (screen 8) for whoever can read this repo's Runs.
+    // Hidden from an org Kody Runtime (catalog alpha) is not released to.
+    const runtimeReleased = isReleasedTo("kodyRuntime", useFeatureFlags());
+    const canReadRuntimePermission = usePermission(
+        Action.Read,
+        ResourceType.RuntimeRun,
+        repositoryId,
+    );
+    const canReadRuntime = runtimeReleased && canReadRuntimePermission;
+    const tabs: PrTab[] = canReadRuntime ? [...WEB_TABS, "runtime"] : WEB_TABS;
+    // The latest Run, its environment and its regressions: one call, read by
+    // the tab badge and the right rail's card.
+    const prRuntime = usePrRuntime(repositoryId, prNumber, canReadRuntime);
+    const runtimeCard =
+        canReadRuntime &&
+        prRuntime &&
+        (prRuntime.latest || prRuntime.environment) ? (
+            <ErrorBoundary FallbackComponent={PanelError}>
+                <PrRuntimeCard
+                    runtime={prRuntime}
+                    repositoryId={repositoryId}
+                    prNumber={prNumber}
+                />
+            </ErrorBoundary>
+        ) : null;
     const [activeTab, setActiveTab] = useState<PrTab>("review");
     // Folder tree vs. role-grouped cohorts. Persisted so the choice sticks
     // across PRs. Applied AFTER mount (not in the initializer) so the server
@@ -425,6 +460,9 @@ function ReviewLayout({
     // column, so drop the rail entirely and let the diff column reclaim the
     // width — the all-clear reads off the full-width summary bar instead.
     const hasFindings = treeIssues.length > 0;
+    // The rail also holds the Kody Runtime card; without findings or the card
+    // it is dropped.
+    const showRightRail = hasFindings || !!runtimeCard;
 
     // Orientation + signal hierarchy for the review header: how far the
     // reviewer has gotten, and how many findings actually need attention vs.
@@ -582,10 +620,10 @@ function ReviewLayout({
                     <div
                         className={`grid grid-cols-1 gap-5 transition-[grid-template-columns] duration-200 ease-out ${
                             state.sidebarOpen
-                                ? hasFindings
+                                ? showRightRail
                                     ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]"
                                     : "lg:grid-cols-[280px_minmax(0,1fr)]"
-                                : hasFindings
+                                : showRightRail
                                   ? "lg:grid-cols-[40px_minmax(0,1fr)_300px]"
                                   : "lg:grid-cols-[40px_minmax(0,1fr)]"
                         }`}>
@@ -622,7 +660,12 @@ function ReviewLayout({
                                 suggestionCount={findingsTotal}
                                 activeTab={activeTab}
                                 onTabChange={setActiveTab}
-                                tabs={WEB_TABS}
+                                tabs={tabs}
+                                runtimeRegressions={
+                                    prRuntime
+                                        ? mainRunOf(prRuntime)?.regressions
+                                        : undefined
+                                }
                             />
 
                             {activeTab === "review" && (
@@ -656,15 +699,26 @@ function ReviewLayout({
                             {activeTab === "commits" && (
                                 <CommitsList commits={commits} />
                             )}
+
+                            {activeTab === "runtime" && (
+                                <ErrorBoundary FallbackComponent={PanelError}>
+                                    <PrRuntimeTab
+                                        repositoryId={repositoryId}
+                                        prNumber={prNumber}
+                                        patchFiles={patchFiles}
+                                    />
+                                </ErrorBoundary>
+                            )}
                         </div>
 
                         {/* RIGHT — issues + PR metadata. Reserved only when
                             there are findings to show; otherwise the column is
                             dropped so the diff expands to fill the width. */}
-                        {hasFindings && (
+                        {showRightRail && (
                             <aside className={stickyAside}>
                                 <ErrorBoundary FallbackComponent={PanelError}>
                                     <RightSidebar
+                                        top={runtimeCard}
                                         pr={pr}
                                         issues={treeIssues}
                                         isCompleted

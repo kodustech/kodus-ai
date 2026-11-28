@@ -1,0 +1,7 @@
+version: 1
+suite:
+  runner: playwright
+  command: npx playwright test {specs}
+  specs: "tests/**/*.spec.ts"
+  service: e2e
+  image: mcr.microsoft.com/playwright

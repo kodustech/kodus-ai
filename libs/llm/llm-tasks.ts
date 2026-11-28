@@ -46,6 +46,10 @@ export const LLM_TASK = {
      *  reproduction tests. A long agentic run, so a team may route it to a
      *  model of its own. Inherits the org default when unset. */
     securityScan: 'securityScan',
+    /** The Kody Runtime agent (plan / intent turns) called through the product's
+     *  LLM gateway (POST /internal/runtime/llm). The worker parses JSON out of
+     *  the answer, so it needs a model that follows a structured-output format. */
+    runtime: 'runtime',
 } as const;
 
 export type LlmTask = (typeof LLM_TASK)[keyof typeof LLM_TASK];

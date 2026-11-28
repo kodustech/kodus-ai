@@ -27,10 +27,11 @@ export function useGetRepositories(
     );
 }
 
-export function useGetSelectedRepositories(teamId: string) {
+export function useGetSelectedRepositories(teamId: string, enabled = true) {
     return useFetch<RepositoryMinimal[]>(
         CODE_MANAGEMENT_API_PATHS.GET_SELECTED_REPOSITORIES,
         { params: { teamId } },
+        enabled,
     );
 }
 

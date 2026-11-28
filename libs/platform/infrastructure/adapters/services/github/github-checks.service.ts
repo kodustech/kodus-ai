@@ -3,11 +3,15 @@ import { createLogger } from '@libs/core/log/logger';
 import {
     CheckConclusion,
     CheckStatus,
+    CommitStatusOutcome,
     CreateCheckRunParams,
+    CreateCommitStatusParams,
     FindCheckRunParams,
     IChecksAdapter,
+    UnknownCheckConclusionError,
     UpdateCheckRunParams,
 } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { Injectable } from '@nestjs/common';
@@ -31,17 +35,117 @@ enum GithubCheckConclusion {
     TIMED_OUT = 'timed_out',
 }
 
-const checkStatusMap = {
+const checkStatusMap: Record<CheckStatus, GithubCheckStatus> = {
+    [CheckStatus.QUEUED]: GithubCheckStatus.QUEUED,
     [CheckStatus.IN_PROGRESS]: GithubCheckStatus.IN_PROGRESS,
     [CheckStatus.COMPLETED]: GithubCheckStatus.COMPLETED,
-} as const;
+};
 
-const checkConclusionMap = {
+const checkConclusionMap: Record<CheckConclusion, GithubCheckConclusion> = {
     [CheckConclusion.FAILURE]: GithubCheckConclusion.FAILURE,
     [CheckConclusion.SUCCESS]: GithubCheckConclusion.SUCCESS,
     [CheckConclusion.NEUTRAL]: GithubCheckConclusion.NEUTRAL,
     [CheckConclusion.SKIPPED]: GithubCheckConclusion.SKIPPED,
-} as const;
+    [CheckConclusion.ACTION_REQUIRED]: GithubCheckConclusion.ACTION_REQUIRED,
+    [CheckConclusion.CANCELLED]: GithubCheckConclusion.CANCELLED,
+    [CheckConclusion.TIMED_OUT]: GithubCheckConclusion.TIMED_OUT,
+};
+
+type GithubCommitStatusState = 'pending' | 'success' | 'failure' | 'error';
+
+/**
+ * The commit status state that keeps what the check conclusion does to a
+ * protected branch. A required check passes on success, neutral or skipped;
+ * a required status passes on success only, so neutral and skipped are
+ * success (the description still says what happened). action_required waits
+ * for a person, so it stays pending; cancelled and timed_out are errors of
+ * the run, not a verdict on the code.
+ * https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging
+ */
+const commitStatusStateMap: Record<CheckConclusion, GithubCommitStatusState> = {
+    [CheckConclusion.SUCCESS]: 'success',
+    [CheckConclusion.NEUTRAL]: 'success',
+    [CheckConclusion.SKIPPED]: 'success',
+    [CheckConclusion.FAILURE]: 'failure',
+    [CheckConclusion.ACTION_REQUIRED]: 'pending',
+    [CheckConclusion.CANCELLED]: 'error',
+    [CheckConclusion.TIMED_OUT]: 'error',
+};
+
+/** The output of a check run as GitHub takes it: the annotations in their wire names, and nothing added when there are none. */
+function toGithubOutput(output: NonNullable<UpdateCheckRunParams['output']>) {
+    const { annotations, ...rest } = output;
+    if (!annotations?.length) return rest;
+    return {
+        ...rest,
+        annotations: annotations.map((a) => ({
+            path: a.path,
+            start_line: a.startLine,
+            end_line: a.endLine,
+            annotation_level: a.level,
+            ...(a.title ? { title: a.title } : {}),
+            message: a.message,
+        })),
+    };
+}
+
+/** GitHub refuses a commit status description longer than this. */
+const COMMIT_STATUS_DESCRIPTION_MAX = 140;
+
+/**
+ * The GitHub conclusion of a completed check. A missing or unknown conclusion
+ * is an error: GitHub would otherwise show a check that never passed as green.
+ */
+export function toGithubCheckConclusion(
+    conclusion: CheckConclusion | undefined,
+): GithubCheckConclusion {
+    if (
+        typeof conclusion !== 'string' ||
+        !Object.prototype.hasOwnProperty.call(checkConclusionMap, conclusion)
+    ) {
+        throw new UnknownCheckConclusionError(conclusion);
+    }
+    return checkConclusionMap[conclusion];
+}
+/** The commit status state of a check; a completed one without a known conclusion throws. */
+export function toGithubCommitStatusState(
+    status: CheckStatus,
+    conclusion: CheckConclusion | undefined,
+): GithubCommitStatusState {
+    if (status !== CheckStatus.COMPLETED) {
+        return 'pending';
+    }
+    toGithubCheckConclusion(conclusion);
+    return commitStatusStateMap[conclusion!];
+}
+
+/**
+ * Whether GitHub refused a commit status because the token may not write
+ * one: a 403 that is no rate limit, or the "Resource not accessible" refusal
+ * whatever its status. A bare 404, a rate limit, a 5xx or a network error can
+ * pass, and is worth a retry.
+ */
+export function isCommitStatusPermissionRefusal(error: unknown): boolean {
+    const status = (error as { status?: number })?.status;
+    const message = String((error as { message?: unknown })?.message ?? '');
+    const headers = (error as { response?: { headers?: Record<string, unknown> } })?.response?.headers ?? {};
+    const rateLimited =
+        classifyGitHubError(error) instanceof RateLimitError ||
+        /rate limit/i.test(message) ||
+        String(headers['x-ratelimit-remaining']) === '0' ||
+        headers['retry-after'] !== undefined;
+    if (rateLimited) return false;
+    return status === 403 || (status === 404 && /resource not accessible/i.test(message));
+}
+
+/** One line, cut to what GitHub accepts. */
+function cutDescription(description: string): string {
+    const line = description.replace(/\s+/g, ' ').trim();
+    return line.length <= COMMIT_STATUS_DESCRIPTION_MAX
+        ? line
+        : `${line.slice(0, COMMIT_STATUS_DESCRIPTION_MAX - 1)}…`;
+}
+
 export interface CompletedGithubCheckRun {
     id: number;
     conclusion: string;
@@ -344,7 +448,7 @@ export class GithubChecksService implements IChecksAdapter {
                 head_sha: headSha,
                 status: checkStatusMap[status] || GithubCheckStatus.IN_PROGRESS,
                 started_at: new Date().toISOString(),
-                output,
+                output: output && toGithubOutput(output),
             });
 
             this.logger.log({
@@ -378,6 +482,65 @@ export class GithubChecksService implements IChecksAdapter {
         }
     }
 
+    /**
+     * The check as a commit status (POST /repos/{owner}/{repo}/statuses/{sha}),
+     * which a personal access token can post: a classic one with `repo` or
+     * `repo:status`, a fine-grained one with "Commit statuses: write".
+     * https://docs.github.com/en/rest/commits/statuses#create-a-commit-status
+     */
+    async createCommitStatus(
+        params: CreateCommitStatusParams,
+    ): Promise<CommitStatusOutcome> {
+        const {
+            organizationAndTeamData,
+            repository,
+            sha,
+            context,
+            status,
+            conclusion,
+            description,
+            targetUrl,
+        } = params;
+
+        // Validated before any call: a completed status never falls back to green.
+        const state = toGithubCommitStatusState(status, conclusion);
+
+        try {
+            const octokit = await this.gitHubService.getAuthenticatedOctokit(
+                organizationAndTeamData,
+            );
+
+            await octokit.repos.createCommitStatus({
+                owner: repository.owner,
+                repo: repository.name,
+                sha,
+                state,
+                context,
+                description: cutDescription(description),
+                ...(targetUrl ? { target_url: targetUrl } : {}),
+            });
+
+            return 'posted';
+        } catch (error) {
+            // A permission refusal is customer-side and lasts until the token
+            // changes; anything else is the platform's, and can pass.
+            const missingPermission = isCommitStatusPermissionRefusal(error);
+            this.logger[missingPermission ? 'warn' : 'error']({
+                message: missingPermission
+                    ? 'Skipping GitHub commit status - the token cannot write commit statuses'
+                    : 'Failed to create GitHub commit status',
+                context: GithubChecksService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repository: repository.name,
+                    sha,
+                },
+            });
+            return missingPermission ? 'permission_missing' : 'failed';
+        }
+    }
+
     async updateCheckRun(params: UpdateCheckRunParams): Promise<boolean> {
         const {
             organizationAndTeamData,
@@ -388,6 +551,13 @@ export class GithubChecksService implements IChecksAdapter {
             output,
             conclusion,
         } = params;
+
+        // Validated before any call so a bad conclusion surfaces to the
+        // caller instead of being swallowed as a failed update.
+        const githubConclusion =
+            status === CheckStatus.COMPLETED || conclusion != null
+                ? toGithubCheckConclusion(conclusion)
+                : undefined;
 
         try {
             const authDetails = await this.gitHubService.getGithubAuthDetails(
@@ -424,14 +594,12 @@ export class GithubChecksService implements IChecksAdapter {
                 updateData.status =
                     checkStatusMap[status] || GithubCheckStatus.IN_PROGRESS;
             }
-            if (status === CheckStatus.COMPLETED || conclusion) {
-                updateData.conclusion =
-                    checkConclusionMap[conclusion] ||
-                    GithubCheckConclusion.SUCCESS;
+            if (githubConclusion) {
+                updateData.conclusion = githubConclusion;
             }
 
             if (output) {
-                updateData.output = output;
+                updateData.output = toGithubOutput(output);
             }
 
             if (name) {

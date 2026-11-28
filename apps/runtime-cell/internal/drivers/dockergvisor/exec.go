@@ -1,0 +1,153 @@
+package dockergvisor
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"path"
+	"regexp"
+	"strings"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
+)
+
+// An exec step (setup commands, the agent's look around, the repository's
+// tests) runs inside the workload's public service container: the sandbox
+// the PR's code already runs in, under runsc on the claim network, with the
+// app's toolchain and dependencies and its services by name. Nothing of the
+// request reaches a shell on the cell host. Like any exec output it is
+// evidence, never a verdict (ADR-053).
+
+type execTarget struct {
+	container string
+	dir       string
+}
+
+// execService is the container exec steps run in: the recipe's public
+// service, or the project's only service.
+func execService(projectDir string, containers map[string]dockercli.Container) (execTarget, bool) {
+	name := ""
+	if rec, err := recipe.Load(projectDir); err == nil && rec != nil {
+		name = rec.Services.Compose.Primary()
+	}
+	if name == "" && len(containers) == 1 {
+		for n := range containers {
+			name = n
+		}
+	}
+	c, ok := containers[name]
+	if !ok {
+		return execTarget{}, false
+	}
+	return targetOf(c), true
+}
+
+// targetOf runs commands in c, from its image's working directory.
+func targetOf(c dockercli.Container) execTarget {
+	dir := c.WorkingDir
+	if dir == "" || !path.IsAbs(dir) {
+		dir = "/"
+	}
+	return execTarget{container: c.ID, dir: dir}
+}
+
+// ErrNoExecService means the project names no service exec steps could run in.
+var ErrNoExecService = errors.New("dockergvisor: no service to run commands in (the recipe names no public service and the project has more than one)")
+
+// ErrNoRepositoryService means no service of the project is built from the repository a command names.
+var ErrNoRepositoryService = errors.New("dockergvisor: no service of the project is built from repository")
+
+// ErrNoServiceTarget means a command named a compose service the project does not run.
+var ErrNoServiceTarget = errors.New("dockergvisor: the project has no such service to run the command in")
+
+// execGrace is how much longer the docker client may run than the command:
+// timeout(1) in the sandbox stops the command first.
+const execGrace = 5_000
+
+var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
+// Exec runs the request in the workload's public service container, or in
+// the container of the compose service it names (Request.Service). cwd is
+// relative to that container's working directory and stays inside it.
+func (d *Driver) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.Request) (kodyexec.Result, error) {
+	if _, err := d.owned(ctx, ref.MachineID); err != nil {
+		return kodyexec.Result{}, err
+	}
+	m := d.peek(ref.MachineID)
+	at := m.exec
+	if req.Repository != "" {
+		// A command on another repository's code of the workspace runs where that code was built.
+		t, ok := m.repoExec[req.Repository]
+		if !ok {
+			return kodyexec.Result{}, fmt.Errorf("%w: %s", ErrNoRepositoryService, req.Repository)
+		}
+		at = &t
+	}
+	if req.Service != "" {
+		// A command on a compose service runs in that service's container: a service the project does not have is an error, never the public one.
+		t, ok := m.targets[req.Service]
+		if !ok {
+			return kodyexec.Result{}, fmt.Errorf("%w: %s", ErrNoServiceTarget, req.Service)
+		}
+		at = &t
+	}
+	if at == nil {
+		return kodyexec.Result{}, ErrNoExecService
+	}
+	dir, err := inside(at.dir, req.Cwd)
+	if err != nil {
+		return kodyexec.Result{}, err
+	}
+	for _, kv := range req.Env {
+		if !envKey.MatchString(kv) {
+			return kodyexec.Result{}, fmt.Errorf("dockergvisor: env %q is not KEY=VALUE", strings.SplitN(kv, "=", 2)[0])
+		}
+	}
+	return d.execIn(ctx, execTarget{container: at.container, dir: dir}, req), nil
+}
+
+// execIn runs req in the container at, from at.dir, under its timeout in
+// the sandbox and a little longer on the docker client.
+//
+// This is an environment machine's exec path on the gvisor backend, and the
+// seam where the guest agent takes over (docs/runtime/isolation-architecture.md
+// C4): on a microVM the guest agent runs in the VM, next to the project's
+// Docker, and the cell sends it the same exec op over vsock
+// (isolation.Backend.DialGuest), which runs it in the service's container.
+// On gVisor the services are the host's containers, so the guest agent
+// would have to enter the customer's own image to serve them; that changes
+// what runs, and docker exec stays until then.
+func (d *Driver) execIn(ctx context.Context, at execTarget, req kodyexec.Request) kodyexec.Result {
+	timeout := req.TimeoutMs
+	if timeout <= 0 {
+		timeout = 60_000
+	}
+	host := req
+	host.TimeoutMs = timeout + execGrace
+	inSandbox := req
+	inSandbox.TimeoutMs = timeout
+	res := d.d.Exec(ctx, dockercli.ExecSpec{Container: at.container, Dir: at.dir, Env: req.Env}, inSandbox, host)
+	// timeout -s KILL in the sandbox: the command ran out its time.
+	if !res.TimedOut && res.ExitCode == 137 && res.DurationMs >= timeout {
+		res.TimedOut, res.ExitCode = true, kodyexec.TimeoutExitCode
+	}
+	return res
+}
+
+// inside joins rel to base, refusing anything that leaves base.
+func inside(base, rel string) (string, error) {
+	if rel == "" {
+		return base, nil
+	}
+	if path.IsAbs(rel) {
+		return "", fmt.Errorf("dockergvisor: cwd %q is not relative to the workspace", rel)
+	}
+	p := path.Join(base, rel)
+	if p != base && !strings.HasPrefix(p, strings.TrimSuffix(base, "/")+"/") {
+		return "", fmt.Errorf("dockergvisor: cwd %q leaves the workspace", rel)
+	}
+	return p, nil
+}

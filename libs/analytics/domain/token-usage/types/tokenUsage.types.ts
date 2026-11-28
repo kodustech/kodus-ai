@@ -51,6 +51,31 @@ export interface BaseUsageContract {
     byTier?: TierUsage[];
 }
 
+/**
+ * The Kody Runtime's usage spans (`attributes.tu.route = 'runtime'`) of one
+ * org in a window, optionally only some Runs. Read in the byok=false view
+ * (every non-system span), so BYOK and managed calls are both counted, each
+ * with its `isByok`.
+ */
+export type RuntimeTokenUsageQueryContract = {
+    organizationId: string;
+    start: Date;
+    end: Date;
+    /** Only these Runs (`attributes.runId`); absent: every Runtime span of the window. */
+    runIds?: string[];
+};
+
+/** One Runtime bucket: a Run (or setup scope), the agent that spent it, where, the model, BYOK or not. */
+export interface RuntimeUsageRowContract extends BaseUsageContract {
+    runId?: string;
+    agentName?: string;
+    task?: string;
+    runName?: string;
+    repositoryId?: string;
+    environmentId?: string;
+    isByok: boolean;
+}
+
 export type UsageSummaryContract = BaseUsageContract;
 
 export interface DailyUsageResultContract extends BaseUsageContract {

@@ -1,0 +1,6 @@
+{
+    "name": "pricing-api",
+    "private": true,
+    "scripts": { "build": "nest build", "start": "node dist/main.js" },
+    "dependencies": { "@nestjs/common": "^11.0.0", "@nestjs/core": "^11.0.0", "@nestjs/platform-express": "^11.0.0", "reflect-metadata": "^0.2.2", "rxjs": "^7.8.1" }
+}

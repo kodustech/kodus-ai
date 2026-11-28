@@ -1,0 +1,18 @@
+{
+  "name": "preview-tunnel-ip-literal",
+  "message": {
+    "v": 1,
+    "id": "8a1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "type": "preview.tunnel",
+    "body": {
+      "url": "wss://169.254.169.254/v1/cells/tunnel",
+      "ticket": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "expiresAt": "2026-11-12T12:01:00Z"
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

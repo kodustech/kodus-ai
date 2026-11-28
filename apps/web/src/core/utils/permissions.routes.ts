@@ -34,7 +34,16 @@ export const resourceRoutes: Partial<Record<ResourceType, string[]>> = {
     [ResourceType.CliReview]: ["/cli-reviews/*"],
     [ResourceType.SecurityScan]: ["/deep-scan/*"],
     [ResourceType.Issues]: ["/issues/*"],
-    [ResourceType.CodeReviewSettings]: ["/settings/code-review/*"],
+    [ResourceType.CodeReviewSettings]: [
+        "/settings/code-review/*",
+        // Kody Runtime settings are per-repository settings (when it runs,
+        // who may ask @kody runtime); the screen gates each control, and the
+        // organization-wide sections need OrganizationSettings.
+        "/runtime/settings/*",
+    ],
+    // Kody Runtime screens. `/runtime` itself only redirects to the Runs.
+    [ResourceType.RuntimeRun]: ["/runtime", "/runtime/runs/*"],
+    [ResourceType.RuntimeEnvironment]: ["/runtime/environments/*"],
     [ResourceType.OrganizationSettings]: [
         "/organization/*",
         "/byok/*",

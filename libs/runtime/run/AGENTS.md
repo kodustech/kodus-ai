@@ -1,0 +1,101 @@
+# libs/runtime/run
+
+The Run and the setup as both sides of the queue see them: the outbox messages between the product and the Runtime, the Run's state machine and verdict, the report and projection the product renders, the sealed tokens, and the setup record. Domain rules and schemas, used by the runtime-worker and the hub, the product API and worker, the publisher and the web (types and the replay lanes). See [`libs/runtime/README.md`](../README.md) "run" and "Reproduction data".
+
+## Owns
+- Outbox messages: `run-messages.ts` (`RuntimeRunRequestedSchema`, `RuntimeRunCancelRequestedSchema`, `RuntimePullRequestObservedSchema`, `RuntimePublishRequestedSchema`, the exchange, queues and routing keys, `runtimeOutboxMessage`, `MAX_DIFF_BYTES`).
+- The Run's states and verdict: `run-state.ts` `canTransition`, `assertTransition`, `decideRunVerdict`, `checkConclusionFor`.
+- The suite's part of a Run (docs/runtime/e2e-suites.md sections 10.1 and 10.2): `suite-publish.ts` (`RuntimeSuitePublishRequestedSchema`, `SUITE_PUBLISH_EVENT`, `suitePublishKey`, `suitePublishEnvelope`: the suite's own check travels the publish queue under its own event name, with a structured `SuiteReport` and the `targetId` the product stored), `suite-verdict.ts` (`suiteFindingsOf`: a regression is a finding of kind `e2e_regression`; `suiteUnclassifiedCount`, which `decideRunVerdict` reads as `suiteUnclassified`: undecided failures make a green Run `partly_tested`, never `no_regressions`).
+- Which changed lines ran: `exercised-lines.ts` `exercisedSummaryOf` (measured files summed, unknown ones in neither count), `exercisedShortfall` ("N of M changed lines ran" below the threshold: a green Run becomes partly tested in `decideRunVerdict`, nothing else changes), `exercisedFact`; the report's `exercised` (`ReportExercisedSchema`).
+- What the product shows: `run-report.ts` (`RuntimeRunReportSchema`, `RuntimeRunProgressSchema`), `replay-lanes.ts` `replayLanesOf`, `response-diff.ts` `responseDiffOf`, `leaf-changes.ts` `leafChanges` (the leaves that differ inside an object or array field of a finding, computed after the gate from its two stored values: cleaned, secret keys redacted, 200 leaves and depth 16 at most; a pure reorder is one change), `boot-failure.ts` `bootFailureOf`, `reproduction.ts` `reproductionFor`, `reproductionManifest`.
+- The projection and stream contracts: `run-projection.ts` (`RunProjectionReader`, `RunProjectionStore`, `LIVE_RUN_STATES`), `run-stream.ts` (`RunStreamStore`, opaque offsets).
+- The PR title a Run keeps for display: `pr-title.ts` `displayPrTitle` (one line, no control or bidi characters, at most 256 characters; the projection's `prTitle`, in `report`).
+- Sealed tokens: `sealed-secret.ts` `sealSecret`, `openSecret`, `isSealedSecret`, `sealingKeyFrom` (AES-256-GCM, bound by AAD to the Run id or the setup command key).
+- The setup and its recipe: `environment-setup.ts`, `recipe.ts` `parseRecipeSummary`, `recipe-inference.ts` `inferRecipe` (a recipe from root files, no LLM), `recipe-resources.ts`, `recipe-author-version.ts` `RECIPE_AUTHOR_VERSION`, `run-workspace.ts` (the repositories of a multi-repo claim), `setup-repo-tokens.ts`.
+- Postgres stores and the file stream: `adapters/` ([its AGENTS.md](adapters/AGENTS.md)); in-memory doubles: `testing/`.
+
+## Does not own
+- One probe's verdict: `libs/runtime/gate`. Entry points and coverage: `libs/runtime/entry-points`.
+- Running the workflow and writing the projection: `apps/runtime/src/worker/run/`. The wording of the check and comment: `libs/runtime-publish`.
+
+## Rules and limits
+- A halted Run never maps to `success`; success needs a `not_reproduced` or `new_endpoint` on every entry point and an untruncated diff ([`AGENTS.md`](../AGENTS.md) "The gate fails closed"). Every change to `decideRunVerdict` or `checkConclusionFor` comes with a case in `run.spec.ts`.
+- `repoToken` and `runToken` are refused unless sealed; a token is opened only inside the step that uses it.
+- No agent or app prose reaches the PR through the report; values in lanes, diffs and boot failures are redacted and cut.
+- The diff is capped at 16 MiB and carries `diffTruncated`.
+- `pullRequest.title` is the author's untrusted text: the intent classifier reads it as data, and the projection keeps only `displayPrTitle` of it, shown as text and never interpreted.
+- `decideRunVerdict` `identityMismatch`: the two sides' claims did not carry the same drawn identity (S-36); the Run is partly tested at best, as with `diffTruncated`.
+- A partly tested check (owner decision of 2026-11-18): `action_required` when something is left to decide, `neutral` only for `nothingToTest` (no entry point, no probe, no forced cause) or when the request carries the org's `partlyTestedCheck: 'neutral'`. `prEgressDenied` (a PR boot the egress proxy stopped) is `action_required` whatever the org chose. `libs/runtime-publish` `checkOf` reads the same fields from the report; change both together.
+- `index.ts` re-exports `adapters/file-run-stream.store.ts` (`fs`) from the barrel of this pure module, and the API module takes `FileRunStreamStore` from it.
+- `run-stream.ts`'s header says the hub writes the stream to an object store; the hub writes Postgres (`adapters/pg-run-stream.store.ts`) or a local file.
+
+## Where new code goes
+- A new message field: its schema in `run-messages.ts`, the builder (`api/application/run-request-builder.service.ts`) and the worker's reader in the same PR; keep old messages parsing.
+- A new Run state: `RUN_STATES`, its transitions, `checkConclusionFor`, the telemetry taxonomy, and the web's labels.
+
+## Tests
+- `node node_modules/jest/bin/jest.js --runInBand libs/runtime/run` (pure; the Postgres specs in `adapters/` skip without `RUNTIME_IT_DATABASE_URL`).
+
+<!-- module-map:start (generated by scripts/runtime/module-docs.mjs; do not edit) -->
+
+## Module map
+
+Files (24, tests apart): `boot-failure.ts`, `build-inputs.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `leaf-changes.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`, `suite-publish.ts`, `suite-verdict.ts`
+
+Imports these Runtime modules:
+
+- [`libs/runtime/blockers`](../blockers/AGENTS.md)
+- [`libs/runtime/contracts`](../contracts/AGENTS.md)
+- [`libs/runtime/entry-points`](../entry-points/AGENTS.md)
+- [`libs/runtime/probe`](../probe/AGENTS.md)
+- [`libs/runtime/protocol`](../protocol/AGENTS.md)
+- [`libs/runtime/redaction`](../redaction/AGENTS.md)
+- [`libs/runtime/run/adapters`](adapters/AGENTS.md)
+- [`libs/runtime/suite`](../suite/AGENTS.md)
+
+Imported by:
+
+- [`apps/runtime/src/e2e`](../../../apps/runtime/src/e2e/AGENTS.md)
+- [`apps/runtime/src/fleet`](../../../apps/runtime/src/fleet/AGENTS.md)
+- [`apps/runtime/src/fleet/template`](../../../apps/runtime/src/fleet/template/AGENTS.md)
+- [`apps/runtime/src/hub`](../../../apps/runtime/src/hub/AGENTS.md)
+- [`apps/runtime/src/hub/claims`](../../../apps/runtime/src/hub/claims/AGENTS.md)
+- [`apps/runtime/src/hub/http`](../../../apps/runtime/src/hub/http/AGENTS.md)
+- [`apps/runtime/src/shared`](../../../apps/runtime/src/shared/AGENTS.md)
+- [`apps/runtime/src/shared/admission`](../../../apps/runtime/src/shared/admission/AGENTS.md)
+- [`apps/runtime/src/shared/persistence`](../../../apps/runtime/src/shared/persistence/AGENTS.md)
+- [`apps/runtime/src/testing`](../../../apps/runtime/src/testing/AGENTS.md)
+- [`apps/runtime/src/worker`](../../../apps/runtime/src/worker/AGENTS.md)
+- [`apps/runtime/src/worker/agent`](../../../apps/runtime/src/worker/agent/AGENTS.md)
+- [`apps/runtime/src/worker/commands`](../../../apps/runtime/src/worker/commands/AGENTS.md)
+- [`apps/runtime/src/worker/consumer`](../../../apps/runtime/src/worker/consumer/AGENTS.md)
+- [`apps/runtime/src/worker/dbos`](../../../apps/runtime/src/worker/dbos/AGENTS.md)
+- [`apps/runtime/src/worker/env`](../../../apps/runtime/src/worker/env/AGENTS.md)
+- [`apps/runtime/src/worker/env-session`](../../../apps/runtime/src/worker/env-session/AGENTS.md)
+- [`apps/runtime/src/worker/intent`](../../../apps/runtime/src/worker/intent/AGENTS.md)
+- [`apps/runtime/src/worker/preview`](../../../apps/runtime/src/worker/preview/AGENTS.md)
+- [`apps/runtime/src/worker/publish`](../../../apps/runtime/src/worker/publish/AGENTS.md)
+- [`apps/runtime/src/worker/run`](../../../apps/runtime/src/worker/run/AGENTS.md)
+- [`apps/runtime/src/worker/secrets`](../../../apps/runtime/src/worker/secrets/AGENTS.md)
+- [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
+- [`libs/runtime-publish/application`](../../runtime-publish/application/AGENTS.md)
+- [`libs/runtime-publish/domain`](../../runtime-publish/domain/AGENTS.md)
+- [`libs/runtime-publish/infrastructure`](../../runtime-publish/infrastructure/AGENTS.md)
+- [`libs/runtime/api`](../api/AGENTS.md)
+- [`libs/runtime/api/application`](../api/application/AGENTS.md)
+- [`libs/runtime/api/application/recipe-author`](../api/application/recipe-author/AGENTS.md)
+- [`libs/runtime/api/application/use-cases`](../api/application/use-cases/AGENTS.md)
+- [`libs/runtime/api/domain`](../api/domain/AGENTS.md)
+- [`libs/runtime/api/infrastructure`](../api/infrastructure/AGENTS.md)
+- [`libs/runtime/blockers`](../blockers/AGENTS.md)
+- [`libs/runtime/contracts`](../contracts/AGENTS.md)
+- [`libs/runtime/contracts/views`](../contracts/views/AGENTS.md)
+- [`libs/runtime/gate`](../gate/AGENTS.md)
+- [`libs/runtime/health`](../health/AGENTS.md)
+- [`libs/runtime/planner`](../planner/AGENTS.md)
+- [`libs/runtime/run/adapters`](adapters/AGENTS.md)
+- [`libs/runtime/run/testing`](testing/AGENTS.md)
+- [`libs/runtime/telemetry`](../telemetry/AGENTS.md)
+
+<!-- module-map:end -->

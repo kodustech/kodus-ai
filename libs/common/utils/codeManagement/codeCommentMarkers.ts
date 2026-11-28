@@ -22,6 +22,12 @@ const EXACT_MARKERS = [
  */
 const PATTERN_MARKERS = [
     /@?kody\s+(start(-review)?|review)\b|start-review/i,
+    // The `@kody runtime` command itself, anchored: a human thread that only
+    // mentions "Kody Runtime" stays in what the review reads.
+    /^\s*@kody\s+runtime(?=\s|$)/i,
+    // The Kody Runtime's own comments and replies (`<!-- kody-runtime:comment -->`,
+    // `<!-- kody-runtime:comment env=… -->`, `<!-- kody-runtime:skipped:… -->`).
+    /<!--\s*kody-runtime:/i,
 ] as const;
 
 /**
@@ -60,6 +66,19 @@ export const KODY_REVIEW_COMMAND_PATTERN =
 export const KODY_REVIEW_MARKER_PATTERN = /<!--\s*kody-codereview\s*-->/i;
 export const KODY_MENTION_NON_REVIEW_PATTERN =
     /^\s*@kody\b(?!\s+(start-review|review)(?=\s|$))/i;
+
+/**
+ * Kody Runtime on-demand trigger (`@kody runtime`). Not a review command: the
+ * GitHub handler hands it to the Runtime trigger (PR 2), which checks who
+ * asked and starts a Run, when the repository is in a Runtime environment.
+ * Anywhere else it stays what it was before the Runtime: a chat mention.
+ */
+export const KODY_RUNTIME_COMMAND_PATTERN = /^\s*@kody\s+runtime(?=\s|$)/i;
+
+export const isRuntimeCommand = (text: string | undefined | null): boolean => {
+    if (!text) return false;
+    return KODY_RUNTIME_COMMAND_PATTERN.test(text);
+};
 
 /**
  * Force re-review flag. Customers add `--force` to bypass the "no new

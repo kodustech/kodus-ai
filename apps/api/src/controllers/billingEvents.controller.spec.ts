@@ -135,6 +135,9 @@ describe('BillingEventsController (HTTP)', () => {
             }),
         );
         await app.init();
+        // Listen on 127.0.0.1 before supertest does: its own listen(0) binds every interface and dials 127.0.0.1, where
+        // another process on this machine may hold the same port and answer instead (a 404 or 401 from someone else).
+        await app.listen(0, '127.0.0.1');
     });
 
     afterEach(async () => {

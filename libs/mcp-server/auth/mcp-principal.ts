@@ -18,6 +18,8 @@ export type McpPrincipal =
           kind: 'team-key';
           organizationId: string;
           teamId: string;
+          /** The key row (quota and audit of /mcp/env name it, never the key itself). */
+          keyId?: string;
           config?: ITeamCliKeyConfig;
       };
 

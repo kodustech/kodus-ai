@@ -10,11 +10,9 @@ import {
 import { PipelineObserverContext } from '../interfaces/pipeline-observer.interface';
 import { ChecksAdapterFactory } from './checks-adapter.factory';
 
-// Single stable check-run name for every pipeline execution. The platform
-// groups check runs by (name, head_sha) and only surfaces the most recent
-// one, so a stable name guarantees one check per commit whose status is
-// always the latest run's outcome — state lives in title/summary instead.
-export const KODY_CHECK_RUN_NAME = 'Kody Code Review';
+import { KODY_CHECK_RUN_NAME } from '../interfaces/checks-adapter.interface';
+
+export { KODY_CHECK_RUN_NAME };
 
 export const checkStageMap = {
     _pipelineStart: {

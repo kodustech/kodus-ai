@@ -385,6 +385,12 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     sandboxSuperseded?: boolean;
 
     /**
+     * Why the review has no sandbox when it is a capacity matter (the wait for
+     * one outlasted SANDBOX_QUEUE_MAX_WAIT_MS). Shown in the SANDBOX_UNAVAILABLE
+     * warning so the admin sees "waited N min for capacity", not a mystery.
+     */
+    sandboxUnavailableReason?: string;
+    /**
      * Why the review has no sandbox, in words for the team, when the reason
      * is theirs to act on: today only a Git host that refused Kodus's shared
      * network for a team without the fixed outbound IP. The "sandbox

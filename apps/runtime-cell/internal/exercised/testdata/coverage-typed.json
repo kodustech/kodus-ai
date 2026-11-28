@@ -1,0 +1,73 @@
+{
+ "result": [
+  {
+   "scriptId": "3",
+   "url": "file:///app/dist/typed.js",
+   "functions": [
+    {
+     "functionName": "",
+     "ranges": [
+      {
+       "startOffset": 0,
+       "endOffset": 255,
+       "count": 1
+      }
+     ],
+     "isBlockCoverage": true
+    },
+    {
+     "functionName": "ran",
+     "ranges": [
+      {
+       "startOffset": 119,
+       "endOffset": 156,
+       "count": 1
+      }
+     ],
+     "isBlockCoverage": true
+    },
+    {
+     "functionName": "never",
+     "ranges": [
+      {
+       "startOffset": 157,
+       "endOffset": 213,
+       "count": 0
+      }
+     ],
+     "isBlockCoverage": true
+    }
+   ]
+  }
+ ],
+ "source-map-cache": {
+  "file:///app/dist/typed.js": {
+   "url": "typed.js.map",
+   "data": {
+    "version": 3,
+    "file": "typed.js",
+    "sourceRoot": "",
+    "sources": [
+     "../src/typed.ts"
+    ],
+    "names": [],
+    "mappings": ";;AAAA,kBAEC;AAED,sBAGC;AAPD,SAAgB,GAAG,CAAC,CAAS;IAC3B,OAAO,CAAC,GAAG,CAAC,CAAC;AACf,CAAC;AAED,SAAgB,KAAK,CAAC,CAAS;IAC7B,MAAM,CAAC,GAAW,CAAC,GAAG,CAAC,CAAC;IACxB,OAAO,CAAC,CAAC;AACX,CAAC;AAED,GAAG,CAAC,CAAC,CAAC,CAAC"
+   },
+   "lineLengths": [
+    13,
+    62,
+    18,
+    22,
+    17,
+    17,
+    1,
+    19,
+    20,
+    13,
+    1,
+    7,
+    33
+   ]
+  }
+ }
+}

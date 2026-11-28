@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RuntimeRoutingSection } from "@components/runtime/repository-runtime-settings";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
@@ -29,9 +30,11 @@ import {
 } from "react-hook-form";
 import {
     useCodeReviewModelData,
+    useFeatureFlags,
     useInitialTeamId,
 } from "src/app/(app)/settings/_components/context";
 import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
+import { isReleasedTo } from "src/core/config/feature-flags";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 import { PerRepositoryPanel } from "src/features/ee/byok/_components/per-repository-panel";
@@ -224,6 +227,12 @@ function RoutingSettings() {
     );
     const canEditModels = canCreateModels && canReadModels;
     const globalScope = repositoryId === "global" && !directoryId;
+    // Kody Runtime is an alpha: the section is for orgs it is released to, and for whoever may edit this scope's settings.
+    // A directory has no Runtime settings of its own, so it shows none.
+    const showRuntime =
+        isReleasedTo("kodyRuntime", useFeatureFlags()) &&
+        canEdit &&
+        !directoryId;
     const ultraInUse = useUltraModeInUse();
     const organization = useOrganizationRouting({
         ultraInUse,
@@ -777,6 +786,9 @@ function RoutingSettings() {
                             }),
                         )}
                     />
+                )}
+                {showRuntime && (
+                    <RuntimeRoutingSection repositoryId={repositoryId} />
                 )}
             </Page.Content>
         </Page.Root>

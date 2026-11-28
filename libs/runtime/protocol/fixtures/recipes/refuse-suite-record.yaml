@@ -1,0 +1,5 @@
+version: 1
+suite:
+  runner: cypress
+  command: npx cypress run --record --spec "{specs}"
+  specs: "cypress/e2e/**/*.cy.ts"

@@ -1,0 +1,2 @@
+version: 1
+limits: { cpu: 2, memory: 4096mb }

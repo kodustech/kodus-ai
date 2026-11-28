@@ -1,0 +1,14 @@
+version: 1
+services:
+  compose:
+    files: [compose.yaml]
+    public: web
+    health: /health
+    health_timeout: 90s
+    env: { WEB_PORT: "8080" }
+  expose:
+    - { service: web, port: 8080, kind: http }
+    - { service: db, port: 5432, kind: postgres }
+data:
+  seed: { service: db, sql: seed.sql }
+  reset: recreate

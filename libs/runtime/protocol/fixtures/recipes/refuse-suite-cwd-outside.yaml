@@ -1,0 +1,6 @@
+version: 1
+suite:
+  runner: playwright
+  command: npx playwright test {specs}
+  cwd: ../elsewhere
+  specs: "tests/**/*.spec.ts"

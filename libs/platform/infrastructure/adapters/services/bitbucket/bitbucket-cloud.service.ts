@@ -2957,6 +2957,8 @@ export class BitbucketCloudService implements Omit<
         prNumber: number;
         commentId: number;
         body: any;
+        /** Throw the failure (with its HTTP status) instead of answering null. */
+        failOnError?: boolean;
     }): Promise<any | null> {
         try {
             const {
@@ -3015,6 +3017,7 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
+            if (params.failOnError) throw error;
             return null;
         }
     }

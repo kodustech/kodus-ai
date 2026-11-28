@@ -1,3 +1,4 @@
+import { getGlobalLogger, LogLevel } from '@langfuse/core';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 import {
     getActiveTraceId,
@@ -46,6 +47,19 @@ function installBeforeExitFlush(): void {
 }
 
 /**
+ * Caps the Langfuse SDK's console logger at INFO. At DEBUG
+ * (`LANGFUSE_DEBUG=true` or `LANGFUSE_LOG_LEVEL=DEBUG`) its span processor
+ * prints every ended span with all its attributes — the prompt
+ * (`gen_ai.input.messages`) and the model's answer (`gen_ai.output.messages`),
+ * which carry customer repository content — to the process's plain logs. The
+ * spans still go to Langfuse whole; only the console copy is dropped.
+ */
+export function keepSpanContentOutOfLogs(): void {
+    const logger = getGlobalLogger();
+    if (logger.isLevelEnabled(LogLevel.DEBUG)) logger.setLevel(LogLevel.INFO);
+}
+
+/**
  * Build (and cache) the `LangfuseSpanProcessor` without registering it on a
  * TracerProvider. The processor must be wired into the global provider by
  * the caller — either via `Sentry.init({ openTelemetrySpanProcessors })`
@@ -65,6 +79,8 @@ function installBeforeExitFlush(): void {
 export function createLangfuseSpanProcessor(): LangfuseSpanProcessor | null {
     if (spanProcessor) return spanProcessor;
     if (!shouldTrace()) return null;
+
+    keepSpanContentOutOfLogs();
 
     spanProcessor = new LangfuseSpanProcessor({
         environment:

@@ -1,0 +1,5 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    env: { NODE_OPTIONS: "--require=/tmp/x.js" }

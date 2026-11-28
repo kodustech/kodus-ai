@@ -1,0 +1,46 @@
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.31kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:20-bookworm
+#2 DONE 1.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 312B done
+#3 DONE 0.0s
+
+#4 [base 1/7] FROM docker.io/library/node:20-bookworm@sha256:0f3e2b1a9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f
+#4 resolve docker.io/library/node:20-bookworm@sha256:0f3e2b1a9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f 0.0s done
+#4 DONE 0.1s
+
+#5 [internal] load build context
+#5 transferring context: 2.31MB 3.9s done
+#5 DONE 4.0s
+
+#6 [base 2/7] WORKDIR /app
+#6 CACHED
+
+#7 [base 3/7] COPY package.json yarn.lock .yarnrc.yml ./
+#7 CACHED
+
+#8 [base 4/7] RUN --mount=type=cache,target=/root/.yarn/berry/cache NODE_OPTIONS=--max-old-space-size=4096 yarn install --immutable
+#8 CACHED
+
+#9 [base 5/7] COPY . .
+#9 DONE 9.8s
+
+#10 [base 6/7] RUN yarn build --filter=web
+#10 DONE 96.4s
+
+#11 [base 7/7] RUN set -eux; rm -rf /tmp/*
+#11 DONE 1.0s
+
+#12 exporting to image
+#12 exporting layers 31.6s done
+#12 exporting manifest sha256:a6527ff1b1bf5e415e7a22fee21ac778adca42adfc24844a9c02e81d1d30457a
+#12 exporting manifest sha256:a6527ff1b1bf5e415e7a22fee21ac778adca42adfc24844a9c02e81d1d30457a 0.0s done
+#12 exporting config sha256:78763e482d20bbf62f59ffb69555c070a881b71a80bc614984133eb589c0a028 0.0s done
+#12 pushing layers 6.2s done
+#12 pushing manifest for 10.213.7.8:5000/b-web-3f2a1c9d:m-claim-1@sha256:a6527ff1b1bf5e415e7a22fee21ac778adca42adfc24844a9c02e81d1d30457a
+#12 pushing manifest for 10.213.7.8:5000/b-web-3f2a1c9d:m-claim-1@sha256:a6527ff1b1bf5e415e7a22fee21ac778adca42adfc24844a9c02e81d1d30457a 0.0s done
+#12 DONE 37.9s

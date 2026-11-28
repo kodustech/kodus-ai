@@ -52,6 +52,11 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as bodyParser from 'body-parser';
+import { runtimeA2AJsonParser } from '@libs/runtime/api/infrastructure/a2a/a2a-body-parser';
+import {
+    runtimeModelTurnJsonParser,
+    runtimePlannerSourceJsonParser,
+} from '@libs/runtime/api/infrastructure/worker-rpc-body-parser';
 import * as compression from 'compression';
 import { useContainer } from 'class-validator';
 import expressRateLimit from 'express-rate-limit';
@@ -186,6 +191,9 @@ async function bootstrap() {
                 }),
             );
         }
+        app.use('/runtime/a2a', ...runtimeA2AJsonParser());
+        app.use('/internal/runtime/model-turn', ...runtimeModelTurnJsonParser());
+        app.use('/internal/runtime/planner-source', ...runtimePlannerSourceJsonParser());
         app.use(bodyParser.json({ limit: '25mb' }));
         app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
         app.set('trust proxy', 1);

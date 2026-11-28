@@ -17,14 +17,22 @@ import {
     buildReviewDeepLinkUrl,
     usePrefetchPullRequestReview,
     type CodeReviewTimelineItem,
+    type PullRequestExecution,
     type ReviewWarning,
     type ReviewWarningKind,
 } from "@services/pull-requests";
+import type {
+    PrRuntime,
+    PrRuntimeCell,
+} from "@services/runtime/model/pull-request-runs";
 import {
     AlertTriangleIcon,
     ArrowRightIcon,
     CheckIcon,
     ChevronDownIcon,
+    CircleCheckIcon,
+    CircleDashedIcon,
+    CircleXIcon,
     ClockIcon,
     ExternalLinkIcon,
     FilterIcon,
@@ -32,16 +40,35 @@ import {
     GitBranchIcon,
     GitPullRequestIcon,
     MessageSquareIcon,
+    PlayIcon,
     UserIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
+import { PrCommitTimeline, reviewOutcome } from "./pr-commit-timeline";
+import { PrRuntimeColumn } from "./pr-runtime";
 import { latestReviewMode, ReviewModeTag } from "./review-mode-tag";
 import { getSpecialists, SpecialistAgentsTable } from "./specialist-agents";
 import type { PullRequestExecutionGroup } from "./types";
 
+/** The Runtime state of one row: what the viewer may read, and the page's answer for this PR. */
+export interface PrRowRuntime {
+    /** The viewer may read Runtime Runs of this PR's repository. */
+    canRead: boolean;
+    data?: PrRuntime;
+    /** Absent while the page's Runtime state loads. */
+    cell?: PrRuntimeCell;
+    /** Asks again for the Runtime state that could not be read. */
+    retry?: () => void;
+}
+
 interface PrListItemProps {
     group: PullRequestExecutionGroup;
+    /** The team the list reads: the expanded row fetches the branch's commits with it. */
+    teamId?: string;
+    /** The table has a Runtime column; absent for viewers who read no Runtime Runs. */
+    showRuntime?: boolean;
+    runtime?: PrRowRuntime;
 }
 
 // Shared column template for the collapsed row AND the table header in
@@ -55,6 +82,10 @@ interface PrListItemProps {
 // header share this template, so they stay aligned.
 export const PR_ROW_GRID =
     "grid grid-cols-[1.25rem_minmax(0,1fr)_8rem_6.5rem_8.5rem] items-center gap-x-4";
+// The same template with the Runtime column between suggestions and status,
+// for viewers who may read Runtime Runs.
+export const PR_ROW_GRID_WITH_RUNTIME =
+    "grid grid-cols-[1.25rem_minmax(0,1fr)_8rem_6.5rem_11rem_8.5rem] items-center gap-x-4";
 
 const formatDateTime = (dateString: string, timezone: string | null) => {
     const tz = timezone || "UTC";
@@ -242,23 +273,6 @@ const getStatusBadge = (status: string, errorMessage?: string | null) => {
     }
 };
 
-const getTimelineStatusColor = (status: string) => {
-    switch (status) {
-        case "success":
-            return "bg-success border-success";
-        case "error":
-            return "bg-error border-error";
-        case "in_progress":
-            return "bg-in-progress border-in-progress";
-        case "skipped":
-            return "bg-card-lv2 border-border";
-        case "partial_error":
-            return "bg-warning border-warning";
-        default:
-            return "bg-card-lv2 border-border";
-    }
-};
-
 const formatStageName = (raw: string) => {
     return raw
         .replace(/Stage$/i, "")
@@ -427,8 +441,14 @@ const isAutomationStartMessage = (message: string) => {
     return m.includes("automation") && m.includes("start");
 };
 
-export const PrListItem = ({ group }: PrListItemProps) => {
+export const PrListItem = ({
+    group,
+    teamId,
+    showRuntime,
+    runtime,
+}: PrListItemProps) => {
     const { latest, executions, reviewCount } = group;
+    const grid = showRuntime ? PR_ROW_GRID_WITH_RUNTIME : PR_ROW_GRID;
     const timezone = useGetTimezone();
     const prefetchReview = usePrefetchPullRequestReview();
     // Warm the review screen's blocking query on intent (hover/focus of a link
@@ -452,9 +472,6 @@ export const PrListItem = ({ group }: PrListItemProps) => {
               ? "border-l-warning/70"
               : "border-l-transparent";
     const [isOpen, setIsOpen] = useState(false);
-    const [collapsedReviews, setCollapsedReviews] = useState<Set<number>>(
-        () => new Set(executions.slice(1).map((_, i) => i + 1)),
-    );
     const prUrl = buildPullRequestUrl(latest);
     // The review screen already deep-links to a finding via
     // `?file=<path>&suggestion=<id>` (scrolls to it and lights it up). The list
@@ -467,18 +484,6 @@ export const PrListItem = ({ group }: PrListItemProps) => {
         latest.firstSentSuggestion,
     );
 
-    const toggleReview = (index: number) => {
-        setCollapsedReviews((prev) => {
-            const next = new Set(prev);
-            if (next.has(index)) {
-                next.delete(index);
-            } else {
-                next.add(index);
-            }
-            return next;
-        });
-    };
-
     return (
         <div
             className={cn("border-card-lv3/30 border-b border-l-2", rowAccent)}>
@@ -487,7 +492,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                 tabIndex={0}
                 className={cn(
                     "cursor-pointer px-5 py-3",
-                    PR_ROW_GRID,
+                    grid,
                     isOpen
                         ? "bg-card-lv2/40 hover:bg-card-lv2/50"
                         : "hover:bg-card-lv1/70",
@@ -516,10 +521,11 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                 Pull request number
                             </TooltipContent>
                         </Tooltip>
-                        {/* Title is the row's PRIMARY action: it routes to the
-                            internal review-detail view, so it gets the accent
-                            link treatment (accent color + underline on hover)
-                            and prefetches that screen on intent. stopPropagation
+                        {/* Title is the row's primary action: it routes to the
+                            internal review-detail view and prefetches it on
+                            intent. White at rest, the accent only under the
+                            pointer: a list of amber titles spends the one
+                            accent on every row. stopPropagation
                             keeps a title click a navigation, not a row-expand.
                             The native title attribute surfaces the full text
                             only when it's truncated. */}
@@ -529,7 +535,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                             onClick={(e) => e.stopPropagation()}
                             onMouseEnter={prefetchThisReview}
                             onFocus={prefetchThisReview}
-                            className="text-primary-light min-w-0 truncate text-sm font-semibold hover:underline">
+                            className="text-text-primary hover:text-primary-light min-w-0 truncate text-sm font-semibold transition-colors hover:underline">
                             {latest.title}
                         </NextLink>
                         {/* Secondary escape hatch: open the PR on its Git
@@ -674,7 +680,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                     "inline-flex min-w-7 items-center justify-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium tabular-nums",
                                     latest.suggestionsCount.sent > 0
                                         ? "bg-success/10 text-success"
-                                        : "bg-card-lv3/40 text-text-tertiary",
+                                        : "text-text-tertiary",
                                 )}>
                                 <CheckIcon className="size-3 shrink-0" />
                                 {latest.suggestionsCount.sent}
@@ -693,7 +699,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                     "inline-flex min-w-7 items-center justify-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium tabular-nums",
                                     latest.suggestionsCount.filtered > 0
                                         ? "bg-danger/10 text-danger"
-                                        : "bg-card-lv3/40 text-text-tertiary",
+                                        : "text-text-tertiary",
                                 )}>
                                 <FilterIcon className="size-3 shrink-0" />
                                 {latest.suggestionsCount.filtered}
@@ -704,6 +710,21 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                         </TooltipContent>
                     </Tooltip>
                 </NextLink>
+
+                {/* Runtime column: the latest Runtime Run of this PR. Empty for
+                    a repository whose Runs this viewer may not read. */}
+                {showRuntime &&
+                    (runtime?.canRead ? (
+                        <PrRuntimeColumn
+                            cell={runtime.cell}
+                            repositoryId={latest.repositoryId}
+                            prNumber={latest.prNumber}
+                            runtime={runtime.data}
+                            onRetry={runtime.retry}
+                        />
+                    ) : (
+                        <span aria-hidden />
+                    ))}
 
                 {/* The approval notice is separate from review execution status.
                     Keep it visible even if the PR has since been merged. */}
@@ -746,503 +767,375 @@ export const PrListItem = ({ group }: PrListItemProps) => {
             </div>
 
             {isOpen && (
-                <div className="bg-card-lv2/20">
-                    <div className="px-4 pt-2 pb-6">
-                        {/* Quiet entry into the full review screen. Lives
-                                here (not on the row/title) because the row click
-                                is the inline expand and the title links out to
-                                the provider. Kept low-key — a text link, not a
-                                filled button — so it reads as "there's more"
-                                without competing with the timeline below. */}
-                        <div className="mt-1 mb-1 flex justify-end">
-                            <NextLink
-                                href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
-                                onClick={(e) => e.stopPropagation()}
-                                onMouseEnter={prefetchThisReview}
-                                onFocus={prefetchThisReview}
-                                className="text-text-tertiary hover:text-primary-light inline-flex items-center gap-1 text-xs font-medium transition-colors">
-                                Open full review
-                                <ArrowRightIcon className="size-3.5" />
-                            </NextLink>
-                        </div>
-                        <div className="pt-2">
-                            <div className="space-y-3">
-                                {executions.map((execution, index) => {
-                                    const executionKey =
-                                        execution.executionId ||
-                                        execution.automationExecution?.uuid ||
-                                        `${execution.prId}-${execution.automationExecution?.createdAt ?? execution.updatedAt ?? execution.createdAt}-${index}`;
-                                    const executionOrigin =
-                                        execution.automationExecution?.origin ||
-                                        "";
-                                    const executionStartedAt =
-                                        execution.automationExecution
-                                            ?.createdAt ?? execution.createdAt;
-                                    const executionFinishedAt =
-                                        execution.automationExecution
-                                            ?.updatedAt ?? execution.updatedAt;
-                                    const executionDuration = formatDuration(
-                                        executionStartedAt,
-                                        executionFinishedAt,
-                                    );
-                                    const executionStatus =
-                                        execution.automationExecution?.status ||
-                                        "pending";
-                                    const isReviewCollapsed =
-                                        collapsedReviews.has(index);
-                                    // Always show all timeline items including agent traces (secondary)
-                                    const timelineItems =
-                                        execution.codeReviewTimeline;
-                                    const timelineItemsSorted = [
-                                        ...timelineItems,
-                                    ].sort((a, b) => {
-                                        const aTime = Date.parse(
-                                            a.createdAt ?? "",
-                                        );
-                                        const bTime = Date.parse(
-                                            b.createdAt ?? "",
-                                        );
-                                        const safeATime = Number.isNaN(aTime)
-                                            ? 0
-                                            : aTime;
-                                        const safeBTime = Number.isNaN(bTime)
-                                            ? 0
-                                            : bTime;
-
-                                        return safeATime - safeBTime;
-                                    });
-
-                                    return (
-                                        <div
-                                            key={executionKey}
-                                            className="border-card-lv3/50 bg-card-lv1/60 rounded-xl border">
-                                            <button
-                                                type="button"
-                                                className="flex w-full cursor-pointer items-center justify-between gap-2 p-4"
-                                                onClick={() =>
-                                                    toggleReview(index)
-                                                }>
-                                                <div className="flex flex-wrap items-center gap-2.5">
-                                                    <ChevronDownIcon
-                                                        className={cn(
-                                                            "text-text-tertiary size-4 shrink-0 transition-transform duration-200",
-                                                            !isReviewCollapsed &&
-                                                                "text-text-secondary rotate-180",
-                                                        )}
-                                                    />
-                                                    <span className="text-text-primary text-sm font-semibold tabular-nums">
-                                                        Review{" "}
-                                                        {reviewCount - index}
-                                                    </span>
-                                                    {getStatusBadge(
-                                                        executionStatus,
-                                                    )}
-                                                    <ReviewModeTag
-                                                        mode={
-                                                            execution.reviewMode
-                                                        }
-                                                    />
-                                                    {executionDuration && (
-                                                        <span className="text-text-tertiary text-xs tabular-nums">
-                                                            {executionStatus ===
-                                                            "in_progress"
-                                                                ? "Elapsed: "
-                                                                : "Duration: "}
-                                                            {executionDuration}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {executionStartedAt && (
-                                                    <span className="text-text-tertiary text-xs tabular-nums">
-                                                        <TimeAgoDisplay
-                                                            dateString={
-                                                                executionStartedAt
-                                                            }
-                                                            timezone={timezone}
-                                                        />
-                                                    </span>
-                                                )}
-                                            </button>
-                                            {!isReviewCollapsed && (
-                                                <div className="border-card-lv3/30 border-t px-4 pt-3 pb-4">
-                                                    {(execution.reviewedCommitSha ||
-                                                        execution.reviewedCommitUrl) && (
-                                                        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
-                                                            {execution.reviewedCommitUrl ? (
-                                                                <Link
-                                                                    href={
-                                                                        execution.reviewedCommitUrl
-                                                                    }
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-text-secondary hover:text-primary-light font-mono">
-                                                                    {formatSha(
-                                                                        execution.reviewedCommitSha,
-                                                                    ) ||
-                                                                        "View commit"}
-                                                                </Link>
-                                                            ) : (
-                                                                execution.reviewedCommitSha && (
-                                                                    <span className="text-text-secondary font-mono">
-                                                                        {formatSha(
-                                                                            execution.reviewedCommitSha,
-                                                                        )}
-                                                                    </span>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {execution.reviewWarnings &&
-                                                        execution.reviewWarnings
-                                                            .length > 0 && (
-                                                            <ReviewNotices
-                                                                warnings={
-                                                                    execution.reviewWarnings
-                                                                }
-                                                            />
-                                                        )}
-                                                    <div className="relative pl-6">
-                                                        <div className="bg-card-lv3/70 absolute top-2 left-[0.5625rem] h-[calc(100%-0.75rem)] w-px" />
-                                                        <div className="space-y-3">
-                                                            {timelineItemsSorted.map(
-                                                                (item) => {
-                                                                    const isActiveStage =
-                                                                        item.status ===
-                                                                            "in_progress" &&
-                                                                        !isAutomationStartMessage(
-                                                                            item.message,
-                                                                        );
-                                                                    const stageInfo =
-                                                                        getStageDisplay(
-                                                                            item,
-                                                                        );
-                                                                    const isAutomationStart =
-                                                                        isAutomationStartMessage(
-                                                                            item.message,
-                                                                        );
-
-                                                                    return (
-                                                                        <div
-                                                                            key={
-                                                                                item.uuid
-                                                                            }
-                                                                            className={cn(
-                                                                                "group flex gap-3",
-                                                                                isActiveStage &&
-                                                                                    "border-in-progress bg-card-lv2/60 rounded-lg border-l-2 px-3 py-2",
-                                                                            )}>
-                                                                            <div className="relative flex w-4 justify-center">
-                                                                                <span
-                                                                                    className={cn(
-                                                                                        "mt-1.5 size-2.5 rounded-full border-2",
-                                                                                        isActiveStage &&
-                                                                                            "size-3",
-                                                                                        getTimelineStatusColor(
-                                                                                            isAutomationStart
-                                                                                                ? "skipped"
-                                                                                                : item.status,
-                                                                                        ),
-                                                                                    )}
-                                                                                />
-                                                                            </div>
-                                                                            <div className="min-w-0 flex-1 py-0.5">
-                                                                                <div className="mb-0.5 flex flex-wrap items-center gap-2">
-                                                                                    <span
-                                                                                        className={cn(
-                                                                                            "text-sm",
-                                                                                            isAutomationStart
-                                                                                                ? "text-text-tertiary"
-                                                                                                : "text-text-primary font-medium",
-                                                                                        )}>
-                                                                                        {
-                                                                                            stageInfo.label
-                                                                                        }
-                                                                                    </span>
-                                                                                    {!isAutomationStart &&
-                                                                                        item.status ===
-                                                                                            "in_progress" && (
-                                                                                            <Spinner className="text-in-progress size-3" />
-                                                                                        )}
-                                                                                    {!isAutomationStart &&
-                                                                                        getStatusBadge(
-                                                                                            item.status,
-                                                                                        )}
-                                                                                    {executionOrigin &&
-                                                                                        isAutomationStart && (
-                                                                                            <Tooltip>
-                                                                                                <TooltipTrigger
-                                                                                                    asChild>
-                                                                                                    <span className="text-text-tertiary text-xs whitespace-nowrap">
-                                                                                                        ·{" "}
-                                                                                                        {getOriginLabel(
-                                                                                                            executionOrigin,
-                                                                                                        )}
-                                                                                                    </span>
-                                                                                                </TooltipTrigger>
-                                                                                                <TooltipContent className="text-xs">
-                                                                                                    {executionOrigin?.toLowerCase?.() ===
-                                                                                                    "system"
-                                                                                                        ? "Triggered automatically by system"
-                                                                                                        : "Triggered by user command"}
-                                                                                                </TooltipContent>
-                                                                                            </Tooltip>
-                                                                                        )}
-                                                                                </div>
-                                                                                <p className="text-text-tertiary text-xs">
-                                                                                    {
-                                                                                        stageInfo.message
-                                                                                    }
-                                                                                </p>
-                                                                                {stageInfo.duration &&
-                                                                                    !isAutomationStart && (
-                                                                                        <p className="text-text-tertiary text-xs tabular-nums">
-                                                                                            {item.status ===
-                                                                                            "in_progress"
-                                                                                                ? "Elapsed: "
-                                                                                                : "Duration: "}
-                                                                                            {
-                                                                                                stageInfo.duration
-                                                                                            }
-                                                                                        </p>
-                                                                                    )}
-                                                                                {item.createdAt &&
-                                                                                    !isAutomationStart && (
-                                                                                        <p className="text-text-tertiary text-xs tabular-nums">
-                                                                                            Started:{" "}
-                                                                                            {formatDateTime(
-                                                                                                item.createdAt,
-                                                                                                timezone,
-                                                                                            )}
-                                                                                        </p>
-                                                                                    )}
-                                                                                {stageInfo.specialists && (
-                                                                                    <SpecialistAgentsTable
-                                                                                        rows={
-                                                                                            stageInfo.specialists
-                                                                                        }
-                                                                                    />
-                                                                                )}
-                                                                                {stageInfo.agentTrace &&
-                                                                                    stageInfo
-                                                                                        .agentTrace
-                                                                                        .toolSummary && (
-                                                                                        <details className="text-text-tertiary mt-2 text-xs">
-                                                                                            <summary className="cursor-pointer">
-                                                                                                {formatToolSummary(
-                                                                                                    stageInfo
-                                                                                                        .agentTrace
-                                                                                                        .toolSummary,
-                                                                                                )}
-                                                                                            </summary>
-                                                                                            {stageInfo
-                                                                                                .agentTrace
-                                                                                                .toolCalls &&
-                                                                                                stageInfo
-                                                                                                    .agentTrace
-                                                                                                    .toolCalls
-                                                                                                    .length >
-                                                                                                    0 && (
-                                                                                                    <ul className="mt-2 space-y-1 pl-4">
-                                                                                                        {stageInfo.agentTrace.toolCalls
-                                                                                                            .slice(
-                                                                                                                0,
-                                                                                                                MAX_TOOL_CALLS_DISPLAY,
-                                                                                                            )
-                                                                                                            .map(
-                                                                                                                (
-                                                                                                                    tc,
-                                                                                                                    tcIdx,
-                                                                                                                ) => (
-                                                                                                                    <li
-                                                                                                                        key={
-                                                                                                                            tcIdx
-                                                                                                                        }
-                                                                                                                        className="truncate font-mono text-xs">
-                                                                                                                        {
-                                                                                                                            tc.tool
-                                                                                                                        }
-
-                                                                                                                        (
-                                                                                                                        {typeof tc.args ===
-                                                                                                                        "string"
-                                                                                                                            ? tc.args
-                                                                                                                            : JSON.stringify(
-                                                                                                                                  tc.args,
-                                                                                                                              )}
-
-                                                                                                                        )
-                                                                                                                    </li>
-                                                                                                                ),
-                                                                                                            )}
-                                                                                                        {stageInfo
-                                                                                                            .agentTrace
-                                                                                                            .toolCalls
-                                                                                                            .length >
-                                                                                                            MAX_TOOL_CALLS_DISPLAY && (
-                                                                                                            <li className="text-text-tertiary text-xs italic">
-                                                                                                                ...
-                                                                                                                and{" "}
-                                                                                                                {stageInfo
-                                                                                                                    .agentTrace
-                                                                                                                    .toolCalls
-                                                                                                                    .length -
-                                                                                                                    MAX_TOOL_CALLS_DISPLAY}{" "}
-                                                                                                                more
-                                                                                                            </li>
-                                                                                                        )}
-                                                                                                    </ul>
-                                                                                                )}
-                                                                                        </details>
-                                                                                    )}
-                                                                                {(item.status ===
-                                                                                    "partial_error" ||
-                                                                                    item.status ===
-                                                                                        "error") &&
-                                                                                    // Only render the collapsible when there
-                                                                                    // are multiple distinct errors — for a
-                                                                                    // single error the stage's top-level
-                                                                                    // message already shows it, and the
-                                                                                    // collapsible just repeats the same text.
-                                                                                    stageInfo
-                                                                                        .partialErrors
-                                                                                        .length >
-                                                                                        1 && (
-                                                                                        <details className="text-warning/90 mt-2 text-xs">
-                                                                                            <summary className="cursor-pointer">
-                                                                                                View
-                                                                                                failed
-                                                                                                files
-                                                                                                (
-                                                                                                {
-                                                                                                    stageInfo
-                                                                                                        .partialErrors
-                                                                                                        .length
-                                                                                                }
-
-                                                                                                )
-                                                                                            </summary>
-                                                                                            <ul className="mt-2 space-y-1 pl-4">
-                                                                                                {stageInfo.partialErrors.map(
-                                                                                                    (
-                                                                                                        entry,
-                                                                                                    ) => (
-                                                                                                        <li
-                                                                                                            key={
-                                                                                                                entry
-                                                                                                            }
-                                                                                                            className="text-text-tertiary font-mono text-xs">
-                                                                                                            {
-                                                                                                                entry
-                                                                                                            }
-                                                                                                        </li>
-                                                                                                    ),
-                                                                                                )}
-                                                                                            </ul>
-                                                                                        </details>
-                                                                                    )}
-                                                                                {stageInfo.fileTimings &&
-                                                                                    stageInfo
-                                                                                        .fileTimings
-                                                                                        .length >
-                                                                                        0 && (
-                                                                                        <details className="text-text-tertiary mt-2 text-xs">
-                                                                                            <summary className="cursor-pointer">
-                                                                                                File
-                                                                                                timings
-                                                                                                (
-                                                                                                {
-                                                                                                    stageInfo
-                                                                                                        .fileTimings
-                                                                                                        .length
-                                                                                                }
-
-                                                                                                )
-                                                                                            </summary>
-                                                                                            <ul className="mt-2 space-y-1 pl-4">
-                                                                                                {stageInfo.fileTimings.map(
-                                                                                                    (
-                                                                                                        ft,
-                                                                                                    ) => (
-                                                                                                        <li
-                                                                                                            key={
-                                                                                                                ft.file
-                                                                                                            }
-                                                                                                            className="font-mono text-xs">
-                                                                                                            {
-                                                                                                                ft.file
-                                                                                                            }{" "}
-                                                                                                            &mdash;{" "}
-                                                                                                            {formatFileTime(
-                                                                                                                ft.durationMs,
-                                                                                                            )}{" "}
-                                                                                                            {ft.status ===
-                                                                                                            "timeout"
-                                                                                                                ? "\u23F1 timeout"
-                                                                                                                : ft.status ===
-                                                                                                                    "error"
-                                                                                                                  ? "\u2717"
-                                                                                                                  : "\u2713"}
-                                                                                                        </li>
-                                                                                                    ),
-                                                                                                )}
-                                                                                            </ul>
-                                                                                        </details>
-                                                                                    )}
-                                                                                {stageInfo.cta && (
-                                                                                    <NextLink
-                                                                                        href={
-                                                                                            stageInfo
-                                                                                                .cta
-                                                                                                .href
-                                                                                        }
-                                                                                        target={
-                                                                                            stageInfo
-                                                                                                .cta
-                                                                                                .external
-                                                                                                ? "_blank"
-                                                                                                : undefined
-                                                                                        }
-                                                                                        rel={
-                                                                                            stageInfo
-                                                                                                .cta
-                                                                                                .external
-                                                                                                ? "noopener noreferrer"
-                                                                                                : undefined
-                                                                                        }
-                                                                                        className={cn(
-                                                                                            buttonVariants(
-                                                                                                {
-                                                                                                    variant:
-                                                                                                        "helper",
-                                                                                                    size: "xs",
-                                                                                                },
-                                                                                            ),
-                                                                                            "mt-1.5",
-                                                                                        )}>
-                                                                                        {
-                                                                                            stageInfo
-                                                                                                .cta
-                                                                                                .label
-                                                                                        }
-                                                                                    </NextLink>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                },
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                <div className="bg-card-lv2/20 border-card-lv3/30 border-t">
+                    {/* The section's header: what follows (the PR by
+                        commit) and the way into the full review screen,
+                        which lives here because the row click is the inline
+                        expand. A helper button, not the accent: the amber
+                        stays on the title. */}
+                    <div className="flex items-center justify-between gap-3 px-5 pt-3 pb-1">
+                        <span className="text-text-tertiary text-2xs font-semibold tracking-wide uppercase">
+                            By commit
+                        </span>
+                        <NextLink
+                            href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseEnter={prefetchThisReview}
+                            onFocus={prefetchThisReview}
+                            className={buttonVariants({
+                                variant: "helper",
+                                size: "xs",
+                            })}>
+                            Open full review
+                            <ArrowRightIcon />
+                        </NextLink>
+                    </div>
+                    <div className="pb-4">
+                        <PrCommitTimeline
+                            group={group}
+                            teamId={teamId}
+                            grid={grid}
+                            runtime={runtime?.data}
+                            hasRuntimeColumn={!!showRuntime}
+                            showRuntime={!!showRuntime && !!runtime?.canRead}
+                            renderReviewDetail={(execution) => (
+                                <ReviewExecutionDetail execution={execution} />
+                            )}
+                        />
                     </div>
                 </div>
             )}
+        </div>
+    );
+};
+
+const StageStatusIcon = ({ status }: { status: string }) => {
+    switch (status) {
+        case "success":
+            return <CircleCheckIcon className="text-success size-4 shrink-0" />;
+        case "error":
+            return <CircleXIcon className="text-danger size-4 shrink-0" />;
+        case "partial_error":
+            return (
+                <AlertTriangleIcon className="text-warning size-4 shrink-0" />
+            );
+        case "in_progress":
+            return <Spinner className="text-in-progress size-3.5 shrink-0" />;
+        case "start":
+            return (
+                <PlayIcon className="text-text-tertiary size-3.5 shrink-0" />
+            );
+        default:
+            return (
+                <CircleDashedIcon className="text-text-tertiary size-4 shrink-0" />
+            );
+    }
+};
+
+/**
+ * One review's detail, opened from its commit in the timeline: how it ran,
+ * the commit it read, what it ran with less of, and its stages in order.
+ */
+export const ReviewExecutionDetail = ({
+    execution,
+}: {
+    execution: PullRequestExecution;
+}) => {
+    const timezone = useGetTimezone();
+    const executionOrigin = execution.automationExecution?.origin || "";
+    const executionStartedAt =
+        execution.automationExecution?.createdAt ?? execution.createdAt;
+    const executionFinishedAt =
+        execution.automationExecution?.updatedAt ?? execution.updatedAt;
+    const executionStatus = execution.automationExecution?.status || "pending";
+    const executionDuration = formatDuration(
+        executionStartedAt,
+        executionStatus === "in_progress" ? undefined : executionFinishedAt,
+    );
+    const timelineItemsSorted = [...(execution.codeReviewTimeline ?? [])].sort(
+        (a, b) => {
+            const aTime = Date.parse(a.createdAt ?? "");
+            const bTime = Date.parse(b.createdAt ?? "");
+            return (
+                (Number.isNaN(aTime) ? 0 : aTime) -
+                (Number.isNaN(bTime) ? 0 : bTime)
+            );
+        },
+    );
+
+    const outcome = reviewOutcome(execution);
+    // Steps that did not run in a row read as one line.
+    const stepRows: Array<
+        | { kind: "step"; item: (typeof timelineItemsSorted)[number] }
+        | { kind: "notRun"; items: typeof timelineItemsSorted }
+    > = [];
+    for (const item of timelineItemsSorted) {
+        const last = stepRows[stepRows.length - 1];
+        if (
+            item.status === "skipped" &&
+            !isAutomationStartMessage(item.message)
+        ) {
+            if (last?.kind === "notRun") last.items.push(item);
+            else stepRows.push({ kind: "notRun", items: [item] });
+        } else stepRows.push({ kind: "step", item });
+    }
+
+    return (
+        <div className="flex flex-col gap-2">
+            {execution.reviewWarnings &&
+                execution.reviewWarnings.length > 0 && (
+                    <ReviewNotices warnings={execution.reviewWarnings} />
+                )}
+            <ol className="flex flex-col">
+                {stepRows.map((row) => {
+                    if (row.kind === "notRun")
+                        return (
+                            <li
+                                key={row.items[0].uuid}
+                                className="flex items-center gap-2.5 py-1 text-sm">
+                                <StageStatusIcon status="skipped" />
+                                <span className="text-text-tertiary min-w-0 flex-1 truncate">
+                                    {row.items
+                                        .map((i) => getStageDisplay(i).label)
+                                        .join(", ")}
+                                </span>
+                                <span className="text-text-tertiary font-mono text-xs">
+                                    not run
+                                </span>
+                            </li>
+                        );
+                    const { item } = row;
+                    const isAutomationStart = isAutomationStartMessage(
+                        item.message,
+                    );
+                    const stageInfo = getStageDisplay(item);
+                    const status = isAutomationStart ? "start" : item.status;
+                    const failed =
+                        item.status === "error" ||
+                        item.status === "partial_error";
+                    const muted =
+                        isAutomationStart || item.status === "skipped";
+                    const showMessage =
+                        !isAutomationStart &&
+                        !!item.message &&
+                        item.message.trim() !== stageInfo.label.trim();
+                    return (
+                        <li key={item.uuid} className="py-1">
+                            <div className="flex items-center gap-2.5 text-sm">
+                                <StageStatusIcon status={status} />
+                                <span
+                                    className={cn(
+                                        "min-w-0 flex-1 truncate",
+                                        muted
+                                            ? "text-text-tertiary"
+                                            : "text-text-primary",
+                                        failed && "font-medium",
+                                    )}>
+                                    {stageInfo.label}
+                                </span>
+                                {stageInfo.duration && !isAutomationStart && (
+                                    <span
+                                        className="text-text-tertiary font-mono text-xs tabular-nums"
+                                        title={
+                                            item.createdAt
+                                                ? `Started ${formatDateTime(item.createdAt, timezone)}`
+                                                : undefined
+                                        }>
+                                        {item.status === "skipped"
+                                            ? "not run"
+                                            : stageInfo.duration}
+                                    </span>
+                                )}
+                            </div>
+                            {showMessage && (
+                                <div className="mt-1 flex flex-col gap-1.5 pl-6">
+                                    {showMessage &&
+                                        (failed ? (
+                                            <p className="bg-danger/5 border-danger/25 text-text-secondary rounded-md border px-2.5 py-1.5 font-mono text-xs break-all">
+                                                {item.message}
+                                            </p>
+                                        ) : (
+                                            <p className="text-text-tertiary text-xs">
+                                                {item.message}
+                                            </p>
+                                        ))}
+                                </div>
+                            )}
+                            <div className="pl-6">
+                                {stageInfo.specialists && (
+                                    <SpecialistAgentsTable
+                                        rows={stageInfo.specialists}
+                                    />
+                                )}
+                                {stageInfo.agentTrace?.toolSummary && (
+                                    <details className="text-text-tertiary mt-1.5 text-xs">
+                                        <summary className="cursor-pointer">
+                                            {formatToolSummary(
+                                                stageInfo.agentTrace
+                                                    .toolSummary,
+                                            )}
+                                        </summary>
+                                        {(stageInfo.agentTrace.toolCalls
+                                            ?.length ?? 0) > 0 && (
+                                            <ul className="mt-2 space-y-1 pl-4">
+                                                {stageInfo.agentTrace
+                                                    .toolCalls!.slice(
+                                                        0,
+                                                        MAX_TOOL_CALLS_DISPLAY,
+                                                    )
+                                                    .map((tc, tcIdx) => (
+                                                        <li
+                                                            key={tcIdx}
+                                                            className="truncate font-mono text-xs">
+                                                            {tc.tool}(
+                                                            {typeof tc.args ===
+                                                            "string"
+                                                                ? tc.args
+                                                                : JSON.stringify(
+                                                                      tc.args,
+                                                                  )}
+                                                            )
+                                                        </li>
+                                                    ))}
+                                                {stageInfo.agentTrace.toolCalls!
+                                                    .length >
+                                                    MAX_TOOL_CALLS_DISPLAY && (
+                                                    <li className="text-text-tertiary text-xs italic">
+                                                        ... and{" "}
+                                                        {stageInfo.agentTrace
+                                                            .toolCalls!.length -
+                                                            MAX_TOOL_CALLS_DISPLAY}{" "}
+                                                        more
+                                                    </li>
+                                                )}
+                                            </ul>
+                                        )}
+                                    </details>
+                                )}
+                                {failed &&
+                                    // A single error is the stage's message already.
+                                    stageInfo.partialErrors.length > 1 && (
+                                        <details className="text-warning/90 mt-1.5 text-xs">
+                                            <summary className="cursor-pointer">
+                                                View failed files (
+                                                {stageInfo.partialErrors.length}
+                                                )
+                                            </summary>
+                                            <ul className="mt-2 space-y-1 pl-4">
+                                                {stageInfo.partialErrors.map(
+                                                    (entry) => (
+                                                        <li
+                                                            key={entry}
+                                                            className="text-text-tertiary font-mono text-xs">
+                                                            {entry}
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </details>
+                                    )}
+                                {stageInfo.fileTimings &&
+                                    stageInfo.fileTimings.length > 0 && (
+                                        <details className="text-text-tertiary mt-1.5 text-xs">
+                                            <summary className="cursor-pointer">
+                                                File timings (
+                                                {stageInfo.fileTimings.length})
+                                            </summary>
+                                            <ul className="mt-2 space-y-1 pl-4">
+                                                {stageInfo.fileTimings.map(
+                                                    (ft) => (
+                                                        <li
+                                                            key={ft.file}
+                                                            className="font-mono text-xs">
+                                                            {ft.file} &mdash;{" "}
+                                                            {formatFileTime(
+                                                                ft.durationMs,
+                                                            )}{" "}
+                                                            {ft.status ===
+                                                            "timeout"
+                                                                ? "\u23F1 timeout"
+                                                                : ft.status ===
+                                                                    "error"
+                                                                  ? "\u2717"
+                                                                  : "\u2713"}
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </details>
+                                    )}
+                                {stageInfo.cta && (
+                                    <NextLink
+                                        href={stageInfo.cta.href}
+                                        target={
+                                            stageInfo.cta.external
+                                                ? "_blank"
+                                                : undefined
+                                        }
+                                        rel={
+                                            stageInfo.cta.external
+                                                ? "noopener noreferrer"
+                                                : undefined
+                                        }
+                                        className={cn(
+                                            buttonVariants({
+                                                variant: "helper",
+                                                size: "xs",
+                                            }),
+                                            "mt-1.5",
+                                        )}>
+                                        {stageInfo.cta.label}
+                                    </NextLink>
+                                )}
+                            </div>
+                        </li>
+                    );
+                })}
+            </ol>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-xs">
+                <span className="text-text-tertiary">
+                    Review {outcome.word}
+                </span>
+                <ReviewModeTag mode={execution.reviewMode} />
+                {executionDuration && (
+                    <span className="text-text-tertiary tabular-nums">
+                        · {executionDuration}
+                        {executionStatus === "in_progress" && " so far"}
+                    </span>
+                )}
+                {executionStartedAt && (
+                    <span className="text-text-tertiary tabular-nums">
+                        ·{" "}
+                        <TimeAgoDisplay
+                            dateString={executionStartedAt}
+                            timezone={timezone}
+                        />
+                    </span>
+                )}
+                {executionOrigin && (
+                    <span className="text-text-tertiary">
+                        · {getOriginLabel(executionOrigin)}
+                    </span>
+                )}
+                {execution.reviewedCommitSha && (
+                    <span className="text-text-tertiary">
+                        · on{" "}
+                        {execution.reviewedCommitUrl ? (
+                            <Link
+                                href={execution.reviewedCommitUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-text-secondary hover:text-primary-light font-mono">
+                                {formatSha(execution.reviewedCommitSha)}
+                            </Link>
+                        ) : (
+                            <span className="text-text-secondary font-mono">
+                                {formatSha(execution.reviewedCommitSha)}
+                            </span>
+                        )}
+                    </span>
+                )}
+            </div>
         </div>
     );
 };

@@ -14,9 +14,9 @@ import {
     e2bDeploymentTag,
 } from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
 import {
-    isLocalSandboxPath,
-    deleteLocalSandbox,
-} from './local-sandbox-cleanup.service';
+    isImmediateCleanupSandbox,
+    deleteImmediateSandbox,
+} from './immediate-sandbox-cleanup';
 
 const CLEANUP_CONCURRENCY = 5;
 
@@ -116,7 +116,7 @@ export class SandboxLeaseReaperService {
                 expired,
                 CLEANUP_CONCURRENCY,
                 async (lease) => {
-                    if (isLocalSandboxPath(lease.sandboxId)) {
+                    if (isImmediateCleanupSandbox(lease.sandboxId)) {
                         await this.cleanupLocalLease(lease, false);
                         return;
                     }
@@ -279,7 +279,7 @@ export class SandboxLeaseReaperService {
                 ready,
                 CLEANUP_CONCURRENCY,
                 async (lease) => {
-                    if (isLocalSandboxPath(lease.sandboxId)) {
+                    if (isImmediateCleanupSandbox(lease.sandboxId)) {
                         await this.cleanupLocalLease(lease, true);
                         return;
                     }
@@ -543,7 +543,7 @@ export class SandboxLeaseReaperService {
         },
         requireLeaseCountZero: boolean,
     ): Promise<void> {
-        if (!lease.sandboxId || !isLocalSandboxPath(lease.sandboxId)) return;
+        if (!lease.sandboxId || !isImmediateCleanupSandbox(lease.sandboxId)) return;
 
         // Re-check: a concurrent acquire may have bumped leaseCount
         const current = await this.leaseRepository.findByPrKey(lease._id);
@@ -565,7 +565,7 @@ export class SandboxLeaseReaperService {
         if (!claimed) return;
 
         try {
-            await deleteLocalSandbox(lease.sandboxId);
+            await deleteImmediateSandbox(lease.sandboxId);
             await this.leaseRepository.completeCleanup(
                 lease._id,
                 lease.sandboxId,

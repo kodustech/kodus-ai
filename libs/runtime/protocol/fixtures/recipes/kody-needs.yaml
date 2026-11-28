@@ -1,0 +1,12 @@
+# Two other repositories booted beside this one: one aliased, one by its short name.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: api
+  expose:
+    - { service: api, port: 3000, kind: http }
+  needs:
+    - repo: acme/billing-service
+      alias: billing
+    - { repo: acme/Web_App }

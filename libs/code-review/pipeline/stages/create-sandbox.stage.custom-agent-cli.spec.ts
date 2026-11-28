@@ -1,6 +1,6 @@
 jest.mock(
     '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner',
-    () => ({ provisionCustomAgentClis: jest.fn() }),
+    () => ({ provisionCustomAgentClis: jest.fn(), planRuntimeCliInstalls: jest.fn(() => []) }),
 );
 
 import { provisionCustomAgentClis } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';

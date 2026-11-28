@@ -23,6 +23,7 @@ let mockUltraReview = true;
 let mockTeam: string | undefined = "team";
 let mockDirectory: string | undefined;
 let mockCanEdit = true;
+let mockRuntimeReleased = false;
 let mockOrgEdit = true;
 let mockOrgRead = true;
 let mockOrgUpdate = false;
@@ -132,7 +133,11 @@ jest.mock("src/app/(app)/settings/_components/context", () => ({
     useCodeReviewConfig: () => mockConfig,
     useInitialTeamId: () => "team",
     // The deep scan's routing row shows only inside its alpha.
-    useFeatureFlags: () => ({ deepScan: false, ultraReview: mockUltraReview }),
+    useFeatureFlags: () => ({
+        deepScan: false,
+        kodyRuntime: mockRuntimeReleased,
+        ultraReview: mockUltraReview,
+    }),
     useCodeReviewModelData: () => ({
         llmConfigStatus: mockStatus,
         hasConnectedProvider: mockStatus.byok.configured,
@@ -140,6 +145,11 @@ jest.mock("src/app/(app)/settings/_components/context", () => ({
         isCheckingProvider: mockProviderChecking,
         byokModels: [],
     }),
+}));
+jest.mock("@components/runtime/repository-runtime-settings", () => ({
+    RuntimeRoutingSection: ({ repositoryId }: { repositoryId: string }) => (
+        <section aria-label="Kody Runtime">scope {repositoryId}</section>
+    ),
 }));
 jest.mock("@services/permissions/hooks", () => ({
     usePermission: (action: string, resource: string) =>
@@ -233,6 +243,7 @@ beforeEach(() => {
     mockUltraReview = true;
     mockDirectory = undefined;
     mockCanEdit = true;
+    mockRuntimeReleased = false;
     mockOrgEdit = true;
     mockOrgRead = true;
     mockOrgUpdate = false;
@@ -823,6 +834,60 @@ it.each([
         ).toHaveTextContent("Heavy");
     },
 );
+
+describe("the Kody Runtime section", () => {
+    it("is absent when Kody Runtime is not released to the organization", async () => {
+        mount(false);
+        await screen.findByRole("combobox", { name: "Default model" });
+        expect(
+            screen.queryByRole("region", { name: "Kody Runtime" }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("sits below the routing settings of the global page when released", async () => {
+        mockRuntimeReleased = true;
+        mount(false);
+        await screen.findByRole("combobox", { name: "Default model" });
+        const section = screen.getByRole("region", { name: "Kody Runtime" });
+        expect(section).toHaveTextContent("scope global");
+        expect(
+            screen
+                .getByRole("region", { name: "Review mode" })
+                .compareDocumentPosition(section),
+        ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it("is scoped to the repository on a repository page", async () => {
+        mockRuntimeReleased = true;
+        mockRepo = "repo-1";
+        mount(false);
+        await screen.findByRole("region", { name: "Review mode" });
+        expect(
+            screen.getByRole("region", { name: "Kody Runtime" }),
+        ).toHaveTextContent("scope repo-1");
+    });
+
+    it("is hidden from whoever may not edit the settings", async () => {
+        mockRuntimeReleased = true;
+        mockCanEdit = false;
+        mount(false);
+        await screen.findByRole("region", { name: "Review mode" });
+        expect(
+            screen.queryByRole("region", { name: "Kody Runtime" }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("is not shown on a directory page", async () => {
+        mockRuntimeReleased = true;
+        mockRepo = "repo-1";
+        mockDirectory = "src/app";
+        mount(false);
+        await screen.findByRole("region", { name: "Review mode" });
+        expect(
+            screen.queryByRole("region", { name: "Kody Runtime" }),
+        ).not.toBeInTheDocument();
+    });
+});
 
 describe("Ultra review mode", () => {
     it("is offered only once the three Ultra models are set", async () => {

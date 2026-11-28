@@ -1,0 +1,498 @@
+"use client";
+
+import { useMemo } from "react";
+import NextLink from "next/link";
+import { useSearchParams } from "next/navigation";
+import { BootFailurePanel } from "@components/runtime/boot-failure";
+import { ConnectedFindings } from "@components/runtime/connected-findings";
+import { RuntimeDisclosure } from "@components/runtime/disclosure";
+import {
+    RuntimeEmptyState,
+    RuntimeErrorState,
+} from "@components/runtime/empty-state";
+import { RecipeChangedNotice } from "@components/runtime/recipe-changed-notice";
+import { ApproveRunButton, RerunButton } from "@components/runtime/run-actions";
+import { RunCostBreakdown } from "@components/runtime/run-cost";
+import {
+    ExercisedFilesList,
+    RunCoverageList,
+} from "@components/runtime/run-coverage";
+import { RunLogView } from "@components/runtime/run-log";
+import { RunPreviewCard } from "@components/runtime/run-preview";
+import { RunSuiteTab } from "@components/runtime/run-suite";
+import { RunTimingView } from "@components/runtime/run-timing";
+import { RunWorkspaceSection } from "@components/runtime/run-workspace";
+import { Fact, RuntimeSection } from "@components/runtime/section";
+import { StuckNotice } from "@components/runtime/stuck-notice";
+import { Heading } from "@components/ui/heading";
+import { LinkTab, LinkTabs } from "@components/ui/link-tabs";
+import { Page } from "@components/ui/page";
+import { Skeleton } from "@components/ui/skeleton";
+import { useInfinitePullRequestExecutions } from "@services/pull-requests/hooks";
+import type { RuntimeRun } from "@services/runtime/contracts";
+import {
+    formatDurationMs,
+    formatEstimatedUsd,
+    shortSha,
+} from "@services/runtime/format";
+import { cellOwnerLabel, isTerminalRunState } from "@services/runtime/labels";
+import { baseVersionLabel } from "@services/runtime/model/base-version";
+import { bootFailureOf } from "@services/runtime/model/boot-failure";
+import { coverageRows } from "@services/runtime/model/coverage";
+import {
+    ENVIRONMENT_SECTION,
+    environmentHref,
+} from "@services/runtime/model/environment";
+import {
+    pullRequestBranchOf,
+    repositoryLabel,
+    workspaceSideRows,
+} from "@services/runtime/model/environment-repositories";
+import { buildFindings } from "@services/runtime/model/findings";
+import { runRecipeSource } from "@services/runtime/model/run-facts";
+import { buildRunLog } from "@services/runtime/model/run-log";
+import { buildRunPaths } from "@services/runtime/model/run-paths";
+import {
+    publicationWarnings,
+    runStatusLine,
+} from "@services/runtime/model/run-status-line";
+import { runTiming } from "@services/runtime/model/run-timing";
+import {
+    useRunBeingRecorded,
+    useRunStream,
+    useRunSuite,
+    useRuntimeEnvironment,
+    useRuntimeRun,
+    type RunStreamStatus,
+} from "@services/runtime/queries";
+import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
+
+const STREAM_STATUS_LABEL: Record<RunStreamStatus, string> = {
+    idle: "Connecting",
+    live: "Live",
+    reconnecting: "Reconnecting",
+    waiting: "Waiting for the first event",
+    paused: "Paused while this tab is hidden",
+    done: "Finished",
+    failed: "Live view unavailable · refreshing every few seconds",
+};
+
+/** `?tab=e2e-suite`: the Run's e2e suite instead of the Run's own sections. */
+const SUITE_TAB = "e2e-suite";
+
+const PLATFORM: Record<string, string> = {
+    GITHUB: "GitHub",
+    GITLAB: "GitLab",
+    BITBUCKET: "Bitbucket",
+    AZURE_REPOS: "Azure Repos",
+};
+
+/**
+ * The PR's title, link and platform, from Kodus's own record of the pull
+ * request (its code review executions). The Run projection has only the
+ * title the Run was requested with (`prTitle`, absent on older Runs): the
+ * header falls back to it, and a PR Kodus never reviewed has no link.
+ */
+const usePullRequestMeta = (run: RuntimeRun | undefined) => {
+    const { items } = useInfinitePullRequestExecutions(
+        run
+            ? {
+                  teamId: run.teamId,
+                  repositoryId: run.repositoryId,
+                  pullRequestNumber: String(run.prNumber),
+              }
+            : undefined,
+        // Not before the Run is known: without its filters this is an org-wide scan (WP5).
+        { pageSize: 1, poll: false, enabled: !!run },
+    );
+    const pr = run ? items.find((e) => e.prNumber === run.prNumber) : undefined;
+    return pr
+        ? {
+              title: pr.title,
+              url: pr.url,
+              author: pr.author?.username,
+              platform: PLATFORM[pr.provider],
+          }
+        : undefined;
+};
+
+/** "Kodus cloud · setup file from main at abc1234 · 3 repositories": what was running, on one line. */
+const whatWasRunningLine = (
+    run: RuntimeRun,
+    baseLabel: string,
+    repositories: number,
+) =>
+    [
+        `On ${cellOwnerLabel(run.cellOwner)}`,
+        `setup file: ${runRecipeSource(run.recipe, baseLabel).toLowerCase()}`,
+        repositories > 0 ? `${repositories} repositories` : undefined,
+    ]
+        .filter(Boolean)
+        .join(" · ");
+
+export const RunDetailPage = ({ runId }: { runId: string }) => {
+    const runQuery = useRuntimeRun(runId);
+    const run = runQuery.data ?? undefined;
+    // Started a moment ago ("Run again", "Run on this PR"): the worker has
+    // not recorded it yet, so the page waits for it instead of "not found".
+    const recording = useRunBeingRecorded(runId, runQuery);
+    // The stream starts with the projection, not after it; once the Run is
+    // known not to exist (null), it is not followed at all.
+    const { view, status } = useRunStream(
+        runQuery.data === null ? undefined : runId,
+        run?.state,
+    );
+    const pr = usePullRequestMeta(run);
+    const prTitle = pr?.title || run?.prTitle;
+    // The Run's e2e suite (none: no tab). Read again while the Run or its suite runs, so the tab appears when the suite starts.
+    const suite =
+        useRunSuite(runId, !!run && !isTerminalRunState(run.state)).data ??
+        undefined;
+    const tab = useSearchParams().get("tab");
+    const onSuiteTab = !!suite && tab === SUITE_TAB;
+
+    // A multi-repository Run names its repositories by id and folder: the
+    // environment, read once, gives their names (a removed one keeps its folder).
+    const environment = useRuntimeEnvironment(
+        run?.workspace?.length ? run.environmentId : undefined,
+    );
+    const workspaceRows = useMemo(() => {
+        if (!run?.workspace?.length) return [];
+        const names = new Map<string, string>(
+            (environment.data?.repositories ?? []).map((r) => [
+                r.repositoryId,
+                repositoryLabel(r),
+            ]),
+        );
+        names.set(
+            run.repositoryId,
+            repositoryLabel({
+                repositoryName: run.repositoryName,
+                fullName: run.repositoryName,
+            }),
+        );
+        return workspaceSideRows(run, names);
+    }, [run, environment.data]);
+
+    const derived = useMemo(() => {
+        if (!run) return undefined;
+        const runPaths = buildRunPaths(run, view.steps);
+        const findings = buildFindings(run, view.steps);
+        const timing = runTiming(run, view);
+        return {
+            runPaths,
+            findings,
+            timing,
+            coverage: coverageRows(runPaths, run),
+            log: buildRunLog(run, view, runPaths, timing),
+            bootFailure: bootFailureOf(run),
+        };
+    }, [run, view]);
+
+    if (runQuery.isLoading) {
+        return (
+            <Page.Root>
+                <Page.Content>
+                    <Skeleton className="h-10 w-80" />
+                    <Skeleton className="h-64 w-full" />
+                </Page.Content>
+            </Page.Root>
+        );
+    }
+
+    if (runQuery.isError || !run || !derived) {
+        return (
+            <Page.Root>
+                <Page.Content>
+                    {runQuery.isError ? (
+                        <RuntimeErrorState
+                            what="this run"
+                            error={runQuery.error}
+                            onRetry={() => runQuery.refetch()}
+                        />
+                    ) : recording ? (
+                        <RuntimeEmptyState title="Run queued" role="status">
+                            Kody Runtime is recording this Run. This page opens
+                            it as soon as it starts.
+                        </RuntimeEmptyState>
+                    ) : (
+                        <RuntimeEmptyState title="Run not found">
+                            It may belong to another organization, or the Run
+                            was never recorded.{" "}
+                            <NextLink
+                                href="/runtime/runs"
+                                className="text-primary-light hover:underline">
+                                Back to runs
+                            </NextLink>
+                        </RuntimeEmptyState>
+                    )}
+                </Page.Content>
+            </Page.Root>
+        );
+    }
+
+    const baseLabel = baseVersionLabel(run);
+    const live = !isTerminalRunState(run.state);
+    const { runPaths, findings, timing, coverage, log, bootFailure } = derived;
+    const logNote =
+        status === "failed"
+            ? "The live view could not be opened for this Run: the log shows what the Run record kept."
+            : !live && status === "done" && view.states.length === 0
+              ? "The step-by-step stream of this Run is gone (it is kept 30 days): the log shows what the Run record kept."
+              : undefined;
+    const openPrClass =
+        "bg-card-lv2 text-text-primary focus-visible:ring-ring inline-flex min-h-12 items-center gap-2 rounded-xl px-6 text-sm font-semibold hover:brightness-120 focus-visible:ring-3 focus-visible:outline-none";
+
+    const elapsed =
+        timing.totalMs !== undefined
+            ? formatDurationMs(timing.totalMs)
+            : undefined;
+
+    return (
+        <Page.Root>
+            <Page.Header>
+                <div className="flex min-w-0 flex-col gap-2">
+                    <NextLink
+                        href={`/runtime/runs?repositoryId=${encodeURIComponent(run.repositoryId)}`}
+                        className="text-text-secondary inline-flex min-h-11 w-fit items-center gap-1 text-sm hover:underline">
+                        <ArrowLeftIcon className="size-4" aria-hidden /> Runs of{" "}
+                        {run.repositoryName}
+                    </NextLink>
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <Heading variant="h1">
+                            {run.repositoryName} #{run.prNumber}
+                        </Heading>
+                        {prTitle && (
+                            <span className="text-text-secondary text-lg font-medium">
+                                {prTitle}
+                            </span>
+                        )}
+                    </div>
+                    <p
+                        className="text-text-secondary text-sm"
+                        role={live ? "status" : undefined}
+                        aria-live={live ? "polite" : undefined}>
+                        {runStatusLine(
+                            run,
+                            findings.filter((f) => !f.intended).length,
+                            timing.totalMs,
+                        )}
+                        {live && ` · ${STREAM_STATUS_LABEL[status]}`}
+                    </p>
+                </div>
+                <Page.HeaderActions>
+                    {pr?.url ? (
+                        <a
+                            href={pr.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={openPrClass}>
+                            Open the PR
+                            <ExternalLinkIcon className="size-4" aria-hidden />
+                            <span className="sr-only">
+                                (opens in a new tab)
+                            </span>
+                        </a>
+                    ) : (
+                        <NextLink
+                            href={`/pull-requests/${encodeURIComponent(run.repositoryId)}/${run.prNumber}`}
+                            className={openPrClass}>
+                            Open the PR
+                        </NextLink>
+                    )}
+                    <ApproveRunButton run={run} size="lg" />
+                    {/* The verdict card carries "Run again" when it is the thing to do: one amber button, not two. */}
+                    <RerunButton run={run} size="lg" variant="helper" />
+                </Page.HeaderActions>
+            </Page.Header>
+
+            <Page.Content>
+                {publicationWarnings(run.publication).map((w) => (
+                    <p
+                        key={w.title}
+                        role="note"
+                        className="text-warning text-sm">
+                        <span aria-hidden>⚠ </span>
+                        {w.title}
+                        {w.fix && (
+                            <details className="text-text-secondary mt-1">
+                                <summary className="cursor-pointer">
+                                    How to fix ›
+                                </summary>
+                                <span>{w.fix}</span>
+                            </details>
+                        )}
+                    </p>
+                ))}
+
+                <StuckNotice what="Run" stuck={run.stuck} />
+
+                {suite && (
+                    <LinkTabs aria-label="Run sections">
+                        <LinkTab
+                            href={`/runtime/runs/${encodeURIComponent(run.runId)}`}
+                            active={!onSuiteTab}>
+                            Run
+                        </LinkTab>
+                        <LinkTab
+                            href={`/runtime/runs/${encodeURIComponent(run.runId)}?tab=${SUITE_TAB}`}
+                            active={onSuiteTab}>
+                            e2e suite
+                        </LinkTab>
+                    </LinkTabs>
+                )}
+
+                {onSuiteTab && suite ? (
+                    <RunSuiteTab run={run} suite={suite} />
+                ) : (
+                    <>
+                        {bootFailure && (
+                            <RuntimeSection
+                                title={
+                                    bootFailure.kodusSide
+                                        ? "What failed on Kodus's side"
+                                        : bootFailure.side === "pr"
+                                          ? "Why this PR did not boot"
+                                          : `Why ${baseLabel} did not boot`
+                                }
+                                description="What the machine saw, with the last log lines it kept · secrets and tokens redacted."
+                                aside={
+                                    // The verdict card already links the setup file when the boot is the whole story.
+                                    !bootFailure.kodusSide &&
+                                    run.state !== "could_not_boot" && (
+                                        <NextLink
+                                            href={environmentHref(
+                                                run.environmentId,
+                                                ENVIRONMENT_SECTION.recipe,
+                                            )}
+                                            className="text-primary-light text-sm hover:underline">
+                                            See the setup file
+                                        </NextLink>
+                                    )
+                                }>
+                                <BootFailurePanel failure={bootFailure} />
+                            </RuntimeSection>
+                        )}
+
+                        <section aria-label="Findings">
+                            <ConnectedFindings
+                                run={run}
+                                findings={findings}
+                                runPaths={runPaths}
+                                live={live}
+                                pullRequestUrl={pr?.url}
+                                bootFailure={bootFailure}
+                            />
+                        </section>
+
+                        <RuntimeDisclosure
+                            id="paths-tested"
+                            title="Paths tested"
+                            summary={
+                                runPaths.totalCount === 0
+                                    ? `The same request sent to ${baseLabel} and to this PR`
+                                    : `${runPaths.testedCount} of ${runPaths.totalCount} ${runPaths.totalCount === 1 ? "path" : "paths"} of this PR · the same request sent to ${baseLabel} and to this PR`
+                            }>
+                            <div className="flex flex-col gap-4">
+                                <RunCoverageList
+                                    runId={run.runId}
+                                    rows={coverage}
+                                    live={live}
+                                />
+                                <ExercisedFilesList
+                                    files={run.exercised?.files ?? []}
+                                />
+                            </div>
+                        </RuntimeDisclosure>
+
+                        <RuntimeDisclosure
+                            id="what-was-running"
+                            title="What was running"
+                            summary={whatWasRunningLine(
+                                run,
+                                baseLabel,
+                                workspaceRows.length,
+                            )}>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <Fact label="Commits">
+                                    this PR{" "}
+                                    <code className="font-mono">
+                                        {shortSha(run.headSha)}
+                                    </code>{" "}
+                                    · {baseLabel}{" "}
+                                    <code className="font-mono">
+                                        {shortSha(run.baseSha)}
+                                    </code>
+                                </Fact>
+                                <Fact label="Environment">
+                                    <NextLink
+                                        href={environmentHref(
+                                            run.environmentId,
+                                        )}
+                                        className="text-primary-light underline-offset-2 hover:underline">
+                                        {run.repositoryName ||
+                                            "Open the environment"}
+                                    </NextLink>
+                                </Fact>
+                                <Fact label="Setup file">
+                                    {runRecipeSource(run.recipe, baseLabel)}
+                                    {run.recipe?.state !== "absent" && (
+                                        <>
+                                            {" · "}
+                                            <NextLink
+                                                href={environmentHref(
+                                                    run.environmentId,
+                                                    ENVIRONMENT_SECTION.recipe,
+                                                )}
+                                                className="text-primary-light underline-offset-2 hover:underline">
+                                                See the file
+                                            </NextLink>
+                                        </>
+                                    )}
+                                </Fact>
+                                <Fact label="Host">
+                                    {cellOwnerLabel(run.cellOwner)}
+                                </Fact>
+                            </dl>
+                            <RecipeChangedNotice run={run} />
+                            <RunWorkspaceSection
+                                embedded
+                                rows={workspaceRows}
+                                pullRequestBranch={pullRequestBranchOf(
+                                    run.workspace,
+                                )}
+                            />
+                            <RunPreviewCard run={run} embedded />
+                        </RuntimeDisclosure>
+
+                        <RuntimeDisclosure
+                            id="run-log"
+                            title="Logs"
+                            summary={
+                                elapsed
+                                    ? `${elapsed} in total`
+                                    : "Not started yet"
+                            }
+                            defaultOpen={live}>
+                            <RunTimingView timing={timing} />
+                            <RunLogView
+                                runId={run.runId}
+                                groups={log}
+                                note={logNote}
+                            />
+                        </RuntimeDisclosure>
+
+                        {run.cost && (
+                            <RuntimeDisclosure
+                                id="run-cost"
+                                title="Cost"
+                                summary={`${formatEstimatedUsd(run.cost.totalUsd)} · machine time and LLM tokens at list prices`}>
+                                <RunCostBreakdown cost={run.cost} />
+                            </RuntimeDisclosure>
+                        )}
+                    </>
+                )}
+            </Page.Content>
+        </Page.Root>
+    );
+};

@@ -4,9 +4,6 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { SANDBOX_PROVIDER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { SANDBOX_LEASE_MANAGER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
-import { E2BSandboxService } from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
-import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
-import { NullSandboxProvider } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import {
     SandboxLeaseModel,
     SandboxLeaseSchema,
@@ -19,10 +16,12 @@ import {
     SandboxConcurrencyConfigService,
 } from '@libs/sandbox/infrastructure/services/sandbox-concurrency-config.service';
 import {
-    ISandboxEgressPolicy,
+    type ISandboxEgressPolicy,
     SANDBOX_EGRESS_POLICY_TOKEN,
     SandboxEgressPolicyService,
 } from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
+import { SandboxCapacityModule } from '@libs/sandbox/modules/sandbox-capacity.module';
+import { selectSandboxProvider } from '@libs/sandbox/modules/select-sandbox-provider';
 import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
@@ -32,6 +31,7 @@ import { LicenseModule } from '@libs/ee/license/license.module';
         MongooseModule.forFeature([
             { name: SandboxLeaseModel.name, schema: SandboxLeaseSchema },
         ]),
+        SandboxCapacityModule,
         GlobalParametersModule,
         // The organization's fixed outbound IP choice is an organization
         // parameter.
@@ -45,31 +45,7 @@ import { LicenseModule } from '@libs/ee/license/license.module';
             useFactory: (
                 configService: ConfigService,
                 egressPolicy: ISandboxEgressPolicy,
-            ) => {
-                const provider =
-                    configService.get<string>('SANDBOX_PROVIDER') || 'auto';
-
-                // Explicit selection respected first.
-                if (provider === 'null') {
-                    return new NullSandboxProvider();
-                }
-                if (provider === 'local') {
-                    return new LocalSandboxService(configService);
-                }
-                if (provider === 'e2b') {
-                    return new E2BSandboxService(configService, egressPolicy);
-                }
-
-                // 'auto' (default): prefer E2B when an API key is configured,
-                // otherwise fall back to LocalSandbox so self-hosted instances
-                // still get native tools (grep, readFile, listDir) for both
-                // review and conversation. NullSandbox is reserved for
-                // explicit `SANDBOX_PROVIDER=null` (test environments).
-                if (configService.get<string>('API_E2B_KEY')) {
-                    return new E2BSandboxService(configService, egressPolicy);
-                }
-                return new LocalSandboxService(configService);
-            },
+            ) => selectSandboxProvider(configService, egressPolicy),
             inject: [ConfigService, SANDBOX_EGRESS_POLICY_TOKEN],
         },
         {

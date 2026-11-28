@@ -1,0 +1,31 @@
+{
+  "about": "The env names a recipe never sets, because they change what runs rather than what the app is configured with (validate.go isControlEnv, recipe.ts isControlEnv). One file for the worker and the cell: apps/runtime-cell/internal/recipe/recipe-control-env.json is a byte copy (go:embed), and both sides test that it is identical and that their parser refuses every name, every prefix and every refused case below, and accepts every allowed case. A name is compared upper-cased: an exact name in names, or one that starts with a prefix.",
+  "prefixes": ["LD_", "DYLD_", "DOCKER_", "COMPOSE_"],
+  "names": [
+    "PATH",
+    "IFS",
+    "BASH_ENV",
+    "ENV",
+    "PROMPT_COMMAND",
+    "SHELLOPTS",
+    "BASHOPTS",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "PYTHONSTARTUP",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "PERL5OPT",
+    "PERL5LIB",
+    "PERLLIB",
+    "RUBYOPT",
+    "RUBYLIB",
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "GCONV_PATH"
+  ],
+  "cases": {
+    "refused": ["LD_AUDIT", "dyld_insert_libraries", "DOCKER_HOST", "COMPOSE_PROFILES", "RubyOpt", "jdk_java_options"],
+    "allowed": ["NODE_ENV", "PATH_PREFIX", "APP_PATH", "LD", "ENVIRONMENT", "PYTHONUNBUFFERED", "DOCKERFILE"]
+  }
+}

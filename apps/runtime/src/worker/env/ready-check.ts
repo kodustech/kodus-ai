@@ -1,0 +1,212 @@
+import { MAX_HEALTH_TIMEOUT_SECONDS } from '@libs/runtime/blockers/catalog';
+import { type EnvironmentRuntime, isEnvError } from '@libs/runtime/environment';
+import type { Probe } from '@libs/runtime/probe';
+import type { ExitedService } from '@libs/runtime/protocol';
+
+// The ready check (§6): GET the health path on the public http service until it
+// answers under 500. A setup runs it once its claim is ready; a Run runs it after
+// every machine.reset, because the reset takes the project down and compose up
+// does not wait for the app to listen again.
+
+/** The wait when the recipe sets no services.compose.health_timeout (as reproduction.ts). */
+export const DEFAULT_HEALTH_TIMEOUT_SECONDS = 120;
+/** Between two tries of the ready check. */
+export const HEALTH_RETRY_INTERVAL_SECONDS = 5;
+/**
+ * After a reset in a Run, the same 5xx this many tries in a row (~25 s) means
+ * the app is up and answers that error: the behavior to measure, not a start
+ * that is still under way. Without it, a PR that breaks the health path itself
+ * (demo-grafana #4: /api/health 503) waits out the whole timeout every round and
+ * is never compared.
+ */
+export const STABLE_ERROR_TRIES = 6;
+/**
+ * The span the same 5xx must cover besides STABLE_ERROR_TRIES: what six tries
+ * five seconds apart cover. A faster cadence asks more often, never decides sooner.
+ */
+export const STABLE_ERROR_WINDOW_MS = (STABLE_ERROR_TRIES - 1) * HEALTH_RETRY_INTERVAL_SECONDS * 1_000;
+/**
+ * Between two tries after a reset in a Run. The whole wait is one durable step,
+ * so a try costs one observer probe and no checkpoint; demo-twenty's app takes
+ * about 80 s to listen again after each reset, and a 5 s
+ * cadence left it answering for 2.5 s on average before the round went on.
+ */
+export const RUN_READY_INTERVAL_MS = 1_000;
+/** What a round's machine.reset waits when the Run has no ready check to size it by. */
+export const DEFAULT_RESET_TIMEOUT_MS = 120_000;
+
+/**
+ * How long a round's machine.reset may take. The reset takes the project down
+ * and brings it up again: the containers, the recipe's steps and the
+ * dependencies' health checks, the same start a setup waits health_timeout for.
+ * A fixed 120 s cut kodus-ai's reset (99–114 s, then 120 s) and left a probe
+ * inconclusive. Never under the default, never past the
+ * recipe's ceiling.
+ */
+export function resetTimeoutMs(ready: Pick<ReadyTarget, 'waitSeconds'> | undefined): number {
+    return Math.max(DEFAULT_RESET_TIMEOUT_MS, Math.min(ready?.waitSeconds ?? 0, MAX_HEALTH_TIMEOUT_SECONDS) * 1_000);
+}
+
+/** The health path when the recipe names none and the worker sets no RUNTIME_SETUP_HEALTH_PATH. */
+export const DEFAULT_HEALTH_PATH = '/health';
+
+export interface ReadyTarget {
+    service: string;
+    port: number;
+    path: string;
+    /** How long the check waits for the app, in seconds: the recipe's health_timeout, bounded. */
+    waitSeconds: number;
+    /** How long the setup's boot of this environment took (ms): a 5xx before that is a start still under way, not the behavior to measure. */
+    bootMs?: number;
+}
+
+type ProbeOutcome = Awaited<ReturnType<EnvironmentRuntime['probe']>>;
+
+/** The recipe's health_timeout as the check waits it: unset is the default, never past MAX_HEALTH_TIMEOUT_SECONDS. */
+export function readyWaitSeconds(healthTimeoutSeconds: number | undefined): number {
+    return Math.min(Math.max(0, healthTimeoutSeconds ?? DEFAULT_HEALTH_TIMEOUT_SECONDS), MAX_HEALTH_TIMEOUT_SECONDS);
+}
+
+/**
+ * What the ready check calls: the public http service of the recipe, else the
+ * first http one. Undefined when nothing is http (a worker-only or database
+ * environment): there is nothing to ask.
+ */
+export function readyTarget(
+    expose: readonly { service: string; port: number; kind: string }[],
+    recipe: { public?: string; health?: string; healthTimeoutSeconds?: number },
+    defaultPath?: string,
+): ReadyTarget | undefined {
+    const http = expose.find((e) => e.kind === 'http' && (!recipe.public || e.service === recipe.public)) ?? expose.find((e) => e.kind === 'http');
+    if (!http) return undefined;
+    return { service: http.service, port: http.port, path: recipe.health ?? defaultPath ?? DEFAULT_HEALTH_PATH, waitSeconds: readyWaitSeconds(recipe.healthTimeoutSeconds) };
+}
+
+/** The observer probe of one try. */
+export function readyProbe(target: Pick<ReadyTarget, 'service' | 'port' | 'path'>, who: { id: string; purpose: string }): Probe {
+    return {
+        id: who.id,
+        origin: 'external',
+        purpose: who.purpose,
+        expected: 'an HTTP response',
+        compare: ['status'],
+        spec: { kind: 'http', target: { service: target.service, port: target.port }, method: 'GET', path: target.path, timeoutMs: 30_000 },
+    };
+}
+
+/**
+ * The app has not answered yet: nothing listens (the observer cannot reach it) or it answers 5xx while it starts.
+ * A lost transport too: a cell that predates the fix reads a port still starting as one (kr-remix, release v1l),
+ * and the caller checks the claim's lease before each try, so a claim that is gone still stops it.
+ */
+export function notAnsweringYet(out: ProbeOutcome): boolean {
+    if (isEnvError(out)) return out.code === 'vm_unhealthy' || out.code === 'transport_lost';
+    const status = out.http?.status;
+    return !status || status >= 500;
+}
+
+/** Answered under 500. */
+export function answered(out: ProbeOutcome | undefined): boolean {
+    if (out === undefined || isEnvError(out)) return false;
+    const status = out.http?.status;
+    return !!status && status < 500;
+}
+
+export interface ReadyWaitResult {
+    ready: boolean;
+    tries: number;
+    waitedMs: number;
+    last?: ProbeOutcome;
+    /** Ready because the app answered this same 5xx STABLE_ERROR_TRIES times in a row (acceptStableError only). */
+    stableError?: number;
+    /** The public service ran and stopped (or restarts in a loop): no wait brings it back, so the wait ended at once. */
+    exited?: ExitedService;
+}
+
+/** The public service as a probe that got no answer found it: exited, with the exit code and the tail of its log. */
+export function exitedServiceOf(out: ProbeOutcome | undefined, service: string): ExitedService | undefined {
+    const services = out === undefined ? undefined : 'services' in out ? out.services : undefined;
+    return services?.find((s) => s.name === service);
+}
+
+/** What a ready check says of a public service that exited: its exit code and last log lines. */
+export function exitedMessage(target: Pick<ReadyTarget, 'service' | 'port' | 'path'>, exited: ExitedService): string {
+    const tail = exited.logTail.slice(-10).join('\n');
+    return `${target.service} exited with code ${exited.exitCode} before it answered GET ${target.path} on port ${target.port} (${exited.state}).${tail ? `\nLast log lines:\n${tail}` : ''}`;
+}
+
+/**
+ * Asks until the app answers or `waitMs` passes on the clock (a try that hangs
+ * to its own timeout uses up the wait too). For a caller already inside one
+ * durable step (a Run's replay round): the whole wait is that step, so a
+ * resumed workflow reads its result and never asks again.
+ */
+export async function waitUntilReady(args: {
+    env: Pick<EnvironmentRuntime, 'probe'>;
+    claimId: string;
+    target: ReadyTarget;
+    who: { id: string; purpose: string };
+    /** The stepId of try i: stable across a retried step. */
+    stepIdOf: (i: number) => string;
+    now: () => number;
+    sleep: (ms: number) => Promise<void>;
+    /**
+     * A Run's replay: an app that keeps answering the same 5xx is up, and that
+     * answer is what the round measures. A setup never sets it: there a stable
+     * 5xx on the default branch is a boot that failed.
+     * Only once the app is known to have started: it had already answered under
+     * 500 on this claim (answeredBefore), or the setup's measured boot time
+     * (target.bootMs) has passed. An app that takes minutes to boot answers 503
+     * the whole time, and that is a start under way. With neither known, the
+     * wait runs to its deadline.
+     */
+    acceptStableError?: boolean;
+    /** The claim already answered under 500 since its last boot: it is the same app, so a 5xx now is its behavior. */
+    answeredBefore?: boolean;
+    /** Between two tries; HEALTH_RETRY_INTERVAL_SECONDS when unset. */
+    intervalMs?: number;
+}): Promise<ReadyWaitResult> {
+    const { env, claimId, target } = args;
+    const waitMs = target.waitSeconds * 1_000;
+    const interval = args.intervalMs ?? HEALTH_RETRY_INTERVAL_SECONDS * 1_000;
+    const startedAt = args.now();
+    const probe = readyProbe(target, args.who);
+    let last: ProbeOutcome | undefined;
+    let tries = 0;
+    let same = 0;
+    let previous: number | undefined;
+    let stableError: number | undefined;
+    let exited: ExitedService | undefined;
+    let sameSince = startedAt;
+    for (;;) {
+        const at = args.now();
+        last = await env.probe(claimId, probe, args.stepIdOf(tries));
+        tries++;
+        if (!notAnsweringYet(last)) break;
+        // A service that exited does not come back by waiting: end here with what the cell read of it.
+        const gone = exitedServiceOf(last, target.service);
+        if (gone) {
+            exited = gone;
+            break;
+        }
+        const status = isEnvError(last) ? undefined : last.http?.status;
+        same = status !== undefined && status === previous ? same + 1 : status !== undefined ? 1 : 0;
+        if (same === 1) sameSince = at;
+        previous = status;
+        const started = args.answeredBefore === true || (target.bootMs !== undefined && at - startedAt >= target.bootMs);
+        if (args.acceptStableError && started && status !== undefined && same >= STABLE_ERROR_TRIES && at - sameSince >= STABLE_ERROR_WINDOW_MS) {
+            stableError = status;
+            break;
+        }
+        if (args.now() + interval - startedAt >= waitMs) break;
+        await args.sleep(interval);
+    }
+    return {
+        ready: exited === undefined && (answered(last) || stableError !== undefined),
+        tries,
+        waitedMs: args.now() - startedAt,
+        last,
+        ...(stableError !== undefined ? { stableError } : {}),
+        ...(exited ? { exited } : {}),
+    };
+}

@@ -6,6 +6,7 @@ import {
     ISandboxLeaseManager,
     SandboxCircuitOpenError,
     DEFAULT_CAPACITY_WAIT_MS,
+    SandboxCapacityTimeoutError,
     SandboxAcquireOptions,
     SandboxWaitAbortedError,
     SandboxInvalidatedError,
@@ -35,12 +36,20 @@ import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository
 import {
     DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
     isRepositorySpecificSandboxFailure,
+    isRuntimeCellFull,
     isSandboxCapacityFailure,
     isTimeoutSandboxFailure,
     SandboxCircuitTransition,
     SandboxCreateCircuitBreaker,
 } from './sandbox-create-circuit-breaker';
 import { SandboxConcurrencyLimiter } from './sandbox-concurrency-limiter';
+import {
+    SANDBOX_CAPACITY_GATE_TOKEN,
+    SandboxCapacityGate,
+    SandboxCapacityNumbers,
+    readSandboxCapacityEnv,
+    CapacityGrant,
+} from './sandbox-capacity-gate';
 import {
     BackoffOptions,
     calculateBackoffInterval,
@@ -58,9 +67,9 @@ import {
     syncE2BSandboxRepo,
 } from '../providers/e2b-sandbox.service';
 import {
-    isLocalSandboxPath,
-    deleteLocalSandbox,
-} from './local-sandbox-cleanup.service';
+    isImmediateCleanupSandbox,
+    deleteImmediateSandbox,
+} from './immediate-sandbox-cleanup';
 
 /**
  * Default idle timeout applied when the last lease on a sandbox is released.
@@ -267,7 +276,10 @@ export class SandboxLeaseManager
             // The limiter no longer counts this slot: forget it, so the next
             // acquire on its prKey takes a new one instead of joining it
             for (const [prKey, slot] of this.prKeySlots) {
-                if (slot.slotId === slotId) this.prKeySlots.delete(prKey);
+                if (slot.slotId === slotId) {
+                    this.prKeySlots.delete(prKey);
+                    this.releaseDeployment(slot);
+                }
             }
             this.logger.warn({
                 message: `SandboxLeaseManager: dropped a sandbox slot held ${heldMs}ms without release`,
@@ -298,7 +310,19 @@ export class SandboxLeaseManager
         @Optional()
         @Inject(SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN)
         private readonly concurrencyConfig?: ISandboxConcurrencyConfigService,
+        // Optional: without it (or without SANDBOX_MAX_CONCURRENT) there is no deployment cap.
+        @Optional()
+        @Inject(SANDBOX_CAPACITY_GATE_TOKEN)
+        private readonly capacityGate?: SandboxCapacityGate,
     ) {}
+
+    /** In-use / queued / oldest wait for the deployment-wide cap. */
+    capacityNumbers(): Promise<SandboxCapacityNumbers> {
+        return (
+            this.capacityGate?.numbers() ??
+            Promise.resolve({ inUse: null, cap: 0, queued: 0, oldestWaitMs: 0 })
+        );
+    }
 
     /**
      * Acquire a lease (see acquireLease) once this worker has a concurrency
@@ -411,6 +435,7 @@ export class SandboxLeaseManager
                         },
                     });
                 }
+                await this.takeDeploymentSlot(prKey, consumer, slot, signal);
                 return slot;
             }
 
@@ -459,6 +484,100 @@ export class SandboxLeaseManager
         if (slot.refs > 0) return;
         if (this.prKeySlots.get(prKey) === slot) this.prKeySlots.delete(prKey);
         this.concurrencyLimiter.release(slot.slotId);
+        void this.capacityGate?.cancel(slot.slotId);
+        this.releaseDeployment(slot);
+    }
+
+    private releaseDeployment(slot: WorkerSlot): void {
+        const pending = slot.deployment;
+        slot.deployment = undefined;
+        void pending?.then((g) =>
+            g.outcome === 'granted'
+                ? g.release().catch((error) =>
+                      this.logger.warn({
+                          message:
+                              'SandboxLeaseManager: could not release the deployment capacity slot',
+                          context: SandboxLeaseManager.name,
+                          error,
+                      }),
+                  )
+                : undefined,
+        );
+    }
+
+    /**
+     * Wait for the deployment-wide slot (SANDBOX_MAX_CONCURRENT) once this
+     * worker's own slot is held. The slot is shared by every caller on the
+     * prKey, like the worker slot. After the max wait the review runs without
+     * a sandbox (SandboxCapacityTimeoutError); a cancel from invalidate() (the
+     * PR was closed or force-pushed) ends it as a supersede.
+     */
+    private async takeDeploymentSlot(
+        prKey: string,
+        consumer: string,
+        slot: WorkerSlot,
+        signal?: AbortSignal,
+    ): Promise<void> {
+        const gate = this.capacityGate;
+        if (!gate?.enabled) return;
+        // A store failure becomes an 'error' grant: a bare rejection would leave
+        // waitFor pending forever (the review hung) and be unhandled elsewhere.
+        slot.deployment ??= gate
+            .acquire(slot.slotId, prKey)
+            .catch((error): CapacityGrant => ({
+                outcome: 'error',
+                waitedMs: 0,
+                error,
+            }));
+        const startedAt = Date.now();
+        let grant: Awaited<NonNullable<WorkerSlot['deployment']>> | null = null;
+        const outcome = await waitFor(
+            slot.deployment.then((g) => {
+                grant = g;
+                return g.outcome === 'granted';
+            }),
+            2_147_483_647,
+            signal,
+        );
+        const waitedMs = Date.now() - startedAt;
+        if (outcome === 'granted') {
+            if (waitedMs >= SLOT_WAIT_LOG_THRESHOLD_MS) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: deployment capacity slot granted after ${waitedMs}ms prKey="${prKey}" consumer="${consumer}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: {
+                        prKey,
+                        consumer,
+                        waitedMs,
+                        ...(await gate.numbers()),
+                    },
+                });
+            }
+            return;
+        }
+        const failed = grant as { outcome: string } | null;
+        this.dropSlot(prKey, slot);
+        this.logger.warn({
+            message: `SandboxLeaseManager: no deployment capacity slot (${failed?.outcome ?? outcome}) after ${waitedMs}ms prKey="${prKey}" consumer="${consumer}"`,
+            context: SandboxLeaseManager.name,
+            metadata: { prKey, consumer, waitedMs, ...(await gate.numbers()) },
+        });
+        if (failed?.outcome === 'timeout') {
+            throw new SandboxCapacityTimeoutError(
+                prKey,
+                waitedMs,
+                `the deployment cap of ${gate.maxConcurrent} sandboxes`,
+            );
+        }
+        if (failed?.outcome === 'error')
+            throw (failed as unknown as { error: unknown }).error;
+        if (failed?.outcome === 'cancelled')
+            throw new SandboxInvalidatedError(prKey);
+        throw new SandboxWaitAbortedError(
+            prKey,
+            waitedMs,
+            'a deployment capacity slot',
+        );
     }
 
     /**
@@ -684,7 +803,8 @@ export class SandboxLeaseManager
         // release (the review, #2628) still records when it gave it back.
         const use = this.leaseIdToUse.get(leaseId);
         this.leaseIdToUse.delete(leaseId);
-        if (use) use.releasedAt = new Date();
+        const releasedAt = new Date();
+        if (use) use.releasedAt = releasedAt;
 
         // The holder is done, but a command it started may still be running
         // (an orchestrator that timed out). The sandbox and the worker slot
@@ -698,7 +818,15 @@ export class SandboxLeaseManager
         ) {
             const background = this.drainInFlight(inFlight, leaseId, prKey)
                 .then(() =>
-                    this.giveBack(leaseId, prKey, sandboxId, held, use, opts),
+                    this.giveBack(
+                        leaseId,
+                        prKey,
+                        sandboxId,
+                        held,
+                        use,
+                        releasedAt,
+                        opts,
+                    ),
                 )
                 .catch((err) =>
                     this.logger.warn({
@@ -713,7 +841,15 @@ export class SandboxLeaseManager
             return;
         }
 
-        await this.giveBack(leaseId, prKey, sandboxId, held, use, opts);
+        await this.giveBack(
+            leaseId,
+            prKey,
+            sandboxId,
+            held,
+            use,
+            releasedAt,
+            opts,
+        );
     }
 
     /**
@@ -726,6 +862,7 @@ export class SandboxLeaseManager
         sandboxId: string | undefined,
         held: { prKey: string; slot: WorkerSlot } | undefined,
         use: SandboxUsage | undefined,
+        releasedAt: Date,
         opts?: { idleMs?: number },
     ): Promise<void> {
         if (held) this.dropSlot(held.prKey, held.slot);
@@ -756,7 +893,7 @@ export class SandboxLeaseManager
 
         if (updated && updated.leaseCount <= 0 && updated.sandboxId) {
             // Local sandbox: immediate cleanup
-            if (isLocalSandboxPath(updated.sandboxId)) {
+            if (isImmediateCleanupSandbox(updated.sandboxId)) {
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
                     updated.sandboxId,
@@ -764,7 +901,7 @@ export class SandboxLeaseManager
                 );
                 if (claimed) {
                     try {
-                        await deleteLocalSandbox(updated.sandboxId);
+                        await deleteImmediateSandbox(updated.sandboxId);
                         if (use) use.stopAt = new Date();
                         await this.leaseRepo.completeCleanup(
                             prKey,
@@ -862,7 +999,9 @@ export class SandboxLeaseManager
                 return;
             }
 
-            const killAt = new Date(Date.now() + idleMs);
+            // The idle window starts when the caller gave the sandbox back, not
+            // after the Mongo writes above: otherwise it runs a few ms long.
+            const killAt = new Date(releasedAt.getTime() + idleMs);
             const scheduled = await this.leaseRepo.setKillAt(prKey, killAt);
             if (!scheduled) {
                 // A holder joined between the decrement and this write: the
@@ -1085,6 +1224,9 @@ export class SandboxLeaseManager
      * - doc not found: no-op (idempotent).
      */
     async invalidate(prKey: string): Promise<void> {
+        // A review of this PR still queued for capacity on this worker is moot
+        // (any worker: the waiting tickets are deleted from Mongo)
+        await this.capacityGate?.cancelPrKey(prKey);
         this.logger.log({
             message: `SandboxLeaseManager: invalidate prKey="${prKey}"`,
             context: SandboxLeaseManager.name,
@@ -1109,7 +1251,7 @@ export class SandboxLeaseManager
         if (doc.state === 'CREATING') {
             // Mid-create race: mark as INVALIDATED so the create path can detect and kill
             // Local sandbox: mark invalidated (cleanup on creator failure or final release)
-            if (isLocalSandboxPath(doc.sandboxId)) {
+            if (isImmediateCleanupSandbox(doc.sandboxId)) {
                 await this.leaseRepo.markInvalidated(prKey);
                 this.logger.log({
                     message: `SandboxLeaseManager: marked INVALIDATED (mid-create, local) prKey="${prKey}"`,
@@ -1129,7 +1271,7 @@ export class SandboxLeaseManager
 
         // READY or PAUSED: soft-drain then delete
         // Local sandbox path
-        if (isLocalSandboxPath(doc.sandboxId)) {
+        if (isImmediateCleanupSandbox(doc.sandboxId)) {
             if (doc.leaseCount <= 0) {
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
@@ -1138,7 +1280,7 @@ export class SandboxLeaseManager
                 );
                 if (claimed) {
                     try {
-                        await deleteLocalSandbox(doc.sandboxId);
+                        await deleteImmediateSandbox(doc.sandboxId);
                         await this.leaseRepo.completeCleanup(
                             prKey,
                             doc.sandboxId,
@@ -1307,9 +1449,9 @@ export class SandboxLeaseManager
                 });
                 // Kill the sandbox we just created; it is orphaned
                 if (sandboxId) {
-                    if (isLocalSandboxPath(sandboxId)) {
+                    if (isImmediateCleanupSandbox(sandboxId)) {
                         try {
-                            await deleteLocalSandbox(sandboxId);
+                            await deleteImmediateSandbox(sandboxId);
                         } catch (localErr) {
                             this.logger.warn({
                                 message: `SandboxLeaseManager: Failed to clean local sandbox after mid-create invalidation prKey="${prKey}"`,
@@ -1357,9 +1499,9 @@ export class SandboxLeaseManager
             return { sandbox, leaseId, sandboxId, wasCreated: true };
         } catch (err) {
             // Local sandbox cleanup on creator failure
-            if (sandboxId && isLocalSandboxPath(sandboxId)) {
+            if (sandboxId && isImmediateCleanupSandbox(sandboxId)) {
                 try {
-                    await deleteLocalSandbox(sandboxId);
+                    await deleteImmediateSandbox(sandboxId);
                 } catch (cleanupErr) {
                     // Claim cleanup first, then mark as failed
                     const claimed = await this.leaseRepo.claimCleanup(
@@ -1476,8 +1618,25 @@ export class SandboxLeaseManager
                         capacityWaits++,
                         CAPACITY_WAIT_BACKOFF,
                     );
+                    // A full runtime cell waits at most the max wait, then the
+                    // review runs without a sandbox and says so. E2B keeps
+                    // waiting for its job unless a deployment cap is set.
+                    const boundMs =
+                        isRuntimeCellFull(err) || this.capacityGate?.enabled
+                            ? (this.capacityGate?.maxWaitMs ??
+                              readSandboxCapacityEnv().maxWaitMs)
+                            : Infinity;
+                    if (Date.now() - startedAt + delayMs > boundMs) {
+                        throw new SandboxCapacityTimeoutError(
+                            prKey,
+                            Date.now() - startedAt,
+                            isRuntimeCellFull(err)
+                                ? 'the Kody Runtime cell is full'
+                                : 'room in the E2B plan',
+                        );
+                    }
                     this.logger.warn({
-                        message: `SandboxLeaseManager: E2B plan has no room for another sandbox; retrying in ${delayMs}ms prKey="${prKey}"`,
+                        message: `SandboxLeaseManager: sandbox provider has no room for another sandbox; retrying in ${delayMs}ms prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
                         error: err,
                         metadata: {
@@ -1953,6 +2112,8 @@ interface WorkerSlot {
     slotId: string;
     refs: number;
     granted: Promise<boolean>;
+    /** The deployment-wide slot, shared like `granted`. */
+    deployment?: Promise<CapacityGrant>;
 }
 
 type CapacityWaitOutcome = 'granted' | 'withdrawn' | 'tick' | 'aborted';

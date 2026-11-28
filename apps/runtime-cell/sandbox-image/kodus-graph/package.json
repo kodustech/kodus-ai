@@ -1,0 +1,8 @@
+{
+  "name": "kodus-runtime-sandbox-kodus-graph",
+  "private": true,
+  "description": "kodus-graph for the Runtime sandbox image: the verified npm tarball, its dependencies pinned by bun.lock (sandbox-image/Dockerfile).",
+  "dependencies": {
+    "@kodus/kodus-graph": "./kodus-graph.tgz"
+  }
+}

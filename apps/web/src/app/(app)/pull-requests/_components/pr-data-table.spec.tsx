@@ -11,6 +11,14 @@ jest.mock("@services/organizationParameters/hooks", () => ({
     useGetTimezone: () => "UTC",
 }));
 
+// The Runtime column and the commit timeline reach the Runtime API and the
+// session; they have their own specs.
+jest.mock("./pr-runtime", () => ({
+    PrRuntimeColumn: () => null,
+    RequestRunButton: () => null,
+}));
+jest.mock("./pr-commit-timeline", () => ({ PrCommitTimeline: () => null }));
+
 jest.mock("@services/pull-requests", () => {
     const actual = jest.requireActual("@services/pull-requests/utils");
     return { ...actual, usePrefetchPullRequestReview: () => jest.fn() };

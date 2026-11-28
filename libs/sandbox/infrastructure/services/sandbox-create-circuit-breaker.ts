@@ -1,5 +1,7 @@
 import { RateLimitError } from 'e2b';
 
+import { RuntimeSandboxError } from '../providers/runtime-sandbox.client';
+
 import { createLogger } from '@libs/core/log/logger';
 
 /**
@@ -285,7 +287,19 @@ export function isRepositorySpecificSandboxFailure(err: unknown): boolean {
  * the clone, or another RateLimitError by name, is an ordinary failure.
  */
 export function isSandboxCapacityFailure(err: unknown): boolean {
-    return err instanceof RateLimitError;
+    return err instanceof RateLimitError || isRuntimeCellFull(err);
+}
+
+/**
+ * The Kody Runtime answered that no cell has room (`no_capacity`, or the
+ * org's cap of shared machines, `org_capacity`): full, not broken. Matched by
+ * shape so this file does not import the runtime client.
+ */
+export function isRuntimeCellFull(err: unknown): boolean {
+    return (
+        err instanceof RuntimeSandboxError &&
+        (err.code === 'no_capacity' || err.code === 'org_capacity')
+    );
 }
 
 /**

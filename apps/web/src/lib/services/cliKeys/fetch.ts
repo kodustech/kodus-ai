@@ -48,6 +48,20 @@ export const updateCLIKeyConfig = async (params: {
     return response;
 };
 
+/** Replaces the repositories the key reaches; each must be configured for the team. */
+export const setCLIKeyRepositories = async (params: {
+    teamId: string;
+    keyId: string;
+    repositoryIds: string[];
+}): Promise<{ uuid: string; repositoryIds: string[] } | null> =>
+    authorizedFetch<{ uuid: string; repositoryIds: string[] }>(
+        CLI_KEYS_PATHS.REPOSITORIES(params.teamId, params.keyId),
+        {
+            method: "PUT",
+            body: JSON.stringify({ repositoryIds: params.repositoryIds }),
+        },
+    );
+
 export const revokeCLIKey = async (params: {
     teamId: string;
     keyId: string;

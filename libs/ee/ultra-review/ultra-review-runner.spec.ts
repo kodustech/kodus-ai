@@ -23,23 +23,48 @@ const fb = model('fallback', 'f');
 
 type Plan = Record<string, UltraModelRunResult<string[]> | 'throw'>;
 
-/** Runs each model per `plan`; a model's failure resolves after `delays`. */
+/** A model's run ends only after another model reached a point: `start:f` or `end:a`. Order is set, never raced on a clock. */
+type Waits = Record<string, `${'start' | 'end'}:${string}`>;
+
+function milestones() {
+    const reached = new Map<string, () => void>();
+    const promises = new Map<string, Promise<void>>();
+    const at = (key: string) => {
+        if (!promises.has(key)) promises.set(key, new Promise<void>((r) => reached.set(key, r)));
+        return promises.get(key)!;
+    };
+    return {
+        at,
+        mark: (key: string) => {
+            at(key);
+            reached.get(key)!();
+        },
+    };
+}
+
+/** Runs each model per `plan`; a model listed in `waits` ends only once the named model started or ended. */
 async function run(
     state: Pick<UltraReviewState, 'models' | 'unavailable' | 'fallback'>,
     plan: Plan,
-    delays: Record<string, number> = {},
+    waits: Waits = {},
     fallbackAllowed?: () => boolean,
 ) {
     const started: string[] = [];
+    const points = milestones();
     const result = await runUltraModels<string[]>({
         state,
         fallbackAllowed,
         run: async (m) => {
             started.push(m.modelId);
-            await new Promise((r) => setTimeout(r, delays[m.modelId] ?? 0));
-            const p = plan[m.modelId];
-            if (p === 'throw') throw new Error(`${m.modelId} blew up`);
-            return p;
+            points.mark(`start:${m.modelId}`);
+            try {
+                if (waits[m.modelId]) await points.at(waits[m.modelId]);
+                const p = plan[m.modelId];
+                if (p === 'throw') throw new Error(`${m.modelId} blew up`);
+                return p;
+            } finally {
+                points.mark(`end:${m.modelId}`);
+            }
         },
     });
     return { ...result, started };
@@ -105,7 +130,8 @@ describe('runUltraModels', () => {
         const r = await run(
             { models: trio, fallback: fb },
             { a: fail('a'), b: fail('b'), c: ok('c'), f: ok('f') },
-            { a: 5, b: 1 },
+            // b fails first and the fallback starts for it; only then does a fail.
+            { a: 'start:f' },
         );
         expect(r.started.filter((id) => id === 'f')).toHaveLength(1);
         expect(r.runs.find((x) => x.modelId === 'b')).toMatchObject({
@@ -211,7 +237,8 @@ describe('runUltraModels', () => {
         const r = await run(
             { models: trio, fallback: inTrio },
             { a: fail('a'), b: ok('b'), c: fail('c') },
-            { a: 1, c: 20 },
+            // a fails first; c, the fallback in the trio, fails after it.
+            { c: 'end:a' },
         );
         expect(r.runs[0].replacedBy).toBeUndefined();
         expect(r.runs[0].reusedRun).toBeUndefined();
@@ -258,12 +285,15 @@ describe('runUltraModels', () => {
 
     it('starts the fallback as soon as a model fails, without waiting for the others', async () => {
         const order: string[] = [];
+        let fallbackStarted!: () => void;
+        const fallbackStart = new Promise<void>((r) => (fallbackStarted = r));
         await runUltraModels<string[]>({
             state: { models: trio, fallback: fb },
             run: async (m) => {
                 order.push(`start:${m.modelId}`);
-                const delay = { a: 30, b: 1, c: 30, f: 1 }[m.modelId] ?? 0;
-                await new Promise((r) => setTimeout(r, delay));
+                if (m.modelId === 'f') fallbackStarted();
+                // a and c end only once the fallback started: the runner must start it while they still run.
+                if (m.modelId === 'a' || m.modelId === 'c') await fallbackStart;
                 order.push(`end:${m.modelId}`);
                 return m.modelId === 'b' ? fail('b') : ok(m.modelId);
             },

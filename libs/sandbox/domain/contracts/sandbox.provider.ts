@@ -32,10 +32,43 @@ export interface CreateSandboxParams {
     /**
      * The organization and team the sandbox works for. Decides whether it
      * needs the fixed egress IP (SandboxEgressPolicyService); without them
-     * it keeps the fixed IP. Never sent to the sandbox provider.
+     * it keeps the fixed IP. Never sent to the E2B API. The runtime-sandbox
+     * provider also needs the organization (a cell claim is an org's).
      */
     organizationId?: string;
     teamId?: string;
+    /**
+     * Runtime sandbox only: team CLIs installed into a user prefix while the
+     * sandbox is still open to `egressAllow`, before its egress is sealed.
+     * Other providers ignore it (E2B installs as root after creation).
+     */
+    cliInstalls?: PreSealCliInstall[];
+}
+
+export interface PreSealCliInstall {
+    /** Stable key of the (agent, CLI) pair; names the prefix directory. */
+    id: string;
+    /** Pinned install command, already validated. */
+    argv: string[];
+    binary: string;
+    /** Registry hosts the install needs while the sandbox is open. */
+    egressAllow: string[];
+}
+
+export interface PreSealCliInstallResult {
+    /** Absolute path of the installed binary, inside the prefix. */
+    binaryPath?: string;
+    /** Runs the binary: the workspace is noexec, so it is `<interpreter> <binaryPath>`. */
+    interpreter?: string;
+    /** The prefix the CLI runs with as HOME (the workspace prefix, or the throwaway home when `prefix` is set). */
+    home: string;
+    /**
+     * Set when the CLI came from a tool layer of the cell: the read-only mount
+     * (/opt/kcli/<id>) the CLI's files are under, while `home` is a throwaway
+     * writable directory. Absent: the CLI was installed into `home` itself.
+     */
+    prefix?: string;
+    error?: string;
 }
 
 export interface SandboxRunOptions {
@@ -79,7 +112,7 @@ export interface SandboxInstance {
     remoteCommands: RemoteCommands;
     cleanup: () => Promise<void>;
     /** Which sandbox provider created this instance */
-    type: 'e2b' | 'local' | 'null';
+    type: 'e2b' | 'local' | 'runtime' | 'null';
     /**
      * Stable identifier the lease manager persists on the lease doc so a
      * second consumer can warm-resume by reconnecting via the provider.
@@ -98,6 +131,8 @@ export interface SandboxInstance {
      * reach (custom agent CLIs). Unset means unknown, and is treated as no.
      */
     privilegesDropped?: boolean;
+    /** Runtime sandbox: outcome of each pre-seal CLI install, by install id. */
+    cliInstalls?: Record<string, PreSealCliInstallResult>;
     /**
      * Run a shell command inside the sandbox.
      * `envs` are merged into the process environment for this command only

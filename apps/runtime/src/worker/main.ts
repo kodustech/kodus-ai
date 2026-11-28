@@ -1,0 +1,24 @@
+import 'reflect-metadata';
+
+import { NestFactory } from '@nestjs/core';
+
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
+
+import { loadWorkerConfig } from '../shared/config';
+import { RuntimeLogger } from '../shared/observability/logger';
+import { setupRuntimeOtel } from '../shared/observability/otel';
+import { RuntimeWorkerModule } from './runtime-worker.module';
+
+async function bootstrap() {
+    // Fails here, before anything connects, on a missing seal key or a bad setting.
+    const config = loadWorkerConfig();
+    const logger = new RuntimeLogger('runtime-worker');
+    const shutdownOtel = await setupRuntimeOtel({ serviceName: 'runtime-worker', serviceVersion: config.releaseVersion }, config.metricsPort);
+    const app = await NestFactory.createApplicationContext(RuntimeWorkerModule.forConfig(config), { ...NEST_APP_OPTIONS, logger });
+    app.enableShutdownHooks();
+    await app.init();
+    logger.write('info', 'runtime-worker consuming workflow.jobs.runtime_run.queue');
+    process.once('SIGTERM', () => void shutdownOtel());
+}
+
+void bootstrap();

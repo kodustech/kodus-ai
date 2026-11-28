@@ -1,0 +1,77 @@
+import { Logger } from '@nestjs/common';
+import type { Pool } from 'pg';
+
+import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
+
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
+import { PgEnvTemplates } from '../../shared/persistence/env-templates';
+import { PgHostPoolReader } from '../../shared/persistence/host-pools';
+import { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
+import { PgSuiteDemand } from '../../shared/persistence/suite-demand';
+import { PgRunClaims } from '../persistence/pg-run-claims';
+import type { RunDependenciesFactory } from '../dbos/run-deps.factory';
+import { AmqpSuitePublishRequester } from '../publish/amqp-suite-publish-requester';
+import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
+import { PgSuiteBaselines } from './pg-suite-baselines';
+import { PgSuiteCoverageMaps } from './pg-suite-coverage-maps';
+import { PgSuiteMainResults } from './pg-suite-main-results';
+import { PgSuiteQueue } from './pg-suite-queue';
+import { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
+import type { PgSuiteRuns } from './pg-suite-runs';
+import { PgSuiteSpecStats } from './pg-suite-spec-stats';
+import { PlacementSuiteDemand } from './suite-adapters';
+import { SuitePublisher } from './suite-publisher';
+import { type SelectionAlert, SuiteService } from './suite-service';
+
+const logger = new Logger('SuiteSelection');
+
+/**
+ * The one suite service both modes run: the `runtime.suite` workflow (CI mode and the baseline) and the Run's stage (Run mode)
+ * are built from it, so "one engine, two triggers" holds in production wiring as well as in the design.
+ */
+export function buildSuiteService(d: {
+    pool: Pool;
+    deps: Pick<RunDependenciesFactory, 'envForSuite'>;
+    setups: Pick<EnvironmentSetupStore, 'get'>;
+    runs: PgSuiteRuns;
+    amqp: Pick<AmqpConnection, 'publish'>;
+    /** RUNTIME_SUITE_MAX_HOSTS: the hosts one suite run asks for at most. */
+    maxHosts: number;
+    /** RUNTIME_SUITE_BASELINE_CADENCE_HOURS: the longest main goes without a full suite run. */
+    baselineCadenceHours: number;
+    /** The evidence store the artifacts of failed specs are written to; absent: none are kept. */
+    evidence?: Pick<EvidenceStore, 'put'>;
+    /** Where a selection miss is raised (an alert a person sees); absent: it is only logged. */
+    alert?: (e: SelectionAlert) => void;
+}): SuiteService {
+    const templates = new PgEnvTemplates(d.pool);
+    const pools = new PgHostPoolReader(d.pool);
+    const demand = new PgSuiteDemand(d.pool);
+    return new SuiteService({
+        setups: d.setups,
+        environment: (ctx) => d.deps.envForSuite(ctx),
+        demand: (scope) => new PlacementSuiteDemand(demand, pools, scope),
+        claims: new PgRunClaims(d.pool),
+        runs: d.runs,
+        stats: new PgSuiteSpecStats(d.pool),
+        queue: new PgSuiteQueue(d.pool),
+        mainResults: new PgSuiteMainResults(d.pool),
+        baselineCadenceMs: d.baselineCadenceHours * 3_600_000,
+        baselines: new PgSuiteBaselines(d.pool),
+        maps: new PgSuiteCoverageMaps(d.pool),
+        ...(d.evidence ? { evidence: d.evidence } : {}),
+        shadows: new PgSuiteShadows(d.pool),
+        selection: new PgSuiteSelectionState(d.pool),
+        alerts: (e) => {
+            // Paths and spec names only. A miss is an event to read, never a failure of the pull request's check.
+            logger.warn({ msg: 'suite.selection_miss', environmentId: e.environmentId, shadowRunId: e.shadowRunId, sourceRunId: e.sourceRunId, specs: e.specs, off: e.off });
+            d.alert?.(e);
+        },
+        templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
+        headroom: async () => d.maxHosts,
+        baselineRequests: new PgSuiteBaselineRequests(d.pool),
+        // The suite's own check goes to the product on the Runtime's publish route.
+        publisher: new SuitePublisher(d.runs, new AmqpSuitePublishRequester(d.amqp)),
+        clock: { now: () => Date.now(), sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)) },
+    });
+}

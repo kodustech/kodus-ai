@@ -26,6 +26,15 @@ export class OutboxMessageRepository implements IOutboxMessageRepository {
         private readonly repository: Repository<OutboxMessageModel>,
     ) {}
 
+    /** Writes all messages and their envelope ids in one product-database transaction. */
+    async createBatch(messages: OutboxMessage[]): Promise<OutboxMessageModel[]> {
+        return this.repository.manager.transaction(async (manager) => {
+            const saved: OutboxMessageModel[] = [];
+            for (const message of messages) saved.push(await this.create(message, manager));
+            return saved;
+        });
+    }
+
     async create(
         message: OutboxMessage,
         transactionManager?: EntityManager,

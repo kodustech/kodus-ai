@@ -1,0 +1,38 @@
+{
+  "name": "browser-explore",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "browser.explore",
+    "body": {
+      "stepId": "0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d",
+      "request": {
+        "steps": [
+          {
+            "goto": "/"
+          },
+          {
+            "fill": [
+              "#name",
+              "--config evil"
+            ]
+          },
+          {
+            "click": "#save"
+          }
+        ],
+        "viewport": {
+          "width": 800,
+          "height": 600
+        },
+        "timeoutMs": 30000
+      }
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "browser.explore"
+  }
+}

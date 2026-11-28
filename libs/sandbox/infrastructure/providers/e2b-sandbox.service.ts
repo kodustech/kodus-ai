@@ -499,7 +499,7 @@ export function buildE2BRemoteCommands(
 /** Standalone so `syncE2BSandboxRepo` (reconnect path) and the instance
  *  method (create path) can never drift — same reasoning as
  *  `buildE2BRemoteCommands` above. */
-function resolvePrRefspec(
+export function resolvePrRefspec(
     platform: PlatformType,
     prNumber: number,
     cloneUrl: string,

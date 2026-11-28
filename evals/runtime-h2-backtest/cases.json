@@ -1,0 +1,795 @@
+[
+ {
+  "id": "twenty-26459",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 26459
+  },
+  "kr": "kr-twenty",
+  "krPr": 2,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /",
+    "GET /objects/people (any SPA route)",
+    "HEAD /"
+   ],
+   "symptom": {
+    "buggy": "FrontendService.serveDocument skips because isFrontendDocumentRequest requires 'text/html' in request.accepts(); falls through to Nest: 404",
+    "check": "status 200 + content-type text/html (good) vs 404 (buggy) for Accept: */* and for no Accept header",
+    "dimension": "status",
+    "good": "Pre-PR ServeStaticModule (app.module.ts getConditionalModules) serves index.html for any non-API GET: 200 text/html regardless of Accept"
+   }
+  },
+  "oracleSha256": "dc268478c33009631ab4b2287d5f165fc4fe773cef8d8b5efde86cf0faefa536",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-23207",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 23207
+  },
+  "kr": "kr-twenty",
+  "krPr": 3,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /object/workflow/:id with the trigger step open in the side panel"
+   ],
+   "symptom": {
+    "buggy": "An error snackbar 'Updating a workflowVersion through the generic mutation is restricted...' appears and the name is not persisted",
+    "check": "no snackbar containing 'restricted' and the trigger node text equals the new title after reload (good) vs snackbar present or old title (buggy); network: UpdateOneWorkflowVersion with input.trigger returns errors",
+    "dimension": "dom",
+    "good": "The new trigger title is saved: no error snackbar, and after reload the trigger node shows the new name"
+   }
+  },
+  "oracleSha256": "5c84a8c0c2ae9fe2c9f888ac8a0d282a4bd76554730c7fba489fee8062e0412b",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-21176",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 21176
+  },
+  "kr": "kr-twenty",
+  "krPr": 4,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /object/workflow/:id (workflow show page)"
+   ],
+   "symptom": {
+    "buggy": "After Activate, the workflow 'disappears': diagram nodes gone and no current version shown until the page is reloaded",
+    "check": "count of .react-flow__node > 0 and a status tag 'Active' within 5 s of clicking Activate, without reload",
+    "dimension": "dom",
+    "good": "After Activate, the page shows the version as Active and the diagram still renders its trigger and step nodes"
+   }
+  },
+  "oracleSha256": "6fa93ae92c8d79aadcd496060f87e7a08dbe14311f648c7015d93e7ee67f4fa6",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-21072",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 21072
+  },
+  "kr": "kr-twenty",
+  "krPr": 5,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "POST /metadata mutation createApiKey (also updateApiKey, revokeApiKey, assignRoleToApiKey)"
+   ],
+   "symptom": {
+    "buggy": "'data' key absent from the body and errors[0].extensions.code !== 'FORBIDDEN' (an internal or unauthenticated code; status may be non-200)",
+    "check": "buggy iff !('data' in body) || body.errors[0].extensions.code !== 'FORBIDDEN' while data.createApiKey is not returned",
+    "dimension": "field",
+    "good": "Fixed: HTTP 200, body.data === null, errors[0].extensions.code === 'FORBIDDEN'. P: success, data.createApiKey.id present"
+   }
+  },
+  "oracleSha256": "3f953e77c688c8bee599c8a6aa9278dfbb5efe7254c1d2cfd12e33dd0ed68f6e",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-20823",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 20823
+  },
+  "kr": "kr-calcom",
+  "krPr": 3,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /api/trpc/insights/eventsByStatus",
+    "page /insights"
+   ],
+   "symptom": {
+    "buggy": "Counts all BookingTimeStatus rows in range (ignores eventTypeId and team scope)",
+    "check": "eventsByStatus.created (total) for {teamId,eventTypeId} equals bookings of that event type vs equals (larger) global total",
+    "dimension": "field",
+    "good": "Counts only bookings of the chosen event type within the team"
+   }
+  },
+  "oracleSha256": "694ae6b551131c4afdbe3bb1878bbbf10fdd45d19703bfe92a8a58ca8698069f",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-23040",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 23040
+  },
+  "kr": "kr-calcom",
+  "krPr": 4,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /getting-started/connected-video"
+   ],
+   "symptom": {
+    "buggy": "500 (or error boundary) on load",
+    "check": "HTTP status 200 vs 500",
+    "dimension": "status",
+    "good": "200 and the conferencing apps list renders"
+   }
+  },
+  "oracleSha256": "f47138a11739d13a820f85d8a47037933316fc5691bc74391e87e2834cbef410",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-23706",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 23706
+  },
+  "kr": "kr-calcom",
+  "krPr": 5,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /event-types (any Shell page)",
+    "GET /api/trpc/pbac/getNavigationPermissions"
+   ],
+   "symptom": {
+    "buggy": "After permissions load, 'Teams' and 'Insights' links are absent; getNavigationPermissions returns {members:false,teams:false,insights:false}",
+    "check": "presence of nav a[href='/teams'] and a[href='/insights'] after network idle; or tRPC JSON field teams === false",
+    "dimension": "dom",
+    "good": "Sidebar shows 'Teams' (href /teams) and 'Insights' (href /insights) links"
+   }
+  },
+  "oracleSha256": "405082a7c2817e98a59cfbacd3c4229f003d62191988db2b5bdb401cb558824b",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-21779",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 21779
+  },
+  "kr": "kr-calcom",
+  "krPr": 6,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /event-types/:id?tabName=setup"
+   ],
+   "symptom": {
+    "buggy": "Extra empty paragraph / <br> between paragraphs (and after the last)",
+    "check": "count of <br> or empty <p> children inside the description contenteditable: 0 vs >=1",
+    "dimension": "dom",
+    "good": "Description editor shows the two paragraphs with no blank line between them"
+   }
+  },
+  "oracleSha256": "b20d4b4b49b2a390a541d6aa5afcf342b45b66fe9f2be22ef62efd61fdfda950",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-20425",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 20425
+  },
+  "kr": "kr-calcom",
+  "krPr": 7,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /:username/:eventSlug"
+   ],
+   "symptom": {
+    "buggy": "Timezone select shows 'Europe/London'",
+    "check": "text of the booker timezone select contains 'Europe/London' vs not",
+    "dimension": "dom",
+    "good": "Timezone select shows the browser timezone (CURRENT_TIMEZONE)"
+   }
+  },
+  "oracleSha256": "3435318e4ade151bfea31666c9c32237c1b77cc7ca95b960766b1438313e2ace",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-19841",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 19841
+  },
+  "kr": "kr-calcom",
+  "krPr": 8,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "POST /api/trpc/public/routing-forms/response (appRoutingForms.public.response)",
+    "GET /router?form=:id&<field>=<value>"
+   ],
+   "symptom": {
+    "buggy": "500 / TRPC error 'Cannot read properties of undefined (reading create)'",
+    "check": "status 200 vs 500, or presence of response id in body",
+    "dimension": "status",
+    "good": "Response 200 with routing data (routingFormResponseId / redirect)"
+   }
+  },
+  "oracleSha256": "09a04bc47b3d8de1fa4b84161a059cbf9930eab20b2519cb3e7d245cbbfee6cf",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-23063",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 23063
+  },
+  "kr": "kr-calcom",
+  "krPr": 9,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /api/trpc/bookings/get",
+    "page /bookings/upcoming"
+   ],
+   "symptom": {
+    "buggy": "Those bookings are missing; totalCount lower",
+    "check": "booking uid X present in bookings.get result vs absent / totalCount differs",
+    "dimension": "field",
+    "good": "Team admin (org MEMBER) sees bookings of other members on the sub-team's event types"
+   }
+  },
+  "oracleSha256": "7d83fcbec3c0584c1eae122f1e69d42fb90c8c8c1a62095888f3a47d78cfb43c",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-18054",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 18054
+  },
+  "kr": "kr-calcom",
+  "krPr": 10,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /api/trpc/public/slots.getSchedule",
+    "page /[user]/[type] (booker)"
+   ],
+   "symptom": {
+    "buggy": "tRPC error (5xx / INTERNAL_SERVER_ERROR) or booker shows no availability / error",
+    "check": "status class 200 vs 500 on slots.getSchedule; or presence of result.data.json.slots keys for tomorrow",
+    "dimension": "status",
+    "good": "200 with slots for the requested days"
+   }
+  },
+  "oracleSha256": "e515e22b5fa79f90c3be77387638b52203af1dfb79ee39e80e1c5cf87386fb07",
+  "reproduced": null
+ },
+ {
+  "id": "payload-16619",
+  "kind": "case",
+  "tier": "A",
+  "upstream": {
+   "repo": "payloadcms/payload",
+   "pr": 16619
+  },
+  "kr": "kr-payload",
+  "krPr": 3,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /admin (dashboard page, authenticated)"
+   ],
+   "symptom": {
+    "buggy": "`.modular-dashboard .widget` computed padding is 0px on M; adjacent widget cards touch",
+    "check": "in the page: getComputedStyle(document.querySelector('.modular-dashboard .widget')).paddingTop !== '0px' on base, === '0px' on PR",
+    "dimension": "dom",
+    "good": "every `.modular-dashboard .widget` element has a non-zero padding (6px inline on P)"
+   }
+  },
+  "oracleSha256": "d1956a55c03ce2b617cfb47590f86ddd3b9a58f197562e83e3c6812a4473b4ce",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-21723",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 21723
+  },
+  "kr": "kr-twenty",
+  "krPr": 6,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /objects/companies (any app page), workspace dropdown in the navigation drawer"
+   ],
+   "symptom": {
+    "buggy": "Nothing happens: no navigation, no new tab, no network request",
+    "check": "After the click, within 3 s: count of window.open or location changes > 0 (good) vs 0 (buggy); or a SignUpInNewWorkspace/navigation request present",
+    "dimension": "dom",
+    "good": "Clicking 'Create Workspace' starts a navigation: P opens a new tab on the new workspace via signUpInNewWorkspace; the fix navigates to <defaultDomain>/welcome?action=create-new-workspace"
+   }
+  },
+  "oracleSha256": "30b4963655b1f0a691b78ec626bcbcc71810e87c9e033dff22ed6afc8a2b0f8c",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-21640",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 21640
+  },
+  "kr": "kr-twenty",
+  "krPr": 7,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /welcome -> /create/workspace -> /create/profile -> /sync/emails -> /invite-team (onboarding flow)"
+   ],
+   "symptom": {
+    "buggy": "The flow goes activation -> profile -> invite team and never renders the sync-emails step",
+    "check": "Visited URLs during the flow include the sync-emails path (good) vs not (buggy); no reloads during the flow",
+    "dimension": "dom",
+    "good": "The sync-emails onboarding page (/sync/emails, 'Emails and Calendar' connect step) shows at some point during the new-workspace onboarding"
+   }
+  },
+  "oracleSha256": "30a17767fb2ee30875c0b4827905fe1310b0b2edb52fd25feb8f4e8baf471786",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-18667",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 18667
+  },
+  "kr": "kr-twenty",
+  "krPr": 8,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /objects/opportunities?viewId=<view with SELECT filter> (record table index)"
+   ],
+   "symptom": {
+    "buggy": "Converter removal (#18667 deleted convertCoreViewFilterToViewFilter, which called convertViewFilterValueToString) leaves value as ['LOST']; building the records filter throws ZodError 'expected string, received array' (console / error boundary), rows are not filtered or the table errors",
+    "check": "console messages contain 'ZodError' or 'expected string, received array' (buggy) vs none (good); and/or the findMany opportunities GraphQL request carries stage { in: ['LOST'] } (good) vs is absent/unfiltered (buggy)",
+    "dimension": "dom",
+    "good": "Table loads with the filter applied: filter chip 'Stage: Lost' in the view bar and every visible row has Stage = Lost; no ZodError in the console"
+   }
+  },
+  "oracleSha256": "4a7f03718db9f77bb4a4bb0a24301fe4005e69cb5199a0cb98340186e487fea2",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-17021",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 17021
+  },
+  "kr": "kr-twenty",
+  "krPr": 9,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "POST /graphql (people findMany)",
+    "page /objects/people sorted by Company with a filter"
+   ],
+   "symptom": {
+    "buggy": "M: errors[0].message contains 'distinctAlias.person_position does not exist' (internal SQL error) for filter + [company.name, position] orderBy with only id selected",
+    "check": "response.body.errors?.[0].message includes 'distinctAlias' (buggy) vs not (good); discriminate P by error code being validation, not internal",
+    "dimension": "field",
+    "good": "P: query rejected at validation (company not in PersonOrderByInput, errors[0].extensions.code GRAPHQL_VALIDATION_FAILED / BAD_USER_INPUT); fixed tree: 200 with data.people.edges and no errors"
+   }
+  },
+  "oracleSha256": "84a509897db0e5fc29c1d61f866ffb7ece52939cfa756e17e426a9efe08bcebc",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-18446",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 18446
+  },
+  "kr": "kr-calcom",
+  "krPr": 11,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /bookings/upcoming",
+    "GET /api/trpc/bookings/get (viewer.bookings.get)"
+   ],
+   "symptom": {
+    "buggy": "Repeated viewer.bookings.get calls until hasNextPage is false; all 100+ bookings rendered; button reads 'No more results'",
+    "check": "count of network requests matching bookings.get within 10 s of load (<=2 vs >=5), or rows count > page size",
+    "dimension": "dom",
+    "good": "After load with no scrolling, 1-2 viewer.bookings.get calls and only the first page of rows (plus 'Load more' button enabled)"
+   }
+  },
+  "oracleSha256": "d3262de8190d9b4a9c68d10224be6c7a652876562340c7c5261cc1da54ee7a4b",
+  "reproduced": null
+ },
+ {
+  "id": "payload-14690",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "payloadcms/payload",
+   "pr": 14690
+  },
+  "kr": "kr-payload",
+  "krPr": 4,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /admin/collections/draft-posts/create (test suite 'versions')"
+   ],
+   "symptom": {
+    "buggy": "M: #action-save reads 'Publish in English' because the label checks isSpecificLocalePublishEnabled instead of !isDefaultPublishAll",
+    "check": "document.querySelector('#action-save').textContent.trim() === 'Publish' (good) vs starts with 'Publish in' (buggy)",
+    "dimension": "dom",
+    "good": "P (and fixed): button #action-save reads 'Publish'"
+   }
+  },
+  "oracleSha256": "9069b91f8f958592a38ffc9cfb750bc33a1691eec01ecaf39652520954095bc9",
+  "reproduced": null
+ },
+ {
+  "id": "immich-29295",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "immich-app/immich",
+   "pr": 29295
+  },
+  "kr": "kr-immich",
+  "krPr": 3,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "POST /api/workflows (create)",
+    "POST /api/assets (upload triggers AssetCreate workflow)",
+    "GET /api/assets/{id}"
+   ],
+   "symptom": {
+    "buggy": "filter compares against originalFileName, fails, action not applied: isFavorite=false",
+    "check": "JSON field `isFavorite` (or `isArchived`/visibility for assetArchive) of the uploaded asset: true on base, false on PR",
+    "dimension": "field",
+    "good": "asset whose originalPath matches the pattern but whose file name does not passes the filter; the action (e.g. assetFavorite) applies: GET /api/assets/{id} -> isFavorite=true"
+   }
+  },
+  "oracleSha256": "dd395f4b62656eedc2bdfc338d03f055dc6e37d5295ddd9ef6f5561e73b742e5",
+  "reproduced": null
+ },
+ {
+  "id": "immich-27715",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "immich-app/immich",
+   "pr": 27715
+  },
+  "kr": "kr-immich",
+  "krPr": 4,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /photos/{assetId} (web asset viewer) with the OCR overlay toggled on"
+   ],
+   "symptom": {
+    "buggy": "OCR boxes are scaled by 1/rasterRatio toward the image's top-left corner (box rect far smaller / clustered near the top-left of the image)",
+    "check": "ratio of an OCR box's getBoundingClientRect() offset from the image rect, divided by its expected normalized position, is ~1 on base and ~rasterScale (<1) on PR",
+    "dimension": "dom",
+    "good": "each OCR box element lies over the text region inside the displayed image's bounding rect (box rect proportional to image rect)"
+   }
+  },
+  "oracleSha256": "49b5ae0473d7d9124e7ede466a685dfb159db4aa89ada8e93e86d036ff54537d",
+  "reproduced": null
+ },
+ {
+  "id": "immich-29684",
+  "kind": "case",
+  "tier": "B",
+  "upstream": {
+   "repo": "immich-app/immich",
+   "pr": 29684
+  },
+  "kr": "kr-immich",
+  "krPr": 5,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "GET /explore (web) - People and Places rows",
+    "search bar people section (SearchPeopleSection.svelte)"
+   ],
+   "symptom": {
+    "buggy": "item count is computed with gap=0, one extra item is rendered and the last item has a different (smaller) width than the others",
+    "check": "in the page: widths of the row's children are all equal on base; on PR the last child's width differs from the first (or children count exceeds the gap-aware formula)",
+    "dimension": "dom",
+    "good": "all items in the single row have the same width and the row's item count = floor((W+gap)/(w+gap))"
+   }
+  },
+  "oracleSha256": "bc1b91cc94362891f62736f6180f9c2589705e2a3614fabdd983de8dd166c755",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-22323",
+  "kind": "case",
+  "tier": "visual",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 22323
+  },
+  "kr": "kr-twenty",
+  "krPr": 10,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /objects/opportunities (kanban 'By Stage' view)"
+   ],
+   "symptom": {
+    "buggy": "DragDropColumnSortableCell fill root has min-width:0 and default flex-shrink:1, so header cells squash below 220px to fit the viewport",
+    "check": "for each stage column: |headerCell.getBoundingClientRect().width - column.getBoundingClientRect().width| < 2px (good) vs header width < column width (buggy)",
+    "dimension": "visual",
+    "good": "Each board header cell keeps its column width (flex-shrink 0 / pre-PR header without the sortable wrapper) and scrolls with the body; header cell i's left/width equals card column i's"
+   }
+  },
+  "oracleSha256": "2876e95aa8b41f85b50c1483476c045a102817d633fa928e11921880a0681adc",
+  "reproduced": null
+ },
+ {
+  "id": "immich-26091",
+  "kind": "case",
+  "tier": "visual",
+  "upstream": {
+   "repo": "immich-app/immich",
+   "pr": 26091
+  },
+  "kr": "kr-immich",
+  "krPr": 6,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /photos/<assetId> (asset viewer)"
+   ],
+   "symptom": {
+    "buggy": "M: letterbox area shows the #808080/#b0b0b0 20px checkerboard",
+    "check": "screenshot pixel sampled inside the img box but outside the rendered content (e.g. 10px below the content's bottom edge, computed from naturalWidth/naturalHeight vs box) is near rgb(128,128,128) or rgb(176,176,176) (buggy) vs dark < rgb(40,40,40) (good); supporting DOM check: getComputedStyle(img).backgroundImage contains 'conic-gradient' (M) vs 'none' (P)",
+    "dimension": "visual",
+    "good": "P: letterbox area beside a landscape JPEG in a portrait or square viewport is the dark viewer background"
+   }
+  },
+  "oracleSha256": "2b8473749b279360e10d4f63b01c4b663871450c407bee8b60eb05daa96455a5",
+  "reproduced": null
+ },
+ {
+  "id": "calcom-21147",
+  "kind": "case",
+  "tier": "visual",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 21147
+  },
+  "kr": "kr-calcom",
+  "krPr": 12,
+  "reviews": [],
+  "findingLabels": {},
+  "oracle": {
+   "targets": [
+    "page /settings/teams/:id/members",
+    "page /settings/organizations/:slug/members"
+   ],
+   "symptom": {
+    "buggy": "Pinned column moves left with the scroll",
+    "check": "pinned cell left offset before vs after scrollLeft += 300 (equal vs differs)",
+    "dimension": "visual",
+    "good": "After scrolling the table horizontally, the pinned first column's getBoundingClientRect().left is unchanged"
+   }
+  },
+  "oracleSha256": "ec09356ab565acc5341b9a8e66408c0f5548d62c9558d95c4275f4ecb5c81f40",
+  "reproduced": null
+ },
+ {
+  "id": "twenty-23583",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 23583
+  },
+  "kr": "kr-twenty",
+  "krPr": 11,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "calcom-20631",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 20631
+  },
+  "kr": "kr-calcom",
+  "krPr": 13,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "calcom-23323",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 23323
+  },
+  "kr": "kr-calcom",
+  "krPr": 14,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "calcom-19323",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 19323
+  },
+  "kr": "kr-calcom",
+  "krPr": 15,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "immich-26678",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "immich-app/immich",
+   "pr": 26678
+  },
+  "kr": "kr-immich",
+  "krPr": 7,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "twenty-23071",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 23071
+  },
+  "kr": "kr-twenty",
+  "krPr": 12,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "twenty-19649",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "twentyhq/twenty",
+   "pr": 19649
+  },
+  "kr": "kr-twenty",
+  "krPr": 13,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "calcom-21618",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 21618
+  },
+  "kr": "kr-calcom",
+  "krPr": 16,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "calcom-24424",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 24424
+  },
+  "kr": "kr-calcom",
+  "krPr": 17,
+  "reviews": [],
+  "findingLabels": {}
+ },
+ {
+  "id": "calcom-21219",
+  "kind": "control",
+  "tier": "control",
+  "upstream": {
+   "repo": "calcom/cal.diy",
+   "pr": 21219
+  },
+  "kr": "kr-calcom",
+  "krPr": 18,
+  "reviews": [],
+  "findingLabels": {}
+ }
+]

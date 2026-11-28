@@ -88,4 +88,18 @@ describe('TeamCliKeyService', () => {
         );
         expect(updatePayload).not.toHaveProperty('config');
     });
+
+    it('keeps the repositories the key reaches when its config is written', async () => {
+        await service.update(
+            { uuid: 'key-1' },
+            { config: { capabilities: ['runs:read'], repositoryIds: ['repo-1', 'repo-2'] } },
+        );
+        expect(repository.update).toHaveBeenCalledWith(
+            { uuid: 'key-1' },
+            { config: { capabilities: ['runs:read'], repositoryIds: ['repo-1', 'repo-2'] } },
+        );
+
+        await service.update({ uuid: 'key-1' }, { config: { capabilities: [] } });
+        expect(repository.update).toHaveBeenLastCalledWith({ uuid: 'key-1' }, { config: { capabilities: [] } });
+    });
 });

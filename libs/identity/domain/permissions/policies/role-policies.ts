@@ -67,6 +67,16 @@ const repoAdmin: PolicyRule[] = [
 
     { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
 
+    // Kody Runtime — read Runs and environments org-wide; asking for a new Run
+    // ("Run again") is a repo setting, so it needs the repo assigned. Org-admin
+    // actions (stop, cells, egress approvals) stay owner-only.
+    { action: Action.Read, resource: ResourceType.RuntimeRun, scope: 'org' },
+    { action: Action.Create, resource: ResourceType.RuntimeRun, scope: 'repo' },
+    { action: Action.Read, resource: ResourceType.RuntimeEnvironment, scope: 'org' },
+    // Opening a preview runs the repository's code and its data, which is
+    // more than reading a Run: repo-scoped for every role but owner
+    // (docs/runtime/preview-urls.md §9.4, decision 7).
+    { action: Action.Read, resource: ResourceType.RuntimePreview, scope: 'repo' },
     // Security scans — read across the org, start one on assigned repos (it
     // spends the organization's model budget on that repository).
     { action: Action.Read, resource: ResourceType.SecurityScan, scope: 'org' },
@@ -102,6 +112,11 @@ const contributor: PolicyRule[] = [
     { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
     { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },
     { action: Action.Read, resource: ResourceType.PluginSettings, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.RuntimeRun, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.RuntimeEnvironment, scope: 'org' },
+    // The one repo-scoped grant of a contributor: a preview runs the
+    // repository's code (docs/runtime/preview-urls.md §9.4, decision 7).
+    { action: Action.Read, resource: ResourceType.RuntimePreview, scope: 'repo' },
 ];
 
 export const ROLE_POLICIES: Record<Role, PolicyRule[]> = {

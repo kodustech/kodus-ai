@@ -22,6 +22,8 @@ This directory contains the agent skills shipped with the Kodus CLI repository.
     - Show and change code review settings at global, repository and directory level, and the review model (`kodus config remote`).
 - `kodus-centralized-config`
     - Manage centralized config from CLI (status, init, sync, disable, download).
+- `kodus-runtime-setup`
+    - Write the Kody Runtime recipe (`.kodus/workspace.yaml`) with your own model, check it and send it to boot on a clean machine, and fix it from the blockers (`kodus env recipe`).
 - `hunk-review` (vendored from [`hunkdiff`](https://github.com/modem-dev/hunk))
     - Drive a live Hunk diff review session: inspect, navigate, reload, and add inline comments via `hunk session ...`. Pairs with `kodus diff` and the hunk-backed `kodus review` viewer.
 
@@ -50,6 +52,8 @@ This directory contains the agent skills shipped with the Kodus CLI repository.
     - Use `kodus-pr-suggestions-resolver` (`kodus pr reviews`).
 - User asks to enable/disable/sync/download centralized config or choose centralized config source repository
     - Use `kodus-centralized-config`.
+- User asks to make Kody Runtime boot the app, set up a Kody Runtime environment, or write `.kodus/workspace.yaml`
+    - Use `kodus-runtime-setup`.
 - User has a Hunk session open or asks to navigate / comment / reload a live Hunk diff
     - Use `hunk-review`. Triggers also include "abrir hunk", "hunk session", "comentar no hunk".
 

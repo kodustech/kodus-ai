@@ -6,4 +6,6 @@ export const CLI_KEYS_PATHS = {
         pathToApiUrl(`/teams/${teamId}/cli-keys/${keyId}`),
     CONFIG: (teamId: string, keyId: string) =>
         pathToApiUrl(`/teams/${teamId}/cli-keys/${keyId}/config`),
+    REPOSITORIES: (teamId: string, keyId: string) =>
+        pathToApiUrl(`/teams/${teamId}/cli-keys/${keyId}/repositories`),
 } as const;

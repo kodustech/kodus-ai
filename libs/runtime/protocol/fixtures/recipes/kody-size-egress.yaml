@@ -1,0 +1,3 @@
+version: 1
+size: { cpu: 4, memory: 8gb }
+egress: { allow: [API.Stripe.com, api.stripe.com, api.example.com.] }

@@ -56,6 +56,24 @@ export class SandboxWaitAbortedError extends Error {
     }
 }
 
+/**
+ * Thrown by acquire() when the deployment-wide cap (SANDBOX_MAX_CONCURRENT)
+ * kept the review waiting for SANDBOX_QUEUE_MAX_WAIT_MS, or the runtime cell
+ * stayed full that long. The review then runs without a sandbox, and says so.
+ */
+export class SandboxCapacityTimeoutError extends Error {
+    constructor(
+        readonly prKey: string,
+        readonly waitedMs: number,
+        readonly waitingFor: string,
+    ) {
+        super(
+            `SandboxLeaseManager: no sandbox capacity (${waitingFor}) after ${waitedMs}ms prKey="${prKey}"; the review runs without a sandbox`,
+        );
+        this.name = 'SandboxCapacityTimeoutError';
+    }
+}
+
 export interface SandboxAcquireOptions {
     /**
      * Aborts the wait for capacity (a worker slot, or E2B plan room). Pass the

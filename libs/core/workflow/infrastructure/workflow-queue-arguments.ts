@@ -57,6 +57,30 @@ export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
         'x-dead-letter-exchange': 'workflow.exchange.dlx',
         'x-dead-letter-routing-key': 'workflow.job.failed',
     },
+    // Kody Runtime. A Run lives 10 to 45 min in DBOS, but the message is
+    // acked as soon as the workflow is started (workflowID = runId), so the
+    // consumer timeout stays the broker default.
+    'workflow.jobs.runtime_run.queue': {
+        'x-queue-type': 'quorum',
+        'x-dead-letter-exchange': 'workflow.exchange.dlx',
+        'x-dead-letter-routing-key': 'workflow.job.failed',
+    },
+    // Stop, revoke and approvals: short handlers, a queue of their own.
+    'workflow.jobs.runtime_control.queue': {
+        'x-queue-type': 'quorum',
+        'x-dead-letter-exchange': 'workflow.exchange.dlx',
+        'x-dead-letter-routing-key': 'workflow.job.failed',
+    },
+    'workflow.jobs.runtime_publish.queue': {
+        'x-queue-type': 'quorum',
+        'x-dead-letter-exchange': 'workflow.exchange.dlx',
+        'x-dead-letter-routing-key': 'workflow.job.failed',
+    },
+    'workflow.jobs.runtime_trigger.queue': {
+        'x-queue-type': 'quorum',
+        'x-dead-letter-exchange': 'workflow.exchange.dlx',
+        'x-dead-letter-routing-key': 'workflow.job.failed',
+    },
     // A scan slice runs at most ~30 min (the sandbox lifetime); a consumer
     // holding a message past 40 min has hung.
     [SECURITY_SCAN_JOB_QUEUE]: {

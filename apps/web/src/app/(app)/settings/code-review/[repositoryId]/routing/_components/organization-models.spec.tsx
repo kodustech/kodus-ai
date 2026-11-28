@@ -167,6 +167,7 @@ function mount(
         ultraAllowed?: boolean;
         ultraInUse?: boolean;
         deepScan?: boolean;
+        kodyRuntime?: boolean;
         ultraReview?: boolean;
     } = {},
 ) {
@@ -180,6 +181,7 @@ function mount(
                 <FeatureFlagsProvider
                     featureFlags={{
                         deepScan: props.deepScan,
+                        kodyRuntime: props.kodyRuntime,
                         ultraReview: props.ultraReview ?? true,
                     }}>
                     <TooltipProvider>
@@ -295,6 +297,17 @@ it("hides the deep scan's model outside its private alpha", async () => {
     await waitFor(() => expect(latest.canEdit).toBe(true));
     expect(await screen.findByText("Custom Agents")).toBeInTheDocument();
     expect(screen.queryByText("Deep scan")).not.toBeInTheDocument();
+});
+it("offers Kody Runtime its own model where Kody Runtime is released", async () => {
+    mount({ kodyRuntime: true });
+    await waitFor(() => expect(latest.canEdit).toBe(true));
+    expect(await screen.findByText("Kody Runtime")).toBeInTheDocument();
+});
+it("hides Kody Runtime's model where Kody Runtime is not released", async () => {
+    mount();
+    await waitFor(() => expect(latest.canEdit).toBe(true));
+    expect(await screen.findByText("Custom Agents")).toBeInTheDocument();
+    expect(screen.queryByText("Kody Runtime")).not.toBeInTheDocument();
 });
 it("re-reads the config, preserves a new provider/model and unrelated routes, and never resubmits masks as keys", async () => {
     mount();
