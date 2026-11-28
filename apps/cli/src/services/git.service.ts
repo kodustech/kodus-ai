@@ -10,7 +10,7 @@ import {
     inferPlatformFromRemote,
 } from '../utils/git-remote.js';
 import { gitEnvironmentToKeep } from '../utils/git-environment.js';
-import { parseGitStatus } from '../utils/git-status.js';
+import { parseGitStatus, parseTrackedGitStatus } from '../utils/git-status.js';
 import { countDiffChanges } from '../utils/git-diff.js';
 import {
     buildFileContentReadPlan,
@@ -55,6 +55,39 @@ class GitService {
     async getGitRoot(): Promise<string> {
         await this.ensureRepo();
         return this.git.revparse(['--show-toplevel']);
+    }
+
+    private async getRepoRoot(): Promise<string> {
+        return (await this.git.raw(['rev-parse', '--show-toplevel'])).replace(
+            /\n$/,
+            '',
+        );
+    }
+
+    /**
+     * When `diff.relative` is enabled in git config, `git diff` limits its
+     * output to the current subdirectory and strips that subdirectory prefix
+     * from emitted paths, while `git status` still reports repo-root paths.
+     * Capture the subdirectory prefix so repository-derived file selection
+     * and metadata stay coherent with the diff.
+     */
+    private async getRepositoryReadContext(): Promise<{
+        repoRoot: string;
+        relativePrefix?: string;
+    }> {
+        const repoRoot = await this.getRepoRoot();
+        const diffRelative = (
+            await this.git.raw(['config', '--bool', '--get', 'diff.relative'])
+        ).trim();
+        if (diffRelative === 'true') {
+            const prefix = (
+                await this.git.raw(['rev-parse', '--show-prefix'])
+            ).replace(/\n$/, '');
+            if (prefix) {
+                return { repoRoot, relativePrefix: prefix };
+            }
+        }
+        return { repoRoot };
     }
 
     /**
@@ -265,41 +298,61 @@ class GitService {
 
     async getModifiedFiles(): Promise<FileDiff[]> {
         await this.ensureRepo();
-        const status = await this.git.status();
+        const { repoRoot, relativePrefix } =
+            await this.getRepositoryReadContext();
+        const status = parseTrackedGitStatus(
+            await this.git.raw([
+                'status',
+                '--porcelain=v1',
+                '-z',
+                '--untracked-files=no',
+            ]),
+        );
         const files: FileDiff[] = [];
+        const selectedFiles = new Set<string>();
+
+        const toScopedFile = (repoRelativeFile: string): string | null => {
+            if (!relativePrefix) {
+                return repoRelativeFile;
+            }
+            return repoRelativeFile.startsWith(relativePrefix)
+                ? repoRelativeFile.slice(relativePrefix.length)
+                : null;
+        };
 
         const processFile = async (
-            file: string,
-            gitStatus: string,
+            repoRelativeFile: string,
+            scopedFile: string,
         ): Promise<FileDiff> => {
-            let status: FileDiff['status'] = 'modified';
-
-            if (gitStatus === 'A' || gitStatus === '?') {
-                status = 'added';
-            } else if (gitStatus === 'D') {
-                status = 'deleted';
-            } else if (gitStatus === 'R') {
-                status = 'renamed';
-            }
-
-            const diff = await this.git.diff(['--', file]);
+            const diff = await this.git.diff([
+                '--',
+                path.resolve(repoRoot, repoRelativeFile),
+            ]);
             const { additions, deletions } = countDiffChanges(diff);
 
-            return { file, status, additions, deletions, diff };
+            return {
+                file: scopedFile,
+                status: 'modified',
+                additions,
+                deletions,
+                diff,
+            };
         };
 
         for (const file of status.staged) {
-            files.push(await processFile(file, 'M'));
-        }
-
-        for (const file of status.modified) {
-            if (!files.find((f) => f.file === file)) {
-                files.push(await processFile(file, 'M'));
+            const scopedFile = toScopedFile(file);
+            if (scopedFile) {
+                files.push(await processFile(file, scopedFile));
+                selectedFiles.add(scopedFile);
             }
         }
 
-        for (const file of status.not_added) {
-            files.push(await processFile(file, 'A'));
+        for (const file of status.modified) {
+            const scopedFile = toScopedFile(file);
+            if (scopedFile && !selectedFiles.has(scopedFile)) {
+                files.push(await processFile(file, scopedFile));
+                selectedFiles.add(scopedFile);
+            }
         }
 
         return files;
@@ -314,6 +367,10 @@ class GitService {
         },
     ): Promise<FileContent[]> {
         await this.ensureRepo();
+        const hasExplicitFiles = Boolean(explicitFiles?.length);
+        const readContext = hasExplicitFiles
+            ? undefined
+            : await this.getRepositoryReadContext();
         let selection:
             | {
                   filesToRead: string[];
@@ -321,7 +378,7 @@ class GitService {
               }
             | undefined;
 
-        if (explicitFiles && explicitFiles.length > 0) {
+        if (hasExplicitFiles && explicitFiles) {
             selection = createFileSelectionFromPaths(explicitFiles);
         } else if (options?.branch) {
             const nameStatus = await this.git.diff([
@@ -341,6 +398,9 @@ class GitService {
             selection = createFileSelectionFromModifiedFiles(allModifiedFiles);
         }
         const { filesToRead, fileStatusMap } = selection;
+        const readOptions = readContext
+            ? { ...options, ...readContext }
+            : options;
 
         // 2. For each file, read content and diff
         const fileContents: FileContent[] = [];
@@ -355,7 +415,7 @@ class GitService {
                     continue;
                 }
 
-                const diffPlan = buildFileDiffReadPlan(filePath, options);
+                const diffPlan = buildFileDiffReadPlan(filePath, readOptions);
                 let fileDiff: string;
                 if (diffPlan.mode === 'single-diff') {
                     fileDiff = await this.git.diff(diffPlan.args);
@@ -367,7 +427,10 @@ class GitService {
                     fileDiff = `${stagedDiff}\n${unstagedDiff}`.trim();
                 }
 
-                const contentPlan = buildFileContentReadPlan(filePath, options);
+                const contentPlan = buildFileContentReadPlan(
+                    filePath,
+                    readOptions,
+                );
                 let content: string;
                 if (contentPlan.mode === 'git-show') {
                     content = await this.git.show(contentPlan.args);

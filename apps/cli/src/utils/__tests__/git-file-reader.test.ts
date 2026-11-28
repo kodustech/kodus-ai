@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
     buildFileContentReadPlan,
@@ -37,6 +38,43 @@ describe('buildFileDiffReadPlan', () => {
             unstagedArgs: ['--', 'src/app.ts'],
         });
     });
+
+    it('resolves repository-relative diff pathspecs against repoRoot when provided', () => {
+        const repoRoot = path.resolve('/tmp/example-repo');
+        const expectedTarget = path.resolve(repoRoot, 'src/app.ts');
+
+        expect(buildFileDiffReadPlan('src/app.ts', { repoRoot })).toEqual({
+            mode: 'working-tree-diff',
+            stagedArgs: ['--cached', '--', expectedTarget],
+            unstagedArgs: ['--', expectedTarget],
+        });
+        expect(
+            buildFileDiffReadPlan('src/app.ts', { staged: true, repoRoot }),
+        ).toEqual({
+            mode: 'single-diff',
+            args: ['--cached', '--', expectedTarget],
+        });
+        expect(
+            buildFileDiffReadPlan('src/app.ts', { branch: 'main', repoRoot }),
+        ).toEqual({
+            mode: 'single-diff',
+            args: ['main...HEAD', '--', expectedTarget],
+        });
+        expect(
+            buildFileDiffReadPlan('inside.txt', {
+                repoRoot,
+                relativePrefix: 'src/',
+            }),
+        ).toEqual({
+            mode: 'working-tree-diff',
+            stagedArgs: [
+                '--cached',
+                '--',
+                path.resolve(repoRoot, 'src/inside.txt'),
+            ],
+            unstagedArgs: ['--', path.resolve(repoRoot, 'src/inside.txt')],
+        });
+    });
 });
 
 describe('buildFileContentReadPlan', () => {
@@ -63,6 +101,35 @@ describe('buildFileContentReadPlan', () => {
             mode: 'fs',
             path: 'src/app.ts',
             encoding: 'utf-8',
+        });
+    });
+
+    it('resolves repository-relative content reads against repoRoot when provided', () => {
+        const repoRoot = path.resolve('/tmp/example-repo');
+        expect(buildFileContentReadPlan('src/app.ts', { repoRoot })).toEqual({
+            mode: 'fs',
+            path: path.resolve(repoRoot, 'src/app.ts'),
+            encoding: 'utf-8',
+        });
+        expect(
+            buildFileContentReadPlan('inside.txt', {
+                repoRoot,
+                relativePrefix: 'src/',
+            }),
+        ).toEqual({
+            mode: 'fs',
+            path: path.resolve(repoRoot, 'src/inside.txt'),
+            encoding: 'utf-8',
+        });
+        expect(
+            buildFileContentReadPlan('inside.txt', {
+                commit: 'abc123',
+                repoRoot,
+                relativePrefix: 'src/',
+            }),
+        ).toEqual({
+            mode: 'git-show',
+            args: ['abc123:src/inside.txt'],
         });
     });
 });
