@@ -348,9 +348,26 @@ fi
 # API_OPEN_AI_API_KEY is also the platform embeddings key (always sent to
 # api.openai.com), so it is kept apart from the LLM key.
 default_embeddings_key="$existing_openai_key"
-# In a legacy config whose provider was not OpenAI, that slot held the LLM key
-# of another upstream (Gemini, Moonshot, Anthropic): not an embeddings key.
-if [ "$llm_from_legacy" = "1" ] && [ "$default_llm_provider" != "openai" ]; then
+# In a legacy config whose provider was not OpenAI, that slot was the LLM key
+# when API_OPENAI_FORCE_BASE_URL sent it to another upstream (Gemini's OpenAI
+# endpoint, Moonshot), or when the provider had no key var of its own: then it
+# is not an embeddings key. With neither, it went to api.openai.com and stays
+# the embeddings key (QA of #2700).
+legacy_slot_was_llm_key() {
+    [ "$llm_from_legacy" = "1" ] && [ "$default_llm_provider" != "openai" ] || return 1
+    case "$(lowercase "$existing_openai_base_url" | sed -E 's|^[a-z]+://||; s|[/:?].*$||')" in
+        ""|api.openai.com) ;;
+        *) return 0 ;;
+    esac
+    local own=""
+    case "$default_llm_provider" in
+        anthropic) own="${API_ANTHROPIC_API_KEY:-}" ;;
+        google_gemini) own="${API_GOOGLE_AI_API_KEY:-${GOOGLE_GENERATIVE_AI_API_KEY:-}}" ;;
+        google_vertex) own="${API_VERTEX_AI_API_KEY:-}" ;;
+    esac
+    [ -z "$own" ]
+}
+if legacy_slot_was_llm_key; then
     default_embeddings_key=""
 fi
 if [ -z "$default_embeddings_key" ] && [ "$new_llm_provider" = "openai" ]; then
@@ -393,6 +410,23 @@ if [ ! -d "$new_installer_path" ]; then
     warn "Directory $new_installer_path does not exist yet. That's fine — provision.sh will complain if you try to provision before cloning."
 fi
 
+# A config value both readers take literally: the scripts source the file
+# (`set -a; . config`, _common.sh) and direnv reads it with `dotenv`. Written
+# unquoted, a base URL lost all after its `&` and a `$` or a backtick in a key
+# expanded or ran on every source (QA of #2700). A value with no shell syntax
+# stays as it was; any other goes in single quotes, literal to both. A single
+# quote inside is closed and reopened, which only bash reads back.
+config_value() {
+    case "$1" in
+        *[!A-Za-z0-9_./:@%+=,-]*) ;;
+        *) printf '%s' "$1"; return ;;
+    esac
+    case "$1" in
+        *\'*) warn "A config value holds a single quote: the scripts read it back, direnv's dotenv may not." >&2 ;;
+    esac
+    printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
 # ---------- write config atomically ----------
 mkdir -p "$CONFIG_DIR"
 chmod 700 "$CONFIG_DIR"
@@ -403,16 +437,16 @@ cat > "$tmp_file" <<EOF
 # Source via 'set -a; . ~/.kodus-dev/config; set +a' or via direnv .envrc.
 # Re-run 'pnpm run selfhosted:setup' to update.
 
-DIGITALOCEAN_TOKEN=$new_do_token
-SH_LICENSE_KEY=$new_license
-GH_DEV_TOKEN=$new_gh_token
-API_LLM_PROVIDER=$new_llm_provider
-API_LLM_PROVIDER_MODEL=$new_llm_model
-API_LLM_API_KEY=$new_llm_api_key
-API_LLM_BASE_URL=$new_llm_base_url
-API_LLM_REASONING_EFFORT=$existing_llm_reasoning_effort
-API_OPEN_AI_API_KEY=$new_openai_key
-KODUS_INSTALLER_PATH=$new_installer_path
+DIGITALOCEAN_TOKEN=$(config_value "$new_do_token")
+SH_LICENSE_KEY=$(config_value "$new_license")
+GH_DEV_TOKEN=$(config_value "$new_gh_token")
+API_LLM_PROVIDER=$(config_value "$new_llm_provider")
+API_LLM_PROVIDER_MODEL=$(config_value "$new_llm_model")
+API_LLM_API_KEY=$(config_value "$new_llm_api_key")
+API_LLM_BASE_URL=$(config_value "$new_llm_base_url")
+API_LLM_REASONING_EFFORT=$(config_value "$existing_llm_reasoning_effort")
+API_OPEN_AI_API_KEY=$(config_value "$new_openai_key")
+KODUS_INSTALLER_PATH=$(config_value "$new_installer_path")
 EOF
 chmod 600 "$tmp_file"
 mv "$tmp_file" "$CONFIG_FILE"
