@@ -1193,6 +1193,7 @@ export abstract class BaseCodeReviewAgentProvider {
     ): MappedFindings {
         return mapAgentFindings(agentResult, {
             changedFiles: input.changedFiles,
+            allBatchFiles: input.allBatchFiles,
             kodyRules: input.kodyRules,
             prNumber: input.prNumber,
             organizationId: input.organizationAndTeamData?.organizationId,

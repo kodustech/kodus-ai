@@ -366,6 +366,9 @@ export interface RuntimeMeta {
      *  "batch i/N · step k" in the UI. */
     batchIndex?: number;
     batchTotal?: number;
+    /** On a batch: the files of all batches. A batch can read its siblings'
+     *  files through the tools, so a finding may name any of them (#2767). */
+    allBatchFiles?: FileChange[];
     /** Internal: how many times executeChunked has re-entered execute()
      *  for this review. Bounded to MAX_RECURSION_DEPTH by execute() to
      *  prevent the historical execute() ↔ executeChunked() loop from

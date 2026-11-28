@@ -148,6 +148,8 @@ export interface MappableAgentResult {
 
 export interface FindingMapperContext {
     changedFiles: FileChange[];
+    /** Files of all batches, when `changedFiles` is only one batch's. */
+    allBatchFiles?: FileChange[];
     kodyRules?: Partial<IKodyRule>[];
     prNumber: number;
     /** The generalist finder's lean output (#1821): a finding keeps only its
@@ -196,10 +198,13 @@ export function mapAgentFindings(
     // (missing leading slash, backslashes), but keep the provider's original
     // filename as the value (downstream comment posting needs the exact shape).
     const validFilesByNormalized = new Map<string, string>(
-        ctx.changedFiles.map((f) => [
+        (ctx.allBatchFiles ?? ctx.changedFiles).map((f) => [
             normalizeRepoPath(f.filename),
             f.filename,
         ]),
+    );
+    const ownFiles = new Set(
+        ctx.changedFiles.map((f) => normalizeRepoPath(f.filename)),
     );
     const kodyRulesByUuid = new Map(
         (ctx.kodyRules || []).filter((r) => r.uuid).map((r) => [r.uuid!, r]),
@@ -222,9 +227,12 @@ export function mapAgentFindings(
         }
         let resolved = validFilesByNormalized.get(emitted);
         if (!resolved) {
-            const tails = [...validFilesByNormalized.keys()].filter((f) =>
+            const allTails = [...validFilesByNormalized.keys()].filter((f) =>
                 f.endsWith(`/${emitted}`),
             );
+            // A tail means the batch's own file before a sibling batch's.
+            const ownTails = allTails.filter((f) => ownFiles.has(f));
+            const tails = ownTails.length ? ownTails : allTails;
             if (tails.length === 1) {
                 resolved = validFilesByNormalized.get(tails[0]);
                 ctx.logger?.log?.({
