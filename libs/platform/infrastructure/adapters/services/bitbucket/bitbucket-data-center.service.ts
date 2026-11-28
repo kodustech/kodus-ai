@@ -26,7 +26,10 @@ import {
     AUTH_INTEGRATION_SERVICE_TOKEN,
     IAuthIntegrationService,
 } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
-import { BitbucketAuthDetail } from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
+import {
+    BitbucketAuthDetail,
+    isDataCenterAuth,
+} from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -549,6 +552,9 @@ export class BitbucketDataCenterService implements Omit<
             organizationAndTeamData,
             PlatformType.BITBUCKET,
             authDetails,
+            // A Cloud credential before this one: its repository ids are
+            // Cloud's, and the team must pick this server's.
+            { resetsSelection: (previous) => !isDataCenterAuth(previous) },
         );
     }
 

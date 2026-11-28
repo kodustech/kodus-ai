@@ -8,14 +8,21 @@ import {
     UpdateQueryBuilder,
 } from 'typeorm';
 
-import { IntegrationCategory, PlatformType } from '@libs/core/domain/enums';
+import {
+    IntegrationCategory,
+    IntegrationConfigKey,
+    PlatformType,
+} from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     mapSimpleModelsToEntities,
     mapSimpleModelToEntity,
 } from '@libs/core/infrastructure/repositories/mappers';
 import { createNestedConditions } from '@libs/core/infrastructure/repositories/model/filters';
-import { IIntegrationRepository } from '@libs/integrations/domain/integrations/contracts/integration.repository.contracts';
+import {
+    IIntegrationRepository,
+    SaveCodeManagementAuthOptions,
+} from '@libs/integrations/domain/integrations/contracts/integration.repository.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/integration.interface';
 
@@ -195,6 +202,7 @@ export class IntegrationRepository implements IIntegrationRepository {
         { organizationId, teamId }: OrganizationAndTeamData,
         platform: PlatformType,
         authDetails: Record<string, unknown>,
+        options: SaveCodeManagementAuthOptions = {},
     ): Promise<IntegrationEntity> {
         return this.integrationRepository.manager.transaction(
             async (manager) => {
@@ -214,6 +222,13 @@ export class IntegrationRepository implements IIntegrationRepository {
                     relations: { authIntegration: true },
                     order: MOST_RECENT_ACTIVE,
                 });
+                const previous = existing?.authIntegration?.authDetails;
+                if (previous && options.resetsSelection?.(previous)) {
+                    await manager.query(
+                        'DELETE FROM integration_configs WHERE team_id = $1 AND "configKey" = $2',
+                        [teamId, IntegrationConfigKey.REPOSITORIES],
+                    );
+                }
                 const authIntegration = await manager.save(
                     AuthIntegrationModel,
                     {

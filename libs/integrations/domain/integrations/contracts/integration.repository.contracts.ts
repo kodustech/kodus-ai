@@ -17,6 +17,7 @@ export interface IIntegrationRepository {
         organizationAndTeamData: OrganizationAndTeamData,
         platform: PlatformType,
         authDetails: Record<string, unknown>,
+        options?: SaveCodeManagementAuthOptions,
     ): Promise<IntegrationEntity>;
     update(
         filter: Partial<IIntegration>,
@@ -28,3 +29,12 @@ export interface IIntegrationRepository {
         platform: PlatformType,
     ): Promise<IntegrationEntity>;
 }
+
+export type SaveCodeManagementAuthOptions = {
+    /**
+     * Whether the credential being replaced pointed at another server, whose
+     * repository ids mean nothing on the new one. When it returns true, the
+     * team's repository selection is dropped in the same transaction.
+     */
+    resetsSelection?: (previous: Record<string, unknown>) => boolean;
+};

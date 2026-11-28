@@ -715,16 +715,11 @@ export class BitbucketService implements Omit<
     }
 
     async handleIntegration(
-        integration: any,
         authDetails: any,
         organizationAndTeamData: OrganizationAndTeamData,
     ) {
         const impl = await this.getImplementation(organizationAndTeamData);
-        return impl.handleIntegration(
-            integration,
-            authDetails,
-            organizationAndTeamData,
-        );
+        return impl.handleIntegration(authDetails, organizationAndTeamData);
     }
 
     async addAccessToken(

@@ -395,6 +395,74 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
         });
     });
 
+    const selectRepositories = (ids: string[]) =>
+        dc.createOrUpdateIntegrationConfig({
+            organizationAndTeamData: tenant,
+            configKey: IntegrationConfigKey.REPOSITORIES,
+            configValue: ids.map((id) => ({ id, name: `repo-${id}` })),
+            deferWebhooks: true,
+        });
+    const selection = async () =>
+        (
+            await db.query(
+                `SELECT "configValue" FROM integration_configs
+                 WHERE team_id = $1 AND "configKey" = $2`,
+                [teamId, IntegrationConfigKey.REPOSITORIES],
+            )
+        ).map((row: { configValue: { id: string }[] }) =>
+            row.configValue.map((repo) => repo.id),
+        );
+
+    it('drops the Cloud repository selection when the team switches to Data Center', async () => {
+        await seedPair({
+            token: 'cloud-token',
+            status: true,
+            minutesAgo: 5,
+            rank: '1',
+        });
+        await selectRepositories(['{cloud-uuid}']);
+
+        await connect();
+
+        expect(await selection()).toEqual([]);
+        await expect(
+            bitbucket.verifyConnection({ organizationAndTeamData: tenant }),
+        ).resolves.toMatchObject({
+            hasConnection: true,
+            isSetupComplete: false,
+        });
+        expect(await counts()).toEqual({ integrations: 1, credentials: 1 });
+    });
+
+    it('drops the Data Center repository selection when the team switches to Cloud', async () => {
+        await connect();
+        await selectRepositories(['7']);
+
+        await cloud.handleIntegration(
+            {
+                username: 'dev',
+                appPassword: encrypt('cloud-token'),
+                authMode: AuthMode.TOKEN,
+                email: 'dev@example.test',
+            },
+            tenant,
+        );
+
+        expect(await selection()).toEqual([]);
+        const pair = await readPair();
+        expect(pair.authIntegration.authDetails.host).toBeUndefined();
+        expect(await counts()).toEqual({ integrations: 1, credentials: 1 });
+    });
+
+    it('keeps the repository selection when the token rotates on the same server', async () => {
+        await connect();
+        await selectRepositories(['7']);
+
+        await connect('rotated-token');
+
+        expect(await selection()).toEqual([['7']]);
+    });
+
     it('makes the team ready for reviews after it saves its first repository', async () => {
         await connect();
         await expect(
