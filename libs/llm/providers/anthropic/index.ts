@@ -18,6 +18,7 @@ import { detectModelFamily } from '../kernel/model-family';
 import { registerProvider } from '../kernel/registry';
 import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
 import { withThinkingSignatureRepair } from './thinking-repair';
+import { withThinkingBindingRetry } from './thinking-binding-retry';
 import { anthropicModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -127,7 +128,7 @@ export const anthropicModule: ProviderModule = {
         return createAnthropic({
             apiKey: cfg.apiKey,
             ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
-            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+            fetch: withThinkingBindingRetry(opts?.fetch ?? fetch),
             ...(isOpenCodeGoBaseUrl(cfg.baseURL)
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
                 : {}),
