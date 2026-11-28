@@ -386,18 +386,26 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
     it('claims a Forgejo comment by its id (#2779)', async () => {
         const inbox = fakeInbox();
         const { useCase } = setup(inbox);
+        const deliver = (id: number) =>
+            useCase.execute({
+                event: 'issue_comment',
+                platformType: PlatformType.FORGEJO,
+                payload: {
+                    action: 'created',
+                    issue: { number: 21 },
+                    comment: { id, body: '@kody hi' },
+                },
+            } as any);
 
-        await useCase.execute({
-            event: 'issue_comment',
-            platformType: PlatformType.FORGEJO,
-            payload: {
-                action: 'created',
-                issue: { number: 21 },
-                comment: { id: 1, body: '@kody hi' },
-            },
-        } as any);
+        await deliver(1);
+        await deliver(2);
 
-        expect(inbox.claim).toHaveBeenCalled();
+        // Two comments on the same PR get their own keys, so neither is
+        // dropped as a duplicate of the other.
+        expect(inbox.claim.mock.calls.map(([, key]) => key)).toEqual([
+            `${PlatformType.FORGEJO}::21::1:`,
+            `${PlatformType.FORGEJO}::21::2:`,
+        ]);
     });
 
     it('answers when the claim cannot be made (a duplicate beats silence)', async () => {
