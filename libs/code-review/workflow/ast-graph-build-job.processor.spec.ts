@@ -123,6 +123,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
             graphIndexer as any,
             repositoryService as any,
             new GraphJobSandbox(),
+            { enqueue: jest.fn() } as any,
         );
     });
 

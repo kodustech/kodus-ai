@@ -51,4 +51,11 @@ export class RepositoryService implements IRepositoryService {
     ): Promise<void> {
         return this.repositoryRepository.updateGraphStatus(uuid, status, extra);
     }
+
+    deferMergeDuringBuild(
+        uuid: string,
+        mergeSha: string | undefined,
+    ): Promise<boolean> {
+        return this.repositoryRepository.deferMergeDuringBuild(uuid, mergeSha);
+    }
 }

@@ -6,7 +6,10 @@ import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { posix } from 'node:path';
-import { AstGraphRepository } from '../../repositories/astGraph.repository';
+import {
+    AstGraphRepository,
+    GraphWriteResult,
+} from '../../repositories/astGraph.repository';
 import { AstGraphStatus } from '../../repositories/schemas/repository.model';
 import { KodusGraphCli } from './kodus-graph-cli';
 
@@ -70,7 +73,7 @@ export class GraphIndexerService {
         signal?: AbortSignal;
         job?: GraphJobAttempt;
         expectedSha?: string | null;
-    }): Promise<void> {
+    }): Promise<GraphWriteResult['mergedDuringBuild']> {
         const { repositoryId, sandbox, headSha, signal, job } = params;
         signal?.throwIfAborted();
         const revision = {
@@ -172,6 +175,7 @@ export class GraphIndexerService {
                     durationMs: totalMs,
                 },
             });
+            return counts.mergedDuringBuild;
         } catch (error) {
             if (error instanceof StaleGraphJobError) throw error;
             // The processor owns the failure transition once the job is aborted.

@@ -19,6 +19,13 @@ import { AstNodeModel } from './schemas/astNode.model';
 import { AstEdgeModel } from './schemas/astEdge.model';
 import { AstGraphStatus, RepositoryModel } from './schemas/repository.model';
 
+export interface GraphWriteResult {
+    nodeCount: number;
+    edgeCount: number;
+    /** Full builds only: merge deferred while the build ran, if any. */
+    mergedDuringBuild?: string | null;
+}
+
 interface GraphRevision {
     job?: GraphJobAttempt;
     sha?: string;
@@ -167,7 +174,7 @@ export class AstGraphRepository {
         nodes: GraphNodeJson[],
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
-    ): Promise<{ nodeCount: number; edgeCount: number }> {
+    ): Promise<GraphWriteResult> {
         return this.writeGraph(repoId, nodes, edges, revision);
     }
 
@@ -187,7 +194,7 @@ export class AstGraphRepository {
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
         filePaths?: string[],
-    ): Promise<{ nodeCount: number; edgeCount: number }> {
+    ): Promise<GraphWriteResult> {
         const signal = revision?.signal;
         return this.dataSource.transaction(async (manager) => {
             signal?.throwIfAborted();
@@ -230,7 +237,7 @@ export class AstGraphRepository {
             }
 
             signal?.throwIfAborted();
-            return this.finishGraphWrite(manager, repoId, revision);
+            return this.finishGraphWrite(manager, repoId, revision, !filePaths);
         });
     }
 
@@ -238,9 +245,14 @@ export class AstGraphRepository {
         manager: EntityManager,
         repoId: string,
         revision?: GraphRevision,
-    ): Promise<void> {
+    ): Promise<RepositoryModel> {
         const locked = await manager.findOneOrFail(RepositoryModel, {
-            select: { uuid: true, astGraphSha: true },
+            select: {
+                uuid: true,
+                astGraphSha: true,
+                astGraphStatus: true,
+                astGraphMergedDuringBuild: true,
+            },
             where: { uuid: repoId },
             lock: { mode: 'for_no_key_update' },
         });
@@ -251,6 +263,7 @@ export class AstGraphRepository {
         ) {
             throw new GraphBaselineChangedError();
         }
+        return locked;
     }
 
     async updateBuildStatus(
@@ -319,34 +332,42 @@ export class AstGraphRepository {
     private async finishGraphWrite(
         manager: EntityManager,
         repoId: string,
-        revision?: GraphRevision,
-    ): Promise<{ nodeCount: number; edgeCount: number }> {
+        revision: GraphRevision | undefined,
+        fullBuild: boolean,
+    ): Promise<GraphWriteResult> {
         // Count the stored rows: ON CONFLICT can skip duplicate parser output.
         const [counts] = await manager.query(
             `SELECT (SELECT count(*)::int FROM ast_nodes WHERE repo_id = $1) AS "nodeCount",
                     (SELECT count(*)::int FROM ast_edges WHERE repo_id = $1) AS "edgeCount"`,
             [repoId],
         );
-        if (revision) {
-            revision.signal?.throwIfAborted();
-            await this.lockJob(manager, revision.job);
-            revision.signal?.throwIfAborted();
-            // Publish the SHA, counts and rows in one transaction. An abort during
-            // any of these writes must leave the previous revision intact.
-            await manager.update(
-                RepositoryModel,
-                { uuid: repoId },
-                {
-                    astGraphStatus: AstGraphStatus.READY,
-                    astGraphBuiltAt: new Date(),
-                    astGraphSha: revision.sha,
-                    astGraphNodeCount: counts.nodeCount,
-                    astGraphEdgeCount: counts.edgeCount,
-                },
-            );
-            revision.signal?.throwIfAborted();
-        }
-        return counts;
+        if (!revision) return counts;
+        revision.signal?.throwIfAborted();
+        await this.lockJob(manager, revision.job);
+        revision.signal?.throwIfAborted();
+        const locked = await this.lockRepository(manager, repoId);
+        const update: Partial<RepositoryModel> = {
+            astGraphBuiltAt: new Date(),
+            astGraphSha: revision.sha,
+            astGraphNodeCount: counts.nodeCount,
+            astGraphEdgeCount: counts.edgeCount,
+        };
+        // A full build in flight owns the final state. An incremental may
+        // still restore READY from FAILED: its rows leave the graph current.
+        if (fullBuild || locked.astGraphStatus !== AstGraphStatus.BUILDING)
+            update.astGraphStatus = AstGraphStatus.READY;
+        // The build takes over merges deferred while it ran.
+        if (fullBuild) update.astGraphMergedDuringBuild = null;
+        // Publish the SHA, counts and rows in one transaction. An abort during
+        // any of these writes must leave the previous revision intact.
+        await manager.update(RepositoryModel, { uuid: repoId }, update);
+        revision.signal?.throwIfAborted();
+        return {
+            ...counts,
+            ...(fullBuild && {
+                mergedDuringBuild: locked.astGraphMergedDuringBuild,
+            }),
+        };
     }
 
     // -----------------------------------------------------------------------

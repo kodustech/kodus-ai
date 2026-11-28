@@ -48,7 +48,7 @@ const GRAPH_INCREMENTAL_LEASE_TTL_MS = 2 * 60 * 60 * 1000; // 2h
 interface AstGraphIncrementalJobPayload {
     repositoryId: string;
     changedFiles: string[];
-    newSha: string;
+    newSha?: string;
     cloneUrl: string;
     defaultBranch: string;
     fullName: string;
@@ -121,7 +121,9 @@ export class AstGraphIncrementalJobProcessor implements IJobProcessorService {
         )
             return;
 
-        if (!payload?.repositoryId || !payload?.changedFiles?.length) {
+        // The processor diffs the checkout itself. A build catch-up carries
+        // no file list, only the deferred merge.
+        if (!payload?.repositoryId || !Array.isArray(payload?.changedFiles)) {
             throw new Error(
                 'Invalid payload: missing required fields (repositoryId, changedFiles)',
             );

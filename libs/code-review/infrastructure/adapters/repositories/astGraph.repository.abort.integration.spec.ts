@@ -415,6 +415,7 @@ const run =
                             .findOneByOrFail({ uuid: repoId }),
                 } as never,
                 new GraphJobSandbox(),
+                { enqueue: async () => '' } as never,
             );
             await processor.process(job.jobId);
             const failed = await jobs.findOne(job.jobId);

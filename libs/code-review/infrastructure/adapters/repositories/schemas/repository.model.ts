@@ -45,6 +45,17 @@ export class RepositoryModel extends CoreModel {
     @Column({ type: 'text', name: 'ast_graph_sha', nullable: true })
     astGraphSha: string | null;
 
+    /**
+     * Head of the latest merge that arrived while a full build ran. The build
+     * consumes it when it publishes; '' means the merge SHA was unknown.
+     */
+    @Column({
+        type: 'text',
+        name: 'ast_graph_merged_during_build',
+        nullable: true,
+    })
+    astGraphMergedDuringBuild: string | null;
+
     @Column({ type: 'timestamp', name: 'ast_graph_built_at', nullable: true })
     astGraphBuiltAt: Date | null;
 

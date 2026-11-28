@@ -117,4 +117,17 @@ export class RepositoryRepository implements IRepositoryRepository {
 
         await this.repo.update({ uuid }, update);
     }
+
+    async deferMergeDuringBuild(
+        uuid: string,
+        mergeSha: string | undefined,
+    ): Promise<boolean> {
+        // Conditional on BUILDING so a build that just published sends the
+        // caller back to the normal incremental path. The latest merge wins.
+        const result = await this.repo.update(
+            { uuid, astGraphStatus: AstGraphStatus.BUILDING },
+            { astGraphMergedDuringBuild: mergeSha ?? '' },
+        );
+        return !!result.affected;
+    }
 }
