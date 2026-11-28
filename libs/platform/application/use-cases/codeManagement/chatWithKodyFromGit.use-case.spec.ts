@@ -276,7 +276,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
             return { businessLogic, conversation };
         };
 
-        it('answers an @kody reply under a Kody code finding in the conversation, not Business Logic', async () => {
+        it('routes an @kody reply under a Kody code finding to the conversation flow, not Business Logic', async () => {
             const { businessLogic, conversation } = await run([
                 {
                     id: 40,
@@ -286,6 +286,13 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 },
                 { id: 50, body: 'reply', path: 'a.ts', position: 3 },
             ]);
+
+            expect(businessLogic).not.toHaveBeenCalled();
+            expect(conversation).toHaveBeenCalledTimes(1);
+        });
+
+        it('skips Business Logic when the review comments cannot be read', async () => {
+            const { businessLogic, conversation } = await run(null as any);
 
             expect(businessLogic).not.toHaveBeenCalled();
             expect(conversation).toHaveBeenCalledTimes(1);
@@ -1638,7 +1645,11 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
             payload: {
                 action: 'created',
                 is_pull: true,
-                repository: { id: 26, full_name: 'o/r', default_branch: 'main' },
+                repository: {
+                    id: 26,
+                    full_name: 'o/r',
+                    default_branch: 'main',
+                },
                 issue: {
                     number: 21,
                     body: 'Issue body',
@@ -1703,9 +1714,10 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
         });
 
         it('reads the git user from the comment', () => {
-            expect(
-                call('getGitUser', issueComment),
-            ).toEqual({ id: 7, username: 'bob' });
+            expect(call('getGitUser', issueComment)).toEqual({
+                id: 7,
+                username: 'bob',
+            });
         });
 
         it('reads the PR description from the PR or the issue', () => {

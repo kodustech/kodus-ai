@@ -727,10 +727,12 @@ export class ChatWithKodyFromGitUseCase {
                             filters: { pullRequestNumber, repository },
                         },
                     );
-                return !(
-                    Array.isArray(reviewComments) &&
-                    reviewComments.some((c) => c?.id === commentId)
-                );
+                // Unreadable list: not a Business Logic decision we can prove,
+                // so skip that handler; the conversation flow retries.
+                if (!Array.isArray(reviewComments)) {
+                    return false;
+                }
+                return !reviewComments.some((c) => c?.id === commentId);
             }
             default:
                 return !params.payload?.comment?.path;
