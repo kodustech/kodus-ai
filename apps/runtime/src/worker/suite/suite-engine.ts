@@ -50,6 +50,7 @@ import { execInService } from './suite-environment';
 import type { Canary } from '../canary/canary';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
+import { CellUnavailableError } from '../../shared/errors';
 
 export type { SuiteShardHost };
 
@@ -176,8 +177,20 @@ export async function acquireSuiteClaim(
     clock: { now(): number; sleep(ms: number): Promise<void> },
     until: number,
 ): Promise<Claim | Blocked> {
-    return (await acquireWaitingForRoom(env, req, { until, now: () => new Date(clock.now()), sleep: (ms) => clock.sleep(ms) })).claim;
+    for (;;) {
+        try {
+            return (await acquireWaitingForRoom(env, req, { until, now: () => new Date(clock.now()), sleep: (ms) => clock.sleep(ms) })).claim;
+        } catch (e) {
+            // The shard's host is its own and was placed: a cell the hub does not hold right now is one reconnecting
+            // (a worker that restarts resumes the suite at once, before the cells are back on a hub that restarted with
+            // it). Asked again with the same key until the deadline, never the end of the whole suite.
+            if (!(e instanceof CellUnavailableError) || clock.now() + SHARD_CELL_RETRY_MS > until) throw e;
+            await clock.sleep(SHARD_CELL_RETRY_MS);
+        }
+    }
 }
+/** The pause before a shard asks again for a cell the hub does not hold. */
+const SHARD_CELL_RETRY_MS = 10_000;
 const HOST_POLL_MS = 5_000;
 /** The demand row lives 120 s unless asked again; the engine asks again at this pace while the run lives. */
 const DEMAND_REFRESH_MS = 45_000;

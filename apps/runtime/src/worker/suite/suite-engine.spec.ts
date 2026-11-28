@@ -1,7 +1,8 @@
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 
 import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteRuns, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
-import { type SuiteConfig, SuiteEngine } from './suite-engine';
+import { acquireSuiteClaim, type SuiteConfig, SuiteEngine } from './suite-engine';
+import { CellUnavailableError } from '../../shared/errors';
 
 // docs/runtime/e2e-suites.md sections 2.2, 6, 9.2 and 14: the first pass of a suite run. The shards, the results as
 // they stream in, a shard that passes its timeout, a runner that crashes.
@@ -351,5 +352,35 @@ describe('a shard whose host is ready late', () => {
         await seed(w as never);
         const out = await w.engine.run(request(), w.inputs(six));
         expect(Object.values(statusOf(out))).toEqual(Array(6).fill('passed'));
+    });
+});
+
+// A worker that restarts resumes the suite at once, while the shards' cells are still reconnecting to a hub that
+// restarted with it: the hub answers cell_unavailable for the host the shard holds. The suite lived on before; it ended
+// errored there, with its hosts still up and its shards left running.
+describe("a shard's claim while its cell reconnects to the hub", () => {
+    const request = { organizationId: 'org-a', environmentId: 'env-1', runId: 'sr-1', idempotencyKey: 'suite:sr-1:0', consumer: 'suite', suiteRunId: 'sr-1', shard: 0, ref: { side: 'base', sha: 'a'.repeat(40) } } as any;
+    const ready = { claimId: 'claim-1' } as any;
+    const clock = () => {
+        let t = 0;
+        return { now: () => t, sleep: async (ms: number) => void (t += ms) };
+    };
+
+    it('asks again with the same key until the cell is back, and gets the claim', async () => {
+        const c = clock();
+        const keys: string[] = [];
+        const answers: Array<() => Promise<any>> = [async () => { throw new CellUnavailableError('cell-1'); }, async () => { throw new CellUnavailableError('cell-1'); }, async () => ready];
+        const env = { acquire: async (req: any) => (keys.push(req.idempotencyKey), answers.shift()!()) };
+
+        expect(await acquireSuiteClaim(env, request, c, 10 * 60_000)).toBe(ready);
+        expect(keys).toEqual(['suite:sr-1:0', 'suite:sr-1:0', 'suite:sr-1:0']);
+    });
+
+    it('ends with the error once the cell stays away past the deadline', async () => {
+        const c = clock();
+        const env = { acquire: async () => { throw new CellUnavailableError('cell-1'); } };
+
+        await expect(acquireSuiteClaim(env, request, c, 60_000)).rejects.toBeInstanceOf(CellUnavailableError);
+        expect(c.now()).toBeLessThanOrEqual(60_000);
     });
 });
