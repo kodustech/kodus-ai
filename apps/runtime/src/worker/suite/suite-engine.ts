@@ -1,6 +1,6 @@
 import { SUITE_ARTIFACT_BUDGET_BYTES } from '@libs/runtime/contracts/evidence';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
-import { type AcquireRequest, type Blocked, type Claim, type EnvironmentRuntime, isBlocked } from '@libs/runtime/environment';
+import { type AcquireRequest, type Blocked, type Claim, type EnvironmentRuntime, isBlocked, prImageUnavailableMessage } from '@libs/runtime/environment';
 import type { EnvError, StepResult } from '@libs/runtime/environment';
 import {
     balanceSpecs,
@@ -199,6 +199,8 @@ export async function acquireSuiteClaim(
 /** The pause before a shard asks again for a cell the hub does not hold. */
 const SHARD_CELL_RETRY_MS = 10_000;
 const HOST_POLL_MS = 5_000;
+/** The longest a Run's shard waits for the PR image when the suite has no deadline of its own. */
+const PR_IMAGE_WAIT_MS = 30 * 60_000;
 /** The demand row lives 120 s unless asked again; the engine asks again at this pace while the run lives. */
 const DEMAND_REFRESH_MS = 45_000;
 const READ_TIMEOUT_MS = 60_000;
@@ -334,6 +336,8 @@ interface RunCtx {
     /** Resolved when every spec of a shard was taken by a sibling: its claim is no longer waited for. */
     drained: Map<number, () => void>;
     cleaned: boolean;
+    /** Set when a Run's shard was refused because its PR image is not there ("PR image unavailable: <cause>"): those specs are `not_run`, never retried on a cold host. */
+    prImageCause?: string;
     /** The time the run's hosts were held, summed over hosts (a baseline and a first pass count as `firstPass`). */
     hostMs: { firstPass: number; rerun: number };
 }
@@ -479,9 +483,11 @@ export class SuiteEngine {
         // What no shard took: a shard whose claim was refused leaves its specs `infra` (the fresh host retries them), the rest `not_run`.
         for (const [spec, owner] of ctx.pending) {
             const shard = ctx.shards.get(owner);
-            if (shard && !shard.missing.has(spec)) shard.missing.set(spec, shard.blocked ? 'infra' : 'not_run');
+            if (shard && !shard.missing.has(spec)) shard.missing.set(spec, shard.blocked && !ctx.prImageCause ? 'infra' : 'not_run');
         }
         ctx.pending.clear();
+        // No PR image: a cold host would rebuild the PR the Run already built, so nothing is retried on a fresh host (fail fast's rule).
+        if (ctx.prImageCause) for (const shard of ctx.shards.values()) for (const spec of shard.missing.keys()) ctx.skipped.add(spec);
         await this.recordMissing(ctx);
     }
 
@@ -566,15 +572,26 @@ export class SuiteEngine {
             idempotencyKey: `suite:${req.suiteRunId}:${shard}:${attempt}`,
             suiteRunId: req.suiteRunId,
             shard,
-        }, this.d.clock, this.claimDeadline(ctx));
+            ...(this.awaitsPrImage(ctx, side) ? { awaitPrImage: true } : {}),
+        }, this.d.clock, this.claimDeadline(ctx, this.awaitsPrImage(ctx, side)));
         if (isBlocked(claim)) return undefined;
         ctx.claims.push(claim.claimId);
         return claim.claimId;
     }
 
-    /** How long a shard's claim may wait for room on its host: the host wait, never past the suite's deadline. */
-    private claimDeadline(ctx: RunCtx): number {
-        return Math.min(this.d.clock.now() + HOST_WAIT_MS, ctx.inputs.deadlineAt ?? Infinity);
+    /**
+     * How long a shard's claim may wait: for room on its host, the host wait, never past the suite's deadline. A Run's PR-side shard
+     * also waits for the PR image its Run's PR side is still building (the hub holds the acquire for it), so it is bounded by the
+     * suite's deadline alone while one is awaited: a build of 12 minutes is not a host that never came.
+     */
+    private claimDeadline(ctx: RunCtx, awaitingImage = false): number {
+        const now = this.d.clock.now();
+        return awaitingImage && ctx.inputs.deadlineAt !== undefined ? ctx.inputs.deadlineAt : Math.min(now + (awaitingImage ? PR_IMAGE_WAIT_MS : HOST_WAIT_MS), ctx.inputs.deadlineAt ?? Infinity);
+    }
+
+    /** A Run's PR-side shard takes the PR image its Run's PR side publishes, and never builds the PR itself. */
+    private awaitsPrImage(ctx: RunCtx, side: 'pr' | 'base'): boolean {
+        return ctx.req.mode === 'run' && side === 'pr';
     }
 
     // ---- one shard
@@ -604,7 +621,8 @@ export class SuiteEngine {
             idempotencyKey: `suite:${req.suiteRunId}:${shard.shard}`,
             suiteRunId: req.suiteRunId,
             shard: shard.shard,
-        }, this.d.clock, this.claimDeadline(ctx));
+            ...(this.awaitsPrImage(ctx, ctx.side) ? { awaitPrImage: true } : {}),
+        }, this.d.clock, this.claimDeadline(ctx, this.awaitsPrImage(ctx, ctx.side)));
         // A claim that boots for long (the PR build on its host) is not waited for once siblings have taken all of its specs.
         const drained = new Promise<'drained'>((resolve) => ctx.drained.set(shard.shard, () => resolve('drained')));
         const claim = await Promise.race([acquiring, drained]);
@@ -616,6 +634,7 @@ export class SuiteEngine {
         if (isBlocked(claim)) {
             // Its specs stay up for the siblings that are still running; what nobody takes is `infra` at the end of the pass.
             shard.blocked = true;
+            ctx.prImageCause ??= prImageUnavailableMessage(claim);
             return;
         }
         this.adopt(ctx, claim, true);
@@ -676,7 +695,7 @@ export class SuiteEngine {
         for (const l of await q.leftovers(req.organizationId, req.suiteRunId)) {
             const owner = (l.claimedBy !== undefined ? ctx.shards.get(l.claimedBy) : undefined) ?? runs[0];
             if (!owner.planned.includes(l.spec)) owner.planned.push(l.spec);
-            owner.missing.set(l.spec, l.state === 'queued' ? (allBlocked ? 'infra' : 'not_run') : 'infra');
+            owner.missing.set(l.spec, l.state === 'queued' ? (allBlocked && !ctx.prImageCause ? 'infra' : 'not_run') : 'infra');
         }
         await this.adoptStored(ctx, runs);
         await this.d.runs.savePlan(req.organizationId, req.suiteRunId, [...ctx.shards.values()].map((s) => ({ shard: s.shard, specs: s.planned })));
@@ -984,7 +1003,7 @@ export class SuiteEngine {
                 ctx.req.organizationId,
                 ctx.req.suiteRunId,
                 { phase, shard: shard.shard },
-                [...shard.missing].map(([spec, status]) => ({ spec, status, durationMs: 0, tests: [], ...(status === 'infra' && cause ? { errorSignature: cause } : {}) })),
+                [...shard.missing].map(([spec, status]) => ({ spec, status, durationMs: 0, tests: [], ...(status === 'infra' && cause ? { errorSignature: cause } : ctx.prImageCause && status === 'not_run' ? { errorSignature: ctx.prImageCause } : {}) })),
             );
         }
     }

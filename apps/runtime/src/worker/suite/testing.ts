@@ -1,4 +1,4 @@
-import type { AcquireRequest, Blocked, Claim, EnvError, ExecRequest, StepResult } from '@libs/runtime/environment';
+import { type AcquireRequest, type Blocked, type Claim, type EnvError, type ExecRequest, prImageUnavailable, type StepResult } from '@libs/runtime/environment';
 import { afterLostClaim, batchSize, MAIN_HISTORY_RUNS, type MainObservation, QUEUE_BATCH_MAX_SPECS, QUEUE_BATCH_TARGET_MS, QUEUE_LEASE_MS, type QueueEntry } from '@libs/runtime/suite';
 
 import type { CoverageMapRecord } from './coverage-collector';
@@ -425,6 +425,8 @@ export interface FakeSuiteWorld {
     specs: Record<string, FakeSpec>;
     /** An acquire this answers true for is blocked (no host, no capacity). */
     blocked?: (req: AcquireRequest) => boolean;
+    /** An acquire this answers a cause for is refused as `PR image unavailable: <cause>` (the hub's answer for a Run's shard with no PR image). */
+    prImageUnavailable?: (req: AcquireRequest) => string | undefined;
     /** The cell has no exec service: every exec that names one is answered exec_service_unavailable. */
     refusesService?: boolean;
     /** What the runner prints last on every poll (its log tail), after the fake's own clock line. */
@@ -484,6 +486,8 @@ export class FakeSuiteCell {
     async acquire(req: AcquireRequest): Promise<Claim | Blocked> {
         this.acquires.push(req);
         if (this.world.blocked?.(req)) return { status: 'blocked', blockers: [{ kind: 'resources', signature: 'no_capacity', message: 'no host' }] };
+        const noImage = this.world.prImageUnavailable?.(req);
+        if (noImage !== undefined) return prImageUnavailable(noImage);
         const delay = this.world.acquireDelayMs?.(req);
         if (delay && this.clock.sleep) {
             // Ready when the shared fake clock reaches it, whoever advances it.

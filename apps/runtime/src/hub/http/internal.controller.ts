@@ -47,6 +47,8 @@ const AcquireBody = z.strictObject({
     diagnosticHold: z.boolean().optional(),
     seedsCache: z.boolean().optional(),
     skipBake: z.boolean().optional(),
+    // A Run-mode suite shard: wait for the PR image the Run's PR side publishes, and never build the PR itself.
+    awaitPrImage: z.boolean().optional(),
     // A Run's claim: the setup's measured boot, which stretches the ready wait (readyTimeoutMinutes); the hub clamps it.
     setupBootMs: z.number().int().positive().max(86_400_000).optional(),
     recipe: ClaimRecipeSchema.optional(),

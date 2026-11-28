@@ -51,6 +51,12 @@ export interface AcquireRequest {
     suiteRunId?: string;
     shard?: number;
     /**
+     * A Run-mode suite shard's PR-side claim: the Run's own PR side builds the image and publishes it to the image store, so the
+     * hub waits for it (up to its cap) and boots the shard from the pull; with none it refuses with the cause (`prImageUnavailable`)
+     * and never builds the PR a second time in parallel. Absent: the claim builds when there is no image, as before.
+     */
+    awaitPrImage?: boolean;
+    /**
      * An environment's own setup (consumer `setup`, not a template build): the setup's key, which names the perRun host
      * bound to it (`setup:<org>/<hash>`). Placement alone reads it; the worker never sends it to the cell or the hub.
      */
