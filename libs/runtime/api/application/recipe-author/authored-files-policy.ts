@@ -271,6 +271,9 @@ function assignmentsOf(args: string, legacy: boolean): Array<{ name: string; val
     return out;
 }
 
+/** The most RUN, COPY and ADD steps a stage of an authored Dockerfile has: the host's overlay takes its layers as one mount option of a page, and about 50 chain-long overlays fail there. */
+export const MAX_STAGE_LAYERS = 30;
+
 /** Each rule an authored Dockerfile breaks, in words the model can act on. */
 export function checkAuthoredDockerfile(path: string, content: string): string[] {
     const errors: string[] = [];
@@ -290,7 +293,17 @@ export function checkAuthoredDockerfile(path: string, content: string): string[]
     const instructions = instructionsOf(content);
     const stages = new Set<string>();
     let froms = 0;
+    // RUN, COPY and ADD each make a layer; a stage past MAX_STAGE_LAYERS outgrows the host's overlay mount (one page of options).
+    let layers = 0;
+    let layersReported = false;
     for (const i of instructions) {
+        if (i.keyword === 'FROM') {
+            layers = 0;
+            layersReported = false;
+        } else if ((i.keyword === 'RUN' || i.keyword === 'COPY' || i.keyword === 'ADD') && ++layers > MAX_STAGE_LAYERS && !layersReported) {
+            layersReported = true;
+            at(i, `is layer ${layers} of its stage; a stage keeps at most ${MAX_STAGE_LAYERS} RUN, COPY and ADD steps, or the host's overlay refuses to mount the image ("too many layers"). Merge them: copy every package manifest in one COPY --parents, then the sources in one COPY, and join related RUN commands with &&`);
+        }
         if (!INSTRUCTIONS.has(i.keyword)) {
             at(i, `is not an instruction Kody writes (${[...INSTRUCTIONS].join(', ')})`);
             continue;

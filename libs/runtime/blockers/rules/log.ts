@@ -280,6 +280,26 @@ const goModuleNotPinned: LineRule = ({ text }) => {
     };
 };
 
+/**
+ * BuildKit could not mount the overlay of a long layer chain: the host's overlay
+ * takes its lower layers as one mount option of at most a page (4096 bytes), and
+ * a Dockerfile of some dozens of layers (one COPY per package.json of a monorepo)
+ * outgrows it. The mount error names no layer count, so the line is the cause.
+ */
+const imageLayers: LineRule = ({ text }) => {
+    if (!/mount source: "overlay"/.test(text) || !/fstype: overlay/.test(text) || !/err: invalid argument/.test(text)) return null;
+    return {
+        kind: 'toolchain',
+        signature: 'toolchain:image_layers',
+        title: "The Dockerfile makes too many layers for the host's overlay",
+        fixes: [
+            fixRecipe(
+                'Merge COPY and RUN steps so a stage keeps fewer than about 30 layers: copy every package manifest in one COPY (or one COPY of the workspace), install once, then copy the sources in one COPY, and chain related RUN commands with &&. A multi-stage build restarts the count in each stage, so build and runtime stages stay small.',
+            ),
+        ],
+    };
+};
+
 const seedData: LineRule = ({ text }) => {
     const table = /relation "([A-Za-z0-9_.]{1,80})" does not exist|no such table: ([A-Za-z0-9_.]{1,80})|Table '([A-Za-z0-9_.]{1,80})' doesn't exist/.exec(text);
     if (!table) return null;
@@ -428,6 +448,7 @@ const unreachable: LineRule = ({ text }) => {
 
 /** The log rules in the order they are read, with the id each has in the classifier's registry. */
 const LOG_RULES: ReadonlyArray<readonly [id: string, rule: LineRule]> = [
+    ['image_layers', imageLayers],
     ['lockfile_outdated', lockfileOutdated],
     ['go_module_not_pinned', goModuleNotPinned],
     ['go_checksum_db', goChecksumDb],

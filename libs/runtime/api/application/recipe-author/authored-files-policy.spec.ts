@@ -157,6 +157,23 @@ describe('authored Dockerfile: what is refused', () => {
         expect(errors).toMatch(why);
     });
 
+    describe('layer count of a stage', () => {
+        const manifests = (n: number) => Array.from({ length: n }, (_, i) => `COPY packages/p${i}/package.json packages/p${i}/package.json`).join('\n');
+        it('refuses a stage with one COPY per package manifest, naming the fix', () => {
+            const errors = checkAuthoredDockerfile('.kodus/Dockerfile', `FROM node:22\n${manifests(45)}\nRUN npm ci\n`).join('\n');
+            expect(errors).toMatch(/\.kodus\/Dockerfile:\d+ .*layers/);
+            expect(errors).toMatch(/COPY --parents|one COPY/);
+        });
+        it('counts each stage on its own', () => {
+            const stage = (name: string) => `FROM node:22 AS ${name}\n${manifests(20)}\nRUN npm ci\n`;
+            expect(checkAuthoredDockerfile('.kodus/Dockerfile', `${stage('a')}${stage('b')}`)).toEqual([]);
+        });
+        it('does not count instructions that add no layer', () => {
+            const envs = Array.from({ length: 60 }, (_, i) => `ENV K${i}=v`).join('\n');
+            expect(checkAuthoredDockerfile('.kodus/Dockerfile', `FROM node:22\n${envs}\nRUN id\n`)).toEqual([]);
+        });
+    });
+
     it('lets ordinary dependency and build steps through', () => {
         const node = `FROM node:22-bookworm-slim AS deps
 WORKDIR /app

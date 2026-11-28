@@ -77,6 +77,12 @@ export const RECIPE_AUTHOR_REVISIONS: readonly RecipeAuthorRevision[] = [
         reauthor: false,
         reason: "Kody may write a .dockerignore for one of its Dockerfiles, which that build reads instead of the repository's",
     },
+    {
+        // Existing recipes are not written again for it: a build that hits the limit reaches the setup as the image_layers card.
+        version: 7,
+        reauthor: false,
+        reason: "a stage of a Dockerfile Kody writes keeps at most 30 RUN, COPY and ADD steps, because the host's overlay mount cannot take more layers",
+    },
 ];
 
 /** The version the author writes with now. */
