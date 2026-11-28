@@ -748,6 +748,165 @@ describe('normalizeError → fromHttpStatus mapping (via AI SDK error facts)', (
         expect(res.ok).toBe(true);
     });
 
+    // QA of #2700: the review comment said "out of credits" for this key and
+    // the Test said "throttling". Both read the 429 the same way now.
+    it.each([
+        'You exceeded your current quota, please check your plan and billing details.',
+        'Quota exceeded. Please retry in 61s.',
+    ])('429 with a spent quota (%s) → payment, ok:false', (message) => {
+        const res = normalize(sdkErr(429, message));
+        expect(res.code).toBe('payment');
+        expect(res.ok).toBe(false);
+    });
+
+    it('429 per-minute window → rate_limit, ok:true', () => {
+        const res = normalize(
+            sdkErr(
+                429,
+                'You exceeded your current quota, please check your plan and billing details. Please retry in 17.3s.',
+            ),
+        );
+        expect(res.code).toBe('rate_limit');
+        expect(res.ok).toBe(true);
+    });
+
+    // Google names a per-minute window in the body (quotaId, RetryInfo), not
+    // always in the message. The review reads the body; the Test must too, or
+    // it calls a throttled key "out of credits".
+    const googleBody = (quotaId: string, retryDelay?: string) =>
+        JSON.stringify({
+            error: {
+                code: 429,
+                message:
+                    'You exceeded your current quota, please check your plan and billing details.',
+                status: 'RESOURCE_EXHAUSTED',
+                details: [
+                    {
+                        '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+                        'violations': [
+                            {
+                                quotaMetric:
+                                    'generativelanguage.googleapis.com/generate_content_free_tier_requests',
+                                quotaId,
+                                quotaDimensions: {
+                                    location: 'global',
+                                    model: 'gemini-3.5-flash',
+                                },
+                                quotaValue: '10',
+                            },
+                        ],
+                    },
+                    {
+                        '@type': 'type.googleapis.com/google.rpc.Help',
+                        'links': [
+                            {
+                                description:
+                                    'Learn more about Gemini API quotas',
+                                url: 'https://ai.google.dev/gemini-api/docs/rate-limits',
+                            },
+                        ],
+                    },
+                    ...(retryDelay
+                        ? [
+                              {
+                                  '@type':
+                                      'type.googleapis.com/google.rpc.RetryInfo',
+                                  retryDelay,
+                              },
+                          ]
+                        : []),
+                ],
+            },
+        });
+    // As the AI SDK hands it: the body as text, longer than the 500
+    // characters the Test keeps of a text body.
+    const googleErr = (body: string) => ({
+        name: 'AI_APICallError',
+        message:
+            'You exceeded your current quota, please check your plan and billing details.',
+        statusCode: 429,
+        responseBody: body,
+    });
+
+    it.each([
+        'GenerateRequestsPerMinutePerProjectPerModel-FreeTier',
+        'GenerateContentInputTokensPerModelPerMinute-FreeTier',
+    ])(
+        '429 whose body names a per-minute quota (%s) → rate_limit, ok:true',
+        (quotaId) => {
+            const res = normalize(googleErr(googleBody(quotaId, '17s')));
+            expect(res.code).toBe('rate_limit');
+            expect(res.ok).toBe(true);
+        },
+    );
+
+    it('a 429 whose body cannot be written as text still gets a verdict', () => {
+        const body: Record<string, unknown> = {
+            error: { message: 'Please retry in 17.3s.' },
+        };
+        body.self = body;
+        const res = normalize({ ...sdkErr(429), responseBody: body });
+        expect(res.code).toBe('rate_limit');
+    });
+
+    it('429 whose body names a per-day quota → payment, ok:false', () => {
+        const res = normalize(
+            googleErr(
+                googleBody('GenerateRequestsPerDayPerProjectPerModel-FreeTier'),
+            ),
+        );
+        expect(res.code).toBe('payment');
+        expect(res.ok).toBe(false);
+    });
+
+    // #2792 review: a spent key also comes back as 400 (Anthropic) or 403
+    // (OpenRouter). The Test says what the review comment says about it.
+    const bodied = (statusCode: number, message: string) => ({
+        name: 'AI_APICallError',
+        message,
+        statusCode,
+        responseBody: JSON.stringify({ error: { message } }),
+    });
+
+    it.each([
+        [
+            400,
+            'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.',
+        ],
+        [
+            400,
+            'You have reached your specified API usage limits. You will regain access on 2026-12-01 at 00:00 UTC.',
+        ],
+        [
+            403,
+            'Key limit exceeded (total limit). Manage it using https://openrouter.ai/settings/keys',
+        ],
+    ])('%i for a spent key (%s) → payment, ok:false', (status, message) => {
+        const res = normalize(bodied(status, message));
+        expect(res.code).toBe('payment');
+        expect(res.ok).toBe(false);
+    });
+
+    it.each([
+        [
+            400,
+            'Unsupported parameter: max_tokens is not supported with this model.',
+            'bad_request',
+        ],
+        [403, 'Incorrect API key provided.', 'auth'],
+        [403, 'Your input was flagged by the moderation system.', 'auth'],
+        [
+            403,
+            'This API method requires billing to be enabled. Please enable billing on project #123 then retry.',
+            'auth',
+        ],
+    ])(
+        '%i that is not a spent key (%s) keeps its verdict',
+        (status, message, code) => {
+            expect(normalize(bodied(status, message)).code).toBe(code);
+        },
+    );
+
     it('500 → server_error (>= 500 boundary, low end)', () => {
         expect(normalize(sdkErr(500)).code).toBe('server_error');
     });
@@ -792,6 +951,36 @@ describe('normalizeError — axios and transport-level branches', () => {
     const axiosErr = (extra: Record<string, unknown>) => ({
         isAxiosError: true,
         ...extra,
+    });
+
+    it('axios 429 whose body names a per-minute quota → rate_limit, ok:true', () => {
+        const res = normalize(
+            axiosErr({
+                response: {
+                    status: 429,
+                    data: {
+                        error: {
+                            message:
+                                'You exceeded your current quota, please check your plan and billing details.',
+                            details: [
+                                {
+                                    '@type':
+                                        'type.googleapis.com/google.rpc.QuotaFailure',
+                                    'violations': [
+                                        {
+                                            quotaId:
+                                                'GenerateRequestsPerMinutePerProjectPerModel-FreeTier',
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    },
+                },
+            }),
+        );
+        expect(res.code).toBe('rate_limit');
+        expect(res.ok).toBe(true);
     });
 
     it('axios error with an HTTP status maps through fromHttpStatus', () => {

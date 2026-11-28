@@ -1,6 +1,7 @@
 import {
     isAbortOrHardTimeout,
     isConnectTimeout,
+    providerRetryDelayMs,
     LlmErrorCategory,
     attachClassification,
     classifyLLMError,
@@ -1828,5 +1829,103 @@ describe('classifyLLMError: the address guard refusal is read from the error, no
         expect(classifyLLMError(err).category).toBe(
             LlmErrorCategory.CONFIG_INVALID,
         );
+    });
+});
+
+describe('providerRetryDelayMs (#2130 QA)', () => {
+    const google429 = (message: string, retryDelay?: string) =>
+        new APICallError({
+            message: 'You exceeded your current quota',
+            url: 'https://generativelanguage.googleapis.com/v1beta/x',
+            requestBodyValues: {},
+            statusCode: 429,
+            responseBody: JSON.stringify({
+                error: {
+                    message,
+                    ...(retryDelay
+                        ? {
+                              details: [
+                                  {
+                                      '@type':
+                                          'type.googleapis.com/google.rpc.RetryInfo',
+                                      retryDelay,
+                                  },
+                              ],
+                          }
+                        : {}),
+                },
+            }),
+        });
+
+    it.each([
+        [
+            'RetryInfo',
+            google429('Quota exceeded per minute.', '17.320s'),
+            17_320,
+        ],
+        ['the body text', google429('Please retry in 4.86s.'), 4_860],
+        ['minutes and seconds', google429('Please retry in 0m30s.'), 30_000],
+        ['a whole minute', google429('Please retry in 1m.'), 60_000],
+        [
+            'the text when RetryInfo says zero',
+            google429('Please retry in 0.3s.', '0s'),
+            300,
+        ],
+        [
+            'the message when only it reached us',
+            Object.assign(
+                new Error(
+                    'Failed after 4 attempts. Last error: You exceeded your current quota, per minute. Please retry in 20s.',
+                ),
+                { statusCode: 429 },
+            ),
+            20_000,
+        ],
+    ])("reads the provider's window from %s", (_label, err, ms) => {
+        expect(providerRetryDelayMs(err)).toBe(ms);
+    });
+
+    it.each([
+        [
+            'a delay past a minute (a daily cap)',
+            google429('Please retry in 1m30s.'),
+        ],
+        ['a 429 that names no delay', google429('Too many requests')],
+        [
+            'an error that is not a rate limit',
+            Object.assign(new Error('Please retry in 5s'), { statusCode: 500 }),
+        ],
+    ])('names no window for %s', (_label, err) => {
+        expect(providerRetryDelayMs(err)).toBeUndefined();
+    });
+
+    // A plain 429, no quota wording: a rate limit by status alone, so only
+    // the delay decides.
+    const plain429 = (message: string) =>
+        Object.assign(new Error(message), { statusCode: 429 });
+
+    it.each([
+        ['retry in 1 minute', 60_000],
+        ['retry in 30 seconds', 30_000],
+        ['retry in 45 secs', 45_000],
+    ])('reads "%s" on a plain 429', (text, ms) => {
+        expect(providerRetryDelayMs(plain429(`Slow down, ${text}.`))).toBe(ms);
+    });
+
+    it.each([
+        ['names no delay', 'Too many requests'],
+        ['asks for more than a minute', 'Too many requests, retry in 120s'],
+    ])('a plain 429 that %s gets no window', (_label, message) => {
+        expect(providerRetryDelayMs(plain429(message))).toBeUndefined();
+    });
+
+    it('reads a per-minute 429 written with minutes as a rate limit', () => {
+        expect(
+            classifyLLMError(
+                google429(
+                    'You exceeded your current quota, please check your plan and billing details. Please retry in 0m30s.',
+                ),
+            ).category,
+        ).toBe(LlmErrorCategory.RATE_LIMIT);
     });
 });

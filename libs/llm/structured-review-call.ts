@@ -74,6 +74,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import {
     classifyLLMError,
+    providerRetryDelayMs,
     isAbortOrHardTimeout,
     LlmErrorCategory,
     markRetriesExhausted,
@@ -721,7 +722,12 @@ async function runReviewCall<T>(
         reissue: () => Promise<T>,
     ): Promise<T> => {
         if (slotInCooldown()) throw markRetriesExhausted(err);
-        await sleep(jitteredBackoffMs(1, RATE_LIMIT_RETRY_DELAY_MS));
+        // The provider's own per-minute window when it named one (#2130):
+        // a fixed 2-4 s landed inside it and gave up on the second 429.
+        await sleep(
+            providerRetryDelayMs(err) ??
+                jitteredBackoffMs(1, RATE_LIMIT_RETRY_DELAY_MS),
+        );
         try {
             return await reissue();
         } catch (retryErr) {
