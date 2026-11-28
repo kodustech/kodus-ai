@@ -106,6 +106,9 @@ async function createTempGitRepo(): Promise<string> {
         cwd: dir,
     });
     await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+    await execFileAsync('git', ['config', 'commit.gpgsign', 'false'], {
+        cwd: dir,
+    });
     return dir;
 }
 
@@ -419,6 +422,99 @@ describe('review integration', () => {
         ]);
         expect(exitCode).toBe(0);
         expect(stdout).toContain('Found 2 issues');
+    });
+
+    it('reviews a repository initial commit with --commit', async () => {
+        const rootRepo = await createTempGitRepo();
+        try {
+            await fs.writeFile(
+                path.join(rootRepo, 'init.ts'),
+                'export const initial = true;\n',
+            );
+            await fs.mkdir(path.join(rootRepo, 'nested'), { recursive: true });
+            await fs.writeFile(
+                path.join(rootRepo, 'nested', 'helper.ts'),
+                'export function help() { return 1; }\n',
+            );
+            await execFileAsync('git', ['add', '.'], { cwd: rootRepo });
+            await execFileAsync('git', ['commit', '-m', 'initial commit'], {
+                cwd: rootRepo,
+            });
+            const { stdout: shaOut } = await execFileAsync(
+                'git',
+                ['rev-parse', 'HEAD'],
+                { cwd: rootRepo },
+            );
+            const rootSha = shaOut.trim();
+
+            await fs.writeFile(
+                path.join(rootRepo, 'init.ts'),
+                'export const initial = false;\n',
+            );
+            await execFileAsync('git', ['add', 'init.ts'], { cwd: rootRepo });
+            await execFileAsync('git', ['commit', '-m', 'second commit'], {
+                cwd: rootRepo,
+            });
+            const { stdout: secondOut } = await execFileAsync(
+                'git',
+                ['rev-parse', 'HEAD'],
+                { cwd: rootRepo },
+            );
+            const secondSha = secondOut.trim();
+
+            const { stdout, stderr, exitCode } = await runCli(
+                ['review', '--commit', rootSha, '--format', 'json'],
+                { cwd: rootRepo },
+            );
+            expect(exitCode, stderr).toBe(0);
+
+            const json = parseFirstJsonObject(stdout);
+            expect(json).toHaveProperty('summary');
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff.startsWith('diff --git ')).toBe(true);
+            expect(req!.body.diff).toContain('init.ts');
+            expect(req!.body.diff).toContain('+export const initial = true;');
+            expect(req!.body.diff).not.toContain(
+                '+export const initial = false;',
+            );
+            expect(req!.body.diff).toContain('nested/helper.ts');
+
+            mockServer.reset();
+
+            const secondRun = await runCli(
+                ['review', '--commit', secondSha, '--format', 'json'],
+                { cwd: rootRepo },
+            );
+            expect(secondRun.exitCode, secondRun.stderr).toBe(0);
+            const secondReq = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(secondReq).toBeDefined();
+            expect(secondReq!.body.diff).toContain(
+                '+export const initial = false;',
+            );
+            expect(secondReq!.body.diff).not.toContain('nested/helper.ts');
+        } finally {
+            await fs.rm(rootRepo, { recursive: true, force: true });
+        }
+    });
+
+    it('exits with code 1 and submits no review for an invalid --commit', async () => {
+        const { exitCode } = await runCli([
+            'review',
+            '--commit',
+            'deadbeefdeadbeef',
+            '--format',
+            'json',
+        ]);
+        expect(exitCode).toBe(1);
+        expect(
+            mockServer.requests.find((r) => r.url === '/cli/review'),
+        ).toBeUndefined();
     });
 
     it('suppresses spinner output for pr suggestions when quiet mode is enabled', async () => {

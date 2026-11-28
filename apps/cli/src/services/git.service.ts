@@ -188,9 +188,46 @@ class GitService {
         return diff;
     }
 
+    private async isParentlessRootCommit(commitSha: string): Promise<boolean> {
+        try {
+            // Check raw commit headers rather than `<sha>^` or `rev-list --parents`,
+            // both of which treat shallow-clone grafts as parentless.
+            const rawCommit = await this.git.raw([
+                'cat-file',
+                'commit',
+                `${commitSha}^{commit}`,
+            ]);
+            const headerEnd = rawCommit.indexOf('\n\n');
+            const header =
+                headerEnd === -1 ? rawCommit : rawCommit.slice(0, headerEnd);
+            return !header
+                .split('\n')
+                .some((line) => line.startsWith('parent '));
+        } catch {
+            return false;
+        }
+    }
+
     async getDiffForCommit(commitSha: string): Promise<string> {
         await this.ensureRepo();
-        const diff = await this.git.diff([`${commitSha}^`, commitSha]);
+        let diff: string;
+        try {
+            diff = await this.git.diff([`${commitSha}^`, commitSha]);
+        } catch (error) {
+            if (!(await this.isParentlessRootCommit(commitSha))) {
+                throw error;
+            }
+            diff = await this.git.raw([
+                'diff-tree',
+                '--root',
+                '--no-commit-id',
+                '--ext-diff',
+                '--textconv',
+                '-p',
+                commitSha,
+                '--',
+            ]);
+        }
 
         if (this.verbose) {
             cliDebug(
