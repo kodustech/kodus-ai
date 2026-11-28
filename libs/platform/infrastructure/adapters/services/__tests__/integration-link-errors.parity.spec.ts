@@ -150,7 +150,10 @@ const harnesses: Harness[] = [
             svc.checkRepositoryPermissions = jest
                 .fn()
                 .mockResolvedValue({ success: true });
-            svc.integrationService.findOne.mockRejectedValue(err);
+            // Setup writes the pair in one locked transaction, like Data Center.
+            svc.integrationService.saveCodeManagementAuth = jest
+                .fn()
+                .mockRejectedValue(err);
         },
     },
     {
@@ -179,7 +182,11 @@ const harnesses: Harness[] = [
                     .fn()
                     .mockResolvedValue({ status: 200, data: { values: [] } }),
             }));
-            svc.integrationService.findOne.mockRejectedValue(err);
+            // The first setup writes the auth and the integration in one
+            // transaction.
+            svc.integrationService.saveCodeManagementAuth = jest
+                .fn()
+                .mockRejectedValue(err);
         },
     },
     {

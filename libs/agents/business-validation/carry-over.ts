@@ -6,30 +6,40 @@ import type {
     TaskCheck,
 } from './business-validation.types';
 import { taskPasses } from './check-policy';
-import type { ValidationResult } from './judge/validation.types';
+import type {
+    OutOfScopeChange,
+    ValidationResult,
+} from './judge/validation.types';
 import { deriveStatus } from './judge/validation-verdict';
 import type { RunTask } from './runs/validation-run.model';
 
 /**
  * A re-check on top of the PR's previous run: what a reviewer accepted stays
  * accepted (UC-37), and a requirement whose state changed says what it was
- * ("was missing", UC-34).
+ * ("was missing", UC-34). `sameCommit`: the previous run judged the same
+ * head, so an out-of-scope change reworded on the same files is the same one
+ * (`matchOutOfScope`).
  */
 export function carryOver(
     outcome: BusinessValidationOutcome,
     previous: RunTask[] | undefined,
+    { sameCommit = false }: { sameCommit?: boolean } = {},
 ): BusinessValidationOutcome {
     if (outcome.kind !== 'validated' || !previous?.length) {
         return outcome;
     }
     const checks = outcome.checks.map((check) => {
         const before = previous.find((t) => t.id === check.task.id);
-        return before ? applyPrevious(check, before) : check;
+        return before ? applyPrevious(check, before, sameCommit) : check;
     });
     return { ...outcome, checks, passed: checks.every((c) => c.passed) };
 }
 
-function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
+function applyPrevious(
+    check: TaskCheck,
+    before: RunTask,
+    sameCommit: boolean,
+): TaskCheck {
     const current = check.verdict.requirements ?? [];
     // Likeness may only stand in for the same text when the task's text is
     // the one the acceptance was given on: edited, "on the orders page"
@@ -61,8 +71,15 @@ function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
             .filter((c) => c.accepted)
             .map((c) => [requirementKey(c.change), c.accepted!]),
     );
-    const outOfScope = (check.verdict.outOfScope ?? []).map((c) => {
-        const accepted = acceptedChanges.get(requirementKey(c.change));
+    const currentChanges = check.verdict.outOfScope ?? [];
+    const priorChanges = matchOutOfScope(currentChanges, before.outOfScope, {
+        sameCommit,
+    });
+    const outOfScope = currentChanges.map((c, i) => {
+        const at = priorChanges[i];
+        const accepted =
+            acceptedChanges.get(requirementKey(c.change)) ??
+            (at === undefined ? undefined : before.outOfScope[at].accepted);
         return accepted ? { ...c, accepted } : c;
     });
     const verdict: ValidationResult = {
@@ -137,6 +154,80 @@ export function matchPrevious(
         }
     }
     return result;
+}
+
+/**
+ * For each out-of-scope change of this run, the index of the same one in the
+ * last run, each earlier change taken once. The exact text wins. On the same
+ * commit the code is the same and only the judge's wording changes, so a
+ * change citing the same set of files is the same one, when no other
+ * unmatched change on either side cites that set: two changes on one file,
+ * both reworded, can't be told apart, so neither is matched (QA of #2681).
+ * Across commits only the text counts: a new push can put a different change
+ * in the same file, and its wording shares most words with the last one
+ * ("Adds …, which the task does not ask for"), so no likeness tells them
+ * apart, and an acceptance must not move to a change nobody reviewed.
+ */
+export function matchOutOfScope(
+    now: readonly OutOfScopeChange[],
+    before: readonly OutOfScopeChange[],
+    { sameCommit }: { sameCommit: boolean },
+): Array<number | undefined> {
+    const taken = new Set<number>();
+    const result: Array<number | undefined> = now.map(() => undefined);
+    const byKey = new Map<string, number[]>();
+    before.forEach((c, j) => {
+        const key = requirementKey(c.change);
+        byKey.set(key, [...(byKey.get(key) ?? []), j]);
+    });
+    now.forEach((c, i) => {
+        const exact = byKey.get(requirementKey(c.change))?.shift();
+        if (exact !== undefined) {
+            taken.add(exact);
+            result[i] = exact;
+        }
+    });
+    if (!sameCommit) {
+        return result;
+    }
+    const countFiles = (
+        changes: readonly OutOfScopeChange[],
+        open: (k: number) => boolean,
+    ) => {
+        const counts = new Map<string, number>();
+        changes.forEach((c, k) => {
+            const key = citedFiles(c);
+            if (key && open(k)) counts.set(key, (counts.get(key) ?? 0) + 1);
+        });
+        return counts;
+    };
+    const nowCounts = countFiles(now, (i) => result[i] === undefined);
+    const beforeCounts = countFiles(before, (j) => !taken.has(j));
+    now.forEach((c, i) => {
+        const key = citedFiles(c);
+        if (
+            result[i] !== undefined ||
+            !key ||
+            nowCounts.get(key) !== 1 ||
+            beforeCounts.get(key) !== 1
+        ) {
+            return;
+        }
+        const j = before.findIndex(
+            (b, k) => !taken.has(k) && citedFiles(b) === key,
+        );
+        taken.add(j);
+        result[i] = j;
+    });
+    return result;
+}
+
+/** The files a change cites, as one key; empty when it cites none. */
+function citedFiles(change: OutOfScopeChange): string {
+    return [...new Set((change.evidence ?? []).map((e) => e.file))]
+        .filter(Boolean)
+        .sort()
+        .join('\n');
 }
 
 function words(text: string): Set<string> {

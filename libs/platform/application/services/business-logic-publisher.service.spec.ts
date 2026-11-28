@@ -478,6 +478,57 @@ describe('BusinessLogicPublisher', () => {
             result.outcome.kind === 'validated' && result.outcome.passed,
         ).toBe(true);
     });
+
+    // #2788 review: a reworded out-of-scope change keeps its acceptance on
+    // the commit it was given on, never on a new push.
+    it.each([
+        ['the same commit', 'b930556', 'nina'],
+        ['a new push', 'c0ffee1', undefined],
+    ])(
+        'carries an out-of-scope acceptance by its files only on %s',
+        async (_label, headSha, acceptedBy) => {
+            const file = [{ file: 'src/refunds/cache.ts' }];
+            const { publisher } = build({
+                verdict: {
+                    headSha: 'b930556',
+                    tasks: [
+                        {
+                            id: 'SAA-96',
+                            requirements: [],
+                            outOfScope: [
+                                {
+                                    change: 'Adds a Redis cache in front of refunds',
+                                    evidence: file,
+                                    accepted: { by: 'nina', at: 'x' },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            });
+            const outcome = validated('met');
+            outcome.checks[0].verdict.outOfScope = [
+                { change: 'Caches refund lookups in Redis', evidence: file },
+            ];
+
+            const result = await publisher.publish({
+                request,
+                headSha,
+                result: {
+                    outcome,
+                    references: [],
+                    attempts: [],
+                    trackers: [],
+                },
+            });
+
+            expect(
+                result.outcome.kind === 'validated' &&
+                    result.outcome.checks[0].verdict.outOfScope?.[0].accepted
+                        ?.by,
+            ).toBe(acceptedBy);
+        },
+    );
 });
 
 describe('lastVerdictFailed', () => {

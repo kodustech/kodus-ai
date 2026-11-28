@@ -169,6 +169,159 @@ describe('sameResult (#2423)', () => {
         ).toBe(false);
     });
 
+    // QA of #2681: two runs on the same commit, the same 4 out-of-scope
+    // changes on the same files, only the model's wording differed, and the
+    // reply said "the result changed".
+    it('reads the same out-of-scope changes in other words, on the same files and commit, as the same result', () => {
+        const at = (...files: string[]) => files.map((file) => ({ file }));
+        const before = run(
+            { headSha: 'b930556' },
+            {
+                outOfScope: [
+                    {
+                        change: 'Adds a Redis cache in front of refunds',
+                        evidence: at('src/refunds/cache.ts'),
+                    },
+                    {
+                        change: 'Renames the audit helper',
+                        evidence: at('src/audit/log.ts', 'src/audit/index.ts'),
+                    },
+                ],
+            },
+        );
+        const reworded = run(
+            { headSha: 'b930556' },
+            {
+                outOfScope: [
+                    {
+                        change: 'Caches refund lookups in Redis',
+                        evidence: at('src/refunds/cache.ts'),
+                    },
+                    {
+                        change: 'The audit helper was renamed',
+                        evidence: at('src/audit/index.ts', 'src/audit/log.ts'),
+                    },
+                ],
+            },
+        );
+        expect(sameResult(before, reworded)).toBe(true);
+        // After a push the wording alone can't tell a reworded change from a
+        // different one: it is a change, as before #2788.
+        expect(sameResult(before, { ...reworded, headSha: 'c0ffee1' })).toBe(
+            false,
+        );
+    });
+
+    it('reads a run stored without an out-of-scope list as having none', () => {
+        expect(sameResult(run({}, { outOfScope: undefined }), run())).toBe(
+            true,
+        );
+        expect(sameResult(run(), run({}, { outOfScope: undefined }))).toBe(
+            true,
+        );
+    });
+
+    it('reads an out-of-scope change dropped, or accepted since, as a change', () => {
+        const cache = {
+            change: 'Adds a Redis cache',
+            evidence: [{ file: 'src/refunds/cache.ts' }],
+        };
+        const log = {
+            change: 'Adds a debug log',
+            evidence: [{ file: 'src/refunds/log.ts' }],
+        };
+        expect(
+            sameResult(
+                run({}, { outOfScope: [cache, log] }),
+                run({}, { outOfScope: [cache] }),
+            ),
+        ).toBe(false);
+        expect(
+            sameResult(
+                run({}, { outOfScope: [cache] }),
+                run(
+                    {},
+                    {
+                        outOfScope: [
+                            {
+                                ...cache,
+                                change: 'Caches refunds in Redis',
+                                accepted: { by: 'nina', at: '2026-10-05' },
+                            },
+                        ],
+                    },
+                ),
+            ),
+        ).toBe(false);
+    });
+
+    it('reads a different out-of-scope change on the same file as a change', () => {
+        const on = (change: string) =>
+            run(
+                {},
+                {
+                    outOfScope: [
+                        {
+                            change,
+                            evidence: [{ file: 'src/refunds/cache.ts' }],
+                        },
+                    ],
+                },
+            );
+        expect(
+            sameResult(
+                on('Adds a Redis cache in front of refunds'),
+                on('Deletes the admin check before a refund is issued'),
+            ),
+        ).toBe(false);
+    });
+
+    // #2788 review: after a push, a different change in the same file is
+    // worded much like the last one; the reply must not say "same result".
+    it('reads a different change in the same file after a push as a change', () => {
+        const on = (change: string, headSha: string) =>
+            run(
+                { headSha },
+                {
+                    outOfScope: [
+                        {
+                            change,
+                            evidence: [{ file: 'src/signup/signup.ts' }],
+                        },
+                    ],
+                },
+            );
+        expect(
+            sameResult(
+                on(
+                    'Adds email format validation in signup.ts, which the task does not ask for',
+                    'b930556',
+                ),
+                on(
+                    'Adds phone number validation in signup.ts, which the task does not ask for',
+                    'c0ffee1',
+                ),
+            ),
+        ).toBe(false);
+    });
+
+    it('reads an out-of-scope change on another file as a change, in any words', () => {
+        const on = (change: string, file: string) =>
+            run({}, { outOfScope: [{ change, evidence: [{ file }] }] });
+        expect(
+            sameResult(
+                on('Adds a Redis cache', 'src/refunds/cache.ts'),
+                on('Adds a Redis cache', 'src/orders/cache.ts'),
+            ),
+        ).toBe(true);
+        expect(
+            sameResult(
+                on('Adds a Redis cache', 'src/refunds/cache.ts'),
+                on('Caches refunds in Redis', 'src/orders/cache.ts'),
+            ),
+        ).toBe(false);
+    });
+
     it('reads a skip about another task as a change', () => {
         const missing = (id: string) =>
             ({

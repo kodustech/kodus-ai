@@ -84,7 +84,9 @@ describe('BackfillRuleDetectorsUseCase (#1449 T0 activation)', () => {
     });
 
     it('with onlyMissing=false, re-processes rules that already have a detector', async () => {
-        const rules = [rule({ uuid: 'a', detector: { type: 'regex', pattern: 'x' } })];
+        const rules = [
+            rule({ uuid: 'a', detector: { type: 'regex', pattern: 'x' } }),
+        ];
         const { uc, compileAndSave } = make(rules, () => ({ compiled: true }));
         const res = await uc.execute(org, { onlyMissing: false });
         expect(res.processed).toBe(1);
@@ -340,6 +342,46 @@ describe('BackfillRuleDetectorsUseCase — context-need backfill (#1826)', () =>
         }));
 
         await uc.execute(org, {});
+
+        expect(compileAndSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('recompiles a settled rule exactly once after DETECTOR_COMPILER_VERSION is bumped', async () => {
+        const settled = decided(rule({ uuid: 'v' }));
+        let sweep!: typeof import('@libs/kodyRules/application/use-cases/backfill-rule-detectors.use-case');
+        let hash!: typeof import('@libs/common/utils/kody-rules/compile-hash');
+        jest.isolateModules(() => {
+            jest.doMock(
+                '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler-version',
+                () => ({ DETECTOR_COMPILER_VERSION: 2 }),
+            );
+            sweep = require('@libs/kodyRules/application/use-cases/backfill-rule-detectors.use-case');
+            hash = require('@libs/common/utils/kody-rules/compile-hash');
+        });
+        const rules = [settled];
+        const compileAndSave = jest.fn(async (_org, _uuid, r) => {
+            // What the compiler service persists after an attempt.
+            rules[0] = {
+                ...r,
+                compileAttempt: {
+                    ...r.compileAttempt,
+                    sourceHash: hash.ruleCompileHash(r),
+                },
+            };
+            return { compiled: false, declineReason: 'not-mechanical' };
+        });
+        const uc = new sweep.BackfillRuleDetectorsUseCase(
+            {
+                findByOrganizationId: jest.fn(async () => ({
+                    uuid: 'kr-1',
+                    rules,
+                })),
+            } as any,
+            { compileAndSave } as any,
+        );
+
+        await uc.execute(org, { concurrency: 1 });
+        await uc.execute(org, { concurrency: 1 });
 
         expect(compileAndSave).toHaveBeenCalledTimes(1);
     });

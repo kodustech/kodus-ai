@@ -3,22 +3,40 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
     FindManyOptions,
     FindOneOptions,
+    FindOptionsOrder,
     Repository,
     UpdateQueryBuilder,
 } from 'typeorm';
 
-import { PlatformType } from '@libs/core/domain/enums';
+import {
+    IntegrationCategory,
+    IntegrationConfigKey,
+    PlatformType,
+} from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     mapSimpleModelsToEntities,
     mapSimpleModelToEntity,
 } from '@libs/core/infrastructure/repositories/mappers';
 import { createNestedConditions } from '@libs/core/infrastructure/repositories/model/filters';
-import { IIntegrationRepository } from '@libs/integrations/domain/integrations/contracts/integration.repository.contracts';
+import {
+    IIntegrationRepository,
+    SaveCodeManagementAuthOptions,
+} from '@libs/integrations/domain/integrations/contracts/integration.repository.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/integration.interface';
 
+import { AuthIntegrationModel } from './schemas/authIntegration.model';
 import { IntegrationModel } from './schemas/integration.model';
+
+// Setups that raced before the team lock left duplicate pairs behind. Before
+// reads had an order, Postgres returned the lowest id, and the team's
+// repository selection was saved against that pair. Reads and setup keep
+// picking it (active first), so those teams stay ready for reviews.
+const FIRST_ACTIVE: FindOptionsOrder<IntegrationModel> = {
+    status: 'DESC',
+    uuid: 'ASC',
+};
 
 @Injectable()
 export class IntegrationRepository implements IIntegrationRepository {
@@ -112,6 +130,7 @@ export class IntegrationRepository implements IIntegrationRepository {
                     ...authIntegrationCondition,
                 },
                 relations: ['authIntegration'],
+                order: FIRST_ACTIVE,
             };
 
             const integration =
@@ -177,6 +196,61 @@ export class IntegrationRepository implements IIntegrationRepository {
         } catch (error) {
             console.log(error);
         }
+    }
+
+    async saveCodeManagementAuth(
+        { organizationId, teamId }: OrganizationAndTeamData,
+        platform: PlatformType,
+        authDetails: Record<string, unknown>,
+        options: SaveCodeManagementAuthOptions = {},
+    ): Promise<IntegrationEntity> {
+        return this.integrationRepository.manager.transaction(
+            async (manager) => {
+                // The team exists before its first integration. Lock it before
+                // looking up the pair so simultaneous setups reuse the same rows.
+                const teamRows = await manager.query(
+                    'SELECT 1 FROM teams WHERE uuid = $1 AND organization_id = $2 FOR NO KEY UPDATE',
+                    [teamId, organizationId],
+                );
+                if (!teamRows.length)
+                    throw new Error('Integration team not found.');
+
+                const organization = { uuid: organizationId };
+                const team = { uuid: teamId };
+                const existing = await manager.findOne(IntegrationModel, {
+                    where: { organization, team, platform },
+                    relations: { authIntegration: true },
+                    order: FIRST_ACTIVE,
+                });
+                const previous = existing?.authIntegration?.authDetails;
+                if (previous && options.resetsSelection?.(previous)) {
+                    await manager.query(
+                        'DELETE FROM integration_configs WHERE team_id = $1 AND "configKey" = $2',
+                        [teamId, IntegrationConfigKey.REPOSITORIES],
+                    );
+                }
+                const authIntegration = await manager.save(
+                    AuthIntegrationModel,
+                    {
+                        uuid: existing?.authIntegration?.uuid,
+                        organization,
+                        team,
+                        status: true,
+                        authDetails,
+                    },
+                );
+                const integration = await manager.save(IntegrationModel, {
+                    uuid: existing?.uuid,
+                    platform,
+                    integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                    organization,
+                    team,
+                    status: true,
+                    authIntegration: { uuid: authIntegration.uuid },
+                });
+                return IntegrationEntity.create(integration);
+            },
+        );
     }
 
     async update(
