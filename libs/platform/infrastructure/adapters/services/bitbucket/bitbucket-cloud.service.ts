@@ -1679,10 +1679,13 @@ export class BitbucketCloudService implements Omit<
                     organizationAndTeamData,
                     IntegrationConfigKey.REPOSITORIES,
                 ),
+                // Team-scoped: the router sends a team with no pair here,
+                // and it must not read another team's Data Center pair.
                 this.integrationService.findOne({
                     organization: {
                         uuid: organizationAndTeamData.organizationId,
                     },
+                    team: { uuid: organizationAndTeamData.teamId },
                     status: true,
                     platform: PlatformType.BITBUCKET,
                 }),

@@ -17,6 +17,8 @@ import { AuthIntegrationService } from '@libs/integrations/infrastructure/adapte
 import { IntegrationService } from '@libs/integrations/infrastructure/adapters/services/integration.service';
 import { IntegrationConfigService } from '@libs/integrations/infrastructure/adapters/services/integrationConfig.service';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import { BitbucketService } from '@libs/platform/infrastructure/adapters/services/bitbucket.service';
+import { BitbucketCloudService } from '@libs/platform/infrastructure/adapters/services/bitbucket/bitbucket-cloud.service';
 import { BitbucketDataCenterService } from '@libs/platform/infrastructure/adapters/services/bitbucket/bitbucket-data-center.service';
 
 const describePostgres =
@@ -25,6 +27,7 @@ const describePostgres =
 describePostgres('Bitbucket Data Center setup on Postgres', () => {
     const organizationId = randomUUID();
     const teamId = randomUUID();
+    const otherTeamId = randomUUID();
     const tenant = { organizationId, teamId };
     const applicationName = `dc-setup-${teamId}`;
     const db = new DataSource({
@@ -49,6 +52,8 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
         entities: ENTITIES,
     });
     let dc: BitbucketDataCenterService;
+    let cloud: BitbucketCloudService;
+    let bitbucket: BitbucketService;
 
     const connect = (token = 'first-token') =>
         dc.createAuthIntegration({
@@ -121,8 +126,8 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
             [organizationId, 'DC test'],
         );
         await db.query(
-            'INSERT INTO teams (uuid, name, organization_id) VALUES ($1, $2, $3)',
-            [teamId, 'DC test', organizationId],
+            'INSERT INTO teams (uuid, name, organization_id) VALUES ($1, $2, $3), ($4, $5, $3)',
+            [teamId, 'DC test', organizationId, otherTeamId, 'Other team'],
         );
         const configs = new IntegrationConfigService(
             new IntegrationConfigRepository(
@@ -140,6 +145,28 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
                     db.getRepository(AuthIntegrationModel),
                 ),
             ),
+            undefined,
+        );
+        const integrations = new IntegrationService(
+            new IntegrationRepository(db.getRepository(IntegrationModel)),
+            configs,
+        );
+        cloud = new BitbucketCloudService(
+            integrations,
+            configs,
+            new AuthIntegrationService(
+                new AuthIntegrationRepository(
+                    db.getRepository(AuthIntegrationModel),
+                ),
+            ),
+            undefined,
+            undefined,
+        );
+        bitbucket = new BitbucketService(
+            cloud,
+            dc,
+            integrations,
+            configs,
             undefined,
         );
     });
@@ -167,7 +194,9 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
 
     afterAll(async () => {
         if (!db.isInitialized) return;
-        await db.query('DELETE FROM teams WHERE uuid = $1', [teamId]);
+        await db.query('DELETE FROM teams WHERE uuid = ANY($1)', [
+            [teamId, otherTeamId],
+        ]);
         await db.query('DELETE FROM organizations WHERE uuid = $1', [
             organizationId,
         ]);
@@ -327,6 +356,43 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
             disabled: 'disabled-token',
         });
         expect(await counts()).toEqual({ integrations: 3, credentials: 3 });
+    });
+
+    it('shows the connection only to the team that made it', async () => {
+        await connect();
+        await dc.createOrUpdateIntegrationConfig({
+            organizationAndTeamData: tenant,
+            configKey: IntegrationConfigKey.REPOSITORIES,
+            configValue: [{ id: '7', name: 'api' }],
+            deferWebhooks: true,
+        });
+        const other = { organizationId, teamId: otherTeamId };
+
+        await expect(
+            bitbucket.verifyConnection({ organizationAndTeamData: other }),
+        ).resolves.toEqual({
+            platformName: 'BITBUCKET',
+            isSetupComplete: false,
+            hasConnection: false,
+            config: { hasRepositories: false, status: undefined },
+            category: 'CODE_MANAGEMENT',
+        });
+        // Either implementation may answer for a team: neither reads another
+        // team's pair.
+        for (const impl of [dc, cloud]) {
+            await expect(
+                impl.verifyConnection({ organizationAndTeamData: other }),
+            ).resolves.toMatchObject({
+                hasConnection: false,
+                isSetupComplete: false,
+            });
+        }
+        await expect(
+            bitbucket.verifyConnection({ organizationAndTeamData: tenant }),
+        ).resolves.toMatchObject({
+            hasConnection: true,
+            isSetupComplete: true,
+        });
     });
 
     it('makes the team ready for reviews after it saves its first repository', async () => {

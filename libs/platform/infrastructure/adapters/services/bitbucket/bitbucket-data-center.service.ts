@@ -394,8 +394,11 @@ export class BitbucketDataCenterService implements Omit<
                 };
             }
 
+            // A pair belongs to one team: another team in the org has not
+            // connected until it sets up its own.
             const bitbucketOrg = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
                 status: true,
                 platform: PlatformType.BITBUCKET,
             });
