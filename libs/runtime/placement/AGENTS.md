@@ -36,8 +36,10 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime/src/fleet/template`](../../../apps/runtime/src/fleet/template/AGENTS.md)
+- [`apps/runtime/src/hub/claims`](../../../apps/runtime/src/hub/claims/AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../../../apps/runtime/src/shared/admission/AGENTS.md)
 - [`apps/runtime/src/shared/persistence`](../../../apps/runtime/src/shared/persistence/AGENTS.md)
+- [`apps/runtime/src/worker/env`](../../../apps/runtime/src/worker/env/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
 - [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime/api/application`](../api/application/AGENTS.md)

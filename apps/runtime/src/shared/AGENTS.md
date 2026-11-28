@@ -68,5 +68,6 @@ Imported by:
 - [`apps/runtime/src/worker/run`](../worker/run/AGENTS.md)
 - [`apps/runtime/src/worker/sandbox`](../worker/sandbox/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../worker/setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../worker/suite/AGENTS.md)
 
 <!-- module-map:end -->

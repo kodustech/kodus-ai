@@ -49,6 +49,7 @@ Imports these Runtime modules:
 - [`libs/runtime/blockers`](../../../../../libs/runtime/blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
+- [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
 - [`libs/runtime/probe`](../../../../../libs/runtime/probe/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
 - [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
