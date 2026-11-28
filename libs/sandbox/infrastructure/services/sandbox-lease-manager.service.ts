@@ -29,6 +29,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
@@ -98,6 +99,9 @@ const IN_FLIGHT_DRAIN_MAX_MS = 6 * 60 * 1000;
  * the holder being done.
  */
 const IN_FLIGHT_QUIET_MS = 1_000;
+
+/** The lease whose held call, started before its release, is running. */
+const heldCall = new AsyncLocalStorage<InFlightCommands>();
 
 /**
  * How long shutdown waits for the releases still running in the background.
@@ -1796,7 +1800,10 @@ export class SandboxLeaseManager
                 inFlight.running += 1;
                 try {
                     if (use.releasedAt) {
-                        if (!warnedUseAfterRelease) {
+                        if (
+                            !warnedUseAfterRelease &&
+                            heldCall.getStore() !== inFlight
+                        ) {
                             warnedUseAfterRelease = true;
                             this.logger.warn({
                                 message: `SandboxLeaseManager: sandbox used after release consumer="${consumer}" leaseId="${leaseId}"`,
@@ -1825,10 +1832,14 @@ export class SandboxLeaseManager
         // (astGrep reads its rule file from the target branch, then writes it
         // and scans), so the release waits for the whole call, not only for
         // its commands. Not a use: nothing is stamped (#2628).
+        // A command of a call held since before the release is the holder's
+        // own, so it is not a use after the release.
         const hold = async <T>(work: () => Promise<T>): Promise<T> => {
             inFlight.running += 1;
             try {
-                return await work();
+                return use.releasedAt
+                    ? await work()
+                    : await heldCall.run(inFlight, work);
             } finally {
                 settled();
             }

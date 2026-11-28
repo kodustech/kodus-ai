@@ -14,6 +14,10 @@ jest.mock('../engine/agent-tools.factory', () => ({
 import { buildAgentTools } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
 import { buildAstGrepTool } from '@libs/code-review/infrastructure/agents/adapters/ast-grep.tool';
+import {
+    AstGrepOutputLog,
+    recordAstGrepOutputs,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 const ctx = { runId: 'r' } as any;
 
@@ -221,5 +225,54 @@ describe('buildFinderToolRegistry', () => {
             'remove held=1',
         ]);
         expect(held).toBe(0);
+    });
+
+    // The review plan (context fit, tiering, chunk budget) is sized from this
+    // estimate, so holding the sandbox must not move it
+    it('serializes the tools the same with and without the sandbox hold', () => {
+        const tool = (description: string) => ({
+            description,
+            inputSchema: jsonSchema({
+                type: 'object',
+                properties: { path: { type: 'string' } },
+            }),
+            execute: async () => 'ok',
+        });
+        (buildAgentTools as jest.Mock).mockReturnValue({
+            grep: tool('search the repo'),
+            readFile: tool('read a file'),
+            checkTypes: tool('type-check'),
+        });
+        const extraTools = [
+            buildAstGrepTool({
+                exec: async () => ({ stdout: '', stderr: '', exitCode: 1 }),
+                writeFile: async () => {},
+                removeDir: async () => {},
+                changedFiles: ['src/a.ts'],
+                rulesPath: '.kody/rules.yml',
+                readTargetFile: async () => '',
+                workDirName: '.kody-ast-grep-test',
+            }) as any,
+        ];
+        const listed = (remoteCommands: any) => {
+            const { registry } = buildFinderToolRegistry({
+                remoteCommands,
+                extraTools,
+            });
+            return {
+                registry: JSON.stringify(registry.list()),
+                recorded: JSON.stringify(
+                    recordAstGrepOutputs(
+                        registry,
+                        new AstGrepOutputLog(),
+                    ).list(),
+                ),
+            };
+        };
+
+        const unheld = listed({});
+        const held = listed({ hold: (work: () => Promise<unknown>) => work() });
+
+        expect(held).toEqual(unheld);
     });
 });
