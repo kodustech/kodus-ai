@@ -24,6 +24,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Ellipsis } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { IntegrationCategory } from "src/core/types";
+import { repositoryFullName } from "src/core/utils/repository-name";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import { DeleteModal } from "./_modals/remove-repository-modal";
@@ -34,8 +35,7 @@ export const columns: ColumnDef<Repository>[] = [
         header: ({ column }) => (
             <DataTableColumnHeader column={column} title="Name" />
         ),
-        accessorFn: ({ organizationName, name }) =>
-            `${organizationName}/${name}`,
+        accessorFn: (repository) => repositoryFullName(repository),
 
         cell: ({ renderValue }) => (
             <span className="font-medium">{renderValue<string>()}</span>
@@ -75,8 +75,7 @@ export const columns: ColumnDef<Repository>[] = [
                         <>
                             Integration with{" "}
                             <span className="text-danger">
-                                {row.original.organizationName}/
-                                {row.original.name}
+                                {repositoryFullName(row.original)}
                             </span>{" "}
                             was removed.
                         </>
