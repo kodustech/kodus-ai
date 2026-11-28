@@ -49,6 +49,20 @@ describe('summarizeStatus', () => {
         });
     });
 
+    // QA of #2681: two PRs skipped as too large for the model, and the card
+    // showed only "Working · 4 PRs in 30 days" (#2233).
+    it('counts a PR too large for the model among those it could not read', () => {
+        const status = summarizeStatus([
+            run({ passed: true, tasks: [task()] }),
+            run({ outcome: 'skipped', skipReason: 'too_large_for_model' }),
+            run({ outcome: 'skipped', skipReason: 'too_large_for_model' }),
+        ]);
+        expect(status.stats).toMatchObject({
+            couldntRead: 2,
+            couldntReadByReason: { too_large_for_model: 2 },
+        });
+    });
+
     it("says paused when the tracker stopped answering and hasn't answered since (UC-06)", () => {
         const status = summarizeStatus([
             run({

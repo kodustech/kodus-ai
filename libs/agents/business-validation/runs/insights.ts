@@ -8,6 +8,8 @@ const COULDNT_READ = new Set([
     'no_capable_tracker',
     'task_too_thin',
     'task_missing',
+    // The PR, not the task, did not fit: nothing was checked either (#2233).
+    'too_large_for_model',
 ]);
 
 export interface BusinessLogicStatus {
