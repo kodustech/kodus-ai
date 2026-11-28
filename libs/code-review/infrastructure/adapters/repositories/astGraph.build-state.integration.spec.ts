@@ -38,6 +38,7 @@ const db = new DataSource({
     database:
         process.env.TEST_PG_DB ?? process.env.API_PG_DB_DATABASE ?? 'kodus_db',
     schema,
+    applicationName: schema,
     entities: [
         RepositoryModel,
         AstNodeModel,
@@ -62,6 +63,19 @@ const run =
     (process.env.TEST_PG_PORT ||
         process.env.API_PG_DB_PORT ||
         process.env.CI === 'true');
+
+async function waitForLockWaiter() {
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+        const [{ blocked }] = await db.query(
+            "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE application_name = $1 AND wait_event_type = 'Lock') AS blocked",
+            [schema],
+        );
+        if (blocked) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('Expected the merge to wait on the build lock');
+}
 
 function node(name: string): GraphNodeJson {
     return {
@@ -340,7 +354,7 @@ function node(name: string): GraphNodeJson {
             });
         });
 
-        it('records a merge that waits on a build write longer than the statement timeout', async () => {
+        it('records a merge that waits on a build write longer than one lock attempt', async () => {
             const build = db.createQueryRunner();
             await build.connect();
             await build.startTransaction();
@@ -350,7 +364,10 @@ function node(name: string): GraphNodeJson {
                 [repoId],
             );
             const deferred = merge(commits[2]);
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            // Hold the lock until the defer has waited on it and timed out
+            // its first attempt, so the test covers the wait and the retry.
+            await waitForLockWaiter();
+            await new Promise((resolve) => setTimeout(resolve, 1200));
             await build.commitTransaction();
             await build.release();
 

@@ -7,6 +7,10 @@ import { IRepositoryRepository } from '@libs/code-review/domain/contracts/Reposi
 
 import { RepositoryModel, AstGraphStatus } from './schemas/repository.model';
 
+const LOCK_NOT_AVAILABLE = '55P03';
+const DEFER_LOCK_WAIT_MS = 500;
+const DEFER_RETRY_DELAY_MS = 2000;
+
 @Injectable()
 export class RepositoryRepository implements IRepositoryRepository {
     constructor(
@@ -127,28 +131,41 @@ export class RepositoryRepository implements IRepositoryRepository {
         // caller back to the normal incremental path. Webhooks can arrive out
         // of order, so two different merges become '' (unknown), which always
         // gets a catch-up instead of trusting whichever landed last.
-        // A full build holds this row locked while it writes its rows, which
-        // on a large graph outlasts the default statement timeout. Wait as
-        // long as the build may run, so its merge is not dropped.
-        return this.repo.manager.transaction(async (manager) => {
-            await manager.query(
-                `SET LOCAL statement_timeout = ${AST_GRAPH_BUILD_TIMEOUT_MS}`,
-            );
-            const result = await manager
-                .createQueryBuilder(RepositoryModel, 'repository')
-                .update()
-                .set({
-                    astGraphMergedDuringBuild: () =>
-                        `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE '' END`,
-                })
-                .where('uuid = :uuid AND ast_graph_status = :building', {
-                    uuid,
-                    building: AstGraphStatus.BUILDING,
-                })
-                .setParameter('sha', mergeSha ?? '')
-                .execute();
-            return !!result.affected;
-        });
+        // A full build holds this row locked while it writes its rows, which on
+        // a large graph outlasts the statement timeout. Wait in short attempts
+        // that give the connection back between them, for as long as the
+        // build may run, so the merge is neither dropped nor pins a connection.
+        const deadline = Date.now() + AST_GRAPH_BUILD_TIMEOUT_MS;
+        for (;;) {
+            try {
+                return await this.repo.manager.transaction(async (manager) => {
+                    await manager.query(
+                        `SET LOCAL lock_timeout = ${DEFER_LOCK_WAIT_MS}`,
+                    );
+                    const result = await manager
+                        .createQueryBuilder(RepositoryModel, 'repository')
+                        .update()
+                        .set({
+                            astGraphMergedDuringBuild: () =>
+                                `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE '' END`,
+                        })
+                        .where(
+                            'uuid = :uuid AND ast_graph_status = :building',
+                            { uuid, building: AstGraphStatus.BUILDING },
+                        )
+                        .setParameter('sha', mergeSha ?? '')
+                        .execute();
+                    return !!result.affected;
+                });
+            } catch (error) {
+                const code = error?.driverError?.code ?? error?.code;
+                if (code !== LOCK_NOT_AVAILABLE || Date.now() >= deadline)
+                    throw error;
+                await new Promise((resolve) =>
+                    setTimeout(resolve, DEFER_RETRY_DELAY_MS),
+                );
+            }
+        }
     }
 
     async clearMergeDeferredDuringBuild(
