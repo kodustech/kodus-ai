@@ -243,20 +243,25 @@ export function stripReasoningBlocks(text: string): string | null {
     return (kept + s.slice(pos)).trim();
 }
 
-/** A markdown code fence: where it starts and ends, its body and its info word. */
+/** A markdown code fence: where it starts and ends, its body, its info word,
+ *  and whether an untagged body opens on a JSON delimiter. */
 interface Fence {
     start: number;
     end: number;
     inner: string;
     tag: string;
+    opensJson: boolean;
 }
 
-/** Whether a fence's info word marks a JSON payload. An untagged fence counts
- *  when its body opens on a bracket, which is how models quote JSON. */
-function isJsonFence(fence: Fence, text: string): boolean {
+/** The info word, bounded: an unterminated info line must not scan the rest
+ *  of the response for every fence. */
+const MAX_INFO = 24;
+
+/** Whether a fence carries a JSON payload. An untagged fence counts when its
+ *  body opens on a bracket, which is how models quote JSON. */
+function isJsonFence(fence: Fence): boolean {
     return (
-        /^json[c5]?$/.test(fence.tag) ||
-        (fence.tag === '' && /^\s*[[{]/.test(text.slice(fence.start + 3)))
+        /^json[c5]?$/.test(fence.tag) || (fence.tag === '' && fence.opensJson)
     );
 }
 
@@ -278,16 +283,26 @@ function scanFences(text: string): Fence[] {
         const start = text.indexOf('```', pos);
         if (start < 0) break;
         const body = start + 3;
-        const eol = text.indexOf('\n', body);
-        const info = text.slice(body, eol < 0 ? text.length : eol);
-        const tag = /^[\w+-]*/.exec(info)?.[0].toLowerCase() ?? '';
-        const fence: Fence = { start, end: 0, inner: '', tag };
-        const trackStrings = isJsonFence(fence, text);
+        // Read the info word in place: a response of one line with many
+        // fences must not search the rest of it per fence.
+        let i = body;
+        while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i++;
+        const tagStart = i;
+        const tagCap = Math.min(text.length, tagStart + MAX_INFO);
+        while (i < tagCap && /[\w+-]/.test(text[i])) i++;
+        const tag = text.slice(tagStart, i).toLowerCase();
+        let j = i;
+        const bodyCap = Math.min(text.length, i + MAX_INFO);
+        while (j < bodyCap && /\s/.test(text[j])) j++;
+        const opensJson = text[j] === '{' || text[j] === '[';
+
+        const trackStrings =
+            /^json[c5]?$/.test(tag) || (tag === '' && opensJson);
         let inString = false;
         let escaped = false;
         let close = -1;
-        for (let i = body; i < text.length; i++) {
-            const ch = text[i];
+        for (let k = body; k < text.length; k++) {
+            const ch = text[k];
             if (trackStrings) {
                 if (inString) {
                     if (escaped) escaped = false;
@@ -300,8 +315,8 @@ function scanFences(text: string): Fence[] {
                     continue;
                 }
             }
-            if (text.startsWith('```', i)) {
-                close = i;
+            if (text.startsWith('```', k)) {
+                close = k;
                 break;
             }
         }
@@ -311,6 +326,7 @@ function scanFences(text: string): Fence[] {
             end: close + 3,
             inner: text.slice(body, close),
             tag,
+            opensJson,
         });
         pos = close + 3;
     }
@@ -363,7 +379,7 @@ export function extractJsonFromText(text: string): string | null {
             // A fence of code is a quote, not the answer: an object inside it
             // is an example, and an answer before it does not become one (the
             // caller re-asks, or takes it with `lastChance`).
-            return isJsonFence(first, s) ? clean(body) : null;
+            return isJsonFence(first) ? clean(body) : null;
         }
     }
 
@@ -372,7 +388,7 @@ export function extractJsonFromText(text: string): string | null {
     let prose = '';
     let last = 0;
     for (const fence of fences) {
-        if (isJsonFence(fence, s)) continue;
+        if (isJsonFence(fence)) continue;
         prose += s.slice(last, fence.start);
         last = fence.end;
     }

@@ -212,6 +212,10 @@ describe('extractJsonFromText', () => {
         ).toBeNull();
     });
 
+    it('reads a JSON fence whose tag is preceded by a space', () => {
+        expect(extractJsonFromText('``` json\n{"a":1}\n```')).toBe('{"a":1}');
+    });
+
     it('ignores a blank fence and still finds the value after it', () => {
         // A prose mention of an empty fence used to replace the whole text
         // with '', so the balanced slice never ran and the answer was lost.
