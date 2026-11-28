@@ -362,21 +362,192 @@ export const hasReviewMarker = (text: string | undefined | null): boolean => {
     return KODY_REVIEW_MARKER_PATTERN.test(text);
 };
 
+/** GitLab's multi-line quote fence: `>>>` alone on a line. */
+const QUOTE_FENCE = /^ {0,3}(>{3,})[ \t]*$/;
+
+/** A `>` quote line; four spaces of indent make it code instead. */
+const QUOTE_LINE = /^ {0,3}>/;
+
+const QUOTE_MARKERS = /^(?: {0,3}>[ \t]?)+/;
+
+/** Blank as markdown sees it: a non-breaking space is text. */
+const BLANK = /^[ \t]*$/;
+
+/** A heading, code fence, rule or HTML block: it ends a paragraph and is not one. */
+const NOT_PARAGRAPH =
+    /^(?:#{1,6}(?:\s|$)|```|~~~|([-*_])(?:\s*\1){2,}\s*$|<(?:!--|\?|![A-Za-z]|!\[CDATA\[|(?:script|pre|style|textarea)(?:\s|>|$)|\/?(?:address|article|aside|blockquote|details|dialog|div|dl|dt|dd|fieldset|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|section|summary|table|tbody|td|th|thead|tr|ul)(?:\s|\/?>|$)))/i;
+
+/** A list item, empty or not: it ends a paragraph above it. */
+const LIST_ITEM = /^(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+
+const EMPTY_LIST_ITEM = /^(?:[-*+]|\d{1,9}[.)])$/;
+
+const LIST_ITEM_START = /^( {0,3}(?:[-*+]|\d{1,9}[.)]))([ \t]*)/;
+
+/** A code fence: the lines up to its closing fence are code. */
+const CODE_FENCE = /^(`{3,}|~{3,})(.*)$/;
+
+/** `===` under a paragraph turns it into a heading. */
+const SETEXT_UNDERLINE = /^=+[ \t]*$/;
+
 /**
- * The comment without the quote block it opens with. GitHub's "Quote reply"
- * puts the quoted text first and the `@kody` mention after it.
+ * A table's `|---|---|` row: the paragraph above it becomes the header.
+ * Read on a trimmed line; no two whitespace runs touch, so it stays linear.
+ */
+const TABLE_DELIMITER =
+    /^(?=.*\|)\|?[ \t]*:?-+:?(?:[ \t]*\|[ \t]*:?-+:?)*(?:[ \t]*\|)?$/;
+
+/** The cells of a table row: `| a | b |` and `a | b` both hold two. */
+const tableCells = (row: string): number =>
+    row
+        .trim()
+        .replace(/^\|/, '')
+        .replace(/(?<!\\)\|$/, '')
+        .split(/(?<!\\)\|/).length;
+
+/**
+ * The comment without the quotes it opens with. GitHub's "Quote reply" puts
+ * the quoted text first and the `@kody` mention after it. A quote ends where
+ * the rendered one does, so a mention shown inside it does not count.
  */
 export const withoutLeadingQuote = (text: string): string => {
     const lines = text.split(/\r?\n/);
     let start = 0;
-    while (
-        start < lines.length &&
-        (!lines[start].trim() || lines[start].trimStart().startsWith('>'))
-    ) {
-        start++;
+    while (start < lines.length) {
+        const line = lines[start];
+        if (BLANK.test(line)) {
+            start++;
+        } else if (QUOTE_FENCE.test(line)) {
+            const close = quoteFenceClose(lines, start);
+            if (close === -1) return '';
+            start = close + 1;
+        } else if (QUOTE_LINE.test(line)) {
+            start = quoteBlockEnd(lines, start);
+        } else {
+            break;
+        }
     }
     return start ? lines.slice(start).join('\n') : text;
 };
+
+/**
+ * The line that closes the `>>>` fence opened at `open`, or -1 when it is
+ * never closed. A fence closes on one at least as long; a shorter one opens
+ * a quote nested inside.
+ */
+function quoteFenceClose(lines: string[], open: number): number {
+    const sizes: number[] = [];
+    for (let i = open; i < lines.length; i++) {
+        const fence = lines[i].match(QUOTE_FENCE);
+        if (!fence) continue;
+        const size = fence[1].length;
+        if (sizes.length && size >= sizes[sizes.length - 1]) {
+            while (sizes.length && size >= sizes[sizes.length - 1]) {
+                sizes.pop();
+            }
+            if (!sizes.length) return i;
+        } else {
+            sizes.push(size);
+        }
+    }
+    return -1;
+}
+
+/**
+ * The first line after the `>` quote that starts at `first`. A plain line
+ * typed right under quoted paragraph text is shown inside the quote; a blank
+ * line, or one that starts a heading, list, code or HTML block, ends it.
+ */
+function quoteBlockEnd(lines: string[], first: number): number {
+    // Paragraph text is open, so a plain line below continues it.
+    let paragraph = false;
+    // It sits right in this quote, not in a list or a deeper quote: only
+    // then can a `===` or `|---|` row below reshape it.
+    let ownParagraph = false;
+    let depth = 0;
+    // Indent that puts a line inside the last list item, 0 with no list.
+    let listIndent = 0;
+    let emptyItem = false;
+    let table = false;
+    let codeFence = '';
+    let i = first;
+    for (; i < lines.length; i++) {
+        const line = lines[i];
+        if (!QUOTE_LINE.test(line)) {
+            const text = line.trim();
+            const interrupts =
+                /^ {0,3}\S/.test(line) &&
+                (NOT_PARAGRAPH.test(text) || LIST_ITEM.test(text));
+            if (!paragraph || BLANK.test(line) || interrupts) break;
+            continue;
+        }
+        const markers = line.match(QUOTE_MARKERS)![0];
+        const lineDepth = markers.split('>').length - 1;
+        const quoted = line.slice(markers.length);
+        const content = quoted.trim();
+        const indent = quoted.match(/^ */)![0].length;
+        const inList = listIndent > 0 && indent >= listIndent;
+        const plainText =
+            !NOT_PARAGRAPH.test(content) && !LIST_ITEM.test(content);
+        const reshapes = paragraph && ownParagraph && lineDepth === depth;
+        const fence = content.match(CODE_FENCE);
+        const previous = lines[i - 1]?.replace(QUOTE_MARKERS, '').trim() ?? '';
+        let lazy = false;
+        if (codeFence) {
+            if (
+                fence &&
+                fence[1][0] === codeFence[0] &&
+                fence[1].length >= codeFence.length &&
+                !fence[2].trim()
+            ) {
+                codeFence = '';
+            }
+            paragraph = false;
+        } else if (BLANK.test(quoted)) {
+            paragraph = false;
+            table = false;
+            if (emptyItem) listIndent = 0;
+        } else if (
+            !paragraph &&
+            (inList ? indent >= listIndent + 4 : /^(?: {4}|\t)/.test(quoted))
+        ) {
+            paragraph = false;
+        } else if (fence) {
+            codeFence = fence[1];
+            paragraph = false;
+        } else if (table && plainText && lineDepth === depth) {
+            paragraph = false;
+        } else if (
+            reshapes &&
+            TABLE_DELIMITER.test(content) &&
+            tableCells(content) === tableCells(previous)
+        ) {
+            table = true;
+            paragraph = false;
+        } else if (reshapes && SETEXT_UNDERLINE.test(content)) {
+            paragraph = false;
+        } else if (paragraph && plainText && lineDepth <= depth) {
+            // Lazy or continued text of the open paragraph.
+            lazy = lineDepth !== depth;
+        } else {
+            table = false;
+            const item = quoted.match(LIST_ITEM_START);
+            if (item) {
+                listIndent =
+                    item[1].length +
+                    Math.max(1, item[2].length > 4 ? 1 : item[2].length);
+            } else if (!inList) {
+                listIndent = 0;
+            }
+            paragraph =
+                !NOT_PARAGRAPH.test(content) && !EMPTY_LIST_ITEM.test(content);
+            ownParagraph = paragraph && !item && !inList;
+            emptyItem = !!item && EMPTY_LIST_ITEM.test(content);
+        }
+        if (!lazy) depth = lineDepth;
+    }
+    return i;
+}
 
 /**
  * Check if comment mentions @kody but is NOT a review command
