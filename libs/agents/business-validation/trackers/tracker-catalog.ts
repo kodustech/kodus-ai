@@ -180,6 +180,7 @@ function bindFinder(
                     reference.kind === 'git_issue'
                         ? (reference.repository ?? context.repository)
                         : undefined,
+                pullRequestRepository: context.repository,
                 tools: await session.tools(),
                 call: (name, args) => session.call(name, args),
                 signal: context.signal,

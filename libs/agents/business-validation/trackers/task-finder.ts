@@ -31,8 +31,13 @@ const logger = createLogger('TaskFinder');
 export interface TaskFinderInput {
     reference: TaskReference;
     tracker: string;
-    /** The PR's repository, for `#12`. */
+    /** The issue's repository: the one `owner/repo#12` names, else the PR's. */
     repository?: { owner?: string; name: string };
+    /**
+     * The PR's repository, which decides the task's id: `acme/specs#12`
+     * stays apart from the PR's own `#12` (#1941).
+     */
+    pullRequestRepository?: { owner?: string; name: string };
     /** Every tool the server lists; only the read-only ones are offered. */
     tools: MCPToolRaw[];
     call: (name: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -128,6 +133,7 @@ export function createTaskFinder(run: AgentRun): TaskFinder {
                             result,
                             reference,
                             input.repository,
+                            input.pullRequestRepository,
                         );
                         if (accepted?.complete) {
                             found = accepted.task;
@@ -286,7 +292,8 @@ function readOnlyTools(tools: MCPToolRaw[]): MCPToolRaw[] {
 function acceptedTask(
     payload: unknown,
     reference: TaskReference,
-    repository?: { owner?: string; name: string },
+    repository: { owner?: string; name: string } | undefined,
+    pullRequestRepository: { owner?: string; name: string } | undefined,
 ): { task: Omit<Task, 'tracker'>; complete: boolean } | undefined {
     const record = recordWithId(payload, reference.id);
     if (!record || record.pull_request) {
@@ -306,7 +313,10 @@ function acceptedTask(
     const described = describeTask(record);
     return described
         ? {
-              task: { id: taskId(reference, repository), ...described },
+              task: {
+                  id: taskId(reference, pullRequestRepository),
+                  ...described,
+              },
               complete: !!described.description || carriesDescription(record),
           }
         : undefined;
