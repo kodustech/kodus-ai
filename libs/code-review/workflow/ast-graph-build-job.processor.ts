@@ -321,8 +321,6 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             );
             signal?.throwIfAborted();
 
-            const totalMs = Date.now() - jobStart;
-
             // Before completing: a failed catch-up retries the job, and the
             // deferred merge stays recorded until the catch-up is queued.
             await raceWithAbortSignal(
@@ -335,6 +333,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 ),
                 signal,
             );
+            const totalMs = Date.now() - jobStart;
             await raceWithAbortSignal(
                 this.markCompleted(
                     jobId,

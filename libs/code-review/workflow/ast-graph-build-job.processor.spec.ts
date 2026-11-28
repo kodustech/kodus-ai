@@ -143,9 +143,27 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         await processor.process('job-1');
 
         expect(jobQueue.enqueue).toHaveBeenCalledTimes(1);
-        expect(jobQueue.enqueue.mock.calls[0][0]).toMatchObject({
+        expect(jobQueue.enqueue.mock.calls[0][0]).toEqual({
             workflowType: 'AST_GRAPH_INCREMENTAL',
-            payload: { repositoryId: 'repo-1', changedFiles: [] },
+            handlerType: 'SIMPLE_FUNCTION',
+            correlationId: 'repo-1',
+            payload: {
+                repositoryId: 'repo-1',
+                changedFiles: [],
+                newSha: undefined,
+                cloneUrl: '',
+                defaultBranch: 'main',
+                fullName: 'org/repo',
+                platform: 'GITHUB',
+                organizationAndTeamData: {
+                    organizationId: 'org-uuid',
+                    teamId: 'team-1',
+                },
+            },
+            status: JobStatus.PENDING,
+            priority: 0,
+            retryCount: 0,
+            maxRetries: 3,
         });
         expect(
             repositoryService.clearMergeDeferredDuringBuild,

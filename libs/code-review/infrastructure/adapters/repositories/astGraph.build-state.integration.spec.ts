@@ -291,9 +291,24 @@ function node(name: string): GraphNodeJson {
             await finishBuild(commits[0]);
 
             expect(enqueued).toHaveLength(1);
-            expect(enqueued[0]).toMatchObject({
+            expect(enqueued[0]).toEqual({
+                correlationId: repoId,
                 workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
-                payload: { repositoryId: repoId, newSha: commits[2] },
+                handlerType: 'SIMPLE_FUNCTION',
+                payload: {
+                    repositoryId: repoId,
+                    changedFiles: [],
+                    newSha: commits[2],
+                    cloneUrl: '',
+                    defaultBranch: 'main',
+                    fullName: 'org/repo',
+                    platform: PlatformType.GITHUB,
+                    organizationAndTeamData: { organizationId: 'org' },
+                },
+                status: 'PENDING',
+                priority: 0,
+                retryCount: 0,
+                maxRetries: 3,
             });
             expect(await state()).toEqual({
                 astGraphStatus: AstGraphStatus.READY,
@@ -339,7 +354,9 @@ function node(name: string): GraphNodeJson {
             await merge(commits[2]);
             failEnqueue = true;
 
-            await expect(finishBuild(commits[0])).rejects.toThrow('queue down');
+            await expect(finishBuild(commits[0])).rejects.toThrow(
+                new Error('queue down'),
+            );
 
             expect(await state()).toEqual({
                 astGraphStatus: AstGraphStatus.READY,
