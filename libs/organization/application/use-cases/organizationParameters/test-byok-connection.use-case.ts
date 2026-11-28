@@ -13,6 +13,7 @@ import {
     describeUnreachedKeys,
 } from '@libs/llm/override-reachability';
 import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
+import { classifyLLMError, LlmErrorCategory } from '@libs/llm/error-classifier';
 import {
     addressRefusal,
     ALLOWED_PRIVATE_HOSTS_ENV,
@@ -263,6 +264,18 @@ type TestByokInput = {
 };
 
 const TEST_TIMEOUT_MS = 15_000;
+
+/** A response body as text, for the classifier; undefined when it has none
+ *  or can't be written (a cycle). */
+function bodyText(body: unknown): string | undefined {
+    if (body === undefined || body === null) return undefined;
+    if (typeof body === 'string') return body;
+    try {
+        return JSON.stringify(body);
+    } catch {
+        return undefined;
+    }
+}
 
 @Injectable()
 export class TestByokConnectionUseCase {
@@ -1009,7 +1022,12 @@ export class TestByokConnectionUseCase {
         if (sdk) {
             const providerMessage =
                 this.extractProviderMessage(sdk.body) ?? sdk.message;
-            return this.fromHttpStatus(sdk.status, providerMessage, latencyMs);
+            return this.fromHttpStatus(
+                sdk.status,
+                providerMessage,
+                latencyMs,
+                sdk.body,
+            );
         }
 
         if (axios.isAxiosError(err)) {
@@ -1019,7 +1037,12 @@ export class TestByokConnectionUseCase {
             );
 
             if (typeof status === 'number') {
-                return this.fromHttpStatus(status, providerMessage, latencyMs);
+                return this.fromHttpStatus(
+                    status,
+                    providerMessage,
+                    latencyMs,
+                    err.response?.data,
+                );
             }
 
             if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
@@ -1044,7 +1067,12 @@ export class TestByokConnectionUseCase {
                 };
             }
 
-            return this.fromHttpStatus(status, providerMessage, latencyMs);
+            return this.fromHttpStatus(
+                status,
+                providerMessage,
+                latencyMs,
+                err.response?.data,
+            );
         }
 
         // An aborted probe is our own timeout, not a provider fault — say so
@@ -1083,8 +1111,35 @@ export class TestByokConnectionUseCase {
         status: number | undefined,
         providerMessage: string | undefined,
         latencyMs: number,
+        /** The provider's response body, which may name what the message
+         *  does not (Google's per-minute quotaId, RetryInfo). */
+        responseBody?: unknown,
     ): TestByokResult {
         const base = { latencyMs, httpStatus: status, providerMessage };
+
+        // A spent key comes back as 429, 400 (Anthropic's credit balance and
+        // spend cap) or 403 (OpenRouter's key limit). The classifier the
+        // review uses tells it apart from a rate limit, a bad request or a
+        // wrong key, so the Test and the review comment never disagree about
+        // one key (QA of #2700, #2792 review).
+        if (
+            (status === 400 || status === 403 || status === 429) &&
+            classifyLLMError({
+                statusCode: status,
+                message: providerMessage ?? '',
+                // The body as the review's error carries it: Google names a
+                // per-minute window there, not always in the message.
+                responseBody: bodyText(responseBody),
+            }).category === LlmErrorCategory.QUOTA_EXCEEDED
+        ) {
+            return {
+                ok: false,
+                code: 'payment',
+                ...base,
+                message:
+                    'The provider says this key is out of credits or over its billing limit. Top up the account or adjust the plan, then save again.',
+            };
+        }
 
         if (status === 401 || status === 403) {
             return {

@@ -33,6 +33,7 @@ import {
 import {
     attachClassification,
     classifyLLMError,
+    providerRetryDelayMs,
     extractHttpStatus,
     LlmErrorCategory,
     type ClassifiedErrorInfo,
@@ -263,6 +264,12 @@ export function wrapByokModel(
                             // this catch — no re-classification.
                             const cooldownSlot = opts.byokConfig;
                             const cooldownMs = cooldownSlot?.cooldownMs;
+                            // A per-minute 429 says how long to wait (Google:
+                            // "Please retry in 17s", no header). The AI SDK's
+                            // retry waits a \`retry-after-ms\` header when it
+                            // has one, so the agent loop's next attempt lands
+                            // after the window, not 2 s into it (#2130).
+                            withProviderRetryDelay(err, classified.category);
                             if (
                                 classified.category ===
                                     LlmErrorCategory.RATE_LIMIT &&
@@ -403,4 +410,35 @@ export function wrapByokModel(
             },
         },
     });
+}
+
+/**
+ * Sets `retry-after-ms` on a rate-limited APICallError that came without a
+ * retry header, from the delay the provider wrote in its body. The AI SDK
+ * reads that header (`getRetryDelayInMs`) and waits it, under a minute, for
+ * its next attempt. A header the provider sent is left as it is.
+ */
+/** The longest retry header the AI SDK honors: `getRetryDelayInMs` takes
+ *  it only under 60 s and otherwise retries on its own 2 s backoff, inside
+ *  the window a "retry in 60s" names. */
+const SDK_RETRY_HEADER_MAX_MS = 59_999;
+
+function withProviderRetryDelay(
+    err: unknown,
+    category: LlmErrorCategory,
+): void {
+    if ((err as { name?: unknown })?.name !== 'AI_APICallError') return;
+    const call = err as { responseHeaders?: Record<string, string> };
+    const headers = call.responseHeaders ?? {};
+    if (headers['retry-after-ms'] || headers['retry-after']) return;
+    const ms = providerRetryDelayMs(err, category);
+    if (ms === undefined) return;
+    try {
+        call.responseHeaders = {
+            ...headers,
+            'retry-after-ms': String(Math.min(ms, SDK_RETRY_HEADER_MAX_MS)),
+        };
+    } catch {
+        // A frozen error keeps the SDK's own backoff.
+    }
 }
