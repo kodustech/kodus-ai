@@ -8,7 +8,7 @@ import { type ResponseDiff, responseDiffOf, type ResponseSample, statusChangeOf,
 import { redactPatterns } from '@libs/runtime/redaction';
 
 import { Canary, CanaryLeakError, containsCanary, redactCanaries, redactDeep } from '../canary/canary';
-import { exitedMessage, type ReadyTarget, RUN_READY_INTERVAL_MS, waitUntilReady } from '../env/ready-check';
+import { answered, exitedMessage, type ReadyTarget, RUN_READY_INTERVAL_MS, waitUntilReady } from '../env/ready-check';
 import { checkClaimLease, type ClaimLeaseFailed, throwClaimLeaseFailure } from '../env/claim-liveness';
 import type { StepRunner } from './ports';
 import { toGateStep } from './probe-fields';
@@ -49,6 +49,23 @@ const BROWSER_ROUND_CAPTURE = ['logs', 'outbound', 'browser'] as const;
  * never the difference.
  */
 export const BROWSER_DEFAULT_CLOCK = '2030-01-01T00:00:00.000Z';
+
+/**
+ * After a reset (and a passing ready check) the app can still be cold for the
+ * probe's own route: a cache that just restarted, a function not loaded yet.
+ * Round 1 then fails on a side whose rounds 2 and 3 answer, and the gate refuses
+ * to call a regression on a base that is not stable. So a read-only HTTP probe is
+ * sent first, unrecorded, until the app answers under 500 (at most this many
+ * sends). Never recorded and never captured: what the round measures is the next send.
+ */
+export const WARMUP_MAX_TRIES = 3;
+/** Between two warm-up sends. */
+export const WARMUP_INTERVAL_MS = 1_000;
+
+/** Only a request that changes nothing is sent twice: a write would be applied before the round's own send. */
+function canWarm(probe: Probe): boolean {
+    return probe.spec.kind === 'http' && ['GET', 'HEAD', 'OPTIONS'].includes(probe.spec.method);
+}
 
 /** The probe as the cell plays it: a browser probe always on a fixed clock. */
 function probeToPlay(probe: Probe): Probe {
@@ -173,6 +190,16 @@ async function playRoundBody(args: RoundArgs, side: 'base' | 'pr', round: number
             const lost = { code: 'transport_lost' as const, stepId, services: [readiness.exited] };
             if (args.evidence) await putStepOutput(args.evidence, { runId: args.run.runId, side, stepId }, { ...head(stepId), stage: 'ready', error: { ...envErrorEvidence(lost), reason: exitedMessage(args.ready, readiness.exited) } });
             return { gate: toGateStep({ probe, side, round, stepId, result: lost }), leaked: false };
+        }
+    }
+    // Cold after the reset for this route: send it unrecorded until it answers, then measure. A round that
+    // fails after the warm-up still counts as it is: the warm-up only skips the first cold answers.
+    if (canWarm(probe)) {
+        for (let i = 0; i < WARMUP_MAX_TRIES; i++) {
+            const warm = await env.probe(claims[side], toPlay, stableStepId(args.run.runId, args.run.attempt, `${name}:warm:${i}`));
+            if (isSecurityViolation(warm)) return { gate: toGateStep({ probe, side, round, stepId, result: { code: 'transport_lost', stepId } }), leaked: false, violation: warm.signature };
+            if (answered(warm)) break;
+            if (i < WARMUP_MAX_TRIES - 1) await sleep(WARMUP_INTERVAL_MS);
         }
     }
     // Issued here, right before the probe, so a grant lives the probe's timeout and not the reset's.

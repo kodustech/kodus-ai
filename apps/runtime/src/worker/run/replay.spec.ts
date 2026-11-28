@@ -420,3 +420,67 @@ describe('stability history (ADR-050)', () => {
         expect(steps.filter((s) => s.side === 'base').length).toBe(2);
     });
 });
+
+describe('warm-up after the reset', () => {
+    const getProbe = ProbeSchema.parse({
+        id: 'list-items',
+        origin: 'agent',
+        purpose: 'the list answers',
+        expected: '200',
+        compare: ['status'],
+        spec: { kind: 'http', target: { service: 'web', port: 3000 }, method: 'GET', path: '/items', timeoutMs: 1_000 },
+    });
+    const step = ((_n: string, fn: () => Promise<unknown>) => fn()) as StepRunner;
+    const http = (stepId: string, status: number) => ({ stepId, executor: 'observer', imageId: 'img', transport: 'ok', vmHealth: 'ok', durationMs: 1, http: { status, headers: {}, body: '{}' }, requests: [{ method: 'GET', route: '/items', status }] });
+    /** An env whose app answers `cold` 5xx after each reset, then `healthy(claim)`. Records every send with whether it asked for evidence. */
+    const envOf = (cold: number, healthy: (claim: string) => number) => {
+        const left = new Map<string, number>();
+        const sends: { claim: string; evidence: boolean }[] = [];
+        const env = {
+            reset: async (claim: string) => {
+                left.set(claim, cold);
+                return { ok: true };
+            },
+            probe: async (claim: string, _p: unknown, stepId: string, evidence?: unknown) => {
+                sends.push({ claim, evidence: evidence !== undefined });
+                const n = left.get(claim) ?? 0;
+                left.set(claim, n - 1);
+                return http(stepId, n > 0 ? 500 : healthy(claim));
+            },
+        } as any;
+        return { env, sends };
+    };
+    const play = (env: any) => replayProbe({ run: RUN, index: 0, probe: getProbe, claims: { base: 'b', pr: 'p' }, pinnedImageId: 'img', env, step, now: () => 0, sleep: async () => undefined });
+
+    // Behavior: a service still cold after the reset answers the warm-up, so the round that is recorded is the warm one.
+    it('does not record the cold answers of a service that is still starting', async () => {
+        const { env } = envOf(2, () => 200);
+        const out = await play(env);
+        expect(out.steps.map((s) => s.fields.status)).not.toContain('500');
+        expect(out.decision).toMatchObject({ verdict: 'not_reproduced' });
+    });
+
+    // Behavior: the warm-up is not evidence; only the round's own send asks the cell to capture it.
+    it('sends the warm-up without evidence capture and the round with it', async () => {
+        const { env, sends } = envOf(1, () => 200);
+        const objects = new Map<string, unknown>();
+        await replayProbe({ run: RUN, index: 0, probe: getProbe, claims: { base: 'b', pr: 'p' }, pinnedImageId: 'img', env, step, maxRoundsPerSide: 1, evidence: { organizationId: 'o', store: { put: async (k: string) => void objects.set(k, 1) } } as any, now: () => 0, sleep: async () => undefined });
+        const own = sends.filter((s) => s.claim === 'b');
+        expect(own).toEqual([{ claim: 'b', evidence: false }, { claim: 'b', evidence: false }, { claim: 'b', evidence: true }]);
+    });
+
+    // Behavior: a PR that answers 500 after the warm-up is still a regression.
+    it('still reports a PR that fails after the warm-up', async () => {
+        const { env } = envOf(1, (claim) => (claim === 'p' ? 500 : 200));
+        const out = await play(env);
+        expect(out.steps.filter((s) => s.side === 'pr').every((s) => s.fields.status === '500')).toBe(true);
+        expect(out.decision).toMatchObject({ verdict: 'finding' });
+    });
+
+    // Behavior: a write is never sent twice, the warm-up would apply it before the round.
+    it('does not warm up a write', async () => {
+        const { env, sends } = envOf(0, () => 201);
+        await replayProbe({ run: RUN, index: 0, probe, claims: { base: 'b', pr: 'p' }, pinnedImageId: 'img', env, step, maxRoundsPerSide: 1, now: () => 0, sleep: async () => undefined });
+        expect(sends.filter((s) => s.claim === 'b')).toHaveLength(1);
+    });
+});
