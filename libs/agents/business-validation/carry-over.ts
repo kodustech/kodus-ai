@@ -153,7 +153,9 @@ export function matchPrevious(
  * every run; the files it cites are what stays. The exact text wins, then a
  * change citing the same set of files, when no other unmatched change on
  * either side cites that set: two changes on one file, both reworded, can't
- * be told apart, so neither is matched (QA of #2681).
+ * be told apart, so neither is matched (QA of #2681). The texts must still
+ * be alike (`SAME_CHANGE`): the accepted change gone and another one in the
+ * same file is a change nobody reviewed, not the same one reworded.
  */
 export function matchOutOfScope(
     now: readonly OutOfScopeChange[],
@@ -199,10 +201,33 @@ export function matchOutOfScope(
         const j = before.findIndex(
             (b, k) => !taken.has(k) && citedFiles(b) === key,
         );
+        if (
+            overlap(changeWords(c.change), changeWords(before[j].change)) <
+            SAME_CHANGE
+        ) {
+            return;
+        }
         taken.add(j);
         result[i] = j;
     });
     return result;
+}
+
+/**
+ * How alike two wordings of one out-of-scope change on the same files must
+ * be, in shared words. Measured on the judge's rewordings of one change
+ * across re-checks of one commit: 0.50 to 1.00; a different change on the
+ * same file: 0.38 at most (QA of #2681).
+ */
+const SAME_CHANGE = 0.5;
+
+/** A change's words, plural or not: the judge writes "cache" and "caches". */
+function changeWords(text: string): Set<string> {
+    return new Set(
+        [...words(text)].map((w) =>
+            w.length > 3 && !w.endsWith('ss') ? w.replace(/s$/, '') : w,
+        ),
+    );
 }
 
 /** The files a change cites, as one key; empty when it cites none. */

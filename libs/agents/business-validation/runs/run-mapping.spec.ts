@@ -250,6 +250,27 @@ describe('sameResult (#2423)', () => {
         ).toBe(false);
     });
 
+    it('reads a different out-of-scope change on the same file as a change', () => {
+        const on = (change: string) =>
+            run(
+                {},
+                {
+                    outOfScope: [
+                        {
+                            change,
+                            evidence: [{ file: 'src/refunds/cache.ts' }],
+                        },
+                    ],
+                },
+            );
+        expect(
+            sameResult(
+                on('Adds a Redis cache in front of refunds'),
+                on('Deletes the admin check before a refund is issued'),
+            ),
+        ).toBe(false);
+    });
+
     it('reads an out-of-scope change on another file as a change, in any words', () => {
         const on = (change: string, file: string) =>
             run({}, { outOfScope: [{ change, evidence: [{ file }] }] });

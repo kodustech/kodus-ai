@@ -289,6 +289,27 @@ describe('carryOver of an accepted out-of-scope change', () => {
         ).toEqual([]);
     });
 
+    // The accepted change is gone (reverted or fixed) and another one shows
+    // up in the same file: nobody reviewed it, so it is not accepted.
+    it('never moves an acceptance to a different change on the same file', () => {
+        const result = carryOver(
+            nowWith([
+                {
+                    change: 'Deletes the admin check before a refund is issued',
+                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                },
+            ]),
+            beforeWith([
+                {
+                    change: 'Adds a Redis cache in front of refunds',
+                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                    accepted,
+                },
+            ]),
+        );
+        expect(changes(result)[0].accepted).toBeUndefined();
+    });
+
     it('never moves an acceptance to a change on another file', () => {
         const result = carryOver(
             nowWith([
@@ -336,14 +357,20 @@ describe('matchOutOfScope', () => {
     it('only when that set of files is cited once on each side', () => {
         expect(
             matchOutOfScope(
-                [change('One', 'a.ts'), change('Two', 'a.ts')],
-                [change('Uno', 'a.ts')],
+                [
+                    change('Caches refunds', 'a.ts'),
+                    change('Caches refund lookups', 'a.ts'),
+                ],
+                [change('Adds a refund cache', 'a.ts')],
             ),
         ).toEqual([undefined, undefined]);
         expect(
             matchOutOfScope(
-                [change('One', 'a.ts')],
-                [change('Uno', 'a.ts'), change('Dos', 'a.ts')],
+                [change('Caches refunds', 'a.ts')],
+                [
+                    change('Adds a refund cache', 'a.ts'),
+                    change('Adds a cache of refunds', 'a.ts'),
+                ],
             ),
         ).toEqual([undefined]);
     });
@@ -351,8 +378,11 @@ describe('matchOutOfScope', () => {
     it('takes the earlier change on those files, not the first one left', () => {
         expect(
             matchOutOfScope(
-                [change('One', 'a.ts')],
-                [change('Other', 'b.ts'), change('Uno', 'a.ts')],
+                [change('Caches refunds', 'a.ts')],
+                [
+                    change('Caches refunds by id', 'b.ts'),
+                    change('Adds a refund cache', 'a.ts'),
+                ],
             ),
         ).toEqual([1]);
     });
@@ -360,24 +390,43 @@ describe('matchOutOfScope', () => {
     it('counts only what the exact text left unmatched', () => {
         expect(
             matchOutOfScope(
-                [change('Kept', 'a.ts'), change('Reworded', 'a.ts')],
-                [change('Kept', 'a.ts'), change('Original', 'a.ts')],
+                [
+                    change('Kept', 'a.ts'),
+                    change('Logs each refund lookup', 'a.ts'),
+                ],
+                [
+                    change('Kept', 'a.ts'),
+                    change('Logs every refund lookup', 'a.ts'),
+                ],
             ),
         ).toEqual([0, 1]);
     });
 
     it('never matches by files a change that cites none, or another set', () => {
-        expect(matchOutOfScope([change('New')], [change('Old')])).toEqual([
-            undefined,
-        ]);
+        const reworded = ['Caches refunds', 'Adds a refund cache'] as const;
+        expect(
+            matchOutOfScope([change(reworded[0])], [change(reworded[1])]),
+        ).toEqual([undefined]);
         expect(
             matchOutOfScope(
-                [change('New', 'a.ts', 'b.ts')],
-                [change('Old', 'a.tsb.ts')],
+                [change(reworded[0], 'a.ts', 'b.ts')],
+                [change(reworded[1], 'a.tsb.ts')],
             ),
         ).toEqual([undefined]);
         expect(
-            matchOutOfScope([change('New', 'a.ts')], [change('Old', 'b.ts')]),
+            matchOutOfScope(
+                [change(reworded[0], 'a.ts')],
+                [change(reworded[1], 'b.ts')],
+            ),
+        ).toEqual([undefined]);
+    });
+
+    it('never takes a different change on the same files as the same one', () => {
+        expect(
+            matchOutOfScope(
+                [change('Deletes the admin check before a refund', 'a.ts')],
+                [change('Adds a Redis cache in front of refunds', 'a.ts')],
+            ),
         ).toEqual([undefined]);
     });
 
