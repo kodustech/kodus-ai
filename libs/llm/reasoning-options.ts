@@ -48,6 +48,13 @@ export function defaultReasoningEffortFor(
         const module = REGISTRY.get(provider);
         const traits =
             module.reasoningTraits?.(slot as any) ?? NON_REASONING_TRAITS;
+        // MiniMax M3.1 on the Anthropic protocol: a slot with no level keeps
+        // the model's own default (`max`), what every call ran at before its
+        // levels were offered (#2036). The caller's default ('low' in the
+        // agent loops) would lower it unasked; 'none' is what omits here.
+        if (traits.adaptiveEffort && provider === 'anthropic_compatible') {
+            return 'none';
+        }
         if (!traits.thinksByDefault) return undefined;
 
         // `thinksByDefault` is a FACT; imposing a family default is a POLICY.

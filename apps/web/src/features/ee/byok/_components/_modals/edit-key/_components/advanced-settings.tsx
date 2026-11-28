@@ -181,10 +181,15 @@ export const ByokAdvancedSettings = ({
     // rejects.
     const reasoningUnsupported = !!caps && !caps.supportsReasoning;
     const allowedLevels = caps?.reasoningOptions ?? [];
+    // Always reasons and cannot be turned off: Off is not a choice. With
+    // levels (MiniMax M3.1 on the Anthropic protocol) they are offered; with
+    // none, there is nothing to pick (#2036).
+    const alwaysOn = !!caps?.reasoningAlwaysOn;
+    const showsLevels = !alwaysOn || allowedLevels.length > 0;
     const isLevelAllowed = (value: string) =>
-        value === "none" ||
+        (value === "none" && !alwaysOn) ||
         value === "custom" ||
-        allowedLevels.length === 0 ||
+        (value !== "none" && allowedLevels.length === 0) ||
         allowedLevels.includes(value as "low" | "medium" | "high");
     useEffect(() => {
         if (!caps) return;
@@ -194,11 +199,12 @@ export const ByokAdvancedSettings = ({
             return;
         }
         // A saved level the model no longer accepts (e.g. "low" on a gpt-5) →
-        // back to Off. Custom is a free-form override, left untouched.
+        // back to Off; an Off on a model that cannot be turned off → unset,
+        // its own default. Custom is a free-form override, left untouched.
         if (
             currentEffort &&
-            currentEffort !== "none" &&
             currentEffort !== "custom" &&
+            (currentEffort !== "none" || alwaysOn) &&
             !isLevelAllowed(currentEffort)
         ) {
             setValue("reasoningEffort", null, { shouldDirty: true });
@@ -237,7 +243,7 @@ export const ByokAdvancedSettings = ({
                             has nothing to pick: a toggle would show Off
                             selected over "always reasons". The copy below
                             says what happens instead. */}
-                        {!caps?.reasoningAlwaysOn && (
+                        {showsLevels && (
                             <Controller
                                 name="reasoningEffort"
                                 control={control}
@@ -247,7 +253,11 @@ export const ByokAdvancedSettings = ({
                                         className="bg-card-lv2 grid grid-cols-5 gap-px overflow-hidden rounded-lg p-0.5"
                                         value={
                                             field.value ??
-                                            (configOverride ? "custom" : "none")
+                                            (configOverride
+                                                ? "custom"
+                                                : alwaysOn
+                                                  ? ""
+                                                  : "none")
                                         }
                                         onValueChange={(value) => {
                                             if (!value) return;
@@ -259,13 +269,17 @@ export const ByokAdvancedSettings = ({
                                             field.onChange(value);
                                         }}>
                                         {THINKING_OPTIONS.map((opt) => {
-                                            // Off is always available; every other
-                                            // option is gated by the model's declared
+                                            // Off is available unless the model
+                                            // always reasons; every other option is
+                                            // gated by the model's declared
                                             // reasoning support + valid levels.
                                             const disabled =
-                                                opt.value !== "none" &&
-                                                (reasoningUnsupported ||
-                                                    !isLevelAllowed(opt.value));
+                                                opt.value === "none"
+                                                    ? alwaysOn
+                                                    : reasoningUnsupported ||
+                                                      !isLevelAllowed(
+                                                          opt.value,
+                                                      );
                                             return (
                                                 <ToggleGroup.Item
                                                     key={opt.value}
@@ -279,6 +293,14 @@ export const ByokAdvancedSettings = ({
                                     </ToggleGroup.Root>
                                 )}
                             />
+                        )}
+
+                        {alwaysOn && !reasoningUnsupported && (
+                            <p className="text-text-tertiary text-xs">
+                                This model always reasons, so it can&apos;t be
+                                turned off. With no level picked, it runs at the
+                                model&apos;s own default.
+                            </p>
                         )}
 
                         {reasoningUnsupported &&
