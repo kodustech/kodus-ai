@@ -395,6 +395,9 @@ export type ModelUiCapabilities = {
     /** It always reasons, and no level can be set for it on this endpoint.
      *  The API sends it only when true; absent means the model does not. */
     reasoningAlwaysOn?: boolean;
+    /** It always reasons and refuses Off, so the form disables Off. Sent
+     *  only when true. */
+    reasoningOffUnavailable?: boolean;
     reasoningOptions: Array<"low" | "medium" | "high">;
     /** Provider-owned example for the "Custom" reasoning-override textarea. */
     reasoningOverrideExample?: string;

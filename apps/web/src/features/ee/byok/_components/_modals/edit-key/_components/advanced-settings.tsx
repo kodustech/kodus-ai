@@ -180,9 +180,11 @@ export const ByokAdvancedSettings = ({
     // invalid after a model switch is cleared so we never submit one the provider
     // rejects.
     const reasoningUnsupported = !!caps && !caps.supportsReasoning;
+    // A model that always reasons refuses Off: the Test rejects it (#2653).
+    const offUnavailable = !!caps?.reasoningOffUnavailable;
     const allowedLevels = caps?.reasoningOptions ?? [];
     const isLevelAllowed = (value: string) =>
-        value === "none" ||
+        (value === "none" && !offUnavailable) ||
         value === "custom" ||
         allowedLevels.length === 0 ||
         allowedLevels.includes(value as "low" | "medium" | "high");
@@ -193,11 +195,11 @@ export const ByokAdvancedSettings = ({
             setValue("reasoningConfigOverride", null, { shouldDirty: true });
             return;
         }
-        // A saved level the model no longer accepts (e.g. "low" on a gpt-5) →
-        // back to Off. Custom is a free-form override, left untouched.
+        // A saved level the model no longer accepts (e.g. "low" on a gpt-5,
+        // or Off on a model that always reasons) → unset. Custom is a
+        // free-form override, left untouched.
         if (
             currentEffort &&
-            currentEffort !== "none" &&
             currentEffort !== "custom" &&
             !isLevelAllowed(currentEffort)
         ) {
@@ -205,6 +207,11 @@ export const ByokAdvancedSettings = ({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [caps, reasoningUnsupported, currentEffort, setValue]);
+
+    // What the toggle shows when no level is saved. On a model that always
+    // reasons, unset is not Off: nothing is selected, and it runs at its
+    // default level.
+    const unsetValue = configOverride ? "custom" : offUnavailable ? "" : "none";
 
     return (
         <Collapsible
@@ -245,10 +252,7 @@ export const ByokAdvancedSettings = ({
                                     <ToggleGroup.Root
                                         type="single"
                                         className="bg-card-lv2 grid grid-cols-5 gap-px overflow-hidden rounded-lg p-0.5"
-                                        value={
-                                            field.value ??
-                                            (configOverride ? "custom" : "none")
-                                        }
+                                        value={field.value ?? unsetValue}
                                         onValueChange={(value) => {
                                             if (!value) return;
                                             // "Off" MUST persist as the explicit
@@ -259,13 +263,17 @@ export const ByokAdvancedSettings = ({
                                             field.onChange(value);
                                         }}>
                                         {THINKING_OPTIONS.map((opt) => {
-                                            // Off is always available; every other
-                                            // option is gated by the model's declared
+                                            // Off is available unless the model
+                                            // refuses it; every other option is
+                                            // gated by the model's declared
                                             // reasoning support + valid levels.
                                             const disabled =
-                                                opt.value !== "none" &&
-                                                (reasoningUnsupported ||
-                                                    !isLevelAllowed(opt.value));
+                                                opt.value === "none"
+                                                    ? offUnavailable
+                                                    : reasoningUnsupported ||
+                                                      !isLevelAllowed(
+                                                          opt.value,
+                                                      );
                                             return (
                                                 <ToggleGroup.Item
                                                     key={opt.value}

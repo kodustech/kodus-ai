@@ -60,7 +60,20 @@ export const CAPABILITY_KINDS = {
         caps: {
             temperature: { kind: 'fixed', value: 1 },
             supportsReasoning: true,
+            reasoningOffUnavailable: true,
             reasoningOptions: [],
+        },
+    },
+    /** A Claude that reasons at the levels listed and refuses "off" (#2653:
+     *  the form offered Off, then the Test refused it). */
+    claudeAlwaysThinking: {
+        provider: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        caps: {
+            temperature: { kind: 'unsupported' },
+            supportsReasoning: true,
+            reasoningOffUnavailable: true,
+            reasoningOptions: ['low', 'medium', 'high'],
         },
     },
 } satisfies Record<string, CapabilityKind>;
