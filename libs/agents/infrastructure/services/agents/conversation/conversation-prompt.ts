@@ -199,6 +199,51 @@ export function fitUserPrompt(prompt: string, budgetTokens: number): string {
         : cutHead + USER_MESSAGE_MARKER + cutMessage;
 }
 
+/**
+ * The prompt for `input` within `budgetTokens`, cut in order of what the agent
+ * can spare. The PR description goes first: it is the longest part and the
+ * least about this reply. Cut from the middle with the rest of the context,
+ * a long description kept its start while the Kody suggestion under
+ * discussion, which no tool can read again, and the identifiers were lost
+ * (#2793 review). Only with the description left out is the rest cut, by
+ * `fitUserPrompt`.
+ */
+export function fitConversationPrompt(
+    input: UserPromptInput,
+    budgetTokens: number,
+): string {
+    const description = input.prepareContext?.pullRequestDescription;
+    if (!description) return fitUserPrompt(buildUserPrompt(input), budgetTokens);
+    const withDescription = (pullRequestDescription: string) =>
+        buildUserPrompt({
+            ...input,
+            prepareContext: { ...input.prepareContext, pullRequestDescription },
+        });
+    // Each cut is smaller than the last, so this ends.
+    let kept = String(description);
+    let prompt = withDescription(kept);
+    while (promptTokens(prompt) > budgetTokens) {
+        const over = promptTokens(prompt) - budgetTokens;
+        const cut = cutToTokens(kept, promptTokens(kept) - over);
+        if (cut === undefined || cut.length < DESCRIPTION_MIN_CHARS) {
+            return fitUserPrompt(
+                withDescription(DESCRIPTION_LEFT_OUT),
+                budgetTokens,
+            );
+        }
+        kept = cut;
+        prompt = withDescription(kept);
+    }
+    return prompt;
+}
+
+/** Less of the description than this says nothing, and is left out. */
+const DESCRIPTION_MIN_CHARS = 200;
+
+/** Where the PR description was, when none of it fits. */
+export const DESCRIPTION_LEFT_OUT =
+    "(The PR description is left out: it does not fit this model's window.)";
+
 /** What the context keeps when the message itself must be cut. */
 const CONTEXT_SHARE_WHEN_CUT = 0.25;
 

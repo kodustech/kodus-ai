@@ -63,8 +63,7 @@ import {
 } from './conversation-window';
 import {
     buildSystemPrompt,
-    buildUserPrompt,
-    fitUserPrompt,
+    fitConversationPrompt,
     type ConversationThreadContext,
 } from './conversation-prompt';
 import {
@@ -307,10 +306,11 @@ export class ConversationAgentProvider {
             const seedMessages = await this.loadThreadHistory(thread);
 
             // The developer's message goes whole; the context around it
-            // takes the cut. A quarter of the budget stays for what the
-            // tools read in later steps (#2793 review).
-            const preparedPrompt = fitUserPrompt(
-                buildUserPrompt({
+            // takes the cut, the PR description first. A quarter of the
+            // budget stays for what the tools read in later steps (#2793
+            // review).
+            const preparedPrompt = fitConversationPrompt(
+                {
                     prompt,
                     userLanguage,
                     prepareContext,
@@ -319,7 +319,7 @@ export class ConversationAgentProvider {
                     toolMetadata: mcp.metadata,
                     hasSandbox: Boolean(openSandbox),
                     priorTurns: seedMessages,
-                }),
+                },
                 Math.floor(
                     (await conversationMessageBudget(windowParams)) *
                         PROMPT_SHARE_OF_BUDGET,
