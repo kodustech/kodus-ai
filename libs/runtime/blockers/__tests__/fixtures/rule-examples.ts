@@ -234,6 +234,16 @@ export const RULE_EXAMPLES: RuleExample[] = [
         },
     },
     {
+        rule: 'log:image_layers',
+        behavior: "reads the overlay mount a long layer chain makes the host refuse as a Dockerfile to flatten",
+        card: { kind: 'toolchain', signature: 'toolchain:image_layers', fixes: ['fix_recipe'] },
+        input: {
+            kind: 'unknown',
+            signature: 'compose_up',
+            message: '#9 ERROR: mount source: "overlay", target: "/tmp/m", fstype: overlay, flags: 0, data: "lowerdir=/a/1/fs:/a/2/fs", err: invalid argument',
+        },
+    },
+    {
         rule: 'log:lockfile_outdated',
         behavior: 'reads a frozen install that would change the lockfile as a lockfile to commit',
         card: { kind: 'toolchain', signature: 'toolchain:lockfile_outdated:pnpm', fixes: ['fix_recipe'] },

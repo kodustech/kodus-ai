@@ -210,7 +210,7 @@ export const BLOCKER_SIGNATURE_CLASSES = [
     'native_dep',
     'setup:not_ready',
     // Whole signatures set in code (the drift test reads every `signature: '...'` and `blockerErr(..., "...")`).
-    'platform:go_checksum_db', 'toolchain:firebase_emulator_download', 'resources:disk', 'seed_data:schema', 'toolchain:go', 'toolchain:node', 'toolchain:python',
+    'platform:go_checksum_db', 'toolchain:image_layers', 'toolchain:firebase_emulator_download', 'resources:disk', 'seed_data:schema', 'toolchain:go', 'toolchain:node', 'toolchain:python',
     'compose_refused:memory',
     'setup:no_recipe', 'setup:no_ref', 'setup:recipe_invalid',
     ...BLOCKER_KINDS.map((k) => `setup:${k}`),

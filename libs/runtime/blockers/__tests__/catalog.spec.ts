@@ -572,6 +572,23 @@ describe('repository fixes the build log names', () => {
     });
 });
 
+describe('an image with too many layers', () => {
+    const overlayRefused = (n: number) =>
+        `#${n} ERROR: failed to mount /tmp/buildkit-mount123: mount source: "overlay", target: "/tmp/buildkit-mount123", fstype: overlay, flags: 0, data: "lowerdir=/home/user/.local/share/buildkit/runc-overlayfs/snapshots/snapshots/12/fs,index=off", err: invalid argument`;
+    it('reads the overlay mount a long layer chain makes the host refuse as an image to flatten', () => {
+        const r = classifyBlocker(composeUp(logs('boot output', overlayRefused(40))));
+        expect(r.kind).toBe('toolchain');
+        expect(r.signature).toBe('toolchain:image_layers');
+        expect(r.title).toContain('too many layers');
+        expect(r.fixes[0].action).toBe('fix_recipe');
+        expect(r.fixes[0].detail).toContain('Merge');
+    });
+    it('does not read another invalid argument as the layer limit', () => {
+        const r = classifyBlocker(composeUp(logs('boot output', 'mount source: "tmpfs", target: "/x", fstype: tmpfs, flags: 0, data: "size=1", err: invalid argument')));
+        expect(r.signature).not.toBe('toolchain:image_layers');
+    });
+});
+
 describe('matchedBlockerLine', () => {
     it('is the line of a multi-line reason that holds the match classifyBlocker read, in its rule order', () => {
         const message = ['compose up: exit 1', 'lookup billing.internal: no such host', 'OLD_VAR is not set', 'NEW_VAR is not set', '#9 ERROR: exit code: 1'].join('\n');
