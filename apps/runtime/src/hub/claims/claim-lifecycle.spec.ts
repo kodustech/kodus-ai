@@ -409,6 +409,17 @@ describe('a security violation the cell reports unsolicited', () => {
             expect(t.logs.find((l) => l.msg === 'claim.pair_unavailable')).toMatchObject({ needMb: 14_336, allocatableMb: 13_000 });
         });
 
+        it("a side on a host bound to that side alone sets nothing aside for the other side, which never comes to this cell", async () => {
+            const t = await harness();
+            await t.h.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, memory: { allocatableMb: 13_000, committedMb: 0, bootMb: 12_288, readyMb: 2_048 } }));
+            t.store.sessions.set('cell-a', { ...t.store.sessions.get('cell-a')!, boundKey: 'run:org-a/run-split/pr' } as any);
+            const pending = prAcquire(t, 'run-split');
+            const req = await t.ackAcquire();
+            await t.ready(req.claimId);
+            expect(await pending).toMatchObject({ claimId: req.claimId, cellId: 'cell-a' });
+            expect(t.logs.find((l) => l.msg === 'claim.memory_admitted')).toMatchObject({ siblingMb: 0 });
+        });
+
         it('a Run that does not fit this cell goes on when another connected cell may hold both sides', async () => {
             const t = await harness();
             await t.h.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, memory: { allocatableMb: 13_000, committedMb: 0, bootMb: 12_288, readyMb: 2_048 } }));

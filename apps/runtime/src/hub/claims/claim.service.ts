@@ -8,6 +8,7 @@ import { memberAliasOfReason } from '@libs/runtime/run/run-workspace';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 import { blockerSignatureClass, telemetryDetail, telemetryPhaseName } from '@libs/runtime/telemetry';
 import { claimHeldMinutes, claimMbMinutes } from '@libs/runtime/api/domain/run-cost';
+import { boundKeyOfRunSide } from '@libs/runtime/placement/candidate-pools';
 
 import { claimIdFor } from '../../shared/claim-id';
 import { DEFAULT_SANDBOX_MEMORY_MB } from '../../shared/config';
@@ -587,7 +588,10 @@ export class ClaimService {
         const siblingKeys = siblingKeysOf(req.runId, req.idempotencyKey);
         const sizeMb = this.sizeMbOf(session, req);
         const memoryClaim = { claimId, runId: req.runId, side: req.ref.side, consumer: req.consumer, sizeMb, ...(siblingKeys.length ? { siblingClaimIds: siblingKeys.map((k) => claimIdFor(req.organizationId, k)) } : {}) };
-        let fit = this.memory.admit(cellId, memoryClaim, at);
+        // A host bound to this side alone (a pair split across hosts): the other side boots on its own host, so nothing is set aside for it here.
+        const side = req.ref.side;
+        const alone = !!req.runId && (side === 'base' || side === 'pr') && !!session.boundKey && session.boundKey === boundKeyOfRunSide(req.organizationId, req.runId, side);
+        let fit = this.memory.admit(cellId, memoryClaim, at, alone ? { pairFitsElsewhere: true } : {});
         if (fit.kind === 'pair_too_large') {
             // This cell cannot hold both sides together; refused only when no other cell that may serve the org can either.
             const elsewhere = await this.store.anotherCellMayHold(req.organizationId, cellId, fit.needMb);
