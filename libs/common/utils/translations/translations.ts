@@ -105,6 +105,17 @@ interface PullRequestFinishSummaryMarkdown {
      */
     partialErrorsNotice?: string;
     /**
+     * Appended to a partial run when a primary reviewer did not run. Must
+     * include `{{agentName}}` and `{{reason}}`. Optional; the resolver falls
+     * back to en-US.
+     */
+    primaryAgentDidNotRun?: string;
+    /**
+     * Plural of `primaryAgentDidNotRun` for two or more reviewers sharing one
+     * failure. Must include `{{agentNames}}` and `{{reason}}`.
+     */
+    primaryAgentsDidNotRun?: string;
+    /**
      * Shown instead of `withoutComments` when the review produced findings
      * but none could be posted (e.g. the platform rate-limited every post).
      * Must include `{{count}}`. Optional; the resolver falls back to en-US.

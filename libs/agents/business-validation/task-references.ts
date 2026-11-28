@@ -125,7 +125,7 @@ export function extractTaskReferences(
     return references;
 }
 
-function strongerIntent(
+export function strongerIntent(
     a: ReferenceIntent,
     b: ReferenceIntent,
 ): ReferenceIntent {
@@ -133,6 +133,18 @@ function strongerIntent(
         return 'part_of';
     }
     return a === 'closes' || b === 'closes' ? 'closes' : 'mentions';
+}
+
+/** Hosts compare owners and names without case: `Acme/Web` is `acme/web`. */
+export function isSameRepository(
+    a: { owner?: string; name: string },
+    b: { owner?: string; name: string } | undefined,
+): boolean {
+    return (
+        !!b &&
+        `${a.owner}/${a.name}`.toLowerCase() ===
+            `${b.owner}/${b.name}`.toLowerCase()
+    );
 }
 
 /**

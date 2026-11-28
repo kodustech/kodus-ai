@@ -228,6 +228,45 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     });
 }
 
+/** The SDK's connect failure whose cause is a connect timeout, as text: what
+ *  the agent runner keeps (name + message) of undici's ConnectTimeoutError
+ *  or the kernel's `connect ETIMEDOUT`. */
+const CONNECT_TIMEOUT_IN_TEXT =
+    /cannot connect to api: (?:connect timeout error\b|connect etimedout\b)/i;
+
+/** One error that is a connect timeout: undici's own, or the socket's
+ *  ETIMEDOUT on connect. A dual-stack connect's parts are each one of these:
+ *  `errorTree` reads an AggregateError's members. */
+function isConnectTimeoutError(e: object): boolean {
+    const { code, syscall } = e as { code?: unknown; syscall?: unknown };
+    return (
+        code === 'UND_ERR_CONNECT_TIMEOUT' ||
+        (code === 'ETIMEDOUT' && syscall === 'connect')
+    );
+}
+
+/**
+ * True when the call's final failure is a connect timeout: the provider's
+ * endpoint never accepted the connection. Unlike a headers, body or hard
+ * timeout, nothing was waiting on the model, so trying the fallback costs the
+ * connect timeout (10 s in undici), not a call's budget (#1844). Only the final
+ * attempt counts, as in `isAbortOrHardTimeout`.
+ * Pure — safe in any catch block.
+ */
+export function isConnectTimeout(err: unknown): boolean {
+    if (!err) return false;
+    if ((err as { name?: string }).name === 'AbortError') return false;
+    if (
+        errorTree(err, 0, [], { attempts: false }).some(isConnectTimeoutError)
+    ) {
+        return true;
+    }
+    const { message } = err as { message?: unknown };
+    return CONNECT_TIMEOUT_IN_TEXT.test(
+        typeof message === 'string' ? message : String(err),
+    );
+}
+
 const RETRIES_EXHAUSTED = Symbol.for('kodus.llm.retriesExhausted');
 
 /**
@@ -585,6 +624,8 @@ function errorTree(
  * the code, for the message the user sees; undefined when it was reached.
  */
 function connectFailureOf(err: unknown): string | undefined {
+    const timedOut = connectTimeoutOf(err);
+    if (timedOut) return timedOut;
     const tree = errorTree(err, 0, [], { attempts: false });
     // The deepest error carrying the code: the socket's own, not a wrapper.
     const coded = tree.findLast((e) =>
@@ -620,6 +661,42 @@ function connectFailureOf(err: unknown): string | undefined {
               ? `${address}${typeof port === 'number' ? `:${port}` : ''}`
               : '';
     return `${coded.code}${where ? ` ${where}` : ''}`.slice(0, 200);
+}
+
+/** undici's ConnectTimeoutError message: the address(es) it dialled and its
+ *  own timeout. */
+const UNDICI_CONNECT_TIMEOUT =
+    /attempted address(?:es)?: ([A-Za-z0-9.:[\], -]+?), timeout: (\d+)ms/;
+/** The kernel's: `connect ETIMEDOUT 10.0.0.9:443`. */
+const SOCKET_CONNECT_TIMEOUT = /connect ETIMEDOUT ([A-Za-z0-9.:[\]-]+)/;
+
+/**
+ * "the connection to 10.0.0.9:443 timed out after 10 s", for a connect timeout
+ * (`isConnectTimeout`); undefined otherwise. Only the address and the
+ * timeout are published, never a raw message.
+ */
+function connectTimeoutOf(err: unknown): string | undefined {
+    if (!isConnectTimeout(err)) return undefined;
+    const tree = errorTree(err, 0, [], { attempts: false });
+    const texts = tree.map((e) => String((e as { message?: unknown }).message));
+    const undici = texts
+        .map((t) => UNDICI_CONNECT_TIMEOUT.exec(t))
+        .find((m) => m);
+    if (undici) {
+        const seconds = Math.round(Number(undici[2]) / 1000);
+        return `the connection to ${undici[1].slice(0, 120)} timed out after ${seconds} s`;
+    }
+    const socket = tree.find(
+        (e) =>
+            (e as { syscall?: unknown }).syscall === 'connect' &&
+            typeof (e as { address?: unknown }).address === 'string',
+    ) as { address: string; port?: unknown } | undefined;
+    const where = socket
+        ? `${socket.address}${typeof socket.port === 'number' ? `:${socket.port}` : ''}`
+        : texts.map((t) => SOCKET_CONNECT_TIMEOUT.exec(t)?.[1]).find(Boolean);
+    return where
+        ? `the connection to ${where.slice(0, 120)} timed out`
+        : 'the connection timed out';
 }
 
 /** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */

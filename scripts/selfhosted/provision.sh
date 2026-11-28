@@ -677,14 +677,9 @@ ssh_vm "cd /opt/kodus-installer && cp .env.example .env && ./scripts/generate-se
 ssh_vm bash -s <<REMOTE
 set -e
 cd /opt/kodus-installer
-env_set() {
-    local k=\$1 v=\$2
-    if grep -qE "^\${k}=" .env; then
-        sed -i "s|^\${k}=.*|\${k}=\${v}|" .env
-    else
-        echo "\${k}=\${v}" >> .env
-    fi
-}
+# _common.sh's env_set, shipped as written: values never enter a sed pattern.
+$(declare -f selfhosted_env_set)
+env_set() { selfhosted_env_set "\$@"; }
 env_set IMAGE_TAG "$IMAGE_TAG"
 # "localhost" is the sentinel the web reads (helpers.ts): it makes the proxy
 # resolve the API via GLOBAL_API_CONTAINER_NAME (the actual container name,
@@ -711,12 +706,13 @@ env_set WORKER_ROLE "code-review"
 # calls ConfigService.getOrThrow). Set a dummy value so the app boots; emails
 # obviously won't actually send. Override RESEND_API_KEY before running
 # provision.sh if you want real notifications.
-env_set RESEND_API_KEY "${RESEND_API_KEY:-disabled-for-dev}"
+$(selfhosted_env_set_line RESEND_API_KEY "${RESEND_API_KEY:-disabled-for-dev}")
 # LLM provider config — required for Kodus to actually review PRs.
 # Without it, the dashboard shows a "No LLM provider configured" banner.
 # Expanded locally: one env_set per var set in the config (_common.sh), so
 # API_LLM_PROVIDER reaches the VM along with the legacy OpenAI-named vars.
-$(selfhosted_llm_env | while IFS= read -r line; do printf 'env_set %s "%s"\n' "${line%%=*}" "${line#*=}"; done)
+# Each value is %q-quoted: the VM's bash reads it back exactly.
+$(selfhosted_llm_env_sets)
 REMOTE
 
 if [ -n "${SH_LICENSE_KEY:-}" ]; then
@@ -724,9 +720,14 @@ if [ -n "${SH_LICENSE_KEY:-}" ]; then
     # KODUS_LICENSE_KEY is the customer-facing var SelfHostedLicenseService
     # reads (NOT API_-prefixed). Injecting the wrong name leaves the install
     # effectively unlicensed → enterprise features 403.
-    ssh_vm "cd /opt/kodus-installer && grep -qE '^KODUS_LICENSE_KEY=' .env \
-            && sed -i 's|^KODUS_LICENSE_KEY=.*|KODUS_LICENSE_KEY=$SH_LICENSE_KEY|' .env \
-            || echo 'KODUS_LICENSE_KEY=$SH_LICENSE_KEY' >> .env"
+    # Same env_set as the block above: the key arrives %q-quoted and never
+    # enters a sed pattern.
+    ssh_vm bash -s <<REMOTE
+set -e
+cd /opt/kodus-installer
+$(declare -f selfhosted_env_set)
+selfhosted_env_set KODUS_LICENSE_KEY $(printf '%q' "$SH_LICENSE_KEY")
+REMOTE
 else
     dim "  No SH_LICENSE_KEY set — stack will boot in installer default mode (no paid features)."
 fi

@@ -37,8 +37,16 @@ load_config_file() {
         if [[ "$line" =~ ^[[:space:]]*([A-Z_][A-Z0-9_]*)=(.*)$ ]]; then
             key="${BASH_REMATCH[1]}"
             val="${BASH_REMATCH[2]}"
-            val="${val%\"}"; val="${val#\"}"
-            val="${val%\'}"; val="${val#\'}"
+            if [[ ${#val} -ge 2 && "$val" == \'*\' ]]; then
+                # setup.sh single-quotes a value with shell syntax and writes
+                # a quote inside it as '\'' (scripts/selfhosted/setup.sh).
+                local quote="'" escaped="'\\''"
+                val="${val:1:${#val}-2}"
+                val="${val//"$escaped"/$quote}"
+            else
+                val="${val%\"}"; val="${val#\"}"
+                val="${val%\'}"; val="${val#\'}"
+            fi
             if [ -z "${!key+x}" ]; then
                 export "$key=$val"
             fi
