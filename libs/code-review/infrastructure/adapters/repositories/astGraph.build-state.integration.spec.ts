@@ -64,14 +64,18 @@ const run =
         process.env.API_PG_DB_PORT ||
         process.env.CI === 'true');
 
-async function waitForLockWaiter() {
-    const deadline = Date.now() + 4000;
+/** Resolves with the transaction start of the merge waiting on the build lock. */
+async function waitForLockWaiter(other?: Date): Promise<Date> {
+    const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
-        const [{ blocked }] = await db.query(
-            "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE application_name = $1 AND wait_event_type = 'Lock') AS blocked",
+        const rows = await db.query(
+            "SELECT xact_start FROM pg_stat_activity WHERE application_name = $1 AND wait_event_type = 'Lock'",
             [schema],
         );
-        if (blocked) return;
+        const waiter = rows.find(
+            (row) => row.xact_start.getTime() !== other?.getTime(),
+        );
+        if (waiter) return waiter.xact_start;
         await new Promise((resolve) => setTimeout(resolve, 10));
     }
     throw new Error('Expected the merge to wait on the build lock');
@@ -364,10 +368,10 @@ function node(name: string): GraphNodeJson {
                 [repoId],
             );
             const deferred = merge(commits[2]);
-            // Hold the lock until the defer has waited on it and timed out
-            // its first attempt, so the test covers the wait and the retry.
-            await waitForLockWaiter();
-            await new Promise((resolve) => setTimeout(resolve, 1200));
+            // Release only once a second transaction waits: the first attempt
+            // gave up its lock wait and the defer retried.
+            const first = await waitForLockWaiter();
+            await waitForLockWaiter(first);
             await build.commitTransaction();
             await build.release();
 

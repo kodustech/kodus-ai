@@ -10,6 +10,7 @@ import { RepositoryModel, AstGraphStatus } from './schemas/repository.model';
 const LOCK_NOT_AVAILABLE = '55P03';
 const DEFER_LOCK_WAIT_MS = 500;
 const DEFER_RETRY_DELAY_MS = 2000;
+const DEFER_STATEMENT_TIMEOUT_MS = 10_000;
 
 @Injectable()
 export class RepositoryRepository implements IRepositoryRepository {
@@ -139,8 +140,13 @@ export class RepositoryRepository implements IRepositoryRepository {
         for (;;) {
             try {
                 return await this.repo.manager.transaction(async (manager) => {
+                    // The statement limit sits above the lock wait, so a short
+                    // global statement timeout cannot fire first and drop it.
                     await manager.query(
                         `SET LOCAL lock_timeout = ${DEFER_LOCK_WAIT_MS}`,
+                    );
+                    await manager.query(
+                        `SET LOCAL statement_timeout = ${DEFER_STATEMENT_TIMEOUT_MS}`,
                     );
                     const result = await manager
                         .createQueryBuilder(RepositoryModel, 'repository')
