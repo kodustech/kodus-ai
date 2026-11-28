@@ -187,8 +187,18 @@ export async function runAgentLoopCall(
         ? AbortSignal.any([callerSignal])
         : timeoutSignal(hardTimeoutMs);
     const temperature = params.temperature ?? inv.callOptions.temperature;
+    // Precedence (highest to lowest):
+    //   1. slot's own maxOutputTokens (user BYOK config) -- never overridden.
+    //   2. caller's per-agent cap (e.g. 800 for task-finder, 600 for reader).
+    //      Zero is treated as absent so an uninitialised caller option does not
+    //      shadow the slot value or send an invalid cap to the provider.
+    //   3. defaultMaxOutputTokens: the large fallback injected by
+    //      resolveSlotCallOptions for Anthropic-wire providers whose model id is
+    //      unknown to @ai-sdk/anthropic (the SDK silently floors those at 4096).
+    //      Callers can override it with a smaller ceiling; it must rank last.
+    const callerMax = (params.maxOutputTokens ?? 0) > 0 ? params.maxOutputTokens : undefined;
     const maxOutputTokens =
-        inv.callOptions.maxOutputTokens ?? params.maxOutputTokens;
+        inv.callOptions.maxOutputTokens ?? callerMax ?? inv.callOptions.defaultMaxOutputTokens;
     // Reasoning: a caller-supplied override wins (the finder's config-derived
     // providerOptions); otherwise the slot-derived ones.
     const providerOptions = params.providerOptions ?? inv.providerOptions;

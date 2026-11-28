@@ -288,6 +288,36 @@ describe('tuning threading — temperature + maxOutputTokens', () => {
         });
         expect(genArgs().providerOptions).toEqual({ __po: 'caller-override' });
     });
+
+    // Precedence regression suite for the Anthropic-wire default path
+    // (anthropic_compatible slots with non-Claude model ids).
+    // Priority: slot.maxOutputTokens > caller cap > defaultMaxOutputTokens
+    it('slot maxOutputTokens (8000) beats caller cap (20000) on anthropic_compatible', async () => {
+        mockResolve.mockReturnValue({
+            ...defaultResolved(),
+            callOptions: { maxOutputTokens: 8000, defaultMaxOutputTokens: 32_768 },
+        });
+        await runAgentLoopCall({ ...baseParams(), maxOutputTokens: 20_000 });
+        expect(genArgs().maxOutputTokens).toBe(8000);
+    });
+
+    it('caller cap (800) wins when no slot maxOutputTokens on anthropic_compatible', async () => {
+        mockResolve.mockReturnValue({
+            ...defaultResolved(),
+            callOptions: { defaultMaxOutputTokens: 32_768 },
+        });
+        await runAgentLoopCall({ ...baseParams(), maxOutputTokens: 800 });
+        expect(genArgs().maxOutputTokens).toBe(800);
+    });
+
+    it('defaultMaxOutputTokens (32768) is used when neither slot nor caller sets a cap', async () => {
+        mockResolve.mockReturnValue({
+            ...defaultResolved(),
+            callOptions: { defaultMaxOutputTokens: 32_768 },
+        });
+        await runAgentLoopCall(baseParams()); // no maxOutputTokens
+        expect(genArgs().maxOutputTokens).toBe(32_768);
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

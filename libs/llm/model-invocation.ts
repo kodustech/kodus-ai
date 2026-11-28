@@ -153,7 +153,23 @@ export function resolveModelConfig(
             resolvedSlot,
             agentModelOptions.defaultModelOverride,
         ),
-        callOptions: resolveSlotCallOptions(resolvedSlot),
+        // For the env/managed path, resolvedSlot is undefined and the provider
+        // lives in envDescriptor. Pass it as a fallback so anthropic-wire env
+        // providers (API_LLM_PROVIDER=anthropic_compatible/moonshot/zai) get
+        // the same large-default injection that BYOK slots on those transports do.
+        // Strip temperature from the env-descriptor result: the descriptor carries
+        // no user-configured temperature and resolveByokTemperature's fixed-policy
+        // branch would otherwise inject a provider-pinned value on every env call.
+        callOptions: (() => {
+            const opts = resolveSlotCallOptions(
+                resolvedSlot ??
+                    (envDescriptor as unknown as Parameters<typeof resolveSlotCallOptions>[0]),
+            );
+            if (!resolvedSlot) {
+                delete (opts as Record<string, unknown>).temperature;
+            }
+            return opts;
+        })(),
         providerOptions,
     };
 }
