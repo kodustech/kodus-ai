@@ -3,6 +3,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
+import { isSameRepository } from '../task-references';
 import { asRecord } from '../value-utils';
 import { McpToolSession } from './mcp-tool-session';
 import { McpTaskTracker, TrackerReadContext } from './tracker';
@@ -108,18 +109,6 @@ export class GitIssuesTracker extends McpTaskTracker {
             },
         };
     }
-}
-
-/** Hosts compare owners and names without case: `Acme/Web` is `acme/web`. */
-function isSameRepository(
-    a: { owner?: string; name: string },
-    b: { owner?: string; name: string } | undefined,
-): boolean {
-    return (
-        !!b &&
-        `${a.owner}/${a.name}`.toLowerCase() ===
-            `${b.owner}/${b.name}`.toLowerCase()
-    );
 }
 
 /**

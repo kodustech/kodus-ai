@@ -135,6 +135,18 @@ function strongerIntent(
     return a === 'closes' || b === 'closes' ? 'closes' : 'mentions';
 }
 
+/** Hosts compare owners and names without case: `Acme/Web` is `acme/web`. */
+export function isSameRepository(
+    a: { owner?: string; name: string },
+    b: { owner?: string; name: string } | undefined,
+): boolean {
+    return (
+        !!b &&
+        `${a.owner}/${a.name}`.toLowerCase() ===
+            `${b.owner}/${b.name}`.toLowerCase()
+    );
+}
+
 /**
  * How a reference reads back to a person: `#12` for an issue a branch named
  * `gh12` or `12-add-login`, never the fragment it was cut from.

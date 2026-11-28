@@ -6,7 +6,11 @@ import type {
     TaskResolution,
     TrackerLookup,
 } from './business-validation.types';
-import { referenceLabel, selectReferences } from './task-references';
+import {
+    isSameRepository,
+    referenceLabel,
+    selectReferences,
+} from './task-references';
 import { createLogger } from '@libs/core/log/logger';
 
 import { TrackerConnectionError } from './trackers/mcp-tool-session';
@@ -71,7 +75,7 @@ export async function resolveTasks(
                 reference,
                 await tracker.read(reference, context),
             );
-            const attempt = attemptOf(reference, tracker, lookup);
+            const attempt = attemptOf(reference, tracker, lookup, context);
             attempts.push(attempt);
             if (lookup.status === 'found') {
                 hit = lookup;
@@ -90,7 +94,7 @@ export async function resolveTasks(
             );
             const checked = second && confirmed(reference, second);
             if (checked?.status === 'found') {
-                attempts.push(attemptOf(reference, hitBy!, checked));
+                attempts.push(attemptOf(reference, hitBy!, checked, context));
                 hit = checked;
             }
         }
@@ -113,14 +117,19 @@ export async function resolveTasks(
             if (second.status !== 'found') {
                 // The agent got answers and the task isn't there: a miss
                 // the typo check reads, not a tracker that is down.
-                miss.attempt = attemptOf(reference, miss.tracker, second);
+                miss.attempt = attemptOf(
+                    reference,
+                    miss.tracker,
+                    second,
+                    context,
+                );
                 attempts.push(miss.attempt);
                 miss.lookup = second;
                 continue;
             }
             const tracker = miss.tracker;
             const checked = confirmed(reference, second);
-            attempts.push(attemptOf(reference, tracker, checked));
+            attempts.push(attemptOf(reference, tracker, checked, context));
             if (checked.status === 'found') {
                 hit = checked;
                 hitBy = tracker;
@@ -379,9 +388,17 @@ function attemptOf(
     reference: TaskReference,
     tracker: TaskTracker,
     lookup: TrackerLookup,
+    context: TrackerReadContext,
 ): ResolutionAttempt {
     return {
-        reference: referenceLabel(reference),
+        // `#31` whether the PR said `#31` or a re-check read its URL back:
+        // a run compares the references it looked up (`sameResult`, #1941).
+        reference:
+            reference.kind === 'git_issue' &&
+            reference.repository &&
+            isSameRepository(reference.repository, context.repository)
+                ? `#${reference.id}`
+                : referenceLabel(reference),
         tracker: tracker.name,
         status: lookup.status,
         ...(lookup.status === 'error'

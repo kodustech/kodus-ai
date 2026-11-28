@@ -5,7 +5,12 @@ import {
     repositoryForLookup,
     resolveTasks,
 } from './task-resolver';
-import { TrackerConnectionError } from './trackers/mcp-tool-session';
+import { sameResult } from './runs/run-mapping';
+import { GitIssuesTracker } from './trackers/git-issues.tracker';
+import {
+    TrackerConnectionError,
+    type McpToolSession,
+} from './trackers/mcp-tool-session';
 import type { TaskTracker } from './trackers/tracker';
 
 const warnings: Array<{ message: string; metadata?: Record<string, unknown> }> =
@@ -458,5 +463,74 @@ describe('repositoryForLookup', () => {
                 owner: 'Acme Corp',
             }),
         ).toEqual({ owner: 'acme.dev', name: 'notes' });
+    });
+});
+
+// The QA check of #1941: a dispute re-check reads the task back by its URL,
+// and the same verdict must still be the same result.
+describe('an issue of the PR repository, named by number or by URL', () => {
+    const repository = { owner: 'acme', name: 'web' };
+    const issueUrl = 'https://github.com/acme/web/issues/31';
+    const gitIssues = () =>
+        new GitIssuesTracker({
+            called: [],
+            call: async () => ({
+                success: true,
+                data: {
+                    number: 31,
+                    title: 'Export',
+                    body: '- AC1',
+                    url: issueUrl,
+                },
+            }),
+        } as unknown as McpToolSession);
+    const runOf = async (text: string) => {
+        const resolution = await resolveTasks(
+            extractTaskReferences({ command: text }),
+            [gitIssues()],
+            { ...context, repository },
+        );
+        if (resolution.kind !== 'found') {
+            throw new Error(`${text}: ${resolution.kind}`);
+        }
+        return {
+            outcome: 'validated' as const,
+            passed: false,
+            unseenFiles: [],
+            references: [],
+            attempts: resolution.attempts,
+            tasks: resolution.tasks.map(({ task }) => ({
+                tracker: task.tracker,
+                id: task.id,
+                passed: false,
+                requirements: [{ requirement: 'AC1', state: 'missing' }],
+                outOfScope: [],
+            })),
+        } as any;
+    };
+
+    it('is looked up and stored as #31 either way', async () => {
+        for (const text of ['#31', issueUrl]) {
+            const run = await runOf(text);
+            expect(run.attempts.map((a: any) => a.reference)).toEqual(['#31']);
+            expect(run.tasks.map((t: any) => t.id)).toEqual(['#31']);
+        }
+    });
+
+    it('is the same result when the verdict is the same', async () => {
+        expect(sameResult(await runOf('#31'), await runOf(issueUrl))).toBe(
+            true,
+        );
+    });
+
+    it("keeps another repository's issue apart from the PR's own", async () => {
+        const resolution = await resolveTasks(
+            extractTaskReferences({ command: 'acme/specs#31' }),
+            [gitIssues()],
+            { ...context, repository },
+        );
+        expect(resolution.attempts.map((a) => a.reference)).toEqual([
+            'acme/specs#31',
+        ]);
     });
 });
