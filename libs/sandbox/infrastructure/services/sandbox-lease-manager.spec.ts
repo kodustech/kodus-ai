@@ -2181,6 +2181,52 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
 
+        const usesAfterRelease = () =>
+            ((manager as any).logger.warn as jest.Mock).mock.calls.filter(
+                ([entry]) =>
+                    String(entry.message).includes(
+                        'sandbox used after release',
+                    ),
+            );
+
+        it('does not log a use after release for the commands of a call held since before it', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            let finishRead!: () => void;
+            const readRules = new Promise<void>(
+                (resolve) => (finishRead = resolve),
+            );
+            const call = sandbox.remoteCommands.hold!(async () => {
+                await sandbox.run('write sgconfig.yml');
+                await readRules;
+                await sandbox.run('write rules.yml');
+                return sandbox.run('scan');
+            });
+            await settle();
+            const lastUsedAt = sandbox.usage?.().lastUsedAt;
+
+            await jest.advanceTimersByTimeAsync(1_000);
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            finishRead();
+            await call;
+
+            expect(usesAfterRelease()).toHaveLength(0);
+            expect(sandbox.usage?.().lastUsedAt).toBe(lastUsedAt);
+
+            await sandbox.run('git log');
+            expect(usesAfterRelease()).toHaveLength(1);
+        });
+
+        it('logs a use after release for a call held only after it', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            await sandbox.remoteCommands.hold!(() => sandbox.run('git log'));
+
+            expect(usesAfterRelease()).toHaveLength(1);
+        });
+
         // A process that exits right after a release (a security-scan slice
         // child closes Nest, then exits) must still decrement the lease
         describe('at shutdown', () => {
