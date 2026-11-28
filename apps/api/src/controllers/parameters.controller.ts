@@ -70,6 +70,7 @@ import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/
 import { FindByKeyParametersUseCase } from '@libs/organization/application/use-cases/parameters/find-by-key-use-case';
 import { GetDefaultConfigUseCase } from '@libs/organization/application/use-cases/parameters/get-default-config.use-case';
 import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/create-or-update-code-review-parameter.dto';
+import { createApiValidationPipe } from '../utils/api-validation-pipe';
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { finished } from 'stream/promises';
@@ -134,8 +135,7 @@ export class ParametersController {
             example: {
                 key: ParametersKey.CODE_REVIEW_CONFIG,
                 configValue: {
-                    useLLM: true,
-                    reviewMode: 'comment',
+                    reviewOptions: { security: true },
                 },
                 organizationAndTeamData: {
                     teamId: 'c33ef663-70e7-4f43-9605-0bbef979b8e0',
@@ -165,16 +165,30 @@ export class ParametersController {
         }
 
         if (body.key === ParametersKey.CODE_REVIEW_CONFIG) {
+            // The body is untyped here, so the global pipe validated nothing:
+            // hold the value to the contract of /create-or-update-code-review.
+            const validated: CreateOrUpdateCodeReviewParameterDto =
+                await createApiValidationPipe().transform(
+                    {
+                        configValue: body.configValue,
+                        organizationAndTeamData: body.organizationAndTeamData,
+                    },
+                    {
+                        type: 'body',
+                        metatype: CreateOrUpdateCodeReviewParameterDto,
+                    },
+                );
+
             return maskCliSecrets(
                 await this.updateOrCreateCodeReviewParameterUseCase.execute({
                     actor: {
                         source: 'web',
                         organizationId,
                     },
-                    configValue: body.configValue,
+                    configValue: validated.configValue,
                     organizationAndTeamData: {
                         organizationId,
-                        teamId: body.organizationAndTeamData.teamId,
+                        teamId: validated.organizationAndTeamData.teamId,
                     },
                     requestUser: toRequestUserContext(this.request?.user),
                 } as any),
