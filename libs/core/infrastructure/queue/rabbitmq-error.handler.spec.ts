@@ -73,7 +73,7 @@ describe('RabbitMQErrorHandler', () => {
         });
 
         expect(amqpConnection.publish).toHaveBeenCalledWith(
-            'workflow.exchange.delayed',
+            'workflow.exchange.retry',
             'workflow.jobs.created.CODE_REVIEW',
             msg.content,
             expect.objectContaining({
@@ -90,6 +90,52 @@ describe('RabbitMQErrorHandler', () => {
         expect(amqpConnection.publish.mock.invocationCallOrder[0]).toBeLessThan(
             channel.ack.mock.invocationCallOrder[0],
         );
+    });
+
+    describe('retry exchange (#2654)', () => {
+        it.each([
+            ['workflow.exchange', 'workflow.exchange.retry'],
+            ['workflow.events', 'workflow.events.retry'],
+            // Delivered by an earlier retry: the exchange published to.
+            ['workflow.exchange.retry', 'workflow.exchange.retry'],
+            ['workflow.events.retry', 'workflow.events.retry'],
+            // Copies the old topic-typed exchange still delivers.
+            ['workflow.exchange.delayed', 'workflow.exchange.retry'],
+            // Direct-typed, which routes on RabbitMQ 4.2 with khepri_db.
+            ['orchestrator.exchange.delayed', 'orchestrator.exchange.delayed'],
+        ])('a failure delivered from %s retries on %s', async (from, to) => {
+            const { handler, amqpConnection } = makeHandler();
+            const msg = makeMessage({ 'x-retry-count': 1 });
+            msg.fields.exchange = from;
+
+            await handler.handle({ ack: jest.fn() }, msg, new Error('boom'));
+
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                to,
+                'workflow.jobs.created.CODE_REVIEW',
+                msg.content,
+                expect.objectContaining({
+                    headers: expect.objectContaining({ 'x-retry-count': 2 }),
+                }),
+            );
+        });
+
+        it('a retried message that exhausts its retries goes to its base DLX', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 2 });
+            const msg = makeMessage({ 'x-retry-count': 2 });
+            msg.fields.exchange = 'workflow.exchange.retry';
+
+            await handler.handle({ ack: jest.fn() }, msg, new Error('boom'), {
+                dlqRoutingKey: 'workflow.job.failed',
+            });
+
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange.dlx',
+                'workflow.job.failed',
+                msg.content,
+                expect.anything(),
+            );
+        });
     });
 
     it('acks the original message after publishing to DLQ', async () => {
@@ -278,7 +324,7 @@ describe('RabbitMQErrorHandler', () => {
             });
 
             expect(amqpConnection.publish).toHaveBeenCalledWith(
-                'workflow.exchange.delayed',
+                'workflow.exchange.retry',
                 'workflow.jobs.created.CODE_REVIEW',
                 msg.content,
                 expect.objectContaining({
@@ -300,7 +346,7 @@ describe('RabbitMQErrorHandler', () => {
             await handler.handle(channel, msg, new ClaimConflictError());
 
             expect(amqpConnection.publish).toHaveBeenCalledWith(
-                'workflow.exchange.delayed',
+                'workflow.exchange.retry',
                 expect.any(String),
                 msg.content,
                 expect.any(Object),

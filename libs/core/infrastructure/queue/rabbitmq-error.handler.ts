@@ -12,6 +12,7 @@ import {
     CLAIM_CONFLICT_REQUEUE_DELAY_MS,
     isClaimConflictError,
 } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { RETRY_EXCHANGE_BY_BASE } from './config/rabbitmq-topology.config';
 
 /**
  * Backoff configuration for consumer retries.
@@ -43,7 +44,8 @@ const RATE_LIMITED_MAX_DELAY_MS = 60 * 60 * 1000;
  *
  * IMPORTANT: Requires the following RabbitMQ topology:
  * - For any `<base>` exchange in use:
- *   - `<base>.delayed` (type: x-delayed-message, x-delayed-type: topic)
+ *   - its retry exchange from RETRY_EXCHANGE_BY_BASE, else `<base>.delayed`
+ *     (type: x-delayed-message)
  *   - `<base>.dlx` (type: topic)
  * - The delayed exchange plugin must be installed: rabbitmq_delayed_message_exchange
  */
@@ -94,7 +96,8 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const retryCount = (headers[this.RETRY_COUNT_HEADER] || 0) as number;
         const messageId = msg.properties.messageId;
         const baseExchange = this.getBaseExchange(msg.fields.exchange);
-        const delayedExchange = `${baseExchange}.delayed`;
+        const delayedExchange =
+            RETRY_EXCHANGE_BY_BASE[baseExchange] ?? `${baseExchange}.delayed`;
         const dlxExchange = `${baseExchange}.dlx`;
 
         const metadata = {
@@ -373,6 +376,14 @@ export class RabbitMQErrorHandler implements OnModuleInit {
     }
 
     private getBaseExchange(exchange: string): string {
+        // A retried message is delivered with the exchange it was published
+        // to, the retry exchange, not the base one it was routed through.
+        const base = Object.keys(RETRY_EXCHANGE_BY_BASE).find(
+            (key) => RETRY_EXCHANGE_BY_BASE[key] === exchange,
+        );
+        if (base) {
+            return base;
+        }
         if (exchange.endsWith('.delayed')) {
             return exchange.slice(0, -'.delayed'.length);
         }

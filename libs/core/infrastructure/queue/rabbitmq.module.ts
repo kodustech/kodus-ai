@@ -127,7 +127,8 @@ export class RabbitMQWrapperModule {
                             componentType === 'webhook';
 
                 return {
-                    exchanges: RABBITMQ_TOPOLOGY_CONFIG.exchanges,
+                    // exchanges and exchangeBindings
+                    ...RABBITMQ_TOPOLOGY_CONFIG,
                     uri: configService.get<string>(
                         'rabbitMQConfig.API_RABBITMQ_URI',
                     ),
