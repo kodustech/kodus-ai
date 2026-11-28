@@ -1,4 +1,5 @@
 import '@libs/llm/providers'; // side-effect: self-register every provider module
+import { validateModelTuning } from '@libs/llm/validate-model-tuning';
 import { GetModelCapabilitiesUseCase } from './get-model-capabilities.use-case';
 
 const build = (supported = true) => {
@@ -31,6 +32,44 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
             expect(c.temperature.kind).toBe('adjustable');
             expect(c.supportsReasoning).toBe(false);
             expect(c.reasoningOptions).toEqual([]);
+        });
+    });
+
+    // #2653: the form offered "Off" on every model, and the Test then refused
+    // it on a model that always reasons ("… can't be turned off"). The form's
+    // answer and the Test's answer must be the same answer.
+    describe('reasoning "off" — offered exactly when the Test accepts it', () => {
+        const testRefusesOff = (provider: string, model: string) =>
+            validateModelTuning({ provider, model, reasoningEffort: 'none' })
+                .length > 0;
+
+        it.each([
+            ['anthropic', 'claude-sonnet-5-5'],
+            ['anthropic', 'claude-opus-5-5'],
+            ['anthropic', 'claude-haiku-5-5'],
+            ['anthropic', 'claude-fable-5-2'],
+            ['anthropic_compatible', 'glm-5.3'],
+            ['openai_compatible', 'zai-glm-5-3'],
+            ['moonshot', 'kimi-k2.7-code'],
+        ])('%s / %s: always reasons → off unavailable', (provider, model) => {
+            expect(testRefusesOff(provider, model)).toBe(true);
+            expect(
+                useCase.execute(provider, model).reasoningOffUnavailable,
+            ).toBe(true);
+        });
+
+        it.each([
+            ['anthropic', 'claude-sonnet-5'],
+            ['anthropic', 'claude-sonnet-4-6'],
+            ['anthropic', 'claude-sonnet-4-5'],
+            ['openai', 'gpt-5.4'],
+            ['openai', 'gpt-4o'],
+            ['moonshot', 'kimi-k2.6'],
+        ])('%s / %s: off is accepted → offered', (provider, model) => {
+            expect(testRefusesOff(provider, model)).toBe(false);
+            expect(
+                useCase.execute(provider, model).reasoningOffUnavailable,
+            ).toBeUndefined();
         });
     });
 

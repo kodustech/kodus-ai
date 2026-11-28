@@ -158,9 +158,49 @@ describe("ByokAdvancedSettings — reasoning copy per production capability kind
             expect(
                 screen.queryByText(UNSUPPORTED_COPY),
             ).not.toBeInTheDocument();
-            for (const level of ["Off", "Low", "Medium", "High", "Custom"]) {
+            for (const level of ["Low", "Medium", "High", "Custom"]) {
                 expect(toggle(level)).toBeEnabled();
             }
+        });
+
+        // It cannot be turned off, and the Test refuses an Off for it.
+        it("does not offer Off", () => {
+            renderKind(kind);
+            expect(toggle("Off")).toBeDisabled();
+        });
+    });
+
+    // #2653: the form showed Off selected and let it be picked, and the Test
+    // then refused it ("claude-sonnet-5-5 always reasons and can't be turned
+    // off").
+    describe("a Claude that refuses Off (anthropic claude-sonnet-5-5)", () => {
+        const kind = CAPABILITY_KINDS.claudeAlwaysThinking;
+        const selected = () =>
+            ["Off", "Low", "Medium", "High", "Custom"].filter(
+                (level) => toggle(level).getAttribute("data-state") === "on",
+            );
+
+        it("does not offer Off, and offers the levels the API listed", () => {
+            renderKind(kind);
+            expect(toggle("Off")).toBeDisabled();
+            for (const level of ["Low", "Medium", "High", "Custom"]) {
+                expect(toggle(level)).toBeEnabled();
+            }
+        });
+
+        it("shows nothing selected when no level is saved, not Off", () => {
+            renderKind(kind);
+            expect(selected()).toEqual([]);
+        });
+
+        it("clears an Off saved before, instead of keeping it selected", () => {
+            renderKind(kind, "none");
+            expect(selected()).toEqual([]);
+        });
+
+        it("keeps a saved level", () => {
+            renderKind(kind, "high");
+            expect(selected()).toEqual(["High"]);
         });
     });
 });

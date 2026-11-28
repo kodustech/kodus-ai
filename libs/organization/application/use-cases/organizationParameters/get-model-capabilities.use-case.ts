@@ -1,4 +1,5 @@
 import { REGISTRY } from '@libs/llm/providers';
+import { reasoningOffRefused } from '@libs/llm/validate-model-tuning';
 import { resolveTemperaturePolicy } from '@libs/llm/providers/kernel/temperature';
 import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
 import type { TemperaturePolicy } from '@libs/llm/providers/kernel/model-types';
@@ -40,6 +41,9 @@ export interface ModelUiCapabilities {
     supportsReasoning: boolean;
     /** It always reasons, and no level can be set for it (#2036). */
     reasoningAlwaysOn?: boolean;
+    /** It reasons by default and refuses "off": the Test rejects an "off"
+     *  for it, so the form must not offer one (#2653). */
+    reasoningOffUnavailable?: boolean;
     /** The valid canonical reasoning levels for this model (from the module's
      *  reasoningConfig). Empty when reasoning is unsupported or uses a non-level
      *  (budget) config — the UI then offers the generic effort scale / Custom. */
@@ -116,6 +120,9 @@ export class GetModelCapabilitiesUseCase {
                 : {}),
             supportsReasoning: caps.supportsReasoning ?? false,
             ...(caps.reasoningAlwaysOn ? { reasoningAlwaysOn: true } : {}),
+            ...(reasoningOffRefused(provider, modelId)
+                ? { reasoningOffUnavailable: true }
+                : {}),
             reasoningOptions,
             reasoningOverrideExample: providerModule.reasoningOverrideExample?.(
                 provider,

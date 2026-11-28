@@ -71,15 +71,35 @@ export function validateModelTuning(
 
     // Turning reasoning OFF on a model that reasons unconditionally is a
     // contradiction the runtime can't honor — surface it rather than ignore it.
-    if (input.reasoningEffort === 'none') {
-        const traits = module.reasoningTraits?.(cfg) ?? NON_REASONING_TRAITS;
-        if (traits.thinksByDefault && !traits.canDisableThinking) {
-            issues.push({
-                field: 'reasoning',
-                message: `${label} always reasons and can't be turned off. Remove the "off" reasoning setting.`,
-            });
-        }
+    if (
+        input.reasoningEffort === 'none' &&
+        reasoningOffRefused(input.provider, input.model)
+    ) {
+        issues.push({
+            field: 'reasoning',
+            message: `${label} always reasons and can't be turned off. Remove the "off" reasoning setting.`,
+        });
     }
 
     return issues;
+}
+
+/**
+ * Whether this model refuses reasoning "off": it thinks by default and
+ * cannot be told not to. The Test rejects an "off" for it, and the connect
+ * form disables the option from the same answer, so the form never offers a
+ * setting the Test then refuses (#2653).
+ */
+export function reasoningOffRefused(
+    provider?: string,
+    model?: string,
+): boolean {
+    if (!provider || !REGISTRY.has(provider)) return false;
+    const traits =
+        REGISTRY.get(provider).reasoningTraits?.({
+            provider,
+            model: model ?? '',
+            apiKey: '',
+        } as NormalizedModel) ?? NON_REASONING_TRAITS;
+    return traits.thinksByDefault && !traits.canDisableThinking;
 }

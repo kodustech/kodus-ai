@@ -887,6 +887,28 @@ describe('normalizeError → fromHttpStatus mapping (via AI SDK error facts)', (
         expect(res.ok).toBe(false);
     });
 
+    // #2653: Anthropic's tier spend cap is a 429. Read as a rate limit, the
+    // Test said "the key works" and saved a key every review then failed on.
+    it("Anthropic's tier spend cap (429) → payment, ok:false", () => {
+        const message =
+            "You have reached your API usage limits: your organization has crossed its monthly API usage threshold, set based on your organization's API tier. You will regain access on 2026-12-01 at 00:00 UTC.";
+        const res = normalize({
+            name: 'AI_APICallError',
+            message,
+            statusCode: 429,
+            responseBody: JSON.stringify({
+                type: 'error',
+                error: {
+                    type: 'rate_limit_error',
+                    message,
+                    details: { error_code: 'enforced_spend_limit_reached' },
+                },
+            }),
+        });
+        expect(res.code).toBe('payment');
+        expect(res.ok).toBe(false);
+    });
+
     it.each([
         [
             400,

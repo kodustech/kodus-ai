@@ -539,6 +539,12 @@ function namesSpentBalance(lower: string): boolean {
         // failure mode of matching the exact phrase is exactly that delay --
         // if Anthropic rewords the cap, we wait instead of mislabelling.
         lower.includes('specified api usage limits') ||
+        // Anthropic's TIER spend cap is a 429 `rate_limit_error` with no
+        // `retry-after`, closed until the next month (#2653). Its prose
+        // ("reached your API usage limits") is too close to a temporary limit
+        // to match, so the code its body carries decides:
+        // platform.claude.com/docs/en/api/rate-limits#reaching-your-spend-cap
+        lower.includes('enforced_spend_limit_reached') ||
         // Z.AI's weekly/monthly cap (code 1310, #2104), matched on its exact
         // wording for the same reason. Its short-window sibling ("Usage limit
         // reached for 5 hour") reopens within hours and stays a rate limit.
