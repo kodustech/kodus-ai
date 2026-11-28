@@ -246,7 +246,7 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_WORKER_ALLOWED_CNS` | empty (any worker cert) | Comma list. |
 | `RUNTIME_FLEET_ALLOWED_CNS` | empty (fleet routes refuse everyone) | Comma list of runtime-fleet's client CNs: the only callers of `/internal/fleet/*`, refused on every worker route. Must not share a CN with `RUNTIME_WORKER_ALLOWED_CNS`. |
 | `RUNTIME_FLEET_INTERNAL_TOKEN` | unset | Test-only plaintext mode: the fleet's bearer token (16+ characters, not `RUNTIME_INTERNAL_TOKEN`). |
-| `RUNTIME_FLEET_INSTALLATION` | `dev` (required in production) | runtime-fleet: the tag every host carries; the orphan pass lists by it. |
+| `RUNTIME_FLEET_INSTALLATION` | `dev-<digest of the hub address>` (required in production) | runtime-fleet: the tag every host carries; the orphan pass lists by it. |
 | `RUNTIME_FLEET_HUB_PUBLIC_URL` | `https://localhost:<hub port>` (required in production) | runtime-fleet: the hub URL a new host registers at (its bootstrap file). |
 | `RUNTIME_FLEET_SYSTEM_DATABASE_URL` | the Runtime database name + `_fleet` | runtime-fleet: its own DBOS system database; must differ from `RUNTIME_DATABASE_URL`. |
 | `RUNTIME_FLEET_RECONCILE_MS` | 15000 | runtime-fleet: the reconcile interval (1 s to 5 min). |

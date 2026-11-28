@@ -464,8 +464,18 @@ describe('loadFleetConfig', () => {
         const c = loadFleetConfig({ RUNTIME_DATABASE_URL: 'postgres://u:p@db:5432/kodus_runtime', RUNTIME_SECRET_SEAL_KEY: Buffer.alloc(32, 7).toString('base64') });
         expect(c.systemDatabaseUrl).toBe('postgres://u:p@db:5432/kodus_runtime_fleet');
         expect(c.boat).toBeUndefined();
-        expect(c.installation).toBe('dev');
+        expect(c.installation).toMatch(/^dev-[0-9a-f]{10}$/);
         expect(fleetSystemDatabaseOf('postgres://u:p@db/x')).toBe('postgres://u:p@db/x_fleet');
+    });
+
+    // Two dev stacks sharing one boat organization each run an orphan pass over the machines tagged with their installation; a shared tag made each destroy the other's fresh hosts.
+    it('gives two dev stacks with different hub addresses different installation tags, and keeps an explicit one', () => {
+        const env = { RUNTIME_DATABASE_URL: 'postgres://u:p@db:5432/kodus_runtime', RUNTIME_SECRET_SEAL_KEY: Buffer.alloc(32, 7).toString('base64') };
+        const a = loadFleetConfig({ ...env, RUNTIME_FLEET_HUB_PUBLIC_URL: 'https://vm-a.example:3410' }).installation;
+        const b = loadFleetConfig({ ...env, RUNTIME_FLEET_HUB_PUBLIC_URL: 'https://vm-b.example:3410' }).installation;
+        expect(a).not.toBe(b);
+        expect(loadFleetConfig({ ...env, RUNTIME_FLEET_HUB_PUBLIC_URL: 'https://vm-a.example:3410' }).installation).toBe(a);
+        expect(loadFleetConfig({ ...env, RUNTIME_FLEET_INSTALLATION: 'mine', RUNTIME_FLEET_HUB_PUBLIC_URL: 'https://vm-a.example:3410' }).installation).toBe('mine');
     });
 
     it('refuses the fake provider, a missing installation and the dev seal key in the production image', () => {

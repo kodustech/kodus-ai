@@ -888,8 +888,9 @@ services:
             RUNTIME_RELEASE_VERSION: ${RUNTIME_RELEASE_VERSION-development}
             # Seals the fleet token inside the host workflow's step outputs (dev-only key, as the worker's).
             RUNTIME_SECRET_SEAL_KEY: ${RUNTIME_SECRET_SEAL_KEY:-de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de7de70}
-            # The tag every host of this install carries; the orphan pass lists the provider by it.
-            RUNTIME_FLEET_INSTALLATION: ${RUNTIME_FLEET_INSTALLATION:-dev}
+            # The tag every host of this install carries; the orphan pass lists the provider by it. Empty = dev-<digest of the hub address>,
+            # so stacks sharing one boat organization never destroy each other's hosts.
+            RUNTIME_FLEET_INSTALLATION: ${RUNTIME_FLEET_INSTALLATION:-}
             # Where new hosts register: reachable from the host, so a boat host needs a public hub URL.
             RUNTIME_FLEET_HUB_PUBLIC_URL: ${RUNTIME_FLEET_HUB_PUBLIC_URL:-https://localhost:3410}
             RUNTIME_FLEET_FAKE_PROVIDER: ${RUNTIME_FLEET_FAKE_PROVIDER:-0}

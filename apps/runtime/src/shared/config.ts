@@ -1,5 +1,5 @@
 import { type IsolationMinimum, IsolationMinimumSchema } from '@libs/runtime/contracts/isolation';
-import { createPublicKey } from 'crypto';
+import { createHash, createPublicKey } from 'crypto';
 import { envInteger, requireEnvInt } from '@libs/runtime/contracts/env-int';
 import { DEFAULT_EXERCISED_LINES_THRESHOLD_PERCENT, DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
 import { readFileSync } from 'fs';
@@ -599,9 +599,11 @@ export function loadFleetConfig(env: Env = process.env): FleetConfig {
         throw new Error(`RUNTIME_SECRET_SEAL_KEY is required: ${(e as Error).message}`, { cause: e });
     }
     if (base.productionImage && secretSealKey.equals(devSealKey())) throw new Error('RUNTIME_SECRET_SEAL_KEY is the dev-only seal key; the production image needs its own');
-    const installation = env.RUNTIME_FLEET_INSTALLATION || (base.productionImage ? '' : 'dev');
-    if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(installation)) throw new Error('RUNTIME_FLEET_INSTALLATION is required in production: a lowercase slug of at most 63 characters');
     const hubPublicUrl = env.RUNTIME_FLEET_HUB_PUBLIC_URL || (base.productionImage ? '' : `https://localhost:${base.hubPort}`);
+    // The tag is the ownership boundary of the orphan pass: a bare `dev` shared by two stacks on one boat organization made each
+    // destroy the other's fresh hosts. A dev stack's default carries a digest of its own hub address, which every stack has apart.
+    const installation = env.RUNTIME_FLEET_INSTALLATION || (base.productionImage ? '' : `dev-${createHash('sha256').update(hubPublicUrl).digest('hex').slice(0, 10)}`);
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(installation)) throw new Error('RUNTIME_FLEET_INSTALLATION is required in production: a lowercase slug of at most 63 characters');
     if (!/^https:\/\/[^/\s]+$/.test(hubPublicUrl)) throw new Error('RUNTIME_FLEET_HUB_PUBLIC_URL must be the https://host:port cells register at');
     const fakeProvider = flag01(env, 'RUNTIME_FLEET_FAKE_PROVIDER');
     if (fakeProvider && base.productionImage) throw new Error('refused in the production image: RUNTIME_FLEET_FAKE_PROVIDER');
