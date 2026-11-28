@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import axios from 'axios';
 import { DataSource, QueryFailedError } from 'typeorm';
 
-import { decrypt } from '@libs/common/utils/crypto';
+import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationConfigKey } from '@libs/core/domain/enums';
 import { ENTITIES } from '@libs/core/infrastructure/database/typeorm/entities';
 import { AuthIntegrationRepository } from '@libs/integrations/infrastructure/adapters/repositories/authIntegration.repository';
@@ -70,6 +70,49 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
             where: { team: { uuid: teamId } },
             relations: { authIntegration: true },
         });
+
+    /** A pair as the earlier race left them: raw rows, aged on purpose. */
+    const seedPair = async (opts: {
+        host?: string;
+        token: string;
+        status: boolean;
+        minutesAgo: number;
+        // Leading hex digit of both row ids: without an order, Postgres
+        // and TypeORM hand back the lowest id or the first insert.
+        rank: string;
+    }) => {
+        const id = (n: string) => `${opts.rank}${n}${randomUUID().slice(2)}`;
+        const at = new Date(Date.now() - opts.minutesAgo * 60_000);
+        const [auth] = await db.query(
+            `INSERT INTO auth_integrations (uuid, "authDetails", status, organization_id, team_id, "createdAt", "updatedAt")
+             VALUES ($5, $1, true, $2, $3, $4, $4) RETURNING uuid`,
+            [
+                {
+                    host: opts.host,
+                    appPassword: encrypt(opts.token),
+                    authMode: AuthMode.TOKEN,
+                },
+                organizationId,
+                teamId,
+                at,
+                id('a'),
+            ],
+        );
+        const [integration] = await db.query(
+            `INSERT INTO integrations (uuid, platform, "integrationCategory", status, organization_id, team_id, auth_integration_id, "createdAt", "updatedAt")
+             VALUES ($6, 'BITBUCKET', 'CODE_MANAGEMENT', $1, $2, $3, $4, $5, $5) RETURNING uuid`,
+            [opts.status, organizationId, teamId, auth.uuid, at, id('b')],
+        );
+        return { integration: integration.uuid, auth: auth.uuid };
+    };
+    const tokenOf = async (authUuid: string) =>
+        decrypt(
+            (
+                await db
+                    .getRepository(AuthIntegrationModel)
+                    .findOneByOrFail({ uuid: authUuid })
+            ).authDetails.appPassword,
+        );
 
     beforeAll(async () => {
         await db.initialize();
@@ -240,6 +283,50 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
             'https://bitbucket.example.test',
         );
         expect(await counts()).toEqual({ integrations: 1, credentials: 1 });
+    });
+
+    it('reads and rotates the most recent active pair when the earlier race left duplicates', async () => {
+        const older = await seedPair({
+            host: 'https://old.example.test',
+            token: 'old-token',
+            status: true,
+            minutesAgo: 60,
+            rank: '0',
+        });
+        const recent = await seedPair({
+            host: 'https://bitbucket.example.test',
+            token: 'recent-token',
+            status: true,
+            minutesAgo: 30,
+            rank: 'f',
+        });
+        const disabled = await seedPair({
+            host: 'https://disabled.example.test',
+            token: 'disabled-token',
+            status: false,
+            minutesAgo: 1,
+            rank: '7',
+        });
+
+        await expect(dc.getAuthDetails(tenant)).resolves.toMatchObject({
+            integrationId: recent.integration,
+            host: 'https://bitbucket.example.test',
+        });
+
+        await expect(connect('rotated-token')).resolves.toEqual({
+            success: true,
+            status: 'SUCCESS',
+        });
+        expect({
+            older: await tokenOf(older.auth),
+            recent: await tokenOf(recent.auth),
+            disabled: await tokenOf(disabled.auth),
+        }).toEqual({
+            older: 'old-token',
+            recent: 'rotated-token',
+            disabled: 'disabled-token',
+        });
+        expect(await counts()).toEqual({ integrations: 3, credentials: 3 });
     });
 
     it('makes the team ready for reviews after it saves its first repository', async () => {
