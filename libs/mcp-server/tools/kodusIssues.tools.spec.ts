@@ -88,4 +88,105 @@ describe('KodusIssuesTools', () => {
             data: null,
         });
     });
+    describe('KODUS_GET_ISSUE output with GitHub issue artifacts', () => {
+        const base = {
+            id: '1',
+            number: 7,
+            title: 'Signup form validation',
+            body: 'Acceptance criteria: see qa.md (artifact #1)',
+            state: 'open' as const,
+            url: 'https://github.com/acme/web/issues/7',
+            labels: [],
+            assignees: [],
+            author: null,
+            createdAt: '2026-10-01T00:00:00Z',
+            updatedAt: '2026-10-01T00:00:00Z',
+            closedAt: null,
+            platform: PlatformType.GITHUB,
+        };
+        const schema = () => (tools.getIssue() as any).outputSchema;
+
+        it('accepts an issue without artifacts, as before', () => {
+            expect(
+                schema().safeParse({ success: true, data: base }).success,
+            ).toBe(true);
+        });
+
+        it('accepts an optional artifacts field', () => {
+            const payload = {
+                success: true,
+                data: {
+                    ...base,
+                    artifacts: [
+                        {
+                            number: 1,
+                            name: 'qa.md',
+                            content: '- An empty form returns 422.',
+                        },
+                    ],
+                },
+            };
+            const parsed = schema().safeParse(payload);
+            expect(parsed.error).toBeUndefined();
+            expect(parsed.success).toBe(true);
+            expect(parsed.data).toEqual(payload);
+        });
+
+        it('passes includeArtifacts on to the facade, and only when given', async () => {
+            mockCodeManagementService.getIssue.mockResolvedValue(base as any);
+            const args = {
+                organizationId: 'org',
+                teamId: 'team',
+                repository: { owner: 'acme', name: 'web' },
+                issueNumber: 7,
+            };
+            await tools
+                .getIssue()
+                .execute({ ...args, includeArtifacts: true } as any);
+            await tools.getIssue().execute(args as any);
+            const [withFlag, without] =
+                mockCodeManagementService.getIssue.mock.calls.map(([p]) => p);
+            const common = {
+                organizationAndTeamData: {
+                    organizationId: 'org',
+                    teamId: 'team',
+                },
+                repository: { owner: 'acme', name: 'web' },
+                issueNumber: 7,
+            };
+            expect(withFlag).toEqual({ ...common, includeArtifacts: true });
+            expect(without).toStrictEqual({
+                ...common,
+                includeArtifacts: undefined,
+            });
+        });
+
+        it('returns the artifacts the facade read, untouched', async () => {
+            const artifacts = [
+                {
+                    number: 1,
+                    name: 'qa.md',
+                    content: 'Returns 422.',
+                },
+            ];
+            mockCodeManagementService.getIssue.mockResolvedValue({
+                ...base,
+                artifacts,
+            } as any);
+
+            const result = await tools.getIssue().execute({
+                organizationId: 'org',
+                teamId: 'team',
+                repository: { owner: 'acme', name: 'web' },
+                issueNumber: 7,
+            } as any);
+
+            expect((result as any).structuredContent.data.artifacts).toEqual(
+                artifacts,
+            );
+            expect(
+                schema().safeParse((result as any).structuredContent).success,
+            ).toBe(true);
+        });
+    });
 });

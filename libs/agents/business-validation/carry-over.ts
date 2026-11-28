@@ -196,7 +196,12 @@ export function taskTextHash(task: Task): string | undefined {
         .update(
             JSON.stringify([
                 task.title ?? '',
-                task.description ?? '',
+                // Only the fence delimiter lines carry the random name; content lines
+                // are always quoted, so they never match.
+                (task.description ?? '').replace(
+                    /^<(\/?)artifact_data_[0-9a-f]{16}>$/gm,
+                    '<$1artifact_data>',
+                ),
                 task.fields ?? {},
             ]),
         )

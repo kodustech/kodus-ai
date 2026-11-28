@@ -38,6 +38,27 @@ const IssueSchema = z.strictObject({
             }),
         )
         .optional(),
+    /** GitHub issue artifacts (public preview): as listed, with its current body. */
+    artifacts: z
+        .array(
+            z.strictObject({
+                number: z.number(),
+                name: z.string(),
+                content: z.string(),
+            }),
+        )
+        .optional(),
+    /** Artifacts that could not be read, so coverage is known to be incomplete. */
+    unreadArtifacts: z
+        .array(
+            z.strictObject({
+                number: z.number().optional(),
+                name: z.string().optional(),
+                reason: z.string(),
+                status: z.number().optional(),
+            }),
+        )
+        .optional(),
 });
 
 const repositorySchema = z.strictObject({
@@ -129,6 +150,8 @@ export class KodusIssuesTools {
             teamId: z.string(),
             repository: repositorySchema,
             issueNumber: z.number().int().positive(),
+            /** GitHub only: also read the issue's artifacts (one extra call). */
+            includeArtifacts: z.boolean().optional(),
         });
 
         type InputType = z.infer<typeof inputSchema>;
@@ -157,6 +180,7 @@ export class KodusIssuesTools {
                         },
                         repository: args.repository,
                         issueNumber: args.issueNumber,
+                        includeArtifacts: args.includeArtifacts,
                     });
 
                     return {

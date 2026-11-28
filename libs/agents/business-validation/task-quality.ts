@@ -36,7 +36,10 @@ function gradeOwn(task: Task): TaskQuality {
     if (!title && !description && !criteria.length) {
         return 'EMPTY';
     }
-    if (criteria.length || countListItems(description) >= 2) {
+    if (
+        criteria.length ||
+        countListItems(withoutOwnArtifactLinks(task, description)) >= 2
+    ) {
         return 'COMPLETE';
     }
     // "Improve tickets" / "Make tickets better." says no more than a bare
@@ -72,7 +75,10 @@ export function applyCriteriaLocation(
     if (!text) {
         return detectCriteria(task);
     }
-    return { ...task, acceptanceCriteria: criteriaIn(text) };
+    return {
+        ...task,
+        acceptanceCriteria: withArtifactCriteria(task, criteriaIn(text)),
+    };
 }
 
 /** The criteria a field or section holds: its list, else one per line. */
@@ -139,15 +145,230 @@ function detectCriteria(task: Task): Task {
         return { ...task, acceptanceCriteria: criteriaIn(field[1]) };
     }
     const description = task.description ?? '';
+    const own = ownArtifactLink(task);
+
+    // Artifacts only add criteria: no body item ever leaves the list because
+    // an artifact exists, and without artifacts the result is what the body
+    // alone gives (its first criteria section, else its list of two or more
+    // items). A body that gives nothing by itself still keeps its AC-labelled
+    // items when the artifacts state criteria. Artifact criteria come after
+    // the body's, de-duplicated; links to the issue's own artifacts are left out.
+    const listed = listItems(description);
+    const items = keepSubstantive(listed, own);
+    let section: string[] = [];
     for (const heading of CRITERIA_HEADINGS) {
-        const section = sectionUnder(description, heading);
-        const items = section ? listItems(section) : [];
-        if (items.length) {
-            return { ...task, acceptanceCriteria: items };
+        const text = sectionUnder(description, heading);
+        const found = text ? keepSubstantive(listItems(text), own) : [];
+        if (found.length) {
+            section = found;
+            break;
         }
     }
-    const items = listItems(description);
-    return items.length >= 2 ? { ...task, acceptanceCriteria: items } : task;
+    const body = section.length
+        ? section
+        : listed.length >= 2
+          ? items
+          : withArtifactCriteria(task, []).length
+            ? items.filter(isLabelledCriterion)
+            : [];
+    const merged = withArtifactCriteria(task, body);
+    return merged.length ? { ...task, acceptanceCriteria: merged } : task;
+}
+
+/** The explicit criteria of a text: its criteria section, plus its AC-labelled items. */
+function explicitIn(
+    text: string,
+    withLabels: boolean,
+    own: RegExp | undefined,
+): string[] {
+    let section: string[] = [];
+    for (const heading of CRITERIA_HEADINGS) {
+        const body = sectionUnder(text, heading);
+        const items = body ? keepSubstantive(listItems(body), own) : [];
+        if (items.length) {
+            section = items;
+            break;
+        }
+    }
+    const labelled = withLabels
+        ? keepSubstantive(listItems(text), own).filter(isLabelledCriterion)
+        : [];
+    return [...section, ...labelled];
+}
+
+const criterionKey = (item: string) =>
+    normalize(item.replace(CRITERION_LABEL, ''));
+
+/**
+ * `criteria` plus the explicit criteria of the documents read with the task
+ * (GitHub issue artifacts), each saying which document it is from. Reference
+ * lines to the issue's own artifacts are left out. Without documents the
+ * criteria are returned as they are.
+ */
+function withArtifactCriteria(task: Task, criteria: string[]): string[] {
+    const documents = task.sourceTexts ?? [];
+    if (!documents.length) {
+        return criteria;
+    }
+    const own = ownArtifactLink(task);
+    const seen = new Set(criteria.map(criterionKey));
+    const merged = [...criteria];
+    for (const document of documents) {
+        for (const raw of explicitIn(
+            flattenLineBreaks(document.text),
+            true,
+            own,
+        )) {
+            const item = escapeClosingTags(oneLine(raw));
+            const key = criterionKey(item);
+            if (key && !seen.has(key)) {
+                seen.add(key);
+                merged.push(`[${document.label}] ${item}`);
+            }
+        }
+    }
+    return merged;
+}
+
+/** Every line separator but `\n` (and CRLF) becomes a space, so no item can carry a hidden break. */
+function flattenLineBreaks(text: string): string {
+    return text
+        .replace(/\r\n/g, '\n')
+        .replace(/[\r\v\f\u0085\u2028\u2029]+/g, ' ');
+}
+
+/** One line: each run of line separators becomes a single space. */
+function oneLine(text: string): string {
+    return text.replace(/(?:\r\n|[\r\n\v\f\u0085\u2028\u2029])+/g, ' ').trim();
+}
+
+/** The same closing-tag escape the quoted document body gets. */
+function escapeClosingTags(text: string): string {
+    return text.replace(/<\s*\/\s*/g, '&lt;/');
+}
+
+/** `AC1: ...`, `AC #2 - ...`, `CA-3) ...`: an item that labels itself a criterion. */
+function isLabelledCriterion(item: string): boolean {
+    return CRITERION_LABEL.test(item);
+}
+
+const CRITERION_LABEL = /^[*_`\s]*(?:AC|CA)[\s#-]*\d+[*_`\s]*[:.)\-–—]\s*/i;
+
+/**
+ * A link to an artifact of this very issue (`https://host/owner/repo/issues/
+ * 310/artifacts/2`, same host, repository and number), whatever its label or
+ * hash. Only when artifacts were read with the task, and only when the task
+ * says which issue it is: otherwise nothing is recognised as one's own.
+ */
+function ownArtifactLink(task: Task): RegExp | undefined {
+    if (!task.hasArtifacts || !task.url) {
+        return undefined;
+    }
+    let url: URL;
+    try {
+        url = new URL(task.url.trim());
+    } catch {
+        return undefined;
+    }
+    const match = /^\/([^/]+)\/([^/]+)\/issues\/(\d+)\/?$/.exec(url.pathname);
+    if (!match || !/^https?:$/.test(url.protocol)) {
+        return undefined;
+    }
+    const escape = (text: string) =>
+        text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const [, owner, repo, number] = match;
+    return new RegExp(
+        `(?<![^\\s(<\\[])https?://${escape(url.host)}/${escape(owner)}/${escape(repo)}/issues/${number}/artifacts/\\d+(?!\\d)`,
+        'i',
+    );
+}
+
+/** Words that make a line only point at a document, not say anything about the code. */
+const REFERENCE_WORDS = new Set([
+    'see',
+    'spec',
+    'specs',
+    'artifact',
+    'artifacts',
+    'sha256',
+    'source',
+    'details',
+    'full',
+    'read',
+    'link',
+    'at',
+    'in',
+    'on',
+    'from',
+    'the',
+    'of',
+    'for',
+    'and',
+    'here',
+    'version',
+    'file',
+]);
+
+/**
+ * The line with its links to the issue's own artifacts blanked: Markdown
+ * `[text](url)` links and bare URLs. One forward scan, never backtracking,
+ * so a line of unclosed brackets costs no more than a line of text.
+ */
+function withoutOwnLinks(line: string, own: RegExp): string {
+    let out = '';
+    let at = 0;
+    let parenGone = false;
+    while (at < line.length) {
+        const open = line.indexOf('[', at);
+        if (open < 0) {
+            break;
+        }
+        const close = line.indexOf(']', open + 1);
+        if (close < 0) {
+            break;
+        }
+        let end = -1;
+        if (line[close + 1] === '(' && !parenGone) {
+            end = line.indexOf(')', close + 2);
+            parenGone = end < 0;
+        }
+        if (end < 0) {
+            out += line.slice(at, close + 1);
+            at = close + 1;
+            continue;
+        }
+        const start = line.lastIndexOf('[', close);
+        const link = line.slice(start, end + 1);
+        out += line.slice(at, start) + (own.test(link) ? ' ' : link);
+        at = end + 1;
+    }
+    out += line.slice(at);
+    return out.replace(/\S+/g, (token) => (own.test(token) ? ' ' : token));
+}
+
+/**
+ * A line that is only a pointer to an artifact of this issue (a bare link,
+ * "see X", a references-list line with a name and a hash). A line that says
+ * something and also links one is not.
+ */
+function isReferenceOnly(line: string, own: RegExp | undefined): boolean {
+    if (!own?.test(line)) {
+        return false;
+    }
+    const rest = withoutOwnLinks(line, own)
+        .replace(/`[^`]*`/g, ' ')
+        .toLowerCase();
+    const words = rest.match(/\p{L}[\p{L}\p{N}._-]*/gu) ?? [];
+    return words.every(
+        (word) =>
+            REFERENCE_WORDS.has(word) ||
+            /^v\d+$/.test(word) ||
+            /^[\p{L}\p{N}_-]+\.[a-z0-9]{1,5}$/u.test(word),
+    );
+}
+
+function keepSubstantive(items: string[], own: RegExp | undefined): string[] {
+    return own ? items.filter((item) => !isReferenceOnly(item, own)) : items;
 }
 
 function sectionUnder(
@@ -157,7 +378,13 @@ function sectionUnder(
     const lines = description.split('\n');
     const wanted = normalize(heading);
     const start = lines.findIndex((line) => {
-        const match = line.match(/^\s*(?:#{1,6}\s+|\*\*)?(.+?)(?:\*\*)?:?\s*$/);
+        // A quoted line is document text, never the configured heading.
+        if (/^\s*>/.test(line)) {
+            return false;
+        }
+        const match = line
+            .trim()
+            .match(/^(?:#{1,6}\s+|\*\*)?(.+?)(?:\*\*)?:?$/);
         return match ? normalize(match[1]) === wanted : false;
     });
     if (start < 0) {
@@ -228,7 +455,21 @@ export function formatTaskForJudge(task: Task): string {
     if (task.url) {
         sections.push(`Links:\n- ${task.url}`);
     }
+    if (task.coverageNotes?.length) {
+        sections.push(`Coverage notes:\n${task.coverageNotes.join('\n')}`);
+    }
     return sections.join('\n\n');
+}
+
+function withoutOwnArtifactLinks(task: Task, text: string): string {
+    const own = ownArtifactLink(task);
+    if (!own) {
+        return text;
+    }
+    return text
+        .split('\n')
+        .filter((line) => !isReferenceOnly(line, own))
+        .join('\n');
 }
 
 function countListItems(text: string): number {

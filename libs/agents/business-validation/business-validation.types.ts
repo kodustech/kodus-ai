@@ -110,6 +110,23 @@ export interface Task {
      * that found it (`McpTaskTracker.relate`). Never reaches the judge.
      */
     links?: TaskLinks;
+    /**
+     * What the tracker could not read of the task (an artifact it could not
+     * fetch), as plain sentences for the judge. Never part of the description,
+     * so it can't count as criteria or lift the task's grade.
+     */
+    coverageNotes?: string[];
+    /**
+     * Raw text of documents read with the task (GitHub issue artifacts), by
+     * label, so acceptance criteria can be detected in them. Never shown to
+     * the judge as such: `description` already carries them, quoted.
+     */
+    sourceTexts?: Array<{ label: string; text: string }>;
+    /**
+     * True when artifacts were read with the task (GitHub issue artifacts),
+     * whatever their text: the signal that its content is untrusted data.
+     */
+    hasArtifacts?: boolean;
 }
 
 /** Another work item a task points at: its parent or one of its sub-tasks. */

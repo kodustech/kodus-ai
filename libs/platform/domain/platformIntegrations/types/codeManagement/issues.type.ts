@@ -28,6 +28,19 @@ export type CodeManagementIssue = {
         title: string;
         state: 'open' | 'closed';
     }>;
+    /** GitHub issue artifacts (public preview): as listed, with its current body. */
+    artifacts?: Array<{
+        number: number;
+        name: string;
+        content: string;
+    }>;
+    /** Artifacts that could not be read: coverage of the issue is incomplete. */
+    unreadArtifacts?: Array<{
+        number?: number;
+        name?: string;
+        reason: string;
+        status?: number;
+    }>;
 };
 
 export type ListIssuesParams = {
@@ -49,6 +62,8 @@ export type GetIssueParams = {
     organizationAndTeamData: OrganizationAndTeamData;
     repository: { id?: string; owner: string; name: string };
     issueNumber: number;
+    /** GitHub: also read the issue's artifacts (one extra call). Default false. */
+    includeArtifacts?: boolean;
 };
 
 export type GitHubIssue = {
