@@ -1117,6 +1117,30 @@ export class TestByokConnectionUseCase {
     ): TestByokResult {
         const base = { latencyMs, httpStatus: status, providerMessage };
 
+        // A spent key comes back as 429, 400 (Anthropic's credit balance and
+        // spend cap) or 403 (OpenRouter's key limit). The classifier the
+        // review uses tells it apart from a rate limit, a bad request or a
+        // wrong key, so the Test and the review comment never disagree about
+        // one key (QA of #2700, #2792 review).
+        if (
+            (status === 400 || status === 403 || status === 429) &&
+            classifyLLMError({
+                statusCode: status,
+                message: providerMessage ?? '',
+                // The body as the review's error carries it: Google names a
+                // per-minute window there, not always in the message.
+                responseBody: bodyText(responseBody),
+            }).category === LlmErrorCategory.QUOTA_EXCEEDED
+        ) {
+            return {
+                ok: false,
+                code: 'payment',
+                ...base,
+                message:
+                    'The provider says this key is out of credits or over its billing limit. Top up the account or adjust the plan, then save again.',
+            };
+        }
+
         if (status === 401 || status === 403) {
             return {
                 ok: false,
@@ -1150,27 +1174,6 @@ export class TestByokConnectionUseCase {
                 ...base,
                 message:
                     'The provider account has insufficient credits or a blocked billing status. Top up on the provider dashboard and retry.',
-            };
-        }
-        // A 429 is a spent quota or a rate limit, told apart by the same
-        // classifier the review uses, so the Test and the review comment
-        // never disagree about one key (QA of #2700).
-        if (
-            status === 429 &&
-            classifyLLMError({
-                statusCode: 429,
-                message: providerMessage ?? '',
-                // The body as the review's error carries it: Google names a
-                // per-minute window there, not always in the message.
-                responseBody: bodyText(responseBody),
-            }).category === LlmErrorCategory.QUOTA_EXCEEDED
-        ) {
-            return {
-                ok: false,
-                code: 'payment',
-                ...base,
-                message:
-                    'The provider says this key is out of credits or over its billing limit. Top up the account or adjust the plan, then save again.',
             };
         }
         if (status === 429) {

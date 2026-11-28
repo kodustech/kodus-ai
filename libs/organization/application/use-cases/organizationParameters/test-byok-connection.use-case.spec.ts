@@ -859,6 +859,54 @@ describe('normalizeError → fromHttpStatus mapping (via AI SDK error facts)', (
         expect(res.ok).toBe(false);
     });
 
+    // #2792 review: a spent key also comes back as 400 (Anthropic) or 403
+    // (OpenRouter). The Test says what the review comment says about it.
+    const bodied = (statusCode: number, message: string) => ({
+        name: 'AI_APICallError',
+        message,
+        statusCode,
+        responseBody: JSON.stringify({ error: { message } }),
+    });
+
+    it.each([
+        [
+            400,
+            'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.',
+        ],
+        [
+            400,
+            'You have reached your specified API usage limits. You will regain access on 2026-12-01 at 00:00 UTC.',
+        ],
+        [
+            403,
+            'Key limit exceeded (total limit). Manage it using https://openrouter.ai/settings/keys',
+        ],
+    ])('%i for a spent key (%s) → payment, ok:false', (status, message) => {
+        const res = normalize(bodied(status, message));
+        expect(res.code).toBe('payment');
+        expect(res.ok).toBe(false);
+    });
+
+    it.each([
+        [
+            400,
+            'Unsupported parameter: max_tokens is not supported with this model.',
+            'bad_request',
+        ],
+        [403, 'Incorrect API key provided.', 'auth'],
+        [403, 'Your input was flagged by the moderation system.', 'auth'],
+        [
+            403,
+            'This API method requires billing to be enabled. Please enable billing on project #123 then retry.',
+            'auth',
+        ],
+    ])(
+        '%i that is not a spent key (%s) keeps its verdict',
+        (status, message, code) => {
+            expect(normalize(bodied(status, message)).code).toBe(code);
+        },
+    );
+
     it('500 → server_error (>= 500 boundary, low end)', () => {
         expect(normalize(sdkErr(500)).code).toBe('server_error');
     });
