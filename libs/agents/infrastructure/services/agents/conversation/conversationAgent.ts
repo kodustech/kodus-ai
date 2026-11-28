@@ -38,11 +38,13 @@ import {
     CONVERSATION_DECISION_TOOL,
     buildDecisionTool,
     grantIfAuthorized,
-    readDecision,
+    readDecisions,
+    writeCallsSinceLastRetraction,
 } from './conversation-decision';
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
     auditWriteTools,
+    decisionDivergence,
     performedWrites,
     writeToolPredicate,
     type WriteToolEvent,
@@ -199,6 +201,7 @@ export class ConversationAgentProvider {
         // pass through both layers untouched — they read the checked-out repo,
         // never org state, so a grep is not an action the agent performed.
         const writeAuthorization = createWriteAuthorization();
+        const isWriteTool = writeToolPredicate(mcp.metadata);
 
         // The guard sits OUTSIDE the audit: a refused call must never reach the
         // audited execute, or a write that was stopped gets logged — and
@@ -239,7 +242,7 @@ export class ConversationAgentProvider {
                     })
                 ),
             ),
-            writeToolPredicate(mcp.metadata),
+            isWriteTool,
             writeAuthorization,
         );
         // Single runtime: the conversation runs as an AgentSpec on the harness
@@ -355,6 +358,11 @@ export class ConversationAgentProvider {
             this.reportDecisionDivergence(
                 state.steps,
                 writes,
+                // A tool the run offers that is not a write: the sandbox reads.
+                (name) =>
+                    Object.prototype.hasOwnProperty.call(tools, name) &&
+                    !isWriteTool(name),
+                isWriteTool,
                 organizationAndTeamData,
                 thread,
             );
@@ -494,41 +502,75 @@ export class ConversationAgentProvider {
     private reportDecisionDivergence(
         steps: RunState['steps'],
         writes: readonly WriteToolEvent[],
+        isReadOnlyTool: (name: string) => boolean,
+        isWriteTool: (name: string) => boolean,
         organizationAndTeamData: OrganizationAndTeamData,
         thread: ConversationThread,
     ): void {
-        const decision = readDecision(steps);
-        const executed = writes.filter((w) => !w.error);
+        const decisions = readDecisions(steps);
+        const decision = decisions.at(-1);
+        const calledWriteTools = writeCallsSinceLastRetraction(
+            steps,
+            isWriteTool,
+        );
+        const divergence = decisionDivergence(
+            decisions,
+            writes,
+            isReadOnlyTool,
+            calledWriteTools,
+        );
+        if (!divergence) return;
 
-        if (decision?.intent === 'act' && executed.length === 0) {
+        const base = {
+            context: ConversationAgentProvider.name,
+            serviceName: ConversationAgentProvider.name,
+        };
+        const threadId = thread?.id?.toString();
+
+        if (divergence.kind === 'unperformed') {
             this.logger.error({
+                ...base,
                 message:
                     'Conversation agent declared an action it never performed',
-                context: ConversationAgentProvider.name,
-                serviceName: ConversationAgentProvider.name,
                 metadata: {
                     organizationAndTeamData,
-                    threadId: thread?.id?.toString(),
-                    intendedTool: decision.tool,
-                    authorizingQuote: decision.authorizingQuote,
+                    threadId,
+                    intendedTool: divergence.tool,
+                    authorizingQuote: decisions.find(
+                        (d) => d.intent === 'act' && d.tool === divergence.tool,
+                    )?.authorizingQuote,
                 },
             });
             return;
         }
 
-        if (decision?.intent !== 'act' && executed.length > 0) {
-            this.logger.error({
-                message: 'Conversation agent wrote without declaring an action',
-                context: ConversationAgentProvider.name,
-                serviceName: ConversationAgentProvider.name,
+        if (divergence.kind === 'failed') {
+            // The failed write is already logged as an error by the audit, and
+            // the agent saw it: this only ties it to the decision.
+            this.logger.warn({
+                ...base,
+                message:
+                    'Conversation agent declared an action whose write failed',
                 metadata: {
                     organizationAndTeamData,
-                    threadId: thread?.id?.toString(),
-                    intent: decision?.intent ?? 'none',
-                    tools: executed.map((w) => w.tool),
+                    threadId,
+                    intendedTool: decision?.tool,
+                    tools: divergence.tools,
                 },
             });
+            return;
         }
+
+        this.logger.error({
+            ...base,
+            message: 'Conversation agent wrote without declaring an action',
+            metadata: {
+                organizationAndTeamData,
+                threadId,
+                intent: decision?.intent ?? 'none',
+                tools: divergence.tools,
+            },
+        });
     }
 
     /**
