@@ -123,11 +123,32 @@ export class RepositoryRepository implements IRepositoryRepository {
         mergeSha: string | undefined,
     ): Promise<boolean> {
         // Conditional on BUILDING so a build that just published sends the
-        // caller back to the normal incremental path. The latest merge wins.
-        const result = await this.repo.update(
-            { uuid, astGraphStatus: AstGraphStatus.BUILDING },
-            { astGraphMergedDuringBuild: mergeSha ?? '' },
-        );
+        // caller back to the normal incremental path. Webhooks can arrive out
+        // of order, so two different merges become '' (unknown), which always
+        // gets a catch-up instead of trusting whichever landed last.
+        const result = await this.repo
+            .createQueryBuilder()
+            .update()
+            .set({
+                astGraphMergedDuringBuild: () =>
+                    `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE '' END`,
+            })
+            .where('uuid = :uuid AND ast_graph_status = :building', {
+                uuid,
+                building: AstGraphStatus.BUILDING,
+            })
+            .setParameter('sha', mergeSha ?? '')
+            .execute();
         return !!result.affected;
+    }
+
+    async clearMergeDeferredDuringBuild(
+        uuid: string,
+        mergeSha: string,
+    ): Promise<void> {
+        await this.repo.update(
+            { uuid, astGraphMergedDuringBuild: mergeSha },
+            { astGraphMergedDuringBuild: null },
+        );
     }
 }

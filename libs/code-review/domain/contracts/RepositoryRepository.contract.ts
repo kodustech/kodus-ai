@@ -39,4 +39,9 @@ export interface IRepositoryRepository {
         uuid: string,
         mergeSha: string | undefined,
     ): Promise<boolean>;
+    /** Clear the deferred merge once its catch-up is settled, unless a newer one replaced it. */
+    clearMergeDeferredDuringBuild(
+        uuid: string,
+        mergeSha: string,
+    ): Promise<void>;
 }

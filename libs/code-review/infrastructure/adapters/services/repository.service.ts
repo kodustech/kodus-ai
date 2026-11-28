@@ -58,4 +58,14 @@ export class RepositoryService implements IRepositoryService {
     ): Promise<boolean> {
         return this.repositoryRepository.deferMergeDuringBuild(uuid, mergeSha);
     }
+
+    clearMergeDeferredDuringBuild(
+        uuid: string,
+        mergeSha: string,
+    ): Promise<void> {
+        return this.repositoryRepository.clearMergeDeferredDuringBuild(
+            uuid,
+            mergeSha,
+        );
+    }
 }

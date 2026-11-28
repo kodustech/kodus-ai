@@ -162,6 +162,7 @@ function node(name: string): GraphNodeJson {
         let dir: string;
         let commits: string[];
         let enqueued: any[];
+        let failEnqueue: boolean;
         let merged: EnqueueAstGraphUpdateOnMergedUseCase;
         let processor: AstGraphBuildJobProcessor;
         const git = (...args: string[]) =>
@@ -244,8 +245,10 @@ function node(name: string): GraphNodeJson {
         afterAll(() => rmSync(dir, { recursive: true, force: true }));
         beforeEach(async () => {
             enqueued = [];
+            failEnqueue = false;
             const queue = {
                 enqueue: async (job: unknown) => {
+                    if (failEnqueue) throw new Error('queue down');
                     enqueued.push(job);
                     return randomUUID();
                 },
@@ -265,7 +268,7 @@ function node(name: string): GraphNodeJson {
                 unused,
                 unused,
                 unused,
-                unused,
+                repositories,
                 unused,
                 queue as never,
             );
@@ -276,8 +279,12 @@ function node(name: string): GraphNodeJson {
         });
 
         it('enqueues one catch-up to the latest merge the build missed', async () => {
-            expect(await merge(commits[1])).toMatchObject({ enqueued: false });
-            expect(await merge(commits[2])).toMatchObject({ enqueued: false });
+            const deferred = {
+                enqueued: false,
+                reason: 'deferred until graph build finishes',
+            };
+            expect(await merge(commits[2])).toEqual(deferred);
+            expect(await merge(commits[2])).toEqual(deferred);
             expect(enqueued).toEqual([]);
             expect((await state()).astGraphMergedDuringBuild).toBe(commits[2]);
 
@@ -311,6 +318,45 @@ function node(name: string): GraphNodeJson {
                 astGraphStatus: AstGraphStatus.READY,
                 astGraphSha: commits[2],
                 astGraphMergedDuringBuild: null,
+            });
+        });
+
+        it('catches up when merges arrive out of order', async () => {
+            // The newer merge lands first; trusting the last one would see an
+            // ancestor of the build head and skip the newer merge.
+            await merge(commits[2]);
+            await merge(commits[1]);
+            expect((await state()).astGraphMergedDuringBuild).toBe('');
+
+            await finishBuild(commits[1]);
+
+            expect(enqueued).toHaveLength(1);
+            expect(enqueued[0].payload.newSha).toBeUndefined();
+            expect((await state()).astGraphMergedDuringBuild).toBeNull();
+        });
+
+        it('keeps the deferred merge when the catch-up cannot be queued', async () => {
+            await merge(commits[2]);
+            failEnqueue = true;
+
+            await expect(finishBuild(commits[0])).rejects.toThrow('queue down');
+
+            expect(await state()).toEqual({
+                astGraphStatus: AstGraphStatus.READY,
+                astGraphSha: commits[0],
+                astGraphMergedDuringBuild: commits[2],
+            });
+        });
+
+        it('a full snapshot from an incremental job does not finish the build', async () => {
+            await merge(commits[2]);
+            await graph.incrementalUpdate(repoId, undefined, [node('b')], [], {
+                sha: commits[1],
+            });
+            expect(await state()).toEqual({
+                astGraphStatus: AstGraphStatus.BUILDING,
+                astGraphSha: commits[1],
+                astGraphMergedDuringBuild: commits[2],
             });
         });
 

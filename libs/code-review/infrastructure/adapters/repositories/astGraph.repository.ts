@@ -175,12 +175,13 @@ export class AstGraphRepository {
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
     ): Promise<GraphWriteResult> {
-        return this.writeGraph(repoId, nodes, edges, revision);
+        return this.writeGraph(repoId, nodes, edges, revision, undefined, true);
     }
 
+    /** `filePaths` undefined replaces every row without owning the build state. */
     async incrementalUpdate(
         repoId: string,
-        filePaths: string[],
+        filePaths: string[] | undefined,
         nodes: GraphNodeJson[],
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
@@ -194,6 +195,7 @@ export class AstGraphRepository {
         edges: GraphEdgeJson[],
         revision?: GraphRevision,
         filePaths?: string[],
+        fullBuild = false,
     ): Promise<GraphWriteResult> {
         const signal = revision?.signal;
         return this.dataSource.transaction(async (manager) => {
@@ -237,7 +239,7 @@ export class AstGraphRepository {
             }
 
             signal?.throwIfAborted();
-            return this.finishGraphWrite(manager, repoId, revision, !filePaths);
+            return this.finishGraphWrite(manager, repoId, revision, fullBuild);
         });
     }
 
@@ -356,8 +358,6 @@ export class AstGraphRepository {
         // still restore READY from FAILED: its rows leave the graph current.
         if (fullBuild || locked.astGraphStatus !== AstGraphStatus.BUILDING)
             update.astGraphStatus = AstGraphStatus.READY;
-        // The build takes over merges deferred while it ran.
-        if (fullBuild) update.astGraphMergedDuringBuild = null;
         // Publish the SHA, counts and rows in one transaction. An abort during
         // any of these writes must leave the previous revision intact.
         await manager.update(RepositoryModel, { uuid: repoId }, update);

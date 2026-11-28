@@ -323,6 +323,18 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
 
             const totalMs = Date.now() - jobStart;
 
+            // Before completing: a failed catch-up retries the job, and the
+            // deferred merge stays recorded until the catch-up is queued.
+            await raceWithAbortSignal(
+                this.enqueueCatchUp(
+                    payload,
+                    sandbox,
+                    headSha,
+                    mergedDuringBuild,
+                    signal,
+                ),
+                signal,
+            );
             await raceWithAbortSignal(
                 this.markCompleted(
                     jobId,
@@ -335,12 +347,6 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                     attempt.attemptId,
                 ),
                 signal,
-            );
-            await this.enqueueCatchUp(
-                payload,
-                sandbox,
-                headSha,
-                mergedDuringBuild,
             );
 
             this.logger.log({
@@ -414,56 +420,75 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         sandbox: SandboxInstance,
         headSha: string,
         mergedDuringBuild: string | null | undefined,
+        signal?: AbortSignal,
     ): Promise<void> {
-        if (mergedDuringBuild == null || mergedDuringBuild === headSha) return;
-        const metadata = {
-            repositoryId: payload.repositoryId,
-            headSha,
-            mergedDuringBuild,
-        };
-        try {
-            if (/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(mergedDuringBuild)) {
-                // Exit 0 only when the merge is in the built history. A merge
-                // newer than the clone is absent, so it gets the catch-up.
-                const included = await sandbox.run(
-                    `git -C ${shSingleQuote(sandbox.repoDir)} merge-base --is-ancestor ${mergedDuringBuild} ${shSingleQuote(headSha)}`,
-                    { timeoutMs: 10_000 },
-                );
-                if (included.exitCode === 0) return;
-            }
-            await this.jobQueueService.enqueue({
-                correlationId: payload.repositoryId,
-                workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
-                handlerType: HandlerType.SIMPLE_FUNCTION,
-                payload: {
-                    repositoryId: payload.repositoryId,
-                    changedFiles: [],
-                    newSha: mergedDuringBuild || undefined,
-                    cloneUrl: '',
-                    defaultBranch: payload.defaultBranch,
-                    fullName: payload.fullName,
-                    platform: payload.platform,
-                    organizationAndTeamData: payload.organizationAndTeamData,
-                },
-                status: JobStatus.PENDING,
-                priority: 0,
-                retryCount: 0,
-                maxRetries: 3,
-            });
-            this.logger.log({
-                message: `[AST-GRAPH-JOB] Enqueued catch-up for merges during build of ${payload.fullName}`,
-                context: AstGraphBuildJobProcessor.name,
-                metadata,
-            });
-        } catch (error) {
-            // The build itself succeeded; the next merge updates the graph.
-            this.logger.warn({
-                message: `[AST-GRAPH-JOB] Failed to enqueue catch-up for ${payload.fullName}`,
-                context: AstGraphBuildJobProcessor.name,
-                error,
-                metadata,
-            });
+        if (mergedDuringBuild == null) return;
+        if (
+            await this.containsMerge(
+                sandbox,
+                headSha,
+                mergedDuringBuild,
+                signal,
+            )
+        ) {
+            await this.repositoryService.clearMergeDeferredDuringBuild(
+                payload.repositoryId,
+                mergedDuringBuild,
+            );
+            return;
         }
+        signal?.throwIfAborted();
+        await this.jobQueueService.enqueue({
+            correlationId: payload.repositoryId,
+            workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
+            handlerType: HandlerType.SIMPLE_FUNCTION,
+            payload: {
+                repositoryId: payload.repositoryId,
+                changedFiles: [],
+                newSha: mergedDuringBuild || undefined,
+                cloneUrl: '',
+                defaultBranch: payload.defaultBranch,
+                fullName: payload.fullName,
+                platform: payload.platform,
+                organizationAndTeamData: payload.organizationAndTeamData,
+            },
+            status: JobStatus.PENDING,
+            priority: 0,
+            retryCount: 0,
+            maxRetries: 3,
+        });
+        // Compare-and-clear: a merge deferred after this read keeps its record.
+        await this.repositoryService.clearMergeDeferredDuringBuild(
+            payload.repositoryId,
+            mergedDuringBuild,
+        );
+        this.logger.log({
+            message: `[AST-GRAPH-JOB] Enqueued catch-up for merges during build of ${payload.fullName}`,
+            context: AstGraphBuildJobProcessor.name,
+            metadata: {
+                repositoryId: payload.repositoryId,
+                headSha,
+                mergedDuringBuild,
+            },
+        });
+    }
+
+    private async containsMerge(
+        sandbox: SandboxInstance,
+        headSha: string,
+        merge: string,
+        signal?: AbortSignal,
+    ): Promise<boolean> {
+        if (merge === headSha) return true;
+        // '' means the merge SHA is unknown: only a catch-up is safe.
+        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(merge)) return false;
+        // Exit 0 only when the merge is in the built history. A merge newer
+        // than the clone is absent, so it gets the catch-up.
+        const result = await sandbox.run(
+            `git -C ${shSingleQuote(sandbox.repoDir)} merge-base --is-ancestor ${merge} ${shSingleQuote(headSha)}`,
+            { timeoutMs: 10_000, signal },
+        );
+        return result.exitCode === 0;
     }
 
     private failureMessage(classification: ErrorClassification): string {

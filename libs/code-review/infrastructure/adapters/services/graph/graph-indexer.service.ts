@@ -288,20 +288,15 @@ export class GraphIndexerService {
 
             signal?.throwIfAborted();
             const persistStart = Date.now();
-            const counts = changedFiles
-                ? await this.astGraphRepo.incrementalUpdate(
-                      repositoryId,
-                      changedFiles,
-                      nodes,
-                      edges,
-                      revision,
-                  )
-                : await this.astGraphRepo.fullRebuild(
-                      repositoryId,
-                      nodes,
-                      edges,
-                      revision,
-                  );
+            // A full snapshot still publishes as an incremental: it must not
+            // finish a full build that is running.
+            const counts = await this.astGraphRepo.incrementalUpdate(
+                repositoryId,
+                changedFiles ?? undefined,
+                nodes,
+                edges,
+                revision,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH] Incremental DB persist completed (${Date.now() - persistStart}ms)`,
