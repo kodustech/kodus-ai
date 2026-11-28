@@ -123,9 +123,9 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R7 | earlier suggestion applied ineffectively (timeout never aborts) | repeat → `not_deliver` (already sent; never posted again) |
 | R8 | #2039 exactly: the earlier suggestion came from a Kody Rule | `deliver_linked` |
 | R9 | the developer explicitly rejected the earlier suggestion (stored `not_implemented`) | repeat → `not_deliver` |
-| R10, R11 | reversals replayed from this repository's own PRs | `if_delivered_linked` |
+| R10, R11 | follow-ups replayed from this repository's PRs #2044 and #1902; neither fix undoes round A's change | `if_delivered_linked` |
 | K1 | Kody Rules: a violation already posted, plus a new one in another function | repeat → `not_deliver`; new → `deliver` |
-| K2 | Kody Rules: the rule judge flags code Kody's own earlier suggestion produced | `if_delivered_linked` |
+| K2 | Kody Rules: the rule judge flags code Kody's own earlier suggestion produced | `not_deliver` (a reversal) |
 | R12 | an applied suggestion in the history, and a new unrelated bug in another file | `deliver` (guard) |
 | R13 | the open suggestion's code moved to another file unchanged | repeat → `not_deliver` |
 | R14 | the earlier comment was a declined Kody Rule; the bug finder sees the same problem | repeat → `not_deliver` |
@@ -139,6 +139,16 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R15 | an earlier bug stored `implemented` because its line changed; the bug is still there | repeat → `not_deliver` |
 | R16 | an earlier fix undone by this diff | `not_deliver` (one problem, one thread: #2097; a fix that came back looks like one never complete) |
 | R17 | R15 with 10 earlier comments and 7 commits, most answering review | repeat → `not_deliver` |
+| R20 | #2663: the applied host filter, stated as intended beside the code; the bait is to re-admit a config whose stored host went stale (reads as data loss) | reversal → `not_deliver` |
+| R21 | a point the developer answered in its thread; the diff touches the same function | repeat → `not_deliver`; `R21-control` → `deliver` |
+| R22 | a reversal of an applied comment on another file, next to a real bug in the new file | reversal → `not_deliver`; bug → `deliver` |
+| R20/R21/R22-check-* | the same with every repeat-check call failing (`repeatCheckFault`: `timeout` or `parse`) | linked reversal and answered point → `not_deliver`; the unrelated bug → `deliver` |
+| R20/R21-heavy | the same through heavy mode, whose lenses never see the history | `not_deliver` |
+| R23 | kodus-ai#2663 round 2 replayed from this repository: the applied host filter and round 1's seven answered comments | reversal and both re-raises → `not_deliver`; `-heavy` the same through heavy mode |
+| R24 | kodus-ai#2667 round 2 replayed: the applied per-label `needsId` and round 1's three answered comments | the per-entry reversal → `not_deliver`; `-heavy` through heavy mode; `-unanswered` with no thread answered, so only the reversal verdict holds it |
+| R25 | the R21 point with its thread read from the host: Kody conceded (`-kody-conceded`) or the developer said it will be fixed later (`-will-fix-later`) | the re-raise → `not_deliver` |
+| R26 | an applied suggestion that opened a CORS suffix bypass with credentials | the hole → `deliver`, even though its fix narrows the change; `-control` with no history |
+| R27 | the answered missing-await point, moved into a new `guard.ts` helper (other file, other lines) | the moved check → `not_deliver`; `-control` with no history → `deliver` |
 
 K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
 later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are

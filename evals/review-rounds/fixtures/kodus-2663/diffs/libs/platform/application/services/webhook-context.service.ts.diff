@@ -1,0 +1,13 @@
+diff --git a/libs/platform/application/services/webhook-context.service.ts b/libs/platform/application/services/webhook-context.service.ts
+index c975825df..11a8dba87 100644
+--- a/libs/platform/application/services/webhook-context.service.ts
++++ b/libs/platform/application/services/webhook-context.service.ts
+@@ -24,7 +24,7 @@ import {
+ 
+ export type WebhookDisambiguator = {
+     /**
+-     * Host of the instance that sent the webhook (e.g. `gitlab-old-c.example`).
++     * Host of the instance that sent the webhook (e.g. `gitlab-c.example`).
+      * GitLab and Forgejo number repositories per instance, so only a config
+      * on this host may take the webhook (`webhookConfigsOfInstance`).
+      */

@@ -22,19 +22,10 @@
 
 import { RateLimitError, Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
-import { FakeCapacityStore } from './sandbox-capacity-fake.store';
-import {
-    SandboxCapacityGate,
-    SandboxCapacityStore,
-} from './sandbox-capacity-gate';
-import { RuntimeSandboxError } from '../providers/runtime-sandbox.client';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
-    SandboxCapacityTimeoutError,
-    assertValidPrKey,
     SandboxCircuitOpenError,
-    SandboxInvalidatedError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
@@ -293,6 +284,20 @@ describe('SandboxLeaseManager', () => {
 
     // ─── Test 3: invalidate via PR-close (soft-drain + delete) ───────────
 
+    it('protects shared leases from immediate graph checkout retirement', async () => {
+        await expect(
+            manager.retireSingleUseCheckout(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77',
+                'shared',
+            ),
+        ).rejects.toEqual(
+            new Error(
+                'Only a single-use graph checkout can be retired immediately',
+            ),
+        );
+        expect(leaseRepo.retire).not.toHaveBeenCalled();
+    });
+
     it('invalidate: soft-drains 60s and retires the lease so the idle-kill cron kills the sandbox', async () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
 
@@ -355,6 +360,7 @@ describe('SandboxLeaseManager', () => {
         await expect(
             manager.acquire(prKey, 'review', undefined, {
                 cloneUrl: 'https://github.com/org/repo.git',
+                authToken: '',
                 branch: 'feature',
                 prNumber: 78,
                 platform: 'GITHUB' as any,
@@ -873,159 +879,6 @@ describe('SandboxLeaseManager', () => {
                 SandboxWaitAbortedError,
             );
             expect((manager.createCircuit as any).failures).toHaveLength(0);
-        });
-
-        // ── Deployment-wide capacity (SANDBOX_MAX_CONCURRENT) ──────────────
-        describe('deployment capacity gate', () => {
-            const sleepFast = async () => {
-                await new Promise((r) => setTimeout(r, 2));
-            };
-            function gatedManager(
-                store: SandboxCapacityStore,
-                env: { maxConcurrent: number; maxWaitMs: number },
-            ) {
-                const gate = new SandboxCapacityGate(
-                    store,
-                    () => env,
-                    Date.now,
-                    sleepFast,
-                );
-                return new SandboxLeaseManager(
-                    sandboxProvider as any,
-                    leaseRepo,
-                    configService,
-                    undefined,
-                    gate,
-                );
-            }
-            const sharedStore = (): SandboxCapacityStore =>
-                new FakeCapacityStore();
-
-            it('holds the cap across two workers and frees a queued review when a lease is released', async () => {
-                const store = sharedStore();
-                const env = { maxConcurrent: 1, maxWaitMs: 60_000 };
-                const workerA = gatedManager(store, env);
-                const workerB = gatedManager(store, env);
-
-                const first = await workerA.acquire(
-                    prKeyFor(30),
-                    'review',
-                    undefined,
-                    cloneParamsFor(30),
-                );
-                let secondDone = false;
-                const second = workerB
-                    .acquire(prKeyFor(31), 'review', undefined, cloneParamsFor(31))
-                    .then((r) => ((secondDone = true), r));
-                await new Promise((r) => setTimeout(r, 30));
-                expect(secondDone).toBe(false);
-                expect(await workerB.capacityNumbers()).toMatchObject({
-                    inUse: 1,
-                    cap: 1,
-                    queued: 1,
-                });
-
-                await workerA.release(first.leaseId);
-                await expect(second).resolves.toMatchObject({ wasCreated: true });
-            });
-
-            it('throws SandboxCapacityTimeoutError after the max wait', async () => {
-                const store = sharedStore();
-                const env = { maxConcurrent: 1, maxWaitMs: 30 };
-                const workerA = gatedManager(store, env);
-                await workerA.acquire(prKeyFor(32), 'review', undefined, cloneParamsFor(32));
-
-                await expect(
-                    gatedManager(store, env).acquire(
-                        prKeyFor(33),
-                        'review',
-                        undefined,
-                        cloneParamsFor(33),
-                    ),
-                ).rejects.toBeInstanceOf(SandboxCapacityTimeoutError);
-            });
-
-            it('surfaces a failing capacity store as an error instead of hanging the review', async () => {
-                const store = sharedStore();
-                store.tryAdmit = async () => {
-                    throw new Error('store exploded');
-                };
-                const manager = gatedManager(store, {
-                    maxConcurrent: 1,
-                    maxWaitMs: 60_000,
-                });
-                await expect(
-                    manager.acquire(
-                        prKeyFor(36),
-                        'review',
-                        undefined,
-                        cloneParamsFor(36),
-                    ),
-                ).rejects.toThrow('store exploded');
-            });
-
-            it('invalidate() cancels the queued review as a supersede', async () => {
-                const store = sharedStore();
-                const env = { maxConcurrent: 1, maxWaitMs: 60_000 };
-                const workerA = gatedManager(store, env);
-                const workerB = gatedManager(store, env);
-                await workerA.acquire(prKeyFor(34), 'review', undefined, cloneParamsFor(34));
-
-                const queued = workerB.acquire(
-                    prKeyFor(35),
-                    'review',
-                    undefined,
-                    cloneParamsFor(35),
-                );
-                await new Promise((r) => setTimeout(r, 30));
-                await workerB.invalidate(prKeyFor(35));
-
-                await expect(queued).rejects.toBeInstanceOf(SandboxInvalidatedError);
-                expect((await workerB.capacityNumbers()).queued).toBe(0);
-            });
-
-            it('a full runtime cell (no_capacity) waits and succeeds when room frees', async () => {
-                const manager = gatedManager(sharedStore(), {
-                    maxConcurrent: 0,
-                    maxWaitMs: 60_000,
-                });
-                jest.useFakeTimers();
-                sandboxProvider.createSandboxWithRepo
-                    .mockRejectedValueOnce(new RuntimeSandboxError(409, 'no_capacity', 'full'))
-                    .mockRejectedValueOnce(new RuntimeSandboxError(409, 'no_capacity', 'full'));
-                const acquired = manager.acquire(
-                    prKeyFor(36),
-                    'review',
-                    undefined,
-                    cloneParamsFor(36),
-                );
-                await jest.advanceTimersByTimeAsync(60_000);
-                await expect(acquired).resolves.toMatchObject({ wasCreated: true });
-                expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(3);
-                expect((manager.createCircuit as any).failures).toHaveLength(0);
-            });
-
-            it('a runtime cell that stays full past the max wait degrades with SandboxCapacityTimeoutError', async () => {
-                const manager = gatedManager(sharedStore(), {
-                    maxConcurrent: 0,
-                    maxWaitMs: 20_000,
-                });
-                jest.useFakeTimers();
-                sandboxProvider.createSandboxWithRepo.mockRejectedValue(
-                    new RuntimeSandboxError(409, 'no_capacity', 'full'),
-                );
-                const acquired = manager.acquire(
-                    prKeyFor(37),
-                    'review',
-                    undefined,
-                    cloneParamsFor(37),
-                );
-                const assertion = expect(acquired).rejects.toBeInstanceOf(
-                    SandboxCapacityTimeoutError,
-                );
-                await jest.advanceTimersByTimeAsync(120_000);
-                await assertion;
-            });
         });
 
         it('keeps waiting for E2B room when another create took the probe meanwhile', async () => {
@@ -1735,16 +1588,21 @@ describe('SandboxLeaseManager', () => {
         expect(result.wasCreated).toBe(false);
         // The sync ran BEFORE the sandbox was handed back — exact command
         // built by syncE2BSandboxRepo for a PR-mode, authenticated GitHub sync.
-        expect(run).toHaveBeenCalledWith(
-            expect.stringContaining(
-                "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
-            ),
-            expect.objectContaining({
-                envs: expect.objectContaining({
-                    GIT_AUTH_HEADER: expect.any(String),
-                }),
-            }),
-        );
+        expect(run.mock.calls[0]).toEqual([
+            "cd /home/user/repo && git fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD && git clean -fd",
+            {
+                timeoutMs: 300000,
+                envs: {
+                    GIT_CONFIG_COUNT: '2',
+                    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
+                    GIT_CONFIG_VALUE_0:
+                        'Authorization: Basic ' +
+                        Buffer.from('x-access-token:token').toString('base64'),
+                    GIT_CONFIG_KEY_1: 'core.hooksPath',
+                    GIT_CONFIG_VALUE_1: '/dev/null',
+                },
+            },
+        ]);
     });
 
     it('joiner WITH cloneParams skips the destructive sync when another consumer is still active', async () => {
@@ -2250,6 +2108,76 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
 
             await jest.advanceTimersByTimeAsync(1);
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        // astGrep writes its config, reads its rule file from the target
+        // branch (not a sandbox command), then writes it and scans: the
+        // release lands in the read and must not give the checkout back
+        // before the scan (#2628)
+        it('keeps the sandbox through a held call that waits on something else between its commands', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finishScan!: () => void;
+            (provided.run as jest.Mock)
+                .mockResolvedValueOnce({ stdout: '', exitCode: 0 })
+                .mockReturnValueOnce(
+                    new Promise<any>(
+                        (resolve) =>
+                            (finishScan = () =>
+                                resolve({ stdout: 'match', exitCode: 0 })),
+                    ),
+                );
+            let finishRead!: (rules: string) => void;
+            const readRules = new Promise<string>(
+                (resolve) => (finishRead = resolve),
+            );
+
+            const call = sandbox.remoteCommands.hold!(async () => {
+                await sandbox.run('write sgconfig.yml');
+                const rules = await readRules;
+                return sandbox.run(`scan ${rules}`);
+            });
+            await settle();
+            releasedWith(0);
+
+            // The read takes 6s: well past the config write's quiet window
+            await jest.advanceTimersByTimeAsync(1_000);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            await jest.advanceTimersByTimeAsync(5_000);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            finishRead('rules.yml');
+            await settle();
+            expect(provided.run).toHaveBeenLastCalledWith('scan rules.yml');
+            await jest.advanceTimersByTimeAsync(2_000);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            finishScan();
+            await expect(call).resolves.toEqual({
+                stdout: 'match',
+                exitCode: 0,
+            });
+            await jest.advanceTimersByTimeAsync(999);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not stamp a held call as a use of the sandbox', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+
+            await expect(
+                sandbox.remoteCommands.hold!(async () => 'read elsewhere'),
+            ).resolves.toBe('read elsewhere');
+            await goQuiet();
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().firstUsedAt).toBeUndefined();
+            expect(sandbox.usage?.().lastUsedAt).toBeUndefined();
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
 

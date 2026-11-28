@@ -4,6 +4,8 @@ import {
     buildDecisionTool,
     grantIfAuthorized,
     readDecision,
+    readDecisions,
+    writeCallsSinceLastRetraction,
 } from './conversation-decision';
 import { createWriteAuthorization } from './write-authorization';
 
@@ -30,10 +32,14 @@ describe('readDecision', () => {
     // the developer asked for was never authorized.
     it("drops a leading 'functions.' from the tool the agent names", () => {
         expect(
-            readDecision([call({ intent: 'act', tool: 'functions.kodus_save_memory' })])?.tool,
+            readDecision([
+                call({ intent: 'act', tool: 'functions.kodus_save_memory' }),
+            ])?.tool,
         ).toBe('kodus_save_memory');
         expect(
-            readDecision([call({ intent: 'act', tool: 'kodus.functions.save' })])?.tool,
+            readDecision([
+                call({ intent: 'act', tool: 'kodus.functions.save' }),
+            ])?.tool,
         ).toBe('kodus.functions.save');
     });
 
@@ -193,5 +199,81 @@ describe('buildDecisionTool', () => {
                 authorizingQuote: 'x',
             },
         ]);
+    });
+});
+
+describe('readDecisions', () => {
+    it('keeps every decision of the run in order, skipping malformed calls', () => {
+        expect(
+            readDecisions([
+                call({ intent: 'act', tool: 'KODUS_CREATE_MEMORY' }),
+                call({ intent: 'nonsense' }),
+                call({ intent: 'act', tool: 'exec' }),
+            ]).map((d) => d.tool),
+        ).toEqual(['KODUS_CREATE_MEMORY', 'exec']);
+    });
+
+    it('agrees with readDecision on the last one', () => {
+        const steps = [
+            call({ intent: 'offer', tool: 'KODUS_CREATE_MEMORY' }),
+            call({ intent: 'answer' }),
+        ];
+        expect(readDecisions(steps).at(-1)).toEqual(readDecision(steps));
+    });
+});
+
+describe('writeCallsSinceLastRetraction', () => {
+    const isWrite = (name: string) => name === 'KODUS_CREATE_MEMORY';
+    const tools = (...names: string[]) => ({
+        index: 0,
+        message: {
+            role: 'assistant' as const,
+            content: '',
+            toolCalls: names.map((name, i) => ({
+                id: `t${i}`,
+                name,
+                input: {},
+            })),
+        },
+    });
+
+    it('keeps every write call when every decision is act', () => {
+        expect(
+            writeCallsSinceLastRetraction(
+                [
+                    call({ intent: 'act', tool: 'exec' }),
+                    tools('exec', 'KODUS_CREATE_MEMORY'),
+                ],
+                isWrite,
+            ),
+        ).toEqual(['KODUS_CREATE_MEMORY']);
+    });
+
+    // A refused write is told to offer instead; the agent did, then went on
+    // to read. That write was withdrawn.
+    it('drops write calls made before the last offer or answer', () => {
+        expect(
+            writeCallsSinceLastRetraction(
+                [
+                    tools('KODUS_CREATE_MEMORY'),
+                    call({ intent: 'offer', tool: 'KODUS_CREATE_MEMORY' }),
+                    call({ intent: 'act', tool: 'exec' }),
+                    tools('exec'),
+                ],
+                isWrite,
+            ),
+        ).toEqual([]);
+    });
+
+    it('keeps a refused write made with no retraction after it', () => {
+        expect(
+            writeCallsSinceLastRetraction(
+                [
+                    tools('KODUS_CREATE_MEMORY'),
+                    call({ intent: 'act', tool: 'exec' }),
+                ],
+                isWrite,
+            ),
+        ).toEqual(['KODUS_CREATE_MEMORY']);
     });
 });

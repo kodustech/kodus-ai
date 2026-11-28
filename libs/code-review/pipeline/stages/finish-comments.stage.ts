@@ -31,6 +31,7 @@ import {
     resolvedProvider,
 } from '../context/code-review-pipeline.context';
 import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
+import { failedPrimaryReviewers } from './primary-review-agents';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
@@ -548,6 +549,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 !!context.onlyCustomAgent,
                 undefined,
                 ultraInfoLine,
+                context.prLevelCommentResults ?? [],
+                failedPrimaryReviewers(
+                    context.lastReviewError?.agentName,
+                    context.errors,
+                ),
             );
             return context;
         }
@@ -622,6 +628,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 !!context.onlyCustomAgent,
                 undefined,
                 ultraInfoLine,
+                context.prLevelCommentResults ?? [],
+                failedPrimaryReviewers(
+                    context.lastReviewError?.agentName,
+                    context.errors,
+                ),
             );
             return context;
         }
@@ -661,6 +672,10 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewErrorCustomMessage,
                 context.reviewWarnings,
                 undefined,
+                failedPrimaryReviewers(
+                    context.lastReviewError?.agentName,
+                    context.errors,
+                ),
                 ultraInfoLine,
             );
         }

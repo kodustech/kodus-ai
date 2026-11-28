@@ -19,6 +19,8 @@ export interface CreateSandboxParams {
      * base. Falsy → fall back to legacy clone-by-branch.
      */
     checkoutSha?: string;
+    /** Include the direct parents for graph jobs that compare the checked-out tree. */
+    includeParentCommit?: boolean;
     /**
      * CLI-only: unified diff to `git apply --3way` on top of `checkoutSha`
      * after clone. Recreates branches that aren't pushed and uncommitted
@@ -70,9 +72,17 @@ export interface PreSealCliInstallResult {
 }
 
 export interface SandboxRunOptions {
+    signal?: AbortSignal;
     timeoutMs?: number;
     envs?: Record<string, string>;
     asRoot?: boolean;
+}
+
+export function sandboxSetupDetails(
+    operation: 'git-fetch' | 'graph-install',
+    exitCode: number,
+) {
+    return { sandboxSetup: { operation, exitCode } };
 }
 
 export interface SandboxRunResult {

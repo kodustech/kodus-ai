@@ -1,3 +1,7 @@
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import { StaleGraphJobError } from '@libs/code-review/domain/graph-job-attempt';
+import { GraphJobSandbox } from './graph-job-sandbox';
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
@@ -28,6 +32,9 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
         repoDir: '/home/user/repo',
         sandboxId: 'sbx-2',
         type: 'e2b',
+        run: jest
+            .fn()
+            .mockResolvedValue({ stdout: 'checked-out-sha', exitCode: 0 }),
         cleanup: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -40,6 +47,7 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
         }),
         release: jest.fn(),
         invalidate: jest.fn(),
+        retireSingleUseCheckout: jest.fn(),
     };
 
     const codeManagementService = {
@@ -109,6 +117,7 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
             codeManagementService as any,
             graphIndexer as any,
             repositoryService as any,
+            new GraphJobSandbox(),
         );
     });
 
@@ -133,7 +142,58 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
             authUsername: 'x-access-token',
             branch: 'main',
             sandboxMetadata: { stage: 'graph-incremental' },
+            includeParentCommit: true,
         });
+    });
+
+    it('publishes every path between the baseline and a later checkout', async () => {
+        const baseline = 'a'.repeat(40);
+        const head = 'b'.repeat(40);
+        const changedFiles = ['src/a.ts', 'src/from-next-merge.ts'];
+        repositoryService.findById.mockResolvedValueOnce({
+            externalId: 'ext-1',
+            defaultBranch: 'main',
+            fullName: 'org/repo',
+            astGraphSha: baseline,
+        });
+        sandbox.run
+            .mockResolvedValueOnce({ stdout: head, exitCode: 0 })
+            .mockResolvedValueOnce({
+                stdout:
+                    changedFiles
+                        .map((f) => ':100644 100644 abc def M\0' + f)
+                        .join('\0') + '\0\0',
+                exitCode: 0,
+            });
+        await processor.process('job-2');
+        const attemptId =
+            jobRepository.update.mock.calls[0][1].metadata.attemptId;
+        expect(graphIndexer.incrementalUpdate).toHaveBeenCalledWith({
+            repositoryId: 'repo-1',
+            sandbox,
+            job: { jobId: 'job-2', attemptId },
+            expectedSha: baseline,
+            newSha: head,
+            changedFiles,
+            signal: undefined,
+        });
+        expect(jobRepository.update).toHaveBeenLastCalledWith(
+            'job-2',
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: expect.any(Date),
+                currentStage: 'DONE',
+                result: {
+                    repositoryId: 'repo-1',
+                    newSha: head,
+                    changedFilesCount: 2,
+                    sandboxId: 'sbx-2',
+                    durationMs: expect.any(Number),
+                },
+            },
+            JobStatus.PROCESSING,
+            attemptId,
+        );
     });
 
     it('cleans up the leased sandbox on completion', async () => {
@@ -160,10 +220,183 @@ describe('AstGraphIncrementalJobProcessor — sandbox creation via lease manager
         expect(sandbox.cleanup).not.toHaveBeenCalled();
     });
 
+    it.each([
+        [
+            'invalid parser output quoting 503 timeout ECONNRESET',
+            ErrorClassification.PERMANENT,
+            'Repository graph incremental update failed',
+        ],
+        [
+            'ECONNRESET',
+            ErrorClassification.RETRYABLE,
+            'Repository graph incremental update failed temporarily',
+        ],
+    ])(
+        'keeps provider details out of the stored and rethrown %s error',
+        async (reason, classification, message) => {
+            graphIndexer.incrementalUpdate.mockRejectedValueOnce(
+                Object.assign(
+                    new Error(`${reason}: private-provider-query`),
+                    reason === 'ECONNRESET'
+                        ? { cause: { code: 'ECONNRESET' } }
+                        : {},
+                ),
+            );
+            const result = processor.process('job-2');
+            if (classification === ErrorClassification.RETRYABLE) {
+                await expect(result).rejects.toBeInstanceOf(RecordedJobFailure);
+                await expect(result).rejects.toMatchObject({ message });
+            } else {
+                await result;
+            }
+            const attemptId =
+                jobRepository.update.mock.calls[0][1].metadata.attemptId;
+            expect(jobRepository.update).toHaveBeenLastCalledWith(
+                'job-2',
+                {
+                    status: JobStatus.FAILED,
+                    errorClassification: classification,
+                    lastError: message,
+                    completedAt: expect.any(Date),
+                    currentStage: 'FAILED',
+                    metadata: {
+                        attemptId,
+                        sandboxId: 'sbx-2',
+                        stage: 'FAILED',
+                    },
+                },
+                [JobStatus.PROCESSING, JobStatus.FAILED],
+                attemptId,
+            );
+        },
+    );
+
+    it('replaces a stale joined checkout within the same delivery', async () => {
+        leaseManager.acquire.mockResolvedValueOnce({
+            sandbox,
+            leaseId: 'reused',
+            sandboxId: 'existing',
+            wasCreated: false,
+        });
+        await processor.process('job-2');
+        expect(leaseManager.retireSingleUseCheckout).toHaveBeenCalledWith(
+            'org-uuid:repo-1:graph:job-2',
+            'existing',
+        );
+        expect(leaseManager.release.mock.calls.map(([id]) => id)).toEqual([
+            'reused',
+            'lease-2',
+        ]);
+        expect(graphIndexer.incrementalUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('bounds stale checkout replacements per delivery', async () => {
+        const joined = {
+            sandbox,
+            leaseId: 'reused',
+            sandboxId: 'existing',
+            wasCreated: false,
+        };
+        leaseManager.acquire
+            .mockResolvedValueOnce(joined)
+            .mockResolvedValueOnce(joined);
+        await expect(processor.process('job-2')).rejects.toBeInstanceOf(
+            RecordedJobFailure,
+        );
+        expect(leaseManager.acquire).toHaveBeenCalledTimes(2);
+        expect(graphIndexer.incrementalUpdate).not.toHaveBeenCalled();
+    });
+
     // The build runs clone + many /contents reads + indexing, any of which
     // can stall on a retry-after; without the race the worker slot stayed
     // held past the router timeout.
     describe('AbortSignal', () => {
+        it('keeps FAILED when indexing returns after cancellation', async () => {
+            let finishIndexing: () => void;
+            const indexing = new Promise<void>((started) => {
+                graphIndexer.incrementalUpdate.mockImplementationOnce(
+                    () =>
+                        new Promise<void>((finish) => {
+                            finishIndexing = finish;
+                            started();
+                        }),
+                );
+            });
+            const controller = new AbortController();
+            const job = processor.process('job-2', controller.signal);
+            await indexing;
+            controller.abort();
+            await job;
+            finishIndexing();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+
+            const statuses = jobRepository.update.mock.calls.map(
+                ([, update]) => update.status,
+            );
+            expect(statuses.at(-1)).toBe(JobStatus.FAILED);
+            expect(statuses).not.toContain(JobStatus.COMPLETED);
+            expect(graphIndexer.incrementalUpdate).toHaveBeenCalledWith(
+                expect.objectContaining({ signal: controller.signal }),
+            );
+            expect(leaseManager.release).toHaveBeenCalledTimes(1);
+        });
+
+        it('fails promptly if cancellation arrives during the completion write', async () => {
+            let finishCompletion: () => void;
+            let persisted = JobStatus.PENDING;
+            const writing = new Promise<void>((started) => {
+                jobRepository.update.mockImplementation(
+                    async (_id, patch, expected) => {
+                        if (patch.status === JobStatus.COMPLETED) {
+                            await new Promise<void>((finish) => {
+                                finishCompletion = finish;
+                                started();
+                            });
+                        }
+                        if (
+                            patch.status &&
+                            (!expected || [expected].flat().includes(persisted))
+                        )
+                            persisted = patch.status;
+                    },
+                );
+            });
+            const controller = new AbortController();
+            const job = processor.process('job-2', controller.signal);
+            await writing;
+            controller.abort();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(persisted).toBe(JobStatus.FAILED);
+            finishCompletion();
+            await job;
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(persisted).toBe(JobStatus.FAILED);
+        });
+
+        it('leaves a replacement attempt running when the graph write loses ownership', async () => {
+            graphIndexer.incrementalUpdate.mockRejectedValueOnce(
+                new StaleGraphJobError('job-2'),
+            );
+            await processor.process('job-2');
+            expect(
+                jobRepository.update.mock.calls.map(
+                    ([, patch]) => patch.status,
+                ),
+            ).not.toContain(JobStatus.FAILED);
+            expect(repositoryService.updateGraphStatus).not.toHaveBeenCalled();
+            expect(leaseManager.release).toHaveBeenCalledTimes(1);
+        });
+
+        it('only lets a processing job write its completion', async () => {
+            await processor.process('job-2');
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-2',
+                expect.objectContaining({ status: JobStatus.COMPLETED }),
+                JobStatus.PROCESSING,
+                expect.any(String),
+            );
+        });
+
         it('unblocks when the signal fires mid-work', async () => {
             repositoryService.findById.mockImplementation(
                 () => new Promise(() => {}),

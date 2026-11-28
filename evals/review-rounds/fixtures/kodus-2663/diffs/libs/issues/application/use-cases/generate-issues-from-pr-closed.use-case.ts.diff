@@ -1,0 +1,77 @@
+diff --git a/libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case.ts b/libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case.ts
+index ef17cf803..7980fd96b 100644
+--- a/libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case.ts
++++ b/libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case.ts
+@@ -13,6 +13,8 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
+ import {
+     webhookConfigsOfInstance,
+     getMappedPlatform,
++    gitlabWebhookSource,
++    type WebhookSource,
+ } from '@libs/common/utils/webhooks';
+ import {
+     IIntegrationConfigService,
+@@ -166,6 +168,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
+         pullRequest: IMappedPullRequest;
+         repository: IMappedRepository;
+         platformType: PlatformType;
++        instanceSource?: WebhookSource;
+     } | null> {
+         const { payload, platformType } = params;
+ 
+@@ -233,6 +236,11 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
+             pullRequest,
+             repository,
+             platformType,
++            // GitLab's mapped repository URL can be the SSH remote: the
++            // instance comes from the payload's project, as the handlers read it.
++            ...(platformType === PlatformType.GITLAB
++                ? { instanceSource: gitlabWebhookSource(sanitizedPayload) }
++                : {}),
+         };
+     }
+ 
+@@ -250,6 +258,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
+                 Number(pullRequest.number),
+                 params?.repository,
+                 platformType,
++                params?.instanceSource,
+             );
+ 
+         return {
+@@ -273,6 +282,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
+         prNumber: number,
+         repository: IRepositoryToIssues,
+         platformType: PlatformType,
++        instanceSource?: WebhookSource,
+     ): Promise<{
+         organizationAndTeamData: OrganizationAndTeamData | null;
+         host?: string;
+@@ -286,16 +296,17 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
+         // GitLab and Forgejo repository ids are per instance: keep the
+         // integrations of the instance that sent the webhook, so a project
+         // of another server that reached the same id never takes its issues.
+-        const configs = webhookConfigsOfInstance(platformType, foundConfigs, {
+-            host: repository.url,
+-            repositoryId: repository.id,
+-            repositoryFullName:
+-                platformType === PlatformType.GITLAB
+-                    ? ((repository as { path_with_namespace?: string })
+-                          ?.path_with_namespace ??
+-                      (repository as { fullName?: string })?.fullName)
+-                    : repository.full_name,
+-        });
++        const configs = webhookConfigsOfInstance(
++            platformType,
++            foundConfigs,
++            instanceSource
++                ? { ...instanceSource, repositoryId: repository.id }
++                : {
++                      host: repository.url,
++                      repositoryId: repository.id,
++                      repositoryFullName: repository.full_name,
++                  },
++        );
+ 
+         if (!configs || !configs.length) {
+             this.logger.warn({

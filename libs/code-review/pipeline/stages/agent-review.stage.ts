@@ -75,6 +75,7 @@ import {
     type ReviewKnowledge,
 } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { resolveAgentReviewSettings } from './agent-review-settings';
+import { PRIMARY_REVIEW_AGENTS as CATEGORY_AGENTS } from './primary-review-agents';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService } from '@libs/feature-gate';
 import {
@@ -294,8 +295,14 @@ export function snapLinesToDiff(
 ): Partial<CodeSuggestion> | null {
     if (validRanges.length === 0) return suggestion;
 
-    const start = suggestion.relevantLinesStart;
-    const end = suggestion.relevantLinesEnd;
+    // A model sometimes writes the range backwards (30-19). Both ends are
+    // real lines, only their order is not: measured as given, a reversed
+    // range overlaps no hunk and the finding was dropped as out of diff.
+    const [start, end] =
+        (suggestion.relevantLinesStart ?? 0) >
+        (suggestion.relevantLinesEnd ?? 0)
+            ? [suggestion.relevantLinesEnd, suggestion.relevantLinesStart]
+            : [suggestion.relevantLinesStart, suggestion.relevantLinesEnd];
 
     if (!start || !end) {
         // No lines specified — use the first valid range
@@ -482,14 +489,6 @@ export function categoryAgentsCompletion(
     }
     return { completed: true };
 }
-
-/** The review's primary agents; Kody Rules and custom agents are auxiliary. */
-const CATEGORY_AGENTS: ReadonlySet<string> = new Set([
-    'generalist',
-    'bug',
-    'security',
-    'performance',
-]);
 
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -1446,12 +1445,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             });
 
-            // Classify agent failures so the pipeline's final conclusion
-            // reflects them. Core agents (bug / security / performance /
-            // generalist) are the primary output — losing one of them is a
-            // critical error and should red-flag the check. Kody-rules is
-            // auxiliary: the review still has value from the core agents,
-            // so its failure is partial (maps to NEUTRAL on GitHub).
+            // Core agents supply the main review. Failures in Kody Rules
+            // and custom agents are always partial.
             const CRITICAL_AGENTS = CATEGORY_AGENTS;
             const generalistCompletion = categoryAgentsCompletion(
                 result,
@@ -1466,6 +1461,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             );
 
             const failures = result.failures ?? [];
+            const criticalFailures: typeof failures = [];
 
             // Classify against the provider that ANSWERED, not the one
             // resolved before the run. The friendly sentence names the
@@ -1479,12 +1475,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(f.error) ??
                 classifyLLMError(f.error, resolvedProvider(context, f.error));
 
+            // Fulfilled tasks include auxiliary agents and reviewers that
+            // stopped early or lost findings during verification.
+            const completedPrimaryAgents = (result.agentResults ?? []).filter(
+                (agent) =>
+                    CRITICAL_AGENTS.has(agent.agentCategory) &&
+                    agent.finishReason === 'stop' &&
+                    !agent.hitHardLimit &&
+                    !agent.discardedByVerifyError?.length,
+            );
+
             for (const failure of failures) {
-                // A custom agent is auxiliary, like kody-rules: its failure
-                // leaves the review partial, not failed.
-                const severity = CRITICAL_AGENTS.has(failure.agentName)
-                    ? 'critical'
-                    : 'partial';
+                const errorCategory = classifyFailure(failure).category;
+                const orgOwnedKey = usesOrgOwnedKey(context, failure.error);
+                // A sibling's review still counts when the org's credits run out.
+                const partialQuotaFailure =
+                    errorCategory === LlmErrorCategory.QUOTA_EXCEEDED &&
+                    orgOwnedKey &&
+                    completedPrimaryAgents.some(
+                        (agent) => agent.agentCategory !== failure.agentName,
+                    );
+                const severity =
+                    CRITICAL_AGENTS.has(failure.agentName) &&
+                    !partialQuotaFailure
+                        ? 'critical'
+                        : 'partial';
+                if (severity === 'critical') {
+                    criticalFailures.push(failure);
+                }
 
                 context = this.updateContext(context, (draft) => {
                     if (!draft.errors) {
@@ -1499,11 +1517,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
-                            errorCategory: classifyFailure(failure).category,
-                            orgOwnedKey: usesOrgOwnedKey(
-                                context,
-                                failure.error,
-                            ),
+                            errorCategory,
+                            orgOwnedKey,
                             prNumber,
                         },
                     });
@@ -1587,13 +1602,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // UNKNOWN) classification wins; fall back to any critical, then
             // any failure.
             if (failures.length > 0) {
-                const criticalFailures = failures.filter((f) =>
-                    CRITICAL_AGENTS.has(f.agentName),
-                );
                 const ranked = (
                     criticalFailures.length > 0 ? criticalFailures : failures
                 ).slice();
                 ranked.sort((a, b) => {
+                    // A partial run has no critical failure; the primary
+                    // reviewer that did not run is the one the notice names,
+                    // not an auxiliary agent (Kody Rules, a custom agent).
+                    const aPrimary = CRITICAL_AGENTS.has(a.agentName);
+                    const bPrimary = CRITICAL_AGENTS.has(b.agentName);
+                    if (aPrimary !== bPrimary) return aPrimary ? -1 : 1;
                     const aMapped =
                         classifyFailure(a).category !==
                         LlmErrorCategory.UNKNOWN;
@@ -1781,6 +1799,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 telemetryMeta,
             );
             let severityNormalized = repeatCheck.kept;
+            for (const s of severityNormalized) {
+                if (
+                    s.label === 'kody_rules' &&
+                    s.relevantFile &&
+                    !s.relevantLinesStart &&
+                    s.suggestionContent
+                ) {
+                    s.repeatClaim = s.suggestionContent;
+                }
+            }
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -2304,31 +2332,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // they recovered, so a lockfile advisory would never reach the PR.
         // A file moved without a content change is the second: a 100%
         // similarity rename has no hunks at all, and the host rejects the
-        // comment with "could not be resolved". Route both PR-level,
-        // citing file:line: the first covers analyzer findings, the second
-        // covers anything a model or an analyzer found on that file.
-        const withoutPatch = (f: FileChange) => Boolean(f.filename) && !f.patch;
+        // comment with "could not be resolved". A patch can also be there
+        // and still hold no hunk: GitLab sends "Binary files ... differ"
+        // for a binary rename, and a mode-only change comes as GitHub
+        // `changed` with no patch or GitLab `modified` with an empty one.
+        // Route those PR-level, citing file:line, whoever found it. A plain
+        // edit with no patch at all is only withheld (analyzers alone).
         const allChanges = [
             ...changedFiles,
             ...(context.ignoredFileChanges ?? []),
         ];
         const withheldDiffs = new Set(
-            allChanges.filter(withoutPatch).map((f) => f.filename),
-        );
-        const movedWithoutHunks = new Set(
             allChanges
-                .filter(
-                    (f) =>
-                        withoutPatch(f) &&
-                        (f.status === 'renamed' || f.status === 'copied'),
+                .filter((f) => f.filename && !f.patch)
+                .map((f) => f.filename),
+        );
+        const withoutHunks = new Set(
+            allChanges
+                .filter((f) =>
+                    !f.filename
+                        ? false
+                        : typeof f.patch === 'string'
+                          ? !/^@@ /m.test(f.patch)
+                          : ['renamed', 'copied', 'changed'].includes(f.status),
                 )
                 .map((f) => f.filename),
         );
         const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
             (!!s.relevantFile &&
-                (isAnalyzerSuggestion(s)
-                    ? withheldDiffs.has(s.relevantFile)
-                    : movedWithoutHunks.has(s.relevantFile))) ||
+                (withoutHunks.has(s.relevantFile) ||
+                    (isAnalyzerSuggestion(s) &&
+                        withheldDiffs.has(s.relevantFile)))) ||
             (s.label === 'kody_rules' &&
                 (!s.relevantFile ||
                     s.fileAnchored === true ||
@@ -2509,6 +2543,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.validSuggestionsByPR.push(
                     ...prLevelSuggestions.map((s) => ({
                         id: crypto.randomUUID(),
+                        // Kept on the record, not only in the text: the
+                        // repeat check of the next round compares a finding
+                        // with the comments on the same file (#2420).
+                        ...(s.relevantFile && { relevantFile: s.relevantFile }),
+                        ...(s.repeatClaim && { repeatClaim: s.repeatClaim }),
+                        ...(s.repeatClaims && {
+                            repeatClaims: s.repeatClaims,
+                        }),
                         // Any finding that named a file has to say WHERE,
                         // since a PR-level comment carries no anchor of
                         // its own — true whether it's fileAnchored
@@ -2536,6 +2578,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             s.severity,
                         ) as SeverityLevel,
                         brokenKodyRulesIds: s.brokenKodyRulesIds,
+                        // A custom agent's finding keeps its agent: the
+                        // comment's tag, the agent's status line and its
+                        // decision history all read it from here.
+                        ...(s.customAgent && { customAgent: s.customAgent }),
                         deliveryStatus: DeliveryStatus.NOT_SENT,
                     })),
                 );
@@ -2846,6 +2892,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             allDiscarded.push({
                 ...s,
                 priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        for (const s of repeatCheck.reversals) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_REVERSAL,
                 deliveryStatus: DeliveryStatus.NOT_SENT,
             });
         }
@@ -3381,6 +3434,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<{
         kept: Partial<CodeSuggestion>[];
         repeats: Partial<CodeSuggestion>[];
+        reversals: Partial<CodeSuggestion>[];
         withheld: Partial<CodeSuggestion>[];
         history: readonly PrDecisionRecord[] | undefined;
     }> {
@@ -3388,7 +3442,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         let history: readonly PrDecisionRecord[] | undefined =
             context.previousDecisions;
         if (!history?.length || !findings.length) {
-            return { kept: findings, repeats: [], withheld: [], history };
+            return {
+                kept: findings,
+                repeats: [],
+                reversals: [],
+                withheld: [],
+                history,
+            };
         }
 
         const repositoryFullName =
@@ -3419,6 +3479,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         }
 
+        history = await this.markAnsweredThreads(context, history);
+
         const ruleTitleByUuid = new Map<string, string>();
         for (const [uuid, rule] of kodyRulesById) {
             if (rule.title) ruleTitleByUuid.set(uuid, rule.title);
@@ -3437,13 +3499,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         }
 
+        const answeredRepeats = result.repeats.filter(
+            (r) => r.earlier.answered,
+        ).length;
         this.logger.log({
-            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} repeats, ${result.withheld.length} withheld without a verdict, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
+            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} repeats (${answeredRepeats} of answered threads), ${result.reversals.length} reversals, ${result.withheld.length} withheld without a verdict, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
                 prNumber,
                 teamId: context.organizationAndTeamData.teamId,
+                discarded: {
+                    reversesEarlier: result.reversals.length,
+                    answeredThread: answeredRepeats,
+                    repeat: result.repeats.length - answeredRepeats,
+                    noVerdict: result.withheld.length,
+                },
+                reversals: result.reversals.map((r) => ({
+                    file: r.finding.relevantFile,
+                    line: r.finding.relevantLinesStart,
+                    label: r.finding.label,
+                    earlierId: r.earlier.suggestionId,
+                    earlierOutcome: r.earlier.outcome,
+                })),
                 withheld: result.withheld.map((finding) => ({
                     file: finding.relevantFile,
                     line: finding.relevantLinesStart,
@@ -3460,12 +3538,64 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             },
         });
 
+        if (result.withheld.length) {
+            // A spike of findings dropped unjudged means the check is failing.
+            this.logger.warn({
+                message: `[REPEAT-CHECK] PR#${prNumber}: ${result.withheld.length} finding(s) discarded without a verdict`,
+                context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData.teamId,
+                    prNumber,
+                    noVerdict: result.withheld.length,
+                },
+            });
+        }
+
         return {
             kept: result.kept,
             repeats: result.repeats.map((r) => r.finding),
+            reversals: result.reversals.map((r) => r.finding),
             withheld: result.withheld,
             history,
         };
+    }
+
+    /**
+     * #2676: a comment whose thread got a reply is a point already answered.
+     * Read from the host now, not stored from the reply webhook, which races
+     * the next round. Without an answer from the host the history stays as
+     * loaded.
+     */
+    private async markAnsweredThreads(
+        context: CodeReviewPipelineContext,
+        history: readonly PrDecisionRecord[],
+    ): Promise<readonly PrDecisionRecord[]> {
+        if (!history.some((earlier) => earlier.commentId)) return history;
+        const answered =
+            await this.codeManagementService?.getAnsweredReviewThreadRootIds?.(
+                {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository,
+                    prNumber: context.pullRequest?.number,
+                },
+                context.platformType,
+            );
+        if (!answered?.size) return history;
+        // The host answers for file threads only: GitHub posts a PR-level
+        // finding as an issue comment, with no thread, and Azure stores it by
+        // its id inside the thread, 1 in every thread.
+        const fileLevelOnly =
+            context.platformType === PlatformType.AZURE_REPOS ||
+            context.platformType === PlatformType.GITHUB;
+        return history.map((earlier) =>
+            earlier.commentId &&
+            answered.has(earlier.commentId) &&
+            !(fileLevelOnly && !earlier.relevantFile)
+                ? { ...earlier, answered: true }
+                : earlier,
+        );
     }
 
     /**

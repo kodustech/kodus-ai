@@ -376,6 +376,17 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         prNumber: number;
     }): Promise<PullRequestReviewComment[] | null>;
 
+    /**
+     * The ids of Kody's root comments whose thread has at least one reply, in
+     * the format `suggestion.comment.id` is saved in. Null when the host could
+     * not be read. OPTIONAL: Forgejo has no reply threads.
+     */
+    getAnsweredReviewThreadRootIds?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null>;
+
     getListOfValidReviews(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;

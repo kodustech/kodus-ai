@@ -220,7 +220,9 @@ export const SelectRepositories = (props: {
                 </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-[var(--radix-popper-anchor-width)] p-0">
+            <PopoverContent
+                collisionPadding={8}
+                className="max-h-[min(300px,var(--radix-popover-content-available-height))] w-[var(--radix-popper-anchor-width)] p-0">
                 <Command
                     filter={(value, search) => {
                         const repository = sortedRepositories.find(

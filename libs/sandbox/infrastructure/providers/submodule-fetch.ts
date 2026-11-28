@@ -636,6 +636,8 @@ export function buildSubmoduleUpdatePlan(params: {
     const configPairs: Array<{ key: string; value: string }> = [];
     if (authHeader && configKey) {
         configPairs.push({ key: configKey, value: authHeader });
+        // Credentialed Git processes also run in previously used checkouts.
+        configPairs.push({ key: 'core.hooksPath', value: '/dev/null' });
     }
     // One `insteadOf` per distinct ssh prefix among the allowed submodules,
     // so git fetches them over https with the scoped header above instead of

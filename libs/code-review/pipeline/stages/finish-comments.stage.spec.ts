@@ -136,6 +136,44 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         expect(args[15]).toEqual(reviewWarnings);
     });
 
+    // QA M11 on #2671: a rename-only PR has its findings at PR level and no
+    // line comment. Both updateOverallComment call sites passed no PR-level
+    // results, so the summary said "No issues were found" under them.
+    it.each([
+        ['the end-review template branch', {}],
+        [
+            'the default summary branch',
+            {
+                pullRequestMessagesConfig: {
+                    startReviewMessage: {
+                        status: PullRequestMessageStatus.ACTIVE,
+                        content: 'Review started',
+                    },
+                    endReviewMessage: undefined,
+                },
+            },
+        ],
+    ])(
+        'forwards context.prLevelCommentResults to updateOverallComment on %s',
+        async (_, over) => {
+            const { stage, commentManagerService } = makeStage();
+            const prLevelCommentResults = [
+                { comment: { type: 'pr_level' }, deliveryStatus: 'sent' },
+            ];
+            const context = baseContext({
+                ...over,
+                lineComments: [],
+                prLevelCommentResults,
+            });
+
+            await (stage as any).executeStage(context);
+
+            const args =
+                commentManagerService.updateOverallComment.mock.calls[0];
+            expect(args[19]).toEqual(prLevelCommentResults);
+        },
+    );
+
     // The stage forwards the warnings from THREE call sites, one per message
     // configuration. Severing all three left the suite green in Verifier round
     // 2, so each branch gets its own guard: covering one would leave the other
@@ -166,6 +204,68 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
 
         const args = commentManagerService.updateOverallComment.mock.calls[0];
         expect(args[15]).toEqual(reviewWarnings);
+    });
+
+    it('forwards the failing primary agent so the end comment can name it', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const lastReviewError = {
+            category: 'QUOTA_EXCEEDED',
+            friendlyMessage: 'out of credits',
+            agentName: 'security',
+            occurredAt: new Date(),
+        };
+        const partial = {
+            stage: 'AgentReviewStage',
+            error: new Error('out of credits'),
+            severity: 'partial' as const,
+        };
+
+        await (stage as any).executeStage(
+            baseContext({
+                lastReviewError,
+                errors: [partial],
+                pullRequestMessagesConfig: {
+                    startReviewMessage: {
+                        status: PullRequestMessageStatus.ACTIVE,
+                        content: 'Review started',
+                    },
+                    endReviewMessage: undefined,
+                },
+            }),
+        );
+        expect(
+            commentManagerService.updateOverallComment.mock.calls[0][20],
+        ).toBe('security');
+
+        await (stage as any).executeStage(
+            baseContext({
+                lastReviewError,
+                errors: [partial],
+            }),
+        );
+        expect(
+            commentManagerService.updateOverallComment.mock.calls[1][20],
+        ).toBe('security');
+
+        await (stage as any).executeStage(
+            baseContext({
+                lastReviewError,
+                errors: [partial],
+                pullRequestMessagesConfig: {
+                    startReviewMessage: {
+                        status: PullRequestMessageStatus.OFF,
+                        content: 'Review started',
+                    },
+                    endReviewMessage: {
+                        status: PullRequestMessageStatus.ACTIVE,
+                        content: 'Done!',
+                    },
+                },
+            }),
+        );
+        expect(commentManagerService.createComment.mock.calls[0][17]).toBe(
+            'security',
+        );
     });
 
     it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {
@@ -796,7 +896,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
 
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args.at(-1)).toBe(
+        expect(args[18]).toBe(
             '> Ultra review: `openai:b` failed, and the fallback `openai:f` took its place.',
         );
     });
@@ -838,7 +938,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         await stage.execute(context(undefined, undefined));
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
         expect(
-            commentManagerService.updateOverallComment.mock.calls[0].at(-1),
+            commentManagerService.updateOverallComment.mock.calls[0][18],
         ).toBeUndefined();
     });
 

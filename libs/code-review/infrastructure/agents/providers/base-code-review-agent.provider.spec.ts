@@ -48,6 +48,8 @@ import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/cor
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { getClassification } from '@libs/llm/error-classifier';
+import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import type {
     ReviewAgentInput,
     AgentProgressEvent,
@@ -866,6 +868,48 @@ describe('losses the run records (#2066)', () => {
         const out = await newAgent().execute(makeInput());
 
         expect(out.warnings ?? []).toEqual([]);
+    });
+});
+
+describe('fixed prompt sized from what is sent (#2205)', () => {
+    const sandbox: any = new Proxy({}, { get: () => async () => '' });
+    const smallWindow = (maxInputTokens: number) =>
+        resolveModelMock.mockResolvedValue(
+            makeModel({ main: { maxInputTokens } }),
+        );
+
+    it('runs a one-file PR on a 12K window, whose real fixed prompt is ~2K tokens', async () => {
+        smallWindow(12_288);
+
+        await newAgent().execute(makeInput({ remoteCommands: sandbox }));
+
+        expect(runLoopMock).toHaveBeenCalledTimes(1);
+        const [params] = runLoopMock.mock.calls[0];
+        const sent =
+            estimateTextTokens(params.systemPrompt) +
+            estimateTextTokens(params.userPrompt);
+        expect(sent).toBeLessThan(Math.floor(12_288 * 0.55));
+    });
+
+    it('refuses with the measured size when the callGraph fills the budget', async () => {
+        smallWindow(12_288);
+        const callGraph = Array.from(
+            { length: 3_000 },
+            (_, i) => `f${i}->g${i}`,
+        ).join('\n');
+
+        const run = newAgent().execute(
+            makeInput({ remoteCommands: sandbox, callGraph }),
+        );
+
+        await expect(run).rejects.toBeInstanceOf(
+            AgentContextWindowTooSmallError,
+        );
+        const err = await run.catch((e) => e);
+        expect(err.overheadTokens).toBeGreaterThan(
+            estimateTextTokens(callGraph),
+        );
+        expect(runLoopMock).not.toHaveBeenCalled();
     });
 });
 

@@ -30,9 +30,26 @@ export class FormatCliOutputStage extends BasePipelineStage<CliReviewPipelineCon
             },
         });
 
+        // A Kody Rule finding that names a file but no line goes to the
+        // PR-level list, not to validSuggestions (#2420). The CLI has no PR to
+        // post it on, so it is listed with the rest, on its file. A finding
+        // with no file judged the CLI's placeholder PR (title "CLI Review", no
+        // description), so there is nothing in the change to act on.
+        const prLevelRuleFindings = (context.validSuggestionsByPR ?? [])
+            .filter((s) => s.label === 'kody_rules' && !!s.relevantFile)
+            .map((s) => ({
+                relevantFile: s.relevantFile,
+                severity: s.severity,
+                label: s.label,
+                oneSentenceSummary: s.oneSentenceSummary,
+                suggestionContent: s.suggestionContent,
+                fullExplanation: s.fullExplanation,
+                brokenKodyRulesIds: s.brokenKodyRulesIds,
+            }));
+
         // Convert pipeline results to CLI format
         const cliResponse = this.converter.convertToCliResponse(
-            context.validSuggestions,
+            [...context.validSuggestions, ...prLevelRuleFindings],
             context.changedFiles.length,
             context.startTime,
         );

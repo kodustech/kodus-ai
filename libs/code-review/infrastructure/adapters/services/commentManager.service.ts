@@ -78,6 +78,7 @@ import {
 import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/prompts/repeatedCodeReviewSuggestionClustering';
 import { reviewedCommitIn } from '@libs/code-review/utils/reviewed-commit';
 import { createLogger } from '@libs/core/log/logger';
+import { isPrimaryReviewAgent } from '@libs/code-review/pipeline/stages/primary-review-agents';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import {
@@ -1309,6 +1310,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
         /** A line the review adds at the end (an Ultra review's fallback). */
         extraLine?: string,
+        /**
+         * The PR-level comments the review posted. A PR whose only findings
+         * are PR-level (a rename-only PR) has no line comment, and without
+         * these the summary called it clean.
+         */
+        prLevelCommentResults?: Array<CommentResult>,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1318,10 +1327,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Same when no comment could be posted: a template written for a
             // finished review would hide that the findings never reached it.
             const nothingDelivered =
-                countUndeliveredComments(codeSuggestions) > 0 &&
-                !codeSuggestions?.some(
-                    (c) => c?.deliveryStatus === DeliveryStatus.SENT,
-                );
+                countUndeliveredComments(
+                    codeSuggestions,
+                    prLevelCommentResults,
+                ) > 0 &&
+                ![
+                    ...(codeSuggestions ?? []),
+                    ...(prLevelCommentResults ?? []),
+                ].some((c) => c?.deliveryStatus === DeliveryStatus.SENT);
             let commentBody =
                 reviewFailed || nothingDelivered ? undefined : finalCommentBody;
 
@@ -1332,7 +1345,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     platformType,
                     codeSuggestions,
                     codeReviewConfig,
-                    undefined,
+                    prLevelCommentResults,
                     reviewFailed,
                     reviewErrorMessage,
                     reviewHasPartialErrors,
@@ -1340,6 +1353,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     linkedRepositoriesMetadata,
                     reviewWarnings,
                     singleAgentRun,
+                    reviewErrorAgentName,
                 );
             } else {
                 // Custom end-review template is rendering — the default
@@ -1360,6 +1374,12 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     if (notice) {
                         commentBody = `${commentBody}${notice}`;
                     }
+                    commentBody = this.appendPrimaryAgentDidNotRun(
+                        commentBody,
+                        reviewErrorMessage,
+                        reviewErrorAgentName,
+                        language,
+                    );
                 }
                 const skippedNotice = this.resolveSkippedRulesNotice(
                     reviewWarnings,
@@ -1436,6 +1456,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -1450,6 +1472,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             linkedRepositoriesMetadata,
             reviewWarnings,
             singleAgentRun,
+            reviewErrorAgentName,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -2100,6 +2123,60 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
     }
 
     /**
+     * Names a primary reviewer that did not run.
+     *
+     * Downgrading that failure to partial leaves the `withErrors` template,
+     * so the comment would say the review found nothing and the generic
+     * notice would name neither the agent nor the reason. Callers only
+     * reach this when the run is partial. A summary-only failure is not
+     * partial, and an auxiliary agent (Kody Rules, a custom agent) must
+     * not be described as a primary reviewer that failed.
+     */
+    private appendPrimaryAgentDidNotRun(
+        body: string,
+        reviewErrorMessage: string | undefined,
+        reviewErrorAgentName: string | readonly string[] | undefined,
+        language: string,
+    ): string {
+        const agentNames = (
+            typeof reviewErrorAgentName === 'string'
+                ? [reviewErrorAgentName]
+                : (reviewErrorAgentName ?? [])
+        )
+            .map((name) => name?.trim())
+            .filter(Boolean);
+        const reason = reviewErrorMessage?.trim();
+        if (
+            !agentNames.length ||
+            !reason ||
+            !agentNames.every((name) => isPrimaryReviewAgent(name))
+        ) {
+            return body;
+        }
+        const several = agentNames.length > 1;
+        const key = several ? 'primaryAgentsDidNotRun' : 'primaryAgentDidNotRun';
+        const template =
+            getTranslationsForLanguageByCategory(
+                language as LanguageValue,
+                TranslationsCategory.PullRequestFinishSummaryMarkdown,
+            )?.[key] ??
+            getTranslationsForLanguageByCategory(
+                LanguageValue.ENGLISH,
+                TranslationsCategory.PullRequestFinishSummaryMarkdown,
+            )?.[key] ??
+            (several
+                ? 'The {{agentNames}} reviews did not run: {{reason}}'
+                : 'The {{agentName}} review did not run: {{reason}}');
+        const names = several
+            ? listInLanguage(agentNames, language)
+            : agentNames[0];
+        const sentence = template
+            .replace(/\{\{agentNames?\}\}/g, () => names)
+            .replace(/\{\{reason\}\}/g, () => reason);
+        return `${body}\n\n${sentence}`;
+    }
+
+    /**
      * Build the localized collapsible notice naming the Kody Rules that were
      * NOT judged because the repository context they declared they need could
      * not be retrieved (issue #1826, KRC-16).
@@ -2165,6 +2242,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<string> {
         try {
             const language =
@@ -2267,6 +2346,12 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     if (notice) {
                         resultText = `${resultText}${notice}`;
                     }
+                    resultText = this.appendPrimaryAgentDidNotRun(
+                        resultText,
+                        reviewErrorMessage,
+                        reviewErrorAgentName,
+                        language,
+                    );
                 }
             }
 
@@ -3049,7 +3134,13 @@ ${reviewOptions}
                             },
                             deliveryStatus: DeliveryStatus.SENT,
                             codeReviewFeedbackData: {
-                                commentId: createdComment.id,
+                                // Azure numbers comments within a thread, so
+                                // every new thread's comment is 1; the thread
+                                // id is what tells two PR-level comments apart,
+                                // and what its line comments store too.
+                                commentId:
+                                    createdComment.threadId ??
+                                    createdComment.id,
                                 pullRequestReviewId: null, // PR-level comments do not have review ID
                                 suggestionId: suggestion.id,
                             },
@@ -3278,6 +3369,8 @@ ${reviewOptions}
         reviewErrorCustomMessage?: string,
         reviewWarnings?: ReviewWarning[],
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string | readonly string[],
         /** A line under the body, e.g. an Ultra review's fallback notice. */
         extraLine?: string,
     ): Promise<void> {
@@ -3315,6 +3408,12 @@ ${reviewOptions}
                 if (notice) {
                     commentBody = `${commentBody}${notice}`;
                 }
+                commentBody = this.appendPrimaryAgentDidNotRun(
+                    commentBody,
+                    reviewErrorMessage,
+                    reviewErrorAgentName,
+                    language ?? LanguageValue.ENGLISH,
+                );
             }
             // Adaptive-fit fidelity warnings are NOT appended to the PR
             // comment (admin-only signal — see updateOverallComment); skipped
@@ -3341,6 +3440,8 @@ ${reviewOptions}
                 reviewErrorCustomMessage,
                 undefined,
                 reviewWarnings,
+                undefined,
+                reviewErrorAgentName,
             );
         }
 
@@ -3585,4 +3686,19 @@ function wholeCharacters(text: string, end: number): string {
     }
     const last = text.charCodeAt(end - 1);
     return text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end);
+}
+
+/** "security and performance", joined the way the review language joins a list. */
+function listInLanguage(items: readonly string[], language: string): string {
+    try {
+        return new Intl.ListFormat(language, {
+            style: 'long',
+            type: 'conjunction',
+        }).format(items);
+    } catch {
+        return new Intl.ListFormat('en-US', {
+            style: 'long',
+            type: 'conjunction',
+        }).format(items);
+    }
 }

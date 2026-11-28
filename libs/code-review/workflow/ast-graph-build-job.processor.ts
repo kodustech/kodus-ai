@@ -1,3 +1,11 @@
+import { randomUUID } from 'node:crypto';
+import {
+    AST_GRAPH_BUILD_TIMEOUT_MS,
+    GraphBaselineChangedError,
+    GraphWorkerShutdownError,
+    GraphJobAttempt,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject } from '@nestjs/common';
 
@@ -9,8 +17,8 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { PlatformType } from '@libs/core/domain/enums';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
+    AcquireResult,
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -20,9 +28,13 @@ import {
     IRepositoryService,
     REPOSITORY_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
-import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { WorkflowJobTimeoutError } from '@libs/core/workflow/infrastructure/run-with-timeout';
+import { RecordedJobFailure } from '@libs/core/workflow/domain/errors/recorded-job-failure.error';
+import { classifyGraphJobError } from './graph-job-failure';
+import { claimGraphJob, updateGraphJobStage } from './graph-job-stage';
+import { GraphJobSandbox } from './graph-job-sandbox';
 
 // The lease manager's own default (30 min) is sized for a PR-review
 // sandbox. A full-repo AST build on a large repo can legitimately run
@@ -54,9 +66,14 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         private readonly graphIndexer: GraphIndexerService,
         @Inject(REPOSITORY_SERVICE_TOKEN)
         private readonly repositoryService: IRepositoryService,
+        private readonly graphSandbox: GraphJobSandbox,
     ) {}
 
-    async process(jobId: string, signal?: AbortSignal): Promise<void> {
+    async process(
+        jobId: string,
+        signal?: AbortSignal,
+        attemptId: string = randomUUID(),
+    ): Promise<void> {
         const jobStart = Date.now();
         const job = await this.jobRepository.findOne(jobId);
 
@@ -65,6 +82,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         }
 
         if (signal?.aborted) {
+            if (signal.reason instanceof GraphWorkerShutdownError)
+                throw signal.reason;
             throw new Error(`Job ${jobId} aborted before start`);
         }
 
@@ -85,7 +104,16 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             },
         });
 
-        await this.updateJobStage(jobId, 'VALIDATING');
+        const attempt: GraphJobAttempt = { jobId, attemptId };
+        if (
+            !(await claimGraphJob(
+                this.jobRepository,
+                job,
+                attempt,
+                AST_GRAPH_BUILD_TIMEOUT_MS,
+            ))
+        )
+            return;
 
         if (
             !payload?.repositoryId ||
@@ -97,21 +125,53 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             );
         }
 
-        let sandbox: SandboxInstance | undefined;
+        const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
+        let lease: AcquireResult | undefined;
         let sandboxId: string | undefined;
-        let leaseId: string | undefined;
+        const releaseSandbox = async ({
+            leaseId,
+            sandboxId,
+        }: AcquireResult) => {
+            const metadata = {
+                jobId,
+                prKey,
+                sandboxId,
+                organizationId: payload.organizationAndTeamData?.organizationId,
+            };
+            try {
+                await this.leaseManager.release(leaseId, { idleMs: 0 });
+                this.logger.log({
+                    message: `[AST-GRAPH-JOB] Sandbox cleaned up for ${repoLabel}`,
+                    context: AstGraphBuildJobProcessor.name,
+                    metadata,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `[AST-GRAPH-JOB] Sandbox cleanup failed for ${repoLabel}`,
+                    context: AstGraphBuildJobProcessor.name,
+                    error,
+                    metadata,
+                });
+            }
+        };
 
         try {
-            // Race the AST build against the parent's AbortSignal. The
-            // pipeline issues clone + lots of /contents reads + indexing;
-            // any can stall on retry-after.
-            await raceWithAbortSignal((async () => {
+            signal?.throwIfAborted();
             // 1. Resolve auth
-            await this.updateJobStage(jobId, 'RESOLVING_AUTH');
+            await raceWithAbortSignal(
+                updateGraphJobStage(
+                    this.jobRepository,
+                    attempt,
+                    'RESOLVING_AUTH',
+                ),
+                signal,
+            );
             const authStart = Date.now();
 
-            const repoRecord = await this.repositoryService.findById(
-                payload.repositoryId,
+            signal?.throwIfAborted();
+            const repoRecord = await raceWithAbortSignal(
+                this.repositoryService.findById(payload.repositoryId),
+                signal,
             );
             if (!repoRecord) {
                 throw new Error(
@@ -119,19 +179,24 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 );
             }
 
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: {
-                        id: repoRecord.externalId,
-                        defaultBranch: repoRecord.defaultBranch,
-                        fullName: repoRecord.fullName,
-                        name:
-                            repoRecord.fullName.split('/').pop() ||
-                            repoRecord.fullName,
+            signal?.throwIfAborted();
+            const cloneParams = await raceWithAbortSignal(
+                this.codeManagementService.getCloneParams(
+                    {
+                        repository: {
+                            id: repoRecord.externalId,
+                            defaultBranch: repoRecord.defaultBranch,
+                            fullName: repoRecord.fullName,
+                            name:
+                                repoRecord.fullName.split('/').pop() ||
+                                repoRecord.fullName,
+                        },
+                        organizationAndTeamData:
+                            payload.organizationAndTeamData,
                     },
-                    organizationAndTeamData: payload.organizationAndTeamData,
-                },
-                payload.platform as PlatformType,
+                    payload.platform as PlatformType,
+                ),
+                signal,
             );
 
             if (!cloneParams) {
@@ -152,48 +217,60 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             });
 
             // 2. Create sandbox + clone
-            await this.updateJobStage(jobId, 'CLONING');
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                updateGraphJobStage(this.jobRepository, attempt, 'CLONING'),
+                signal,
+            );
             const cloneStart = Date.now();
 
             const branchRaw = repoRecord.defaultBranch || payload.defaultBranch;
             const branch = branchRaw.replace(/^refs\/heads\//, '');
 
-            // Routed through the lease manager (not the raw provider) so a
-            // worker crash mid-build leaves a lease doc the GRAPH_BUILD_LEASE_TTL_MS
-            // + 5min reaper cron already cleans up. The prKey is unique
-            // per job (jobId), so this always takes the creator path — never
-            // joins another job's sandbox, same as the direct-create call it
-            // replaces. No PR is involved here (repo-level graph build), so
-            // the key uses "graph" in the prNumber slot instead.
-            const prKey = `${payload.organizationAndTeamData?.organizationId}:${payload.repositoryId}:graph:${jobId}`;
-            const acquired = await this.leaseManager.acquire(
-                prKey,
-                'graph-build',
-                GRAPH_BUILD_LEASE_TTL_MS,
-                {
-                    cloneUrl: cloneParams.url || payload.cloneUrl,
-                    authToken: cloneParams.auth?.token || '',
-                    authUsername: cloneParams.auth?.username,
-                    branch,
-                    platform: payload.platform as PlatformType,
-                    sandboxMetadata: { stage: 'graph-build' },
-                    organizationId:
-                        payload.organizationAndTeamData?.organizationId,
-                    teamId: payload.organizationAndTeamData?.teamId,
-                },
+            const checkout = await this.graphSandbox.acquireCheckout(
+                () =>
+                    this.leaseManager.acquire(
+                        prKey,
+                        'graph-build',
+                        GRAPH_BUILD_LEASE_TTL_MS,
+                        {
+                            cloneUrl: cloneParams.url || payload.cloneUrl,
+                            authToken: cloneParams.auth?.token || '',
+                            authUsername: cloneParams.auth?.username,
+                            branch,
+                            platform: payload.platform as PlatformType,
+                            sandboxMetadata: { stage: 'graph-build' },
+                            organizationId:
+                                payload.organizationAndTeamData?.organizationId,
+                            teamId: payload.organizationAndTeamData?.teamId,
+                        },
+                        { signal },
+                    ),
+                signal,
+                releaseSandbox,
+                repoRecord.astGraphSha,
+                (id) => this.leaseManager.retireSingleUseCheckout(prKey, id),
             );
-            sandbox = acquired.sandbox;
-            leaseId = acquired.leaseId;
+            lease = checkout;
+            const { sandbox, headSha } = checkout;
+            sandboxId = lease.sandboxId;
 
-            sandboxId =
-                (sandbox as any)?.sandboxId ||
-                (sandbox as any)?.id ||
-                sandbox.type ||
-                'unknown';
-
-            await this.jobRepository.update(jobId, {
-                metadata: { sandboxId, stage: 'CLONING' },
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.jobRepository.update(
+                    jobId,
+                    {
+                        metadata: {
+                            attemptId: attempt.attemptId,
+                            sandboxId,
+                            stage: 'CLONING',
+                        },
+                    },
+                    JobStatus.PROCESSING,
+                    attempt.attemptId,
+                ),
+                signal,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH-JOB] Sandbox ready for ${repoLabel} (${Date.now() - cloneStart}ms)`,
@@ -202,15 +279,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             });
 
             // 3. Get HEAD sha
-            const shaResult = await sandbox.run(
-                `git -C ${sandbox.repoDir} rev-parse HEAD`,
-                { timeoutMs: 10_000 },
-            );
-            const headSha = shaResult.stdout?.trim() || '';
-
-            if (!headSha) {
-                throw new Error('Failed to resolve HEAD sha from sandbox');
-            }
+            signal?.throwIfAborted();
 
             this.logger.log({
                 message: `[AST-GRAPH-JOB] HEAD sha resolved: ${headSha.substring(0, 8)} for ${repoLabel}`,
@@ -219,22 +288,44 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             });
 
             // 4. Parse + persist
-            await this.updateJobStage(jobId, 'PARSING', { sandboxId, headSha });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                updateGraphJobStage(this.jobRepository, attempt, 'PARSING', {
+                    sandboxId,
+                    headSha,
+                }),
+                signal,
+            );
 
-            await this.graphIndexer.fullBuild({
-                repositoryId: payload.repositoryId,
-                sandbox,
-                headSha,
-            });
+            signal?.throwIfAborted();
+            await raceWithAbortSignal(
+                this.graphIndexer.fullBuild({
+                    repositoryId: payload.repositoryId,
+                    sandbox,
+                    job: attempt,
+                    expectedSha: repoRecord.astGraphSha ?? null,
+                    headSha,
+                    signal,
+                }),
+                signal,
+            );
+            signal?.throwIfAborted();
 
             const totalMs = Date.now() - jobStart;
 
-            await this.markCompleted(jobId, {
-                repositoryId: payload.repositoryId,
-                headSha,
-                sandboxId,
-                durationMs: totalMs,
-            });
+            await raceWithAbortSignal(
+                this.markCompleted(
+                    jobId,
+                    {
+                        repositoryId: payload.repositoryId,
+                        headSha,
+                        sandboxId,
+                        durationMs: totalMs,
+                    },
+                    attempt.attemptId,
+                ),
+                signal,
+            );
 
             this.logger.log({
                 message: `[AST-GRAPH-JOB] Build COMPLETED for ${repoLabel} in ${totalMs}ms`,
@@ -247,13 +338,19 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                     durationMs: totalMs,
                 },
             });
-            })(), signal);
-        } catch (error) {
+        } catch (caught) {
+            if (caught instanceof StaleGraphJobError) return;
+            const reason = signal?.reason;
+            const error =
+                reason instanceof GraphWorkerShutdownError ||
+                reason instanceof WorkflowJobTimeoutError
+                    ? reason
+                    : caught;
             const totalMs = Date.now() - jobStart;
-            const classification = this.classifyError(error);
+            const classification = classifyGraphJobError(error);
 
             this.logger.error({
-                message: `[AST-GRAPH-JOB] Build FAILED for ${repoLabel} after ${totalMs}ms — ${error.message}`,
+                message: `[AST-GRAPH-JOB] Build FAILED for ${repoLabel} after ${totalMs}ms`,
                 error,
                 context: AstGraphBuildJobProcessor.name,
                 metadata: {
@@ -271,102 +368,68 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 classification,
                 sandboxId,
                 payload.repositoryId,
+                attempt.attemptId,
             );
 
             // Only re-throw TRANSIENT errors so RabbitMQ retries.
             // PERMANENT errors are already marked FAILED — retrying would just overwrite the status.
-            if (classification === ErrorClassification.RETRYABLE) {
+            if (
+                error instanceof GraphBaselineChangedError ||
+                error instanceof GraphWorkerShutdownError
+            )
                 throw error;
+            if (classification === ErrorClassification.RETRYABLE) {
+                throw new RecordedJobFailure(
+                    this.failureMessage(classification),
+                );
             }
         } finally {
-            if (leaseId) {
-                try {
-                    // A graph sandbox is single-use (its key carries the jobId):
-                    // nothing joins it again, so its final release stops compute
-                    // now instead of paying the 5-minute default idle window.
-                    await this.leaseManager.release(leaseId, { idleMs: 0 });
-                    this.logger.log({
-                        message: `[AST-GRAPH-JOB] Sandbox cleaned up for ${repoLabel}`,
-                        context: AstGraphBuildJobProcessor.name,
-                        metadata: { jobId, sandboxId },
-                    });
-                } catch (cleanupError) {
-                    this.logger.warn({
-                        message: `[AST-GRAPH-JOB] Sandbox cleanup failed for ${repoLabel}`,
-                        context: AstGraphBuildJobProcessor.name,
-                        error: cleanupError,
-                        metadata: { jobId, sandboxId },
-                    });
-                }
-            }
+            if (lease) await releaseSandbox(lease);
         }
     }
 
-    private async updateJobStage(
-        jobId: string,
-        stage: string,
-        extra?: Record<string, unknown>,
-    ): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.PROCESSING,
-            startedAt: new Date(),
-            currentStage: stage,
-            metadata: { stage, ...extra },
-        });
-    }
-
-    private classifyError(error: any): ErrorClassification {
-        const msg = (error?.message || '').toLowerCase();
-        const stderr = (error?.result?.stderr || '').toLowerCase();
-        const combined = `${msg} ${stderr}`;
-
-        // Transient: sandbox, network, timeout, clone auth, resource exhaustion
-        if (
-            combined.includes('timeout') ||
-            combined.includes('econnrefused') ||
-            combined.includes('econnreset') ||
-            combined.includes('enotfound') ||
-            combined.includes('epipe') ||
-            combined.includes('sandbox') ||
-            combined.includes('exit status 128') ||
-            combined.includes('could not resolve host') ||
-            combined.includes('rate limit') ||
-            combined.includes('out of memory') ||
-            combined.includes('enomem') ||
-            combined.includes('enospc') ||
-            combined.includes('503') ||
-            combined.includes('502') ||
-            combined.includes('temporarily unavailable')
-        ) {
-            return ErrorClassification.RETRYABLE;
-        }
-
-        return ErrorClassification.PERMANENT;
+    private failureMessage(classification: ErrorClassification): string {
+        return classification === ErrorClassification.RETRYABLE
+            ? 'Repository graph build failed temporarily'
+            : 'Repository graph build failed';
     }
 
     async handleFailure(
         jobId: string,
         error: Error,
-        classification: ErrorClassification = ErrorClassification.PERMANENT,
+        classification: ErrorClassification = classifyGraphJobError(error),
         sandboxId?: string,
         repositoryId?: string,
+        attemptId?: string,
     ): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.FAILED,
-            errorClassification: classification,
-            lastError: error.message?.slice(0, 1000),
-            failedAt: new Date(),
-            metadata: { sandboxId, stage: 'FAILED' },
-        });
+        const updated = await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.FAILED,
+                errorClassification: classification,
+                lastError: this.failureMessage(classification),
+                completedAt: new Date(),
+                currentStage: 'FAILED',
+                metadata: { attemptId, sandboxId, stage: 'FAILED' },
+            },
+            [JobStatus.PROCESSING, JobStatus.FAILED],
+            attemptId,
+        );
+        if (updated === null) return;
 
-        // Ensure repository status is updated to FAILED so it doesn't stay stuck in PENDING/BUILDING
-        if (repositoryId) {
+        if (
+            repositoryId &&
+            attemptId &&
+            !(error instanceof GraphBaselineChangedError) &&
+            !(error instanceof GraphWorkerShutdownError)
+        ) {
             try {
-                await this.repositoryService.updateGraphStatus(
-                    repositoryId,
-                    AstGraphStatus.FAILED,
-                );
+                await this.graphIndexer.failBuildForAttempt(repositoryId, {
+                    jobId,
+                    attemptId,
+                });
             } catch (statusError) {
+                if (statusError instanceof StaleGraphJobError) return;
                 this.logger.warn({
                     message: `[AST-GRAPH-JOB] Failed to update repository status to FAILED`,
                     context: AstGraphBuildJobProcessor.name,
@@ -377,12 +440,22 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         }
     }
 
-    async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.COMPLETED,
-            completedAt: new Date(),
-            currentStage: 'DONE',
-            result,
-        });
+    async markCompleted(
+        jobId: string,
+        result?: unknown,
+        attemptId?: string,
+    ): Promise<void> {
+        const updated = await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                currentStage: 'DONE',
+                result,
+            },
+            JobStatus.PROCESSING,
+            attemptId,
+        );
+        if (updated === null) throw new StaleGraphJobError(jobId);
     }
 }

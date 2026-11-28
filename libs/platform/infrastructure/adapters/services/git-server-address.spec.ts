@@ -768,6 +768,7 @@ describe('connecting a self-managed server that is refused says why', () => {
                 () => undefined,
                 (e: unknown) => e,
             );
+        expect(err).toBeInstanceOf(BadRequestException);
         expect((err as Error).message).toBe(
             'Git server host "gitlab.attacker.test" resolves to a private or reserved address; the call was not sent.',
         );

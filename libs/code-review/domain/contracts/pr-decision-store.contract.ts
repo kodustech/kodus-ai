@@ -31,14 +31,26 @@ export interface PrDecisionRecord {
     readonly suggestionId: string;
     /** Absent for a PR-LEVEL decision — a kody-rules PULL_REQUEST-scope
      *  finding, which judges the diff as a whole and is never anchored to one
-     *  file (`ISuggestionByPR`, stored in `prLevelSuggestions`, has no file
-     *  field at all). A PR-level record has no `implementationStatus` either
+     *  file (`ISuggestionByPR`, stored in `prLevelSuggestions`). Present, with
+     *  no lines, for a rule finding that named a changed file but no line,
+     *  posted at PR level too (#2420). A PR-level record has no
+     *  `implementationStatus` either
      *  (that check only diffs file patches), so it always carries
      *  `outcome: 'pending'` — descriptive context, never refutation evidence. */
     readonly relevantFile?: string;
     readonly relevantLinesStart?: number;
     readonly relevantLinesEnd?: number;
     readonly suggestionContent: string;
+    /** The claim before formatting, for a rule finding posted PR-level with
+     *  a file and no line (#2420): the posted text is rewritten, cited and
+     *  linked, so an identical repost is matched on this instead. */
+    readonly claim?: string;
+    /** Every file and claim folded into this PR-level comment, when a rule's
+     *  line-less findings on several files were posted as one (#2420). */
+    readonly claims?: ReadonlyArray<{
+        readonly file: string;
+        readonly claim: string;
+    }>;
     /** 'bug' | 'security' | 'performance' | 'kody_rules' | ... — surfaced to the
      *  verifier so a security-labeled prior decision can be weighed differently
      *  than a style one. Always 'kody_rules' for a rule-based finding — does
@@ -64,6 +76,16 @@ export interface PrDecisionRecord {
      *  (`engine/repeat-check.ts`) recognize the same occurrence without a
      *  model call. Absent on PR-level records. */
     readonly existingCode?: string;
+    /** The code the suggestion proposed. On an applied suggestion it names
+     *  what the developer added, so a later finding about that code in
+     *  another file still meets the comment in the repeat check (#2676). */
+    readonly improvedCode?: string;
+    /** The posted comment's id on the git host, as `suggestion.comment.id`
+     *  stores it. Matches the comment's thread at review time. */
+    readonly commentId?: string;
+    /** Someone replied in the comment's thread (the developer, or Kody
+     *  answering them). Read from the host at review time (#2676). */
+    readonly answered?: boolean;
     readonly outcome: PrDecisionOutcome;
     /** `createdAt` of the original suggestion. */
     readonly decidedAt: string;

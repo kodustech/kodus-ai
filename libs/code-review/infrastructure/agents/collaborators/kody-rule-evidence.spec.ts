@@ -224,7 +224,11 @@ describe('Kody Rule evidence deadline', () => {
             } as unknown as ReviewAgentInput,
             undefined,
             true,
-        )(candidate, { ...shard, filename: 'src/a.ts' }, Date.now() + 60_000);
+        )(
+            { ...candidate, relevantLinesStart: 3 },
+            { ...shard, filename: 'src/a.ts' },
+            Date.now() + 60_000,
+        );
 
         const sent = JSON.parse(
             (run.mock.calls[0][1] as { prompt: string }).prompt,
@@ -232,6 +236,45 @@ describe('Kody Rule evidence deadline', () => {
         expect(sent.description).toHaveLength(INTENT_BUDGET_CHARS);
         expect(sent.descriptionTruncated).toBe(true);
     });
+
+    // QA X2 on #2420: a PR-title rule scoped to files is judged per file,
+    // where a "PR title" citation was never accepted, so the issue's own case
+    // was withheld as unsupported_citation and never reached the PR.
+    it.each([
+        ['cites no line', undefined, 'verified'],
+        // No line of code was read, so nothing supports a lined claim.
+        ['cites a line', 12, 'no_excerpts'],
+    ])(
+        'accepts the PR title as evidence on a file shard only for a candidate that %s',
+        async (_name, relevantLinesStart, expected) => {
+            jest.spyOn(AiSdkAgentRunner.prototype, 'run').mockResolvedValue({
+                status: 'completed',
+                steps: [],
+                artifacts: [],
+            } as never);
+            jest.spyOn(LLM, 'run').mockResolvedValue({
+                ...violation,
+                rationale: 'The title is "update".',
+                path: 'PR title',
+                line: 0,
+            });
+
+            await expect(
+                kodyRuleEvidenceVerifier(
+                    {
+                        changedFiles: [],
+                        prTitle: 'update',
+                    } as unknown as ReviewAgentInput,
+                    undefined,
+                    true,
+                )(
+                    { ...candidate, relevantLinesStart },
+                    { ...shard, filename: 'src/CheckinReport.cs' },
+                    Date.now() + 60_000,
+                ),
+            ).resolves.toBe(expected);
+        },
+    );
 
     it.each([
         [700, 700],

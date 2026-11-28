@@ -1,0 +1,74 @@
+diff --git a/libs/platformData/application/use-cases/pullRequests/save.use-case.spec.ts b/libs/platformData/application/use-cases/pullRequests/save.use-case.spec.ts
+index 5c6470f91..15c710fcb 100644
+--- a/libs/platformData/application/use-cases/pullRequests/save.use-case.spec.ts
++++ b/libs/platformData/application/use-cases/pullRequests/save.use-case.spec.ts
+@@ -408,8 +408,8 @@ describe('SavePullRequestUseCase on Forgejo saves under the instance that sent t
+ });
+ 
+ describe('SavePullRequestUseCase on GitLab saves under the instance that sent the webhook', () => {
+-    // GitLab numbers projects per instance: project 9 is web-apps/elfood on
+-    // gitlab-a.example and managerium/mgm-api on gitlab-b.example.
++    // GitLab numbers projects per instance: project 9 is acme/web-shop on
++    // gitlab-a.example and globex/billing-api on gitlab-b.example.
+     const gitlabConfig = (org: string, httpUrl: string, name: string) => ({
+         team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+         integration: { authIntegration: { authDetails: {} } },
+@@ -417,13 +417,13 @@ describe('SavePullRequestUseCase on GitLab saves under the instance that sent th
+     });
+     const fromB = gitlabConfig(
+         'b',
+-        'https://gitlab-b.example/managerium/mgm-api.git',
+-        'managerium/mgm-api',
++        'https://gitlab-b.example/globex/billing-api.git',
++        'globex/billing-api',
+     );
+     const onA = gitlabConfig(
+         'a',
+-        'https://gitlab-a.example/web-apps/elfood.git',
+-        'web-apps/elfood',
++        'https://gitlab-a.example/acme/web-shop.git',
++        'acme/web-shop',
+     );
+     // An update with no new commit: saved without reading files, the path
+     // that every MR event of the other server took.
+@@ -432,29 +432,29 @@ describe('SavePullRequestUseCase on GitLab saves under the instance that sent th
+         user: { id: 11, username: 'dev-b' },
+         project: {
+             id: 9,
+-            name: 'mgm-api',
+-            path_with_namespace: 'managerium/mgm-api',
+-            web_url: 'https://gitlab-b.example/managerium/mgm-api',
+-            git_http_url: 'https://gitlab-b.example/managerium/mgm-api.git',
++            name: 'billing-api',
++            path_with_namespace: 'globex/billing-api',
++            web_url: 'https://gitlab-b.example/globex/billing-api',
++            git_http_url: 'https://gitlab-b.example/globex/billing-api.git',
+         },
+         repository: {
+-            name: 'mgm-api',
+-            url: 'git@gitlab-b.example:managerium/mgm-api.git',
+-            homepage: 'https://gitlab-b.example/managerium/mgm-api',
++            name: 'billing-api',
++            url: 'git@gitlab-b.example:globex/billing-api.git',
++            homepage: 'https://gitlab-b.example/globex/billing-api',
+         },
+         object_attributes: {
+-            iid: 12525,
++            iid: 4242,
+             title: 'Billing export',
+             action: 'update',
+             state: 'opened',
+             source_branch: 'feat/export',
+             target_branch: 'main',
+-            url: 'https://gitlab-b.example/managerium/mgm-api/-/merge_requests/12525',
++            url: 'https://gitlab-b.example/globex/billing-api/-/merge_requests/4242',
+             last_commit: { id: 'abc' },
+             oldrev: 'abc',
+             author_id: 11,
+-            target: { path_with_namespace: 'managerium/mgm-api' },
+-            source: { path_with_namespace: 'managerium/mgm-api' },
++            target: { path_with_namespace: 'globex/billing-api' },
++            source: { path_with_namespace: 'globex/billing-api' },
+         },
+     };
+ 

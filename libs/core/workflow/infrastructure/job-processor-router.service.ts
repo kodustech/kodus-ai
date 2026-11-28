@@ -1,9 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Inject } from '@nestjs/common';
 import { updateActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import { jobFields } from '@libs/core/infrastructure/activity/job-fields';
 import { createLogger } from '@libs/core/log/logger';
 
-import { runWithTimeout } from './run-with-timeout';
+import { isClaimConflictError } from '../domain/errors/claim-conflict.error';
+import { RecordedJobFailure } from '../domain/errors/recorded-job-failure.error';
+import {
+    AST_GRAPH_BUILD_TIMEOUT_MS,
+    AST_GRAPH_INCREMENTAL_TIMEOUT_MS,
+} from '@libs/code-review/domain/graph-job-attempt';
+import { runWithTimeout, WorkflowJobTimeoutError } from './run-with-timeout';
 import { IJobProcessorRouter } from '@libs/core/workflow/domain/contracts/job-processor-router.contract';
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
 import {
@@ -34,8 +41,6 @@ const WEBHOOK_PROCESS_TIMEOUT_MS = 9 * 60 * 1000; // 9 min (broker default 30min
 export const CODE_REVIEW_PROCESS_TIMEOUT_MS = 105 * 60 * 1000; // 1h45min (broker 2h)
 const CLI_CODE_REVIEW_PROCESS_TIMEOUT_MS = 28 * 60 * 1000; // 28 min
 const CHECK_IMPLEMENTATION_TIMEOUT_MS = 9 * 60 * 1000; // 9 min
-const AST_GRAPH_BUILD_TIMEOUT_MS = 19 * 60 * 1000; // 19 min
-const AST_GRAPH_INCREMENTAL_TIMEOUT_MS = 9 * 60 * 1000; // 9 min
 // One scan slice: the engine stops starting units at 20 min, the last unit and
 // the bookkeeping finish inside this.
 const SECURITY_SCAN_TIMEOUT_MS = 34 * 60 * 1000; // 34 min
@@ -71,22 +76,65 @@ export class JobProcessorRouterService
 
         const processor = this.getProcessor(job.workflowType);
         const timeoutMs = this.getProcessTimeoutMs(job.workflowType);
+        const timeoutMessage = `Workflow job ${jobId} timeout after ${timeoutMs}ms`;
+        const graphAttempt =
+            job.workflowType === WorkflowType.AST_GRAPH_BUILD ||
+            job.workflowType === WorkflowType.AST_GRAPH_INCREMENTAL
+                ? randomUUID()
+                : undefined;
 
         try {
             return await runWithTimeout(
-                (timeoutSignal) =>
-                    processor.process(
-                        jobId,
-                        signal
-                            ? AbortSignal.any([timeoutSignal, signal])
-                            : timeoutSignal,
-                    ),
+                (timeoutSignal) => {
+                    const jobSignal = signal
+                        ? AbortSignal.any([timeoutSignal, signal])
+                        : timeoutSignal;
+                    return graphAttempt
+                        ? processor.process(jobId, jobSignal, graphAttempt)
+                        : processor.process(jobId, jobSignal);
+                },
                 timeoutMs,
-                `Workflow job ${jobId} timeout after ${timeoutMs}ms`,
+                graphAttempt
+                    ? new WorkflowJobTimeoutError(timeoutMessage)
+                    : timeoutMessage,
             );
         } catch (error) {
-            if (isSlicePreemptedError(error)) {
+            if (
+                isSlicePreemptedError(error) ||
+                isClaimConflictError(error) ||
+                error instanceof RecordedJobFailure
+            ) {
                 throw error;
+            }
+
+            if (graphAttempt && error instanceof WorkflowJobTimeoutError) {
+                const failed = await this.jobRepository.update(
+                    jobId,
+                    {
+                        status: JobStatus.FAILED,
+                        completedAt: new Date(),
+                        currentStage: 'FAILED',
+                        errorClassification: ErrorClassification.RETRYABLE,
+                        lastError: error.message,
+                    },
+                    JobStatus.PROCESSING,
+                    graphAttempt,
+                );
+                if (failed === null) {
+                    const current = await this.jobRepository.findOne(jobId);
+                    if (
+                        current?.status === JobStatus.COMPLETED ||
+                        current?.status === JobStatus.CANCELLED ||
+                        (current?.status === JobStatus.FAILED &&
+                            current.errorClassification ===
+                                ErrorClassification.PERMANENT) ||
+                        (current?.status === JobStatus.PROCESSING &&
+                            current.metadata?.attemptId !== graphAttempt)
+                    )
+                        return;
+                }
+                // The queue still redelivers a timed-out attempt without writing over another owner.
+                throw new RecordedJobFailure(error.message);
             }
 
             const isTimeout = error.message?.includes('timeout after');

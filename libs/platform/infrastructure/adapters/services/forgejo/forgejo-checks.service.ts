@@ -25,8 +25,9 @@ import { ForgejoService } from '../forgejo.service';
  *   other check (the Kody Runtime) posts under its own name, so the two
  *   never replace each other's state on the same SHA.
  * - `output.title` / `output.summary` → `description`
- * - `status: in_progress/completed` → `state: pending/success/failure/warning`
- * - `conclusion: success/failure/neutral` → `state: success/failure/warning`
+ * - `status: in_progress/completed` → `state: pending/success`
+ * - `conclusion: success/failure` → `state: success/failure`
+ * - `conclusion: neutral/skipped` → `state: success` (a `warning` fails a required check)
  */
 const COMMIT_STATUS_CONTEXT = 'Kodus Code Review';
 
@@ -60,8 +61,13 @@ const statusStateMap: Record<
 const conclusionStateMap: Record<CheckConclusion, string> = {
     [CheckConclusion.SUCCESS]: 'success',
     [CheckConclusion.FAILURE]: 'failure',
-    [CheckConclusion.NEUTRAL]: 'warning',
-    [CheckConclusion.SKIPPED]: 'warning',
+    // Forgejo's `warning` fails a required status. GitHub's `neutral` does
+    // not, so a partial review is posted as `success` and the description
+    // still says the review completed with warnings.
+    [CheckConclusion.NEUTRAL]: 'success',
+    // A required status must pass for Forgejo to allow the merge.
+    // The commit status description still explains the skip.
+    [CheckConclusion.SKIPPED]: 'success',
     [CheckConclusion.ACTION_REQUIRED]: 'failure',
     [CheckConclusion.CANCELLED]: 'error',
     [CheckConclusion.TIMED_OUT]: 'error',
@@ -203,6 +209,7 @@ export class ForgejoChecksService implements IChecksAdapter {
 
             await repoCreateStatus({
                 client,
+                throwOnError: true,
                 path: {
                     owner: repository.owner,
                     repo: repository.name,

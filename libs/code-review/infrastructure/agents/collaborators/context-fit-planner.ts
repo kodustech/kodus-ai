@@ -3,35 +3,40 @@
  *
  * Pure functions extracted from BaseCodeReviewAgentProvider (Phase 1 of the
  * provider decomposition). They answer ONE question: "does this review fit the
- * model's context window, and if not, how do we make it fit?" — token
- * estimation, the preflight overhead guard, large-PR filtering, and diff
- * chunking. No NestJS, no I/O, no LLM — trivially unit-testable.
+ * model's context window, and if not, how do we make it fit?" — diff token
+ * counts, the preflight overhead guard, large-PR filtering, and diff
+ * chunking. The non-diff overhead is measured by the provider, which owns
+ * the prompts and tools. No NestJS, no I/O, no LLM.
  */
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 
-/** Rough token estimate: 1 token ≈ 4 characters */
 /**
- * Chars per token for the planner's estimates. A flat ratio HERE is a measured
- * engineering decision, not the leftover it looks like.
- *
- * The repo had five estimators answering "how many tokens is this text" with
- * four different ratios, and the others were moved onto the real tokenizer. This
- * one was too, and then moved back: `o200k_base` costs ~15ms on a 92k-char file,
- * and this planner walks the same files repeatedly — estimate, chunk, re-estimate
- * per chunk, recurse — over slices that are NEW strings each pass, so nothing
- * memoizes. The recursion suite went from 1.5s to 160s. A hundredfold on the
- * chunking path buys accuracy this decision does not need.
- *
- * 4 is the measured figure: o200k_base on this repo's own TypeScript runs ~4.2
- * chars/token, so this sits within ~5% and slightly UNDER, which converts a
- * length into slightly more tokens than it really is — the safe direction for a
- * budget. The guard that must be exact is the preflight, and that one measures.
+ * One file's diff in tokens, counted once per file. A flat 4 chars/token
+ * undercounted dense diffs (line-numbered data runs 2.6-3.0 on DeepSeek), so
+ * batches at 128K went past the budget; `o200k` stays within 3% of DeepSeek
+ * per file. The cache keeps the planner's repeated walks from re-tokenizing.
  */
-export const CHARS_PER_TOKEN = 4;
+const diffTokenCache = new WeakMap<
+    FileChange,
+    { diff: string; tokens: number }
+>();
+
+export function fileDiffTokens(file: FileChange): number {
+    const diff = file.patchWithLinesStr ?? file.patch ?? '';
+    const cached = diffTokenCache.get(file);
+    if (cached && cached.diff === diff) {
+        return cached.tokens;
+    }
+    const tokens = estimateTextTokens(diff);
+    diffTokenCache.set(file, { diff, tokens });
+    return tokens;
+}
+
 /**
  * Ceiling on the ESTIMATED full prompt (not just diffs) as a fraction of
  * the model context window. At 0.55 we reserve ~45% of the window for
@@ -40,24 +45,6 @@ export const CHARS_PER_TOKEN = 4;
  * starting at >70% utilization in PRs with hundreds of files.
  */
 export const PROMPT_BUDGET_RATIO = 0.55;
-/**
- * Everything in the prompt that isn't the diff content itself:
- * system prompt (~22K chars), tool schemas (~40K chars), PR context,
- * and coverage target list. Kept as a char constant because it's used
- * to reduce the per-chunk diff budget when we split.
- */
-export const PROMPT_STATIC_OVERHEAD_CHARS = 62_000;
-/**
- * Static overhead when the compact prompt path fires (adaptive-fit
- * `compact+` profiles). Measured empirically from the post-fix benchmark:
- * the compact system + user prompt strings drop ~14K chars (saving
- * ~3.5K tokens of the system prompt + the OutputFormat block + the
- * trimmed Rules). The 40K-char tool-schema block is untouched (we
- * deliberately don't reduce the toolset). 62K - 14K = 48K chars ≈ 12K
- * tokens of overhead, which gives 16K models ~4K of headroom for diffs.
- */
-export const PROMPT_STATIC_OVERHEAD_CHARS_COMPACT = 48_000;
-
 /**
  * Low-signal glob patterns dropped from changedFiles only when a large PR
  * is reviewed in non-deep mode. Tests, docs, and pure styles rarely carry
@@ -76,36 +63,30 @@ export const LARGE_PR_AGGRESSIVE_FILTER_PATTERNS = [
 ];
 
 /**
- * Preflight guard: when the agent's static overhead (system prompt +
- * tool schemas + coverage list + PR context) already exceeds the
- * model's context window, no PR can ever fit and the LLM call would
- * fail immediately with a 4xx. Without this check the agent silently
- * hangs until AGENT_TIMEOUT_MS (30 min) — see runAgentLoop's setTimeout
- * — burning a queue slot and producing zero output.
+ * Preflight guard: when the prompt without any diff (system prompt, tool
+ * schemas, PR context, coverage list, callGraph) already fills what the
+ * model can take, no batch can fit and every LLM call would fail with a 4xx.
+ * Without this check the agent silently hangs until AGENT_TIMEOUT_MS
+ * (30 min) — see runAgentLoop's setTimeout — burning a queue slot and
+ * producing zero output.
  *
- * Exported so it can be unit-tested in isolation. Called from
- * BaseCodeReviewAgentProvider.execute right after resolveContextWindow.
+ * `overheadTokens` is measured from the prompts this run will send, so the
+ * number the user sees is the real size of the fixed prompt.
  */
 export function assertContextWindowFitsOverhead(params: {
-    input: {
-        changedFiles?: FileChange[];
-        callGraph?: string;
-        prTitle?: string;
-        prBody?: string;
-        adaptiveProfile?: AdaptiveProfile;
-    };
+    overheadTokens: number;
+    adaptiveProfile?: AdaptiveProfile;
     contextWindow: number;
     modelName: string;
 }): void {
-    const overheadTokens = estimateNonDiffOverheadTokens(params.input);
+    const { overheadTokens } = params;
 
     // On a small window, overhead past the prompt budget leaves no room
     // for a batch's diff and the answer: every batch would overflow. A
     // full-size window keeps the whole window as the limit, so a huge
     // callGraph still runs as one batch.
     const smallWindow =
-        !!params.input.adaptiveProfile &&
-        params.input.adaptiveProfile.kind !== 'full';
+        !!params.adaptiveProfile && params.adaptiveProfile.kind !== 'full';
     const limit = smallWindow
         ? Math.floor(params.contextWindow * PROMPT_BUDGET_RATIO)
         : params.contextWindow;
@@ -119,73 +100,19 @@ export function assertContextWindowFitsOverhead(params: {
 }
 
 export function estimateDiffTokens(files: FileChange[]): number {
-    return files.reduce((sum, f) => {
-        const diff = f.patchWithLinesStr ?? f.patch ?? '';
-        return sum + Math.ceil(diff.length / CHARS_PER_TOKEN);
-    }, 0);
+    return files.reduce((sum, f) => sum + fileDiffTokens(f), 0);
 }
 
 /**
- * Total non-diff overhead in tokens: static (system prompt + tool schemas)
- * plus dynamic (callGraph + coverage list + PR context). Reused by both
- * estimatePromptTokens and the per-chunk budget calc so the split decision
- * and chunk sizing can't drift — when they did, a ~2% prompt overflow
- * still produced a chunker that packed every file into one chunk because
- * the chunk budget subtracted only the static part.
+ * Estimate of the full input token count for the first LLM call: every
+ * file's diff, sent whole whatever its tier (#2652), plus the measured
+ * non-diff part of the prompt.
  */
-export function estimateNonDiffOverheadTokens(input: {
-    changedFiles?: FileChange[];
-    callGraph?: string;
-    prTitle?: string;
-    prBody?: string;
-    adaptiveProfile?: AdaptiveProfile;
-}): number {
-    // Adaptive fit: when the compact prompt path will fire, the system
-    // + user prompt are ~14K chars smaller. Counting the full 62K
-    // overhead would cause the preflight to throw before the compact
-    // path even has a chance to render — exactly the bug observed on
-    // the post-fix 16K benchmark run where every PR preflight-failed
-    // despite the strategies being wired correctly.
-    const staticOverheadChars = input.adaptiveProfile?.compactPrompt
-        ? PROMPT_STATIC_OVERHEAD_CHARS_COMPACT
-        : PROMPT_STATIC_OVERHEAD_CHARS;
-    // CallGraph: if the profile drops it from the prompt, the estimator
-    // must drop it too. Otherwise the preflight blames overhead the
-    // user will never actually pay.
-    const callGraphChars = input.adaptiveProfile?.dropCallGraph
-        ? 0
-        : (input.callGraph || '').length;
-    const prBodyChars = Math.min((input.prBody || '').length, 500);
-    const prContextChars = 300 + (input.prTitle || '').length + prBodyChars;
-    const coverageListChars = (input.changedFiles?.length || 0) * 80;
-    const totalChars =
-        callGraphChars +
-        prContextChars +
-        coverageListChars +
-        staticOverheadChars;
-    return Math.ceil(totalChars / CHARS_PER_TOKEN);
-}
-
-/**
- * Estimate of the full input token count for the first LLM call:
- * diff content + callGraph + PR context + per-file coverage lines +
- * static overhead (system prompt + tool schemas).
- */
-export function estimatePromptTokens(input: {
-    changedFiles?: FileChange[];
-    callGraph?: string;
-    prTitle?: string;
-    prBody?: string;
-    adaptiveProfile?: AdaptiveProfile;
-}): number {
-    // Every file is counted at its full diff because every prompt builder
-    // sends it whole, whatever its tier.
-    const diffChars = (input.changedFiles || []).reduce(
-        (sum, f) => sum + (f.patchWithLinesStr ?? f.patch ?? '').length,
-        0,
-    );
-    const diffTokens = Math.ceil(diffChars / CHARS_PER_TOKEN);
-    return diffTokens + estimateNonDiffOverheadTokens(input);
+export function estimatePromptTokens(
+    files: FileChange[],
+    overheadTokens: number,
+): number {
+    return estimateDiffTokens(files) + overheadTokens;
 }
 
 export function normalizeFilenameForTier(filename?: string): string {
@@ -233,8 +160,7 @@ export function chunkFilesByTokenBudget(
     let currentTokens = 0;
 
     for (const file of files) {
-        const diff = file.patchWithLinesStr ?? file.patch ?? '';
-        const fileTokens = Math.ceil(diff.length / CHARS_PER_TOKEN);
+        const fileTokens = fileDiffTokens(file);
 
         // If a single file exceeds the budget, give it its own chunk
         if (fileTokens > budgetTokens) {

@@ -1,8 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
-import {
-    assertGitServerUrlAllowed,
-    gitServerRefusal,
-} from './git-server-url.guard';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
+import { assertGitServerUrlAllowed } from './git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
@@ -140,6 +138,10 @@ import {
 } from './gitlab-rate-limit.util';
 import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from './integration-link-error';
 import {
     failWebhookSetupForAll,
     runWebhookSetup,
@@ -1375,26 +1377,68 @@ export class GitlabService implements Omit<
 
             return res;
         } catch (err) {
-            throw new BadRequestException(err);
+            // Same rule as the OAuth link's own catch, so its faults are not
+            // mapped into refusals here.
+            const linkError = toIntegrationLinkError(err, 'GitLab', {
+                kodusCredentials: params?.authMode === AuthMode.OAUTH,
+            });
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'GitLab',
+                context: GitlabService.name,
+                err,
+                linkError,
+                // Named fields only: params carries the PAT or OAuth code.
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host,
+                },
+            });
+            throw linkError;
         }
     }
 
     async authenticateWithCodeOauth(params: any): Promise<any> {
         try {
-            const tokenResponse = await axios.post(
-                process.env.API_GITLAB_TOKEN_URL,
-                {
-                    client_id: process.env.GLOBAL_GITLAB_CLIENT_ID,
-                    client_secret: process.env.GLOBAL_GITLAB_CLIENT_SECRET,
-                    code: params.code,
-                    grant_type: 'authorization_code',
-                    redirect_uri: process.env.GLOBAL_GITLAB_REDIRECT_URL,
-                },
-                { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
-            );
+            const tokenResponse = await axios
+                .post(
+                    process.env.API_GITLAB_TOKEN_URL,
+                    {
+                        client_id: process.env.GLOBAL_GITLAB_CLIENT_ID,
+                        client_secret: process.env.GLOBAL_GITLAB_CLIENT_SECRET,
+                        code: params.code,
+                        grant_type: 'authorization_code',
+                        redirect_uri: process.env.GLOBAL_GITLAB_REDIRECT_URL,
+                    },
+                    { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
+                )
+                .catch((exchangeError: unknown) => {
+                    if (!axios.isAxiosError(exchangeError)) {
+                        throw exchangeError;
+                    }
+                    // The body carries the user's authorization code, which log
+                    // redaction keeps (`code` is also GitHub's installation id).
+                    if (exchangeError.config) {
+                        exchangeError.config.data = undefined;
+                    }
+                    // A code that expired or was used (a callback reloaded or
+                    // opened late) is the user's to retry; any other 400 is ours.
+                    if (
+                        exchangeError.response?.status === 400 &&
+                        exchangeError.response.data?.error === 'invalid_grant'
+                    ) {
+                        throw new BadRequestException(
+                            'GitLab did not accept the authorization. Start the GitLab connection again.',
+                            { cause: exchangeError },
+                        );
+                    }
+                    throw exchangeError;
+                });
 
             if (!tokenResponse || !tokenResponse.data) {
-                throw new Error('Gitlab failed to generate auth token');
+                throw new BadRequestException(
+                    'Gitlab failed to generate auth token',
+                );
             }
 
             const gitlabHost = process.env.API_GITLAB_TOKEN_URL
@@ -1438,9 +1482,11 @@ export class GitlabService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            throw new BadRequestException(
-                err.message || 'Error authenticating with PAT.',
-            );
+            // The exchange authenticates with Kodus's OAuth client: a 401 is
+            // GitLab refusing our client secret, not anything the user gave.
+            throw toIntegrationLinkError(err, 'GitLab', {
+                kodusCredentials: true,
+            });
         }
     }
 
@@ -1460,7 +1506,9 @@ export class GitlabService implements Omit<
             });
 
             if (!testResponse || !testResponse.data) {
-                throw new Error('GitLab failed to validate the PAT.');
+                throw new BadRequestException(
+                    'GitLab failed to validate the PAT.',
+                );
             }
 
             const authDetails = {
@@ -1494,11 +1542,7 @@ export class GitlabService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            // A refused address is not a bad token: say which it was.
-            throw (
-                gitServerRefusal(err) ??
-                new BadRequestException('Error authenticating with GITLAB PAT.')
-            );
+            throw toIntegrationLinkError(err, 'GitLab');
         }
     }
 
@@ -5581,6 +5625,57 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService getPullRequestDiscussions',
                 error: error,
                 metadata: params,
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            if (!repository?.id || !prNumber) return null;
+
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!gitlabAuthDetail) return null;
+
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+            const discussions = await gitlabAPI.MergeRequestDiscussions.all(
+                repository.id,
+                prNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
+            );
+
+            return answeredThreadRootIds(
+                (discussions ?? []).map((discussion: any) => {
+                    const notes = discussion?.notes ?? [];
+                    return {
+                        // A file-level finding is saved under its first note's
+                        // id, a PR-level one under the discussion id.
+                        rootIds: [notes[0]?.id, discussion?.id],
+                        replies: notes
+                            .slice(1)
+                            .filter((note: any) => note?.system !== true),
+                    };
+                }),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
             });
             return null;
         }

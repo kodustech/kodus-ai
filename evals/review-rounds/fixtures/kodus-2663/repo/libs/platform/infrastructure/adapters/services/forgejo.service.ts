@@ -1,0 +1,5096 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { v4 as uuidv4 } from 'uuid';
+import { isAxiosError } from 'axios';
+import pLimit from 'p-limit';
+
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
+import { createLogger } from '@libs/core/log/logger';
+import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
+import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
+import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
+import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
+import { extractOwnerAndRepo } from '@libs/common/utils/helpers';
+import {
+    getTranslationsForLanguageByCategory,
+    TranslationsCategory,
+} from '@libs/common/utils/translations/translations';
+import {
+    CreateAuthIntegrationStatus,
+    IntegrationCategory,
+    IntegrationConfigKey,
+    LanguageValue,
+    PlatformType,
+    PullRequestState,
+} from '@libs/core/domain/enums';
+import {
+    CommentResult,
+    FileChange,
+    Repository,
+    ReviewComment,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
+
+import {
+    AUTH_INTEGRATION_SERVICE_TOKEN,
+    IAuthIntegrationService,
+} from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
+import { ForgejoAuthDetail } from '@libs/integrations/domain/authIntegrations/types/forgejo-auth-detail.type';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+
+import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import {
+    CodeManagementConnectionStatus,
+    ICodeManagementService,
+    PullRequestFileChange,
+} from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
+import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { Organization } from '@libs/platform/domain/platformIntegrations/types/codeManagement/organization.type';
+import {
+    OneSentenceSummaryItem,
+    PullRequest,
+    PullRequestAuthor,
+    PullRequestCodeReviewTime,
+    PullRequestReviewComment,
+    PullRequestReviewState,
+    PullRequestsWithChangesRequested,
+    PullRequestWithFiles,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
+import {
+    buildDefaultSourceBranchName,
+    DEFAULT_COMMIT_MESSAGE,
+    DEFAULT_PR_TITLE,
+    EMPTY_REPO_DEFAULT_BRANCH,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
+} from './code-management-defaults.constants';
+
+import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
+import {
+    type ChangedFile as ForgejoChangedFile,
+    type Commit as ForgejoCommit,
+    type Organization as ForgejoOrganization,
+    type PullRequest as ForgejoPullRequest,
+    type PullReview as ForgejoPullReview,
+    type PullReviewComment as ForgejoPullReviewComment,
+    type Repository as ForgejoRepository,
+    type User as ForgejoUser,
+    getTree,
+    issueCreateComment,
+    issueDeleteCommentReaction,
+    issueDeleteIssueReaction,
+    issueEditComment,
+    issueGetCommentReactions,
+    issueGetComments,
+    issueGetIssue,
+    issueListIssues,
+    repoListStatusesByRef,
+    issuePostCommentReaction,
+    issuePostIssueReaction,
+    orgListCurrentUserOrgs,
+    orgListMembers,
+    orgListRepos,
+    repoCreateHook,
+    repoCreatePullReview,
+    repoDismissPullReview,
+    repoDeleteHook,
+    repoDownloadPullDiffOrPatch,
+    repoEditHook,
+    repoEditPullRequest,
+    repoGet,
+    repoGetAllCommits,
+    repoGetContents,
+    repoGetLanguages,
+    repoGetPullRequest,
+    repoGetPullRequestCommits,
+    repoGetPullRequestFiles,
+    repoGetPullReviewComments,
+    repoListHooks,
+    repoListPullRequests,
+    repoListPullReviews,
+    repoMergePullRequest,
+    userCurrentListRepos,
+    userGet,
+    userGetCurrent,
+    userSearch,
+    repoChangeFiles,
+    repoCreatePullRequest,
+} from '@llamaduck/forgejo-ts';
+import { Client, createClient } from '@llamaduck/forgejo-ts/client';
+import { listingFailed } from './repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from './webhook-setup/webhook-setup';
+import { recordWebhookSetupOutcome } from './webhook-setup/webhook-setup-failures.service';
+
+/**
+ * The Forgejo client returns failures instead of throwing. Turns one into an
+ * error carrying the HTTP status and headers, so it can be classified.
+ *
+ * A request that got no answer (connection dropped, reset, refused) comes
+ * back as the axios error itself, with `error: {}` and no `response`. Its
+ * `code` and message are what tell a transport failure, so they are kept;
+ * its `config` holds the token, so it is not passed on.
+ */
+function throwIfForgejoFailed(result: {
+    error?: unknown;
+    response?: { status?: number; headers?: unknown };
+    code?: unknown;
+    message?: unknown;
+}): void {
+    // `error` is the response body, and a proxy's 429 or 502 often has none
+    // (`error === ""`): the status, or the result being the axios error
+    // itself, is what says the request failed.
+    const failed =
+        result instanceof Error ||
+        (result?.response?.status ?? 0) >= 400 ||
+        !!result?.error;
+    if (!failed) {
+        return;
+    }
+
+    if (!result.response) {
+        throw Object.assign(
+            new Error(
+                typeof result.message === 'string'
+                    ? result.message
+                    : 'Forgejo request got no response',
+            ),
+            typeof result.code === 'string' ? { code: result.code } : {},
+        );
+    }
+
+    const status = result.response?.status;
+    const rawHeaders = result.response?.headers as
+        | { forEach?: (cb: (value: string, key: string) => void) => void }
+        | Record<string, unknown>
+        | undefined;
+    const headers: Record<string, string> = {};
+    if (typeof rawHeaders?.forEach === 'function') {
+        (rawHeaders as Headers).forEach((value, key) => {
+            headers[key.toLowerCase()] = value;
+        });
+    } else if (rawHeaders) {
+        for (const [key, value] of Object.entries(rawHeaders)) {
+            if (value != null) headers[key.toLowerCase()] = String(value);
+        }
+    }
+    const detail =
+        (result.error as { message?: string })?.message ??
+        (typeof result.error === 'string' ? result.error : undefined);
+
+    throw Object.assign(
+        // An empty body gives an empty detail: the status says more.
+        new Error(detail || `Forgejo request failed with status ${status}`),
+        { status, response: { status, headers } },
+    );
+}
+
+function isForgejoServerError(error: unknown): boolean {
+    const status = (error as { status?: unknown } | null)?.status;
+    return typeof status === 'number' && status >= 500;
+}
+
+const FORGEJO_REACTIONS_CONCURRENCY = 5;
+
+const TREE_PAGE_SIZE = 1000;
+const MAX_TREE_PAGES = 100;
+
+@Injectable()
+@IntegrationServiceDecorator(PlatformType.FORGEJO, 'codeManagement')
+export class ForgejoService implements Omit<
+    ICodeManagementService,
+    | 'getAuthenticationOAuthToken'
+    | 'getUserById'
+    | 'minimizeComment'
+    | 'markReviewCommentAsResolved' // Currently forgejo doesn't support marking comments as resolved gitea added this on 01/02/2026 but forgejo hasn't yet'
+> {
+    private readonly logger = createLogger(ForgejoService.name);
+
+    constructor(
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
+
+        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
+        private readonly integrationConfigService: IIntegrationConfigService,
+
+        @Inject(AUTH_INTEGRATION_SERVICE_TOKEN)
+        private readonly authIntegrationService: IAuthIntegrationService,
+
+        private readonly configService: ConfigService,
+    ) {}
+
+    public createForgejoClient(authDetail: ForgejoAuthDetail): Client {
+        const token = decrypt(authDetail.accessToken);
+        return createClient({
+            baseURL: `${authDetail.host}/api/v1`,
+            headers: {
+                Authorization: `token ${token}`,
+            },
+        });
+    }
+
+    /**
+     * Helper to paginate through all results of an API endpoint.
+     * Forgejo uses page-based pagination with a default limit of 50.
+     */
+    private async paginate<T>(
+        fetchPage: (page: number, limit: number) => Promise<T[]>,
+        options: { limit?: number; maxPages?: number } = {},
+    ): Promise<T[]> {
+        const limit = options.limit ?? 50;
+        const maxPages = options.maxPages ?? 100;
+        const allItems: T[] = [];
+        let page = 1;
+
+        while (page <= maxPages) {
+            const items = await fetchPage(page, limit);
+            allItems.push(...items);
+
+            if (items.length < limit) {
+                break;
+            }
+            page++;
+        }
+
+        return allItems;
+    }
+    private mapForgejoReviewComment(
+        review: ForgejoPullReview,
+        comment: {
+            id?: number;
+            body?: string;
+            created_at?: string;
+            updated_at?: string;
+            user?: ForgejoUser;
+            resolver?: ForgejoUser | null;
+        },
+    ): PullRequestReviewComment {
+        return {
+            id: comment.id,
+            // The comment id, not the review's: Forgejo reviews are not
+            // comment threads, and the only behavioural reader of this field -
+            // the reactions lookup - needs the per-comment identity, which the
+            // review id can never be (#2064 review).
+            threadId: comment.id?.toString(),
+            isResolved: comment.resolver != null,
+            isOutdated: review.stale ?? false,
+            body: comment.body ?? '',
+            createdAt: comment.created_at,
+            updatedAt: comment.updated_at,
+            author: {
+                id: comment.user?.id?.toString() ?? '',
+                username: comment.user?.login ?? '',
+                name: comment.user?.full_name ?? comment.user?.login ?? '',
+            },
+        };
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        try {
+            const client = this.createForgejoClient(authDetail);
+
+            const result = await repoListStatusesByRef({
+                client,
+                path: {
+                    owner: repository.owner,
+                    repo: repository.name,
+                    ref: commitSha,
+                },
+                query: { limit: 100 },
+            });
+
+            return (result.data ?? []).map((status) =>
+                this.mapForgejoCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Forgejo commit statuses',
+                context: ForgejoService.name,
+                error,
+                metadata: { repository: repository.name, commitSha },
+            });
+            return [];
+        }
+    }
+
+    private mapForgejoCommitStatus(status: {
+        id?: number;
+        context?: string;
+        status?: string;
+        target_url?: string;
+        updated_at?: string;
+    }): CheckEvidence {
+        const pending = status.status === 'pending';
+
+        return {
+            id: String(status.id ?? ''),
+            name: status.context ?? '',
+            status: pending ? 'in_progress' : 'completed',
+            conclusion: pending
+                ? null
+                : this.mapForgejoConclusion(status.status),
+            url: status.target_url ?? null,
+            completedAt: pending ? null : (status.updated_at ?? null),
+            platform: PlatformType.FORGEJO,
+        };
+    }
+
+    private mapForgejoConclusion(
+        status: string | undefined,
+    ): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failure':
+            case 'error':
+                return 'failure';
+            case 'warning':
+                return 'neutral';
+            default:
+                return null;
+        }
+    }
+
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
+        const { organizationAndTeamData, repository, filters = {} } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const client = this.createForgejoClient(authDetail);
+
+        const result = await issueListIssues({
+            client,
+            path: { owner: repository.owner, repo: repository.name },
+            query: {
+                type: 'issues',
+                state: filters.state ?? 'open',
+                labels: filters.labels?.length
+                    ? filters.labels.join(',')
+                    : undefined,
+                page: filters.page,
+                limit: filters.perPage,
+            },
+        });
+
+        return (result.data ?? [])
+            .filter((issue) => !issue.pull_request)
+            .map((issue) => this.mapForgejoIssue(issue));
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const { organizationAndTeamData, repository, issueNumber } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return null;
+        }
+
+        const client = this.createForgejoClient(authDetail);
+
+        const result = await issueGetIssue({
+            client,
+            path: {
+                owner: repository.owner,
+                repo: repository.name,
+                index: issueNumber,
+            },
+        });
+
+        const issue = result.data;
+        if (!issue || issue.pull_request) {
+            return null;
+        }
+
+        return this.mapForgejoIssue(issue);
+    }
+
+    private mapForgejoIssue(issue: any): CodeManagementIssue {
+        return {
+            id: String(issue.id),
+            number: issue.number,
+            title: issue.title,
+            body: issue.body ?? null,
+            state: issue.state === 'closed' ? 'closed' : 'open',
+            url: issue.html_url,
+            labels: (issue.labels ?? [])
+                .map((label: any) => label?.name)
+                .filter((name: unknown): name is string => Boolean(name)),
+            assignees: (issue.assignees ?? [])
+                .map((assignee: any) => assignee?.login)
+                .filter((login: unknown): login is string => Boolean(login)),
+            author: issue.user
+                ? { username: issue.user.login, id: String(issue.user.id) }
+                : null,
+            createdAt: issue.created_at,
+            updatedAt: issue.updated_at,
+            closedAt: issue.closed_at ?? null,
+            platform: PlatformType.FORGEJO,
+        };
+    }
+
+    public async getAuthDetails(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<ForgejoAuthDetail | null> {
+        try {
+            const integration = await this.integrationService.findOne({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                platform: PlatformType.FORGEJO,
+            });
+
+            if (!integration?.authIntegration?.authDetails) {
+                return null;
+            }
+
+            return integration.authIntegration.authDetails as ForgejoAuthDetail;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting auth details',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async findRepositoryByName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        name: string;
+    }): Promise<Partial<Repository> | null> {
+        try {
+            const repositories = await this.getRepositories({
+                organizationAndTeamData: params.organizationAndTeamData,
+            });
+            const wanted = params.name.trim().toLowerCase();
+            const repo = repositories.find((r) => {
+                const fullName = (
+                    r.full_name || `${r.organizationName}/${r.name}`
+                ).toLowerCase();
+
+                return r.name.toLowerCase() === wanted || fullName === wanted;
+            });
+            if (!repo) {
+                this.logger.warn({
+                    message: 'Repository not found by name',
+                    context: ForgejoService.name,
+                    metadata: { repositoryName: params.name },
+                });
+                return null;
+            }
+
+            return {
+                id: repo.id,
+                name: repo.name,
+                fullName:
+                    repo.full_name || `${repo.organizationName}/${repo.name}`,
+                defaultBranch: repo.default_branch,
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error finding repository by name',
+                context: ForgejoService.name,
+                error,
+                metadata: { repositoryName: params.name },
+            });
+            return null;
+        }
+    }
+
+    async createPullRequestWithFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        sourceBranch?: string;
+        targetBranch?: string;
+        baseBranch?: string;
+        title?: string;
+        description?: string;
+        commitMessage?: string;
+        author?: { name: string; email?: string };
+        files: PullRequestFileChange[];
+    }): Promise<Partial<PullRequest> | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            sourceBranch,
+            targetBranch,
+            baseBranch,
+            title,
+            description = '',
+            commitMessage,
+            author,
+            files,
+        } = params;
+
+        const resolvedSourceBranch =
+            sourceBranch || buildDefaultSourceBranchName();
+        const resolvedTitle = title?.trim() || DEFAULT_PR_TITLE;
+        const resolvedCommitMessage =
+            commitMessage?.trim() || DEFAULT_COMMIT_MESSAGE;
+
+        try {
+            const resolvedTargetBranch =
+                targetBranch ||
+                (await this.getDefaultBranch({
+                    organizationAndTeamData,
+                    repository,
+                })) ||
+                EMPTY_REPO_DEFAULT_BRANCH;
+            const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
+
+            const authDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!authDetail) {
+                throw new Error('Authentication details not found');
+            }
+
+            const repoInfo = this.extractRepoInfo(
+                repository.name,
+                'createPullRequestWithFiles',
+            );
+
+            if (!repoInfo) {
+                throw new Error('Invalid repository name format');
+            }
+
+            const client = this.createForgejoClient(authDetail);
+
+            // An empty repository has no default-branch ref yet, so branch
+            // creation and the PR below fail. Seed an initial commit so the
+            // base branch exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                client,
+                repoInfo,
+                baseBranch: resolvedBaseBranch,
+                author,
+            });
+
+            const uploadResult = await this.uploadFiles({
+                organizationAndTeamData,
+                repository,
+                branchName: resolvedSourceBranch,
+                baseBranch: resolvedBaseBranch,
+                files,
+                message: resolvedCommitMessage,
+                author,
+            });
+
+            if (!uploadResult) {
+                throw new BadRequestException(
+                    'Failed to upload files to Forgejo',
+                );
+            }
+
+            const pr = await repoCreatePullRequest({
+                client,
+                path: repoInfo,
+                body: {
+                    base: resolvedTargetBranch,
+                    head: resolvedSourceBranch,
+                    title: resolvedTitle,
+                    body: description,
+                },
+            });
+
+            if (!pr || pr.status >= 300) {
+                throw new Error(`Failed to create pull request: ${pr.status}`);
+            }
+
+            return {
+                id: pr.data?.id?.toString() ?? '',
+                number: pr.data?.number ?? -1,
+                title: pr.data?.title ?? '',
+                prURL: pr.data?.html_url ?? '',
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error creating pull request with files',
+                context: ForgejoService.name,
+                error,
+                metadata: { params },
+            });
+            // Propagate the real cause so the caller can surface it.
+            throw error;
+        }
+    }
+
+    async uploadFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        branchName?: string;
+        baseBranch?: string;
+        files: PullRequestFileChange[];
+        message?: string;
+        author?: { name: string; email?: string };
+    }): Promise<boolean> {
+        const {
+            organizationAndTeamData,
+            repository,
+            branchName,
+            baseBranch,
+            files,
+            message,
+            author,
+        } = params;
+
+        try {
+            const defaultBranch = await this.getDefaultBranch({
+                organizationAndTeamData,
+                repository,
+            });
+            const resolvedBaseBranch = baseBranch || defaultBranch;
+            const resolvedBranchName = branchName || resolvedBaseBranch;
+            const resolvedMessage = message?.trim() || DEFAULT_COMMIT_MESSAGE;
+
+            const authDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!authDetail) {
+                throw new Error('Authentication details not found');
+            }
+
+            const repoInfo = this.extractRepoInfo(
+                repository.name,
+                'uploadFiles',
+            );
+
+            if (!repoInfo) {
+                throw new Error('Invalid repository name format');
+            }
+
+            const client = this.createForgejoClient(authDetail);
+
+            const tokenAuthorIdentity =
+                authDetail.authMode === AuthMode.TOKEN && author?.name
+                    ? {
+                          name: author.name,
+                          email: author.email || 'kody@kodus.io',
+                      }
+                    : undefined;
+
+            const branchAlreadyExists =
+                resolvedBranchName === resolvedBaseBranch
+                    ? true
+                    : await this.checkForgejoBranchExists(
+                          client,
+                          repoInfo,
+                          resolvedBranchName,
+                      );
+
+            const fileExistsReferenceBranch = branchAlreadyExists
+                ? resolvedBranchName
+                : resolvedBaseBranch;
+
+            const fileExistsEntries = await Promise.all(
+                files.map(async (file) => {
+                    const exists = await this.checkForgejoFileExists(
+                        client,
+                        repoInfo,
+                        fileExistsReferenceBranch,
+                        file.path,
+                    );
+
+                    return [file.path, exists] as const;
+                }),
+            );
+
+            const fileExistsByPath = new Map(fileExistsEntries);
+
+            const changes = files
+                .map((file) => {
+                    const operation = file.operation || 'upsert';
+                    const fileExists = fileExistsByPath.get(file.path) === true;
+
+                    if (operation === 'delete') {
+                        if (!fileExists) {
+                            return null;
+                        }
+
+                        return {
+                            operation: 'delete' as const,
+                            path: file.path,
+                        } as any;
+                    }
+
+                    if (typeof file.content !== 'string') {
+                        throw new Error(
+                            `File content is required for upsert operation: ${file.path}`,
+                        );
+                    }
+
+                    return {
+                        operation: fileExists
+                            ? ('update' as const)
+                            : ('create' as const),
+                        path: file.path,
+                        // Forgejo's change-files API requires base64 content.
+                        content: Buffer.from(file.content).toString('base64'),
+                    } as any;
+                })
+                .filter((change): change is NonNullable<typeof change> =>
+                    Boolean(change),
+                );
+
+            if (changes.length === 0) {
+                return true;
+            }
+
+            const res = await repoChangeFiles({
+                client,
+                path: repoInfo,
+                body: {
+                    files: changes,
+                    message: resolvedMessage,
+                    branch: branchAlreadyExists
+                        ? resolvedBranchName
+                        : resolvedBaseBranch,
+                    ...(tokenAuthorIdentity
+                        ? {
+                              author: tokenAuthorIdentity,
+                              committer: tokenAuthorIdentity,
+                          }
+                        : {}),
+                    ...(!branchAlreadyExists &&
+                    resolvedBranchName !== resolvedBaseBranch
+                        ? {
+                              new_branch: resolvedBranchName,
+                          }
+                        : {}),
+                },
+            });
+
+            if (!res || res.status >= 300) {
+                throw new Error(`Failed to upload files: ${res.status}`);
+            }
+
+            return true;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error uploading files to Forgejo',
+                context: ForgejoService.name,
+                error,
+                metadata: { params },
+            });
+            return false;
+        }
+    }
+
+    private async checkForgejoBranchExists(
+        client: Client,
+        repoInfo: { owner: string; repo: string },
+        branchName: string,
+    ): Promise<boolean> {
+        try {
+            await getTree({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    sha: branchName,
+                },
+                query: {
+                    recursive: false,
+                },
+            });
+
+            return true;
+        } catch (error) {
+            if (this.isForgejoNotFoundError(error)) {
+                return false;
+            }
+
+            throw error;
+        }
+    }
+
+    // Seeds an empty repository with an initial commit so the base branch
+    // exists for the branch + PR flow. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        client: Client;
+        repoInfo: { owner: string; repo: string };
+        baseBranch: string;
+        author?: { name: string; email?: string };
+    }): Promise<void> {
+        const { client, repoInfo, baseBranch, author } = params;
+
+        const exists = await this.checkForgejoBranchExists(
+            client,
+            repoInfo,
+            baseBranch,
+        );
+        if (exists) {
+            return;
+        }
+
+        const identity = author?.name
+            ? {
+                  name: author.name,
+                  email: author.email || 'kody@kodus.io',
+              }
+            : undefined;
+
+        const res = await repoChangeFiles({
+            client,
+            path: repoInfo,
+            body: {
+                files: [
+                    {
+                        operation: 'create',
+                        path: EMPTY_REPO_SEED_PATH,
+                        // Forgejo's change-files API requires base64 content.
+                        content: Buffer.from(EMPTY_REPO_SEED_CONTENT).toString(
+                            'base64',
+                        ),
+                    },
+                ] as any,
+                message: EMPTY_REPO_SEED_COMMIT_MESSAGE,
+                branch: baseBranch,
+                ...(identity ? { author: identity, committer: identity } : {}),
+            },
+        });
+
+        if (!res || res.status >= 300) {
+            throw new Error(
+                `Failed to initialize empty repository: ${res?.status}`,
+            );
+        }
+
+        this.logger.log({
+            message:
+                'Seeded empty Forgejo repository with an initial commit for centralized config',
+            context: ForgejoService.name,
+            metadata: { repo: repoInfo.repo, baseBranch },
+        });
+    }
+
+    private async checkForgejoFileExists(
+        client: Client,
+        repoInfo: { owner: string; repo: string },
+        branchName: string,
+        filePath: string,
+    ): Promise<boolean> {
+        try {
+            await repoGetContents({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    filepath: filePath.replace(/^\/+/, ''),
+                },
+                query: {
+                    ref: branchName,
+                },
+            });
+
+            return true;
+        } catch (error) {
+            if (this.isForgejoNotFoundError(error)) {
+                return false;
+            }
+
+            throw error;
+        }
+    }
+
+    private isForgejoNotFoundError(error: unknown): boolean {
+        const candidate = error as
+            | {
+                  status?: number;
+                  code?: number;
+                  response?: { status?: number };
+              }
+            | undefined;
+
+        const status =
+            candidate?.status || candidate?.code || candidate?.response?.status;
+
+        return status === 404;
+    }
+
+    private extractRepoInfo(
+        repositoryName: string,
+        methodName: string,
+    ): { owner: string; repo: string } | null {
+        const repoData = extractOwnerAndRepo(repositoryName);
+        if (!repoData) {
+            this.logger.error({
+                message: `Could not parse repository name in ${methodName}`,
+                context: ForgejoService.name,
+                metadata: { repositoryName },
+            });
+            return null;
+        }
+        return repoData;
+    }
+
+    private mapPullRequestState(pr: ForgejoPullRequest): PullRequestState {
+        if (pr.merged) return PullRequestState.MERGED;
+        if (pr.state === 'closed') return PullRequestState.CLOSED;
+        return PullRequestState.OPENED;
+    }
+
+    private transformPullRequest(
+        pr: ForgejoPullRequest,
+        repo:
+            | Repositories
+            | { id: string; name: string; default_branch?: string },
+        organizationAndTeamData?: OrganizationAndTeamData,
+        labels?: string[],
+    ): PullRequest {
+        const state = this.mapPullRequestState(pr);
+        const repoWithDefaults = {
+            id: repo.id ?? '',
+            name: repo.name ?? '',
+            default_branch:
+                ('default_branch' in repo ? repo.default_branch : undefined) ??
+                '',
+        };
+        const repositoryFullName =
+            pr.base?.repo?.full_name ?? repoWithDefaults.name;
+        const baseRepositoryName = pr.base?.repo?.name ?? repoWithDefaults.name;
+
+        return {
+            id: pr.id?.toString() ?? '',
+            number: pr.number ?? -1,
+            pull_number: pr.number ?? -1,
+            organizationId: organizationAndTeamData?.organizationId ?? '',
+            title: pr.title ?? '',
+            body: pr.body ?? '',
+            labels,
+            state,
+            prURL: pr.html_url ?? '',
+            repository: repositoryFullName,
+            repositoryId: repoWithDefaults.id,
+            repositoryData: {
+                id: repoWithDefaults.id,
+                name: repositoryFullName,
+            },
+            message: pr.title ?? '',
+            created_at: pr.created_at ?? '',
+            closed_at: pr.closed_at ?? '',
+            updated_at: pr.updated_at ?? '',
+            merged_at: pr.merged_at ?? '',
+            participants: pr.user?.id ? [{ id: pr.user.id.toString() }] : [],
+            reviewers: [],
+            sourceRefName: pr.head?.ref ?? '',
+            head: {
+                ref: pr.head?.ref ?? '',
+                sha: pr.head?.sha,
+                repo: {
+                    id: pr.head?.repo?.id?.toString() ?? '',
+                    name: pr.head?.repo?.name ?? '',
+                    defaultBranch: pr.head?.repo?.default_branch ?? '',
+                    fullName:
+                        pr.head?.repo?.full_name ?? pr.head?.repo?.name ?? '',
+                },
+            },
+            targetRefName: pr.base?.ref ?? '',
+            base: {
+                ref: pr.base?.ref ?? '',
+                sha: pr.base?.sha,
+                repo: {
+                    id: repoWithDefaults.id,
+                    name: baseRepositoryName,
+                    defaultBranch: repoWithDefaults.default_branch,
+                    fullName: repositoryFullName,
+                },
+            },
+            user: {
+                login: pr.user?.login || '',
+                name: pr.user?.full_name || pr.user?.login || '',
+                id: pr.user?.id?.toString() ?? '',
+            },
+            isDraft:
+                pr.draft ||
+                pr.title?.toLowerCase().startsWith('wip:') ||
+                pr.title?.toLowerCase().startsWith('[wip]') ||
+                pr.title?.toLowerCase().startsWith('draft:') ||
+                pr.title?.toLowerCase().startsWith('[draft]') ||
+                false,
+        };
+    }
+
+    /**
+     * Parses a unified diff string and extracts per-file patches.
+     * Returns a map of filename -> patch content.
+     */
+    private parseUnifiedDiff(diffContent: string): Map<string, string> {
+        // The shared splitter reads the name from the ---/+++ lines first;
+        // the `diff --git` header is ambiguous for a path holding " b/"
+        return new Map(
+            splitUnifiedDiff(diffContent).map((file) => [
+                file.filename,
+                file.patch,
+            ]),
+        );
+    }
+
+    private transformCommit(commit: ForgejoCommit): Commit {
+        return {
+            sha: commit.sha,
+            commit: {
+                message: commit.commit?.message || '',
+                author: {
+                    name: commit.commit?.author?.name || '',
+                    email: commit.commit?.author?.email || '',
+                    date: commit.commit?.author?.date || '',
+                },
+            },
+            parents: commit.parents?.map((p) => ({ sha: p.sha })),
+        };
+    }
+
+    async createAuthIntegration(params: any): Promise<any> {
+        return this.authenticateWithToken(params);
+    }
+
+    async authenticateWithToken(params: {
+        token: string;
+        host: string;
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<{ success: boolean; status: CreateAuthIntegrationStatus }> {
+        try {
+            const { token, host, organizationAndTeamData } = params;
+
+            if (!host) throw new Error('Forgejo host URL is required');
+            if (!token) throw new Error('Forgejo access token is required');
+
+            const normalizedHost = host.replace(/\/+$/, '');
+
+            const authDetails: ForgejoAuthDetail = {
+                accessToken: encrypt(token),
+                authMode: AuthMode.TOKEN,
+                host: normalizedHost,
+            };
+
+            const checkRepos = await this.checkRepositoryPermissions({
+                authDetails,
+            });
+            if (!checkRepos.success) return checkRepos;
+
+            const integration = await this.integrationService.findOne({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                platform: PlatformType.FORGEJO,
+            });
+
+            if (!integration) {
+                await this.addAccessToken(organizationAndTeamData, authDetails);
+            } else {
+                await this.updateAuthIntegration({
+                    organizationAndTeamData,
+                    authIntegrationId: integration?.authIntegration?.uuid,
+                    integrationId: integration?.uuid,
+                    authDetails,
+                });
+            }
+
+            return {
+                success: true,
+                status: CreateAuthIntegrationStatus.SUCCESS,
+            };
+        } catch (err) {
+            const errorMessage =
+                err?.response?.data?.message || err?.message || 'Unknown error';
+            this.logger.error({
+                message: 'Error authenticating with Forgejo token',
+                context: ForgejoService.name,
+                error: err,
+                metadata: { errorMessage },
+            });
+            throw new BadRequestException(
+                `Error authenticating with Forgejo: ${errorMessage}`,
+            );
+        }
+    }
+
+    private async checkRepositoryPermissions(params: {
+        authDetails: ForgejoAuthDetail;
+    }): Promise<{ success: boolean; status: CreateAuthIntegrationStatus }> {
+        try {
+            const client = this.createForgejoClient(params.authDetails);
+
+            const userReposResult = await userCurrentListRepos({
+                client,
+                query: { limit: 50 },
+            });
+
+            const userRepos = userReposResult.data ?? [];
+            if (userRepos.length > 0) {
+                return {
+                    success: true,
+                    status: CreateAuthIntegrationStatus.SUCCESS,
+                };
+            }
+
+            const orgsResult = await orgListCurrentUserOrgs({
+                client,
+                query: { limit: 50 },
+            });
+
+            const orgs = orgsResult.data ?? [];
+            for (const org of orgs) {
+                const orgReposResult = await orgListRepos({
+                    client,
+                    path: { org: org.name! },
+                    query: { limit: 10 },
+                });
+                const orgRepos = orgReposResult.data ?? [];
+                if (orgRepos.length > 0) {
+                    return {
+                        success: true,
+                        status: CreateAuthIntegrationStatus.SUCCESS,
+                    };
+                }
+            }
+
+            return {
+                success: false,
+                status: CreateAuthIntegrationStatus.NO_REPOSITORIES,
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to check repository permissions',
+                context: ForgejoService.name,
+                error,
+            });
+            return {
+                success: false,
+                status: CreateAuthIntegrationStatus.NO_REPOSITORIES,
+            };
+        }
+    }
+
+    private async addAccessToken(
+        organizationAndTeamData: OrganizationAndTeamData,
+        authDetails: ForgejoAuthDetail,
+    ): Promise<void> {
+        const integrationUuid = uuidv4();
+        const authIntegrationUuid = uuidv4();
+
+        const newIntegration = await this.integrationService.create({
+            uuid: integrationUuid,
+            platform: PlatformType.FORGEJO,
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            status: true,
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+        });
+
+        await this.authIntegrationService.create({
+            uuid: authIntegrationUuid,
+            status: true,
+            authDetails,
+            integration: { uuid: newIntegration.uuid },
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+        });
+    }
+
+    async updateAuthIntegration(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        authIntegrationId: string;
+        integrationId: string;
+        authDetails: ForgejoAuthDetail;
+    }): Promise<any> {
+        await this.integrationService.update(
+            {
+                uuid: params.integrationId,
+                organization: {
+                    uuid: params.organizationAndTeamData.organizationId,
+                },
+                team: { uuid: params.organizationAndTeamData.teamId },
+            },
+            { status: true },
+        );
+
+        return await this.authIntegrationService.update(
+            {
+                uuid: params.authIntegrationId,
+                organization: {
+                    uuid: params.organizationAndTeamData.organizationId,
+                },
+                team: { uuid: params.organizationAndTeamData.teamId },
+            },
+            {
+                status: true,
+                authDetails: params.authDetails,
+            },
+        );
+    }
+
+    async createOrUpdateIntegrationConfig(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        configKey: IntegrationConfigKey;
+        configValue: any;
+        type?: 'replace' | 'append';
+        /**
+         * Set by the chunked repository save on every request but the last, so
+         * webhooks are reconciled once against the complete selection instead
+         * of against each partially-persisted chunk.
+         */
+        deferWebhooks?: boolean;
+    }): Promise<any> {
+        try {
+            const integration = await this.integrationService.findOne({
+                organization: {
+                    uuid: params.organizationAndTeamData.organizationId,
+                },
+                team: { uuid: params.organizationAndTeamData.teamId },
+                platform: PlatformType.FORGEJO,
+            });
+
+            if (!integration) {
+                return;
+            }
+
+            await this.integrationConfigService.createOrUpdateConfig(
+                params.configKey,
+                params.configValue,
+                integration?.uuid,
+                params.organizationAndTeamData,
+                params.type,
+            );
+
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createPullRequestWebhook({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    integrationId: integration?.uuid,
+                });
+            }
+        } catch (err) {
+            throw new BadRequestException(err);
+        }
+    }
+
+    /**
+     * The repositories config of `repository` on the instance that sent the
+     * webhook (`host`, or the same `owner/repo` under that id). Forgejo
+     * numbers repositories per instance, so the id alone matches
+     * repositories of other connected instances.
+     */
+    async findTeamAndOrganizationIdByConfigKey(params: {
+        repository: { id?: string | number; name?: string };
+        host?: string;
+        repositoryFullName?: string;
+    }): Promise<IntegrationConfigEntity | null> {
+        try {
+            const repositoryId = String(params?.repository?.id ?? '');
+            if (!repositoryId) {
+                return null;
+            }
+
+            const configs =
+                await this.integrationConfigService.findIntegrationConfigWithTeams(
+                    IntegrationConfigKey.REPOSITORIES,
+                    repositoryId,
+                    PlatformType.FORGEJO,
+                );
+
+            return (
+                forgejoConfigsForWebhook(configs, {
+                    host: params.host,
+                    repositoryId,
+                    repositoryFullName:
+                        params.repositoryFullName ?? params.repository.name,
+                })[0] ?? null
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error finding team and organization by config key',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    private async findOneByOrganizationAndTeamDataAndConfigKey(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configKey: IntegrationConfigKey,
+    ): Promise<any> {
+        const integration = await this.integrationService.findOne({
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            platform: PlatformType.FORGEJO,
+        });
+
+        if (!integration) return null;
+
+        const config = await this.integrationConfigService.findOne({
+            integration: { uuid: integration.uuid },
+            configKey,
+            team: { uuid: organizationAndTeamData.teamId },
+        });
+
+        return config?.configValue || null;
+    }
+
+    async verifyConnection(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<CodeManagementConnectionStatus> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetail) {
+                return {
+                    hasConnection: false,
+                    isSetupComplete: false,
+                    platformName: PlatformType.FORGEJO,
+                    category: IntegrationCategory.CODE_MANAGEMENT,
+                };
+            }
+
+            const client = this.createForgejoClient(authDetail);
+            await userGetCurrent({ client });
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            return {
+                hasConnection: true,
+                isSetupComplete:
+                    Array.isArray(repositories) && repositories.length > 0,
+                platformName: PlatformType.FORGEJO,
+                category: IntegrationCategory.CODE_MANAGEMENT,
+                config: { repositories, host: authDetail.host },
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error verifying Forgejo connection',
+                context: ForgejoService.name,
+                error,
+            });
+            return {
+                hasConnection: false,
+                isSetupComplete: false,
+                platformName: PlatformType.FORGEJO,
+                category: IntegrationCategory.CODE_MANAGEMENT,
+            };
+        }
+    }
+
+    async getRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        filters?: {
+            archived?: boolean;
+            organizationSelected?: string;
+            visibility?: 'all' | 'public' | 'private';
+            language?: string;
+        };
+        options?: {
+            includePullRequestMetrics?: { lastNDays?: number };
+        };
+    }): Promise<Repositories[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const client = this.createForgejoClient(authDetail);
+
+            const integration = await this.integrationService.findOne({
+                organization: {
+                    uuid: params.organizationAndTeamData.organizationId,
+                },
+                team: { uuid: params.organizationAndTeamData.teamId },
+                platform: PlatformType.FORGEJO,
+            });
+
+            const integrationConfig =
+                await this.integrationConfigService.findOne({
+                    integration: { uuid: integration?.uuid },
+                    configKey: IntegrationConfigKey.REPOSITORIES,
+                    team: { uuid: params.organizationAndTeamData.teamId },
+                });
+
+            const repositories: Repositories[] = [];
+            const seenRepoIds = new Set<string>();
+
+            const userRepos = await this.paginate<ForgejoRepository>(
+                async (page, limit) => {
+                    const result = await userCurrentListRepos({
+                        client,
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+            for (const repo of userRepos) {
+                const repoId = repo.id!.toString();
+                if (!seenRepoIds.has(repoId)) {
+                    seenRepoIds.add(repoId);
+                    repositories.push(
+                        this.transformRepository(repo, integrationConfig),
+                    );
+                }
+            }
+
+            try {
+                const orgs = await this.paginate<ForgejoOrganization>(
+                    async (page, limit) => {
+                        const result = await orgListCurrentUserOrgs({
+                            client,
+                            query: { page, limit },
+                        });
+                        return result.data ?? [];
+                    },
+                );
+                for (const org of orgs) {
+                    const orgReposResult =
+                        await this.paginate<ForgejoRepository>(
+                            async (page, limit) => {
+                                const result = await orgListRepos({
+                                    client,
+                                    path: { org: org.name! },
+                                    query: { page, limit },
+                                });
+                                return result.data ?? [];
+                            },
+                        );
+                    for (const repo of orgReposResult) {
+                        const repoId = repo.id!.toString();
+                        if (!seenRepoIds.has(repoId)) {
+                            seenRepoIds.add(repoId);
+                            repositories.push(
+                                this.transformRepository(
+                                    repo,
+                                    integrationConfig,
+                                ),
+                            );
+                        }
+                    }
+                }
+            } catch (error) {
+                this.logger.warn({
+                    message: 'Error fetching organization repositories',
+                    context: ForgejoService.name,
+                    error,
+                });
+            }
+
+            return repositories;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting repositories',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    private transformRepository(
+        repo: ForgejoRepository,
+        integrationConfig?: IntegrationConfigEntity | null,
+    ): Repositories {
+        return {
+            id: repo.id!.toString(),
+            name: repo.full_name!,
+            http_url: repo.clone_url,
+            avatar_url: repo.avatar_url || repo.owner?.avatar_url,
+            organizationName: repo.owner?.login,
+            visibility: repo.private ? 'private' : 'public',
+            selected: integrationConfig?.configValue?.some(
+                (r: { name: string }) => r?.name === repo.full_name,
+            ),
+            default_branch: repo.default_branch,
+            lastActivityAt: repo.updated_at,
+            archived: Boolean(repo.archived),
+            fork: Boolean(repo.fork),
+            mirror: Boolean(repo.mirror),
+        };
+    }
+
+    async getDefaultBranch(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        /**
+         * Only the branch the provider confirmed: a failed or empty lookup
+         * throws instead of falling back to a usual name, which a caller
+         * acting on the branch (the security scan) would read as the answer.
+         */
+        strict?: boolean;
+    }): Promise<string> {
+        const fallback = (why: string) => {
+            if (params.strict) {
+                throw new Error(`Forgejo default branch not confirmed: ${why}`);
+            }
+            return 'main';
+        };
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return fallback('no credentials');
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'getDefaultBranch',
+            );
+            if (!repoInfo) return fallback('unreadable repository name');
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await repoGet({
+                client,
+                path: { owner: repoInfo.owner, repo: repoInfo.repo },
+            });
+            return result.data?.default_branch || fallback('none returned');
+        } catch (error) {
+            if (params.strict) throw error;
+            this.logger.error({
+                message: 'Error getting default branch',
+                context: ForgejoService.name,
+                error,
+            });
+            return 'main';
+        }
+    }
+
+    async getLanguageRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+    }): Promise<string | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'getLanguageRepository',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await repoGetLanguages({
+                client,
+                path: { owner: repoInfo.owner, repo: repoInfo.repo },
+            });
+            const languages = result.data as Record<string, number> | undefined;
+
+            const sorted = Object.entries(languages ?? {}).sort(
+                ([, a], [, b]) => b - a,
+            );
+            return sorted[0]?.[0] || null;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting repository language',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getListMembers(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<{ name: string; id: string | number; type?: string }[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const client = this.createForgejoClient(authDetail);
+
+            const orgs = await this.paginate<ForgejoOrganization>(
+                async (page, limit) => {
+                    const result = await orgListCurrentUserOrgs({
+                        client,
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            const allMembers: {
+                name: string;
+                id: string | number;
+                type?: string;
+            }[] = [];
+            const seenIds = new Set<string>();
+
+            for (const org of orgs) {
+                if (!org.name) continue;
+
+                try {
+                    const members = await this.paginate<ForgejoUser>(
+                        async (page, limit) => {
+                            const result = await orgListMembers({
+                                client,
+                                path: { org: org.name! },
+                                query: { page, limit },
+                            });
+                            return result.data ?? [];
+                        },
+                    );
+
+                    for (const member of members) {
+                        const memberId = member.id?.toString() ?? '';
+                        if (!seenIds.has(memberId)) {
+                            seenIds.add(memberId);
+                            allMembers.push({
+                                name: member.login ?? member.full_name ?? '',
+                                id: member.id ?? '',
+                                type: member.is_admin ? 'admin' : 'user',
+                            });
+                        }
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error fetching members for org ${org.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+
+            // An account that belongs to no organization still has an owner
+            // who opens pull requests. Without this the list comes back empty
+            // and no seat can be assigned to anyone.
+            if (allMembers.length === 0) {
+                const owner = await userGetCurrent({ client });
+
+                if (owner.data?.id) {
+                    allMembers.push({
+                        name: owner.data.login ?? owner.data.full_name ?? '',
+                        id: owner.data.id,
+                        type: 'user',
+                    });
+                }
+            }
+
+            return allMembers;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting list members',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getCloneParams(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: {
+            id?: string;
+            name: string;
+            fullName?: string;
+            defaultBranch?: string;
+        };
+    }): Promise<GitCloneParams> {
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) {
+            throw new Error('No auth details found');
+        }
+
+        const repositoryFullName =
+            params.repository.fullName || params.repository.name;
+
+        const repoInfo = this.extractRepoInfo(
+            repositoryFullName,
+            'getCloneParams',
+        );
+        if (!repoInfo) {
+            throw new Error('Invalid repository name');
+        }
+
+        const token = decrypt(authDetail.accessToken);
+        const cloneUrl = `${authDetail.host}/${repositoryFullName}.git`;
+
+        return {
+            url: cloneUrl,
+            provider: PlatformType.FORGEJO,
+            organizationId: params.organizationAndTeamData.organizationId,
+            repositoryId: params.repository.id || repoInfo.repo,
+            repositoryName: repoInfo.repo,
+            branch: params.repository.defaultBranch,
+            auth: {
+                type: authDetail.authMode,
+                username: 'oauth2',
+                token,
+            },
+        };
+    }
+
+    async getPullRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository?: { id: string; name: string };
+        filters?: {
+            startDate?: Date;
+            endDate?: Date;
+            state?: PullRequestState;
+            author?: string;
+            branch?: string;
+        };
+    }): Promise<PullRequest[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const client = this.createForgejoClient(authDetail);
+            const pullRequests: PullRequest[] = [];
+
+            let repositories = params.repository
+                ? [params.repository]
+                : await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                      params.organizationAndTeamData,
+                      IntegrationConfigKey.REPOSITORIES,
+                  );
+
+            if (!repositories || !Array.isArray(repositories)) {
+                repositories = [];
+            }
+
+            for (const repo of repositories) {
+                const repoInfo = this.extractRepoInfo(
+                    repo.name,
+                    'getPullRequests',
+                );
+                if (!repoInfo) continue;
+
+                try {
+                    const state = this.mapStateToForgejoState(
+                        params.filters?.state,
+                    );
+                    const prs = await this.paginate<ForgejoPullRequest>(
+                        async (page, limit) => {
+                            const result = await repoListPullRequests({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                },
+                                query: { state, page, limit },
+                            });
+                            return result.data ?? [];
+                        },
+                    );
+
+                    for (const pr of prs) {
+                        const transformed = this.transformPullRequest(pr, repo);
+
+                        if (
+                            params.filters?.startDate &&
+                            new Date(pr.created_at!) < params.filters.startDate
+                        )
+                            continue;
+                        if (
+                            params.filters?.endDate &&
+                            new Date(pr.created_at!) > params.filters.endDate
+                        )
+                            continue;
+                        if (
+                            params.filters?.author &&
+                            pr.user?.login !== params.filters.author
+                        )
+                            continue;
+                        if (
+                            params.filters?.branch &&
+                            pr.head?.ref !== params.filters.branch
+                        )
+                            continue;
+
+                        pullRequests.push(transformed);
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error fetching PRs for repository ${repo.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+
+            return pullRequests;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting pull requests',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    private mapStateToForgejoState(
+        state?: PullRequestState,
+    ): 'open' | 'closed' | 'all' {
+        if (!state) return 'all';
+        if (state === PullRequestState.OPENED) return 'open';
+        return 'closed';
+    }
+
+    async getPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        includeLabels?: boolean;
+    }): Promise<PullRequest | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) {
+                this.logger.warn({
+                    message: 'No auth details found for getPullRequest',
+                    context: ForgejoService.name,
+                    metadata: {
+                        prNumber: params.prNumber,
+                        repository: params.repository.name,
+                    },
+                });
+                return null;
+            }
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name!,
+                'getPullRequest',
+            );
+            if (!repoInfo) {
+                this.logger.warn({
+                    message: 'Could not extract repo info for getPullRequest',
+                    context: ForgejoService.name,
+                    metadata: {
+                        prNumber: params.prNumber,
+                        repository: params.repository.name,
+                    },
+                });
+                return null;
+            }
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await repoGetPullRequest({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+            });
+
+            if (result.error) {
+                this.logger.warn({
+                    message: 'Forgejo API error getting pull request',
+                    context: ForgejoService.name,
+                    metadata: {
+                        prNumber: params.prNumber,
+                        repository: params.repository.name,
+                        error: result.error,
+                    },
+                });
+                return null;
+            }
+
+            if (!result.data) return null;
+
+            // Forgejo exposes labels on the issue endpoint. The SDK's PR
+            // response does not declare them, so avoid treating a missing
+            // field on that response as an empty label list.
+            const labelTimeoutMs = 5000;
+            let labels: string[] | undefined;
+            if (params.includeLabels) {
+                try {
+                    const issue = await issueGetIssue({
+                        client,
+                        timeout: labelTimeoutMs,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                    });
+                    if (issue.error) throw issue.error;
+                    labels = issue.data?.labels
+                        ?.map((label) => label.name)
+                        .filter(
+                            (name): name is string => typeof name === 'string',
+                        );
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            'Forgejo issue labels unavailable for pull request',
+                        context: ForgejoService.name,
+                        error,
+                        metadata: {
+                            repository: params.repository.name,
+                            prNumber: params.prNumber,
+                            organizationId:
+                                params.organizationAndTeamData.organizationId,
+                            teamId: params.organizationAndTeamData.teamId,
+                            timeoutMs: labelTimeoutMs,
+                        },
+                    });
+                }
+            }
+            return this.transformPullRequest(
+                result.data,
+                {
+                    id: params.repository.id || '',
+                    name: params.repository.name!,
+                },
+                undefined,
+                labels,
+            );
+        } catch (error) {
+            if ((error as any)?.status === 404) {
+                return null;
+            }
+            this.logger.error({
+                message: 'Error getting pull request',
+                context: ForgejoService.name,
+                error,
+                metadata: { prNumber: params.prNumber },
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestByNumber(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string; id?: string };
+        prNumber: number;
+    }): Promise<PullRequest | null> {
+        return this.getPullRequest(params);
+    }
+
+    async getPullRequestsByRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+    }): Promise<PullRequest[]> {
+        return this.getPullRequests({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repository: params.repository,
+        });
+    }
+
+    async getPullRequestsWithFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository?: { id: string; name: string };
+        filters?: { state?: PullRequestState };
+    }): Promise<PullRequestWithFiles[] | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const result: PullRequestWithFiles[] = [];
+
+            const repositories = params.repository
+                ? [params.repository]
+                : await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                      params.organizationAndTeamData,
+                      IntegrationConfigKey.REPOSITORIES,
+                  );
+
+            if (!repositories) return null;
+
+            for (const repo of repositories) {
+                const repoInfo = this.extractRepoInfo(
+                    repo.name,
+                    'getPullRequestsWithFiles',
+                );
+                if (!repoInfo) continue;
+
+                try {
+                    const state = this.mapStateToForgejoState(
+                        params.filters?.state,
+                    );
+                    const prs = await this.paginate<ForgejoPullRequest>(
+                        async (page, limit) => {
+                            const res = await repoListPullRequests({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                },
+                                query: { state, page, limit },
+                            });
+                            return res.data ?? [];
+                        },
+                    );
+
+                    for (const pr of prs) {
+                        const files = await this.paginate<ForgejoChangedFile>(
+                            async (page, limit) => {
+                                const res = await repoGetPullRequestFiles({
+                                    client,
+                                    path: {
+                                        owner: repoInfo.owner,
+                                        repo: repoInfo.repo,
+                                        index: pr.number!,
+                                    },
+                                    query: { page, limit },
+                                });
+                                return res.data ?? [];
+                            },
+                        );
+                        result.push({
+                            id: pr.id,
+                            pull_number: pr.number,
+                            state: pr.state || 'open',
+                            title: pr.title || '',
+                            repository: repo.name,
+                            repositoryData: {
+                                platform: 'forgejo',
+                                id: repo.id || '',
+                                name: repo.name,
+                                fullName: repo.name,
+                                language: repo.language || '',
+                                defaultBranch: repo.default_branch || 'main',
+                            },
+                            pullRequestFiles: files.map((f) => ({
+                                additions: f.additions,
+                                deletions: f.deletions,
+                                changes: f.changes,
+                                status: f.status,
+                            })),
+                        });
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error fetching PRs with files for ${repo.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+
+            return result;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting pull requests with files',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestsForRTTM(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        filters?: {
+            period?: {
+                startDate?: Date;
+                endDate?: Date;
+            };
+        };
+    }): Promise<PullRequestCodeReviewTime[] | null> {
+        try {
+            if (!params?.organizationAndTeamData.organizationId) {
+                return null;
+            }
+
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+            if (!repositories) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            const { startDate, endDate } = params?.filters?.period || {};
+            const pullRequestCodeReviewTime: PullRequestCodeReviewTime[] = [];
+
+            for (const repo of repositories) {
+                const repoInfo = this.extractRepoInfo(
+                    repo.name,
+                    'getPullRequestsForRTTM',
+                );
+                if (!repoInfo) continue;
+
+                try {
+                    const prs = await this.paginate<ForgejoPullRequest>(
+                        async (page, limit) => {
+                            const result = await repoListPullRequests({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                },
+                                query: { state: 'closed', page, limit },
+                            });
+                            return result.data ?? [];
+                        },
+                    );
+
+                    for (const pr of prs) {
+                        if (startDate && pr.created_at) {
+                            if (new Date(pr.created_at) < startDate) continue;
+                        }
+                        if (endDate && pr.created_at) {
+                            if (new Date(pr.created_at) > endDate) continue;
+                        }
+
+                        pullRequestCodeReviewTime.push({
+                            id: pr.id ?? 0,
+                            created_at: pr.created_at ?? '',
+                            closed_at: pr.closed_at ?? '',
+                        });
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error fetching PRs for RTTM from ${repo.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+
+            return pullRequestCodeReviewTime;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting PRs for RTTM',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getFilesByPullRequestId(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+    }): Promise<any[] | null> {
+        const logMetadata = {
+            organizationId: params.organizationAndTeamData.organizationId,
+            teamId: params.organizationAndTeamData.teamId,
+            repository: params.repository.name,
+            prNumber: params.prNumber,
+        };
+
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'getFilesByPullRequestId',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            // Fetch file metadata and diff in parallel
+            const [files, diffResult] = await Promise.all([
+                this.paginate<ForgejoChangedFile>(async (page, limit) => {
+                    const result = await repoGetPullRequestFiles({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                        query: { page, limit },
+                    });
+                    // The client answers an HTTP error instead of throwing
+                    // it: read as an empty page, it would end the listing early
+                    throwIfForgejoFailed(result);
+                    return result.data ?? [];
+                }),
+                repoDownloadPullDiffOrPatch({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        index: params.prNumber,
+                        diffType: 'diff',
+                    },
+                })
+                    .then((result) => {
+                        throwIfForgejoFailed(result);
+                        return result;
+                    })
+                    .catch((error) => {
+                        // A rate limit, a network blip or a server error is
+                        // not a PR without patches: let the job retry
+                        if (
+                            is429Error(error) ||
+                            isTransientFetchError(error) ||
+                            isForgejoServerError(error)
+                        ) {
+                            throw error;
+                        }
+                        this.logger.warn({
+                            message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
+                            context: ForgejoService.name,
+                            error,
+                            metadata: logMetadata,
+                        });
+                        return { data: '' };
+                    }),
+            ]);
+
+            const diffContent = (diffResult.data as string) ?? '';
+
+            // Parse the unified diff to extract per-file patches
+            const patchMap = this.parseUnifiedDiff(diffContent);
+
+            this.logger.log({
+                message: `Fetched ${files.length} files with ${patchMap.size} patches for PR#${params.prNumber}`,
+                context: ForgejoService.name,
+                metadata: {
+                    filesCount: files.length,
+                    patchesCount: patchMap.size,
+                    prNumber: params.prNumber,
+                },
+            });
+
+            return files.map((f) => ({
+                sha: '',
+                filename: f.filename,
+                status: f.status,
+                additions: f.additions,
+                deletions: f.deletions,
+                changes: f.changes,
+                patch: patchMap.get(f.filename ?? '') ?? '',
+                previous_filename: f.previous_filename,
+            }));
+        } catch (error) {
+            // A rate limit, a network blip or a server error is not a
+            // fileless PR: let the job retry
+            if (
+                is429Error(error) ||
+                isTransientFetchError(error) ||
+                isForgejoServerError(error)
+            ) {
+                throw error;
+            }
+            this.logger.error({
+                message: 'Error getting files by PR ID',
+                context: ForgejoService.name,
+                error,
+                metadata: logMetadata,
+            });
+            return null;
+        }
+    }
+
+    async getChangedFilesSinceLastCommit(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        lastCommitSha: string;
+    }): Promise<any | null> {
+        // For simplicity, return all files - Forgejo doesn't have easy diff between commits
+        return this.getFilesByPullRequestId(params);
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        // The compare API lists files without patches, and the web
+        // `compare/{base}...{head}.diff` route doesn't take an API token on a
+        // private repo (404), so the caller falls back to the full review.
+        this.logger.log({
+            message: `No diff at an earlier head for PR#${params.prNumber} on Forgejo`,
+            context: ForgejoService.name,
+            metadata: {
+                organizationId: params.organizationAndTeamData?.organizationId,
+                repository: params.repository?.name,
+                prNumber: params.prNumber,
+                headSha: params.headSha,
+                reason: 'not_supported',
+            },
+        });
+        return null;
+    }
+
+    async isDraftPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<boolean> {
+        try {
+            const pr = await this.getPullRequest(params);
+            return pr?.isDraft || false;
+        } catch {
+            return false;
+        }
+    }
+
+    async getPullRequestAuthors(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        determineBots?: boolean;
+    }): Promise<PullRequestAuthor[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const client = this.createForgejoClient(authDetail);
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            if (!repositories) return [];
+
+            const authorsMap = new Map<string, PullRequestAuthor>();
+
+            for (const repo of repositories) {
+                const repoInfo = this.extractRepoInfo(
+                    repo.name,
+                    'getPullRequestAuthors',
+                );
+                if (!repoInfo) continue;
+
+                try {
+                    const prs = await this.paginate<ForgejoPullRequest>(
+                        async (page, limit) => {
+                            const result = await repoListPullRequests({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                },
+                                query: { state: 'all', page, limit },
+                            });
+                            return result.data ?? [];
+                        },
+                    );
+
+                    for (const pr of prs) {
+                        if (
+                            pr.user?.id &&
+                            !authorsMap.has(pr.user.id.toString())
+                        ) {
+                            authorsMap.set(pr.user.id.toString(), {
+                                id: pr.user.id.toString(),
+                                name: pr.user.full_name || pr.user.login || '',
+                            });
+                        }
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error fetching PR authors for ${repo.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+
+            return Array.from(authorsMap.values());
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting PR authors',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getCommits(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository?: Partial<Repository>;
+        filters?: {
+            startDate?: Date;
+            endDate?: Date;
+            author?: string;
+            branch?: string;
+        };
+    }): Promise<Commit[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const client = this.createForgejoClient(authDetail);
+            const commits: Commit[] = [];
+
+            const repositories = params.repository
+                ? [params.repository]
+                : await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                      params.organizationAndTeamData,
+                      IntegrationConfigKey.REPOSITORIES,
+                  );
+
+            if (!repositories) return [];
+
+            for (const repo of repositories) {
+                if (!repo.name) continue;
+                const repoInfo = this.extractRepoInfo(repo.name, 'getCommits');
+                if (!repoInfo) continue;
+
+                try {
+                    const repoCommits = await this.paginate<ForgejoCommit>(
+                        async (page, limit) => {
+                            const result = await repoGetAllCommits({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                },
+                                query: {
+                                    sha: params.filters?.branch,
+                                    page,
+                                    limit,
+                                },
+                            });
+                            return result.data ?? [];
+                        },
+                    );
+
+                    for (const commit of repoCommits) {
+                        const transformed = this.transformCommit(commit);
+
+                        const commitDate = new Date(
+                            commit.commit?.author?.date || '',
+                        );
+                        if (
+                            params.filters?.startDate &&
+                            commitDate < params.filters.startDate
+                        )
+                            continue;
+                        if (
+                            params.filters?.endDate &&
+                            commitDate > params.filters.endDate
+                        )
+                            continue;
+                        if (
+                            params.filters?.author &&
+                            commit.commit?.author?.name !==
+                                params.filters.author
+                        )
+                            continue;
+
+                        commits.push(transformed);
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error fetching commits for ${repo.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+
+            return commits;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting commits',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getCommitsForPullRequestForCodeReview(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+    }): Promise<Commit[] | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'getCommitsForPullRequestForCodeReview',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const commits = await this.paginate<ForgejoCommit>(
+                async (page, limit) => {
+                    const result = await repoGetPullRequestCommits({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            return commits
+                .map((c) => this.transformCommit(c))
+                .sort(
+                    (a, b) =>
+                        new Date(a?.commit?.author?.date || '').getTime() -
+                        new Date(b?.commit?.author?.date || '').getTime(),
+                );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting commits for PR',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async mergePullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        mergeMethod?: 'merge' | 'squash' | 'rebase';
+    }): Promise<any> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) throw new Error('No auth details');
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'mergePullRequest',
+            );
+            if (!repoInfo) throw new Error('Invalid repository name');
+
+            const client = this.createForgejoClient(authDetail);
+
+            const mergeMethodMap: Record<
+                string,
+                'merge' | 'squash' | 'rebase'
+            > = {
+                merge: 'merge',
+                squash: 'squash',
+                rebase: 'rebase',
+            };
+
+            await repoMergePullRequest({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: {
+                    Do:
+                        mergeMethodMap[params.mergeMethod || 'merge'] ||
+                        'merge',
+                },
+            });
+
+            return { success: true };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error merging pull request',
+                context: ForgejoService.name,
+                error,
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Dismisses the token user's approving reviews when a later review holds
+     * approval. Returns how many were dismissed.
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'APPROVED',
+            'Kody held automatic approval after a new review.',
+        );
+    }
+
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        return this.dismissOwnReviews(params, 'REQUEST_CHANGES', params.reason);
+    }
+
+    private async dismissOwnReviews(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        state: 'APPROVED' | 'REQUEST_CHANGES',
+        message: string,
+    ): Promise<number> {
+        const what = state === 'APPROVED' ? 'approval' : 'change request';
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) throw new Error('No auth details');
+        const repoInfo = this.extractRepoInfo(
+            params.repository?.name ?? '',
+            'dismissOwnReviews',
+        );
+        if (!repoInfo) throw new Error('Invalid repository name');
+        const client = this.createForgejoClient(authDetail);
+        const path = {
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            index: params.prNumber,
+        };
+        const [me, reviews] = await Promise.all([
+            userGetCurrent({ client }),
+            this.paginate<ForgejoPullReview>(async (page, limit) => {
+                const result = await repoListPullReviews({
+                    client,
+                    path,
+                    query: { page, limit },
+                });
+                if (result.error) throw result.error;
+                return result.data ?? [];
+            }),
+        ]);
+        if (!me.data?.id) throw new Error('Unable to identify the token user');
+        const own = reviews.filter(
+            (review) =>
+                review.state === state &&
+                !review.dismissed &&
+                review.user?.id === me.data.id &&
+                review.id,
+        );
+        for (const review of own) {
+            const result = await repoDismissPullReview({
+                client,
+                path: { ...path, id: review.id! },
+                body: { message },
+            });
+            if (isAxiosError(result) && result.response?.status === 403) {
+                // Forgejo lets only a repository admin dismiss a review, the
+                // same role it needs to create the webhook automatically.
+                throw new Error(
+                    `Forgejo refused to dismiss Kody's ${what} on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
+                );
+            }
+            if (result.error) throw result.error;
+        }
+        return own.length;
+    }
+
+    async approvePullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        body?: string;
+    }): Promise<any> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) throw new Error('No auth details');
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'approvePullRequest',
+            );
+            if (!repoInfo) throw new Error('Invalid repository name');
+
+            const client = this.createForgejoClient(authDetail);
+
+            const result = await repoCreatePullReview({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: {
+                    event: 'APPROVED',
+                    body: params.body || '',
+                },
+            });
+
+            return result.data;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error approving pull request',
+                context: ForgejoService.name,
+                error,
+            });
+            throw error;
+        }
+    }
+
+    async requestChangesPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        repository: { id: string; name: string };
+        criticalComments: CommentResult[];
+    }): Promise<any> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) throw new Error('No auth details');
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'requestChangesPullRequest',
+            );
+            if (!repoInfo) throw new Error('Invalid repository name');
+
+            const client = this.createForgejoClient(authDetail);
+
+            const listOfCriticalIssues = this.getListOfCriticalIssues({
+                criticalComments: params.criticalComments,
+                repository: params.repository,
+                prNumber: params.prNumber,
+                forgejoHost: authDetail.host,
+            });
+
+            const requestChangeBodyTitle =
+                '# Found critical issues please review the requested changes';
+
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
+
+            const result = await repoCreatePullReview({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: {
+                    event: 'REQUEST_CHANGES',
+                    body: formattedBody,
+                },
+            });
+
+            this.logger.log({
+                message: `Changed status to requested changes on pull request #${params.prNumber}`,
+                context: ForgejoService.name,
+                metadata: params,
+            });
+
+            return result.data;
+        } catch (error) {
+            this.logger.error({
+                message: `Error to change status to request changes on pull request #${params.prNumber}`,
+                context: ForgejoService.name,
+                error,
+                metadata: params,
+            });
+            throw error;
+        }
+    }
+
+    private getListOfCriticalIssues(params: {
+        criticalComments: CommentResult[];
+        repository: Partial<Repository>;
+        prNumber: number;
+        forgejoHost?: string;
+    }): string {
+        const { criticalComments, prNumber, repository, forgejoHost } = params;
+
+        const repositoryFullName = repository.fullName || repository.name;
+        const forgejoBaseUrl = forgejoHost?.replace(/\/+$/, '');
+        const criticalIssuesSummaryArray =
+            this.getCriticalIssuesSummaryArray(criticalComments);
+
+        return criticalIssuesSummaryArray
+            .map((criticalIssue) => {
+                const commentId = criticalIssue.id;
+                const summary = criticalIssue.oneSentenceSummary;
+                const link =
+                    !forgejoBaseUrl ||
+                    !repositoryFullName ||
+                    !prNumber ||
+                    !commentId
+                        ? ''
+                        : `${forgejoBaseUrl}/${repositoryFullName}/pulls/${prNumber}#issuecomment-${commentId}`;
+
+                return commentId ? `- [${summary}](${link})` : `- ${summary}`;
+            })
+            .join('\n');
+    }
+
+    private getCriticalIssuesSummaryArray(
+        criticalComments: CommentResult[],
+    ): OneSentenceSummaryItem[] {
+        return criticalComments.map((comment) => ({
+            id: comment.codeReviewFeedbackData?.commentId,
+            oneSentenceSummary:
+                comment.comment?.suggestion?.oneSentenceSummary ?? '',
+        }));
+    }
+
+    async getOrganizations(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<Organization[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const client = this.createForgejoClient(authDetail);
+
+            const orgs = await this.paginate<ForgejoOrganization>(
+                async (page, limit) => {
+                    const result = await orgListCurrentUserOrgs({
+                        client,
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            return orgs.map((org) => ({
+                id: org.id?.toString() ?? '',
+                name: org.name ?? org.username ?? '',
+                url: org.avatar_url ?? '',
+                selected: false,
+            }));
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting organizations',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any[] | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name!,
+                'getListOfValidReviews',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            const reviews = await this.paginate<ForgejoPullReview>(
+                async (page, limit) => {
+                    const result = await repoListPullReviews({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            const reviewsWithComments = await Promise.all(
+                reviews.map(async (review) => {
+                    if (!review.id) return { ...review, comments: [] };
+
+                    try {
+                        const commentsResult = await repoGetPullReviewComments({
+                            client,
+                            path: {
+                                owner: repoInfo.owner,
+                                repo: repoInfo.repo,
+                                index: params.prNumber,
+                                id: review.id,
+                            },
+                        });
+                        const comments = commentsResult.data ?? [];
+
+                        return {
+                            state: review.state,
+                            id: review.id?.toString(),
+                            comments: comments.map((c) => ({
+                                id: c.id?.toString(),
+                                body: c.body,
+                                outdated: false, // Forgejo doesn't have outdated concept
+                                isMinimized: false, // Forgejo doesn't have minimize concept
+                            })),
+                        };
+                    } catch {
+                        return {
+                            state: review.state,
+                            id: review.id?.toString(),
+                            comments: [],
+                        };
+                    }
+                }),
+            );
+
+            return reviewsWithComments;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting list of valid reviews',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestsWithChangesRequested(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+    }): Promise<PullRequestsWithChangesRequested[] | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name!,
+                'getPullRequestsWithChangesRequested',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            const prs = await this.paginate<ForgejoPullRequest>(
+                async (page, limit) => {
+                    const result = await repoListPullRequests({
+                        client,
+                        path: { owner: repoInfo.owner, repo: repoInfo.repo },
+                        query: { state: 'open', page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            const result: PullRequestsWithChangesRequested[] = [];
+
+            for (const pr of prs) {
+                if (!pr.number) continue;
+
+                try {
+                    const reviews = await this.paginate<ForgejoPullReview>(
+                        async (page, limit) => {
+                            const res = await repoListPullReviews({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                    index: pr.number!,
+                                },
+                                query: { page, limit },
+                            });
+                            return res.data ?? [];
+                        },
+                    );
+
+                    const latestReview = reviews[reviews.length - 1];
+                    if (latestReview?.state === 'REQUEST_CHANGES') {
+                        result.push({
+                            title: pr.title || '',
+                            number: pr.number,
+                            reviewDecision:
+                                PullRequestReviewState.CHANGES_REQUESTED,
+                        });
+                    }
+                } catch {
+                    // Skip PRs we can't get reviews for
+                }
+            }
+
+            return result;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting PRs with changes requested',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestReviewThreads(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<PullRequestReviewComment[] | null> {
+        // Forgejo doesn't have true review threads like GitHub
+        // Return review comments grouped by their review instead
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name!,
+                'getPullRequestReviewThreads',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            const reviews = await this.paginate<ForgejoPullReview>(
+                async (page, limit) => {
+                    const result = await repoListPullReviews({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            const allComments: PullRequestReviewComment[] = [];
+
+            for (const review of reviews) {
+                if (!review.id) continue;
+
+                try {
+                    const commentsResult = await repoGetPullReviewComments({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                            id: review.id,
+                        },
+                    });
+                    const comments = commentsResult.data ?? [];
+
+                    for (const c of comments) {
+                        allComments.push(
+                            this.mapForgejoReviewComment(review, c),
+                        );
+                    }
+                } catch {
+                    // Skip reviews we can't get comments for
+                }
+            }
+
+            return allComments;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting PR review threads',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async updateDescriptionInPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        summary?: string;
+        body?: string;
+    }): Promise<any> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) {
+                throw new Error(
+                    `No Forgejo credentials to update PR #${params.prNumber}`,
+                );
+            }
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'updateDescriptionInPullRequest',
+            );
+            if (!repoInfo) {
+                throw new Error(
+                    `No Forgejo repository named "${params.repository.name}" to update PR #${params.prNumber}`,
+                );
+            }
+
+            const client = this.createForgejoClient(authDetail);
+
+            // Truncate at the adapter boundary so the per-platform limit
+            // is enforced consistently — see fit-pr-description.ts.
+            const description = fitPRDescription(
+                params.summary ?? params.body ?? '',
+                PlatformType.FORGEJO,
+            );
+
+            const result = await repoEditPullRequest({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: {
+                    body: description,
+                },
+                // The client answers an HTTP error with `{ error }` unless told
+                // to throw, and an unthrown error is a silent success (#2380).
+                throwOnError: true,
+            });
+
+            return result.data;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error updating PR description',
+                context: ForgejoService.name,
+                error,
+            });
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
+        }
+    }
+
+    async checkIfPullRequestShouldBeApproved(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        repository: { id: string; name: string };
+    }): Promise<{ shouldApprove: boolean; reason?: string } | null> {
+        try {
+            const pr = await this.getPullRequest({
+                organizationAndTeamData: params.organizationAndTeamData,
+                repository: params.repository,
+                prNumber: params.prNumber,
+            });
+
+            if (!pr) return null;
+
+            return {
+                shouldApprove:
+                    pr.state === PullRequestState.OPENED && !pr.isDraft,
+                reason: pr.isDraft ? 'PR is a draft' : undefined,
+            };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async getReviewStatusByPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<PullRequestReviewState | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name!,
+                'getReviewStatusByPullRequest',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const reviews = await this.paginate<ForgejoPullReview>(
+                async (page, limit) => {
+                    const result = await repoListPullReviews({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            // Kody's own state: the token user's reviews that still count. A
+            // human's approval is not Kody's, and a later comment review does
+            // not undo an approval on Forgejo.
+            const me = await userGetCurrent({ client });
+            if (!me.data?.id) return null;
+            const own = reviews.filter(
+                (review) => review.user?.id === me.data.id && !review.dismissed,
+            );
+            const latestReview = own
+                .filter((review) =>
+                    ['APPROVED', 'REQUEST_CHANGES'].includes(
+                        review.state ?? '',
+                    ),
+                )
+                .at(-1);
+            if (!latestReview) {
+                return own.length
+                    ? PullRequestReviewState.COMMENTED
+                    : PullRequestReviewState.NONE;
+            }
+
+            switch (latestReview.state) {
+                case 'APPROVED':
+                    return PullRequestReviewState.APPROVED;
+                case 'REQUEST_CHANGES':
+                    return PullRequestReviewState.CHANGES_REQUESTED;
+                case 'COMMENT':
+                    return PullRequestReviewState.COMMENTED;
+                default:
+                    return PullRequestReviewState.PENDING;
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting review status',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async createReviewComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string; language?: string };
+        prNumber: number;
+        lineComment: any;
+        commit?: { sha: string };
+        language?: LanguageValue;
+        suggestionCopyPrompt?: boolean;
+    }): Promise<ReviewComment | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'createReviewComment',
+            );
+            if (!repoInfo) return null;
+
+            const { lineComment, commit, language, suggestionCopyPrompt } =
+                params;
+
+            const translations = getTranslationsForLanguageByCategory(
+                language as LanguageValue,
+                TranslationsCategory.ReviewComment,
+            );
+
+            const bodyFormatted = this.formatBodyForForgejo(
+                lineComment,
+                params.repository,
+                translations,
+                suggestionCopyPrompt ?? true,
+            );
+
+            const endLine = lineComment.line;
+
+            this.logger.log({
+                message: `Creating review comment for PR#${params.prNumber}`,
+                context: ForgejoService.name,
+                metadata: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    prNumber: params.prNumber,
+                    path: lineComment.path,
+                    line: endLine,
+                    commitSha: commit?.sha?.substring(0, 7),
+                },
+            });
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await repoCreatePullReview({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: {
+                    body: '',
+                    commit_id: commit?.sha,
+                    event: 'COMMENT',
+                    comments: [
+                        {
+                            path: lineComment.path,
+                            body: bodyFormatted,
+                            new_position: endLine,
+                        },
+                    ],
+                },
+            });
+            const review = result.data;
+            // The SDK's PullReview type does not model `comments`, which the
+            // create response carries only on some Forgejo versions, so the
+            // field is read with a runtime guard and typed from the SDK's own
+            // comment type rather than asserted with an unchecked cast.
+            const rawComments = (review as { comments?: unknown })?.comments;
+            let createdComment: ForgejoPullReviewComment | undefined;
+            if (Array.isArray(rawComments)) {
+                createdComment = rawComments[0] as ForgejoPullReviewComment;
+            }
+
+            // Forgejo (16.x) answers the create-review request with the review,
+            // `comments_count`, but no `comments` array, so the id of the
+            // created comment is not in the response — reaching it means
+            // listing the review's comments (#2051). That review was created by
+            // this very call, so its newest comment is the one we just posted.
+            if (!createdComment && review?.id != null) {
+                try {
+                    const commentsResult = await repoGetPullReviewComments({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                            id: review.id,
+                        },
+                    });
+                    createdComment = [...(commentsResult.data ?? [])].sort(
+                        (a, b) => (b.id ?? 0) - (a.id ?? 0),
+                    )[0];
+                } catch (lookupError) {
+                    // The comment is already posted — never fail the create
+                    // because the id lookup did: the caller's retry logic
+                    // would post it a second time under the same review id,
+                    // and a message containing "line"/"position" would be
+                    // misread as a line mismatch. Best-effort, like the other
+                    // SDK call sites in this file.
+                    this.logger.warn({
+                        message: `Could not resolve the created comment id for PR#${params.prNumber}`,
+                        context: ForgejoService.name,
+                        error: lookupError,
+                        metadata: {
+                            reviewId: review.id,
+                            organizationAndTeamData:
+                                params.organizationAndTeamData,
+                        },
+                    });
+                }
+            }
+
+            this.logger.log({
+                message: `Created review comment for PR#${params.prNumber}`,
+                context: ForgejoService.name,
+                metadata: {
+                    reviewId: review?.id,
+                    commentId: createdComment?.id,
+                },
+            });
+
+            return {
+                id: createdComment?.id ?? review?.id,
+                pullRequestReviewId: review?.id?.toString(),
+                body: createdComment?.body ?? bodyFormatted,
+                createdAt: createdComment?.created_at ?? review?.submitted_at,
+                updatedAt: createdComment?.updated_at ?? review?.submitted_at,
+            };
+        } catch (error: any) {
+            const isLineMismatch =
+                error.responseData?.message?.includes('line') ||
+                error.responseData?.message?.includes('position');
+
+            const errorType = isLineMismatch
+                ? 'failed_lines_mismatch'
+                : 'failed';
+
+            this.logger.error({
+                message: `Error creating review comment for PR#${params.prNumber}`,
+                context: ForgejoService.name,
+                error,
+                metadata: { errorType },
+            });
+
+            throw { ...error, errorType };
+        }
+    }
+
+    private formatBodyForForgejo(
+        lineComment: any,
+        repository: any,
+        translations: any,
+        suggestionCopyPrompt: boolean,
+    ): string {
+        const severityShield = lineComment?.suggestion
+            ? getSeverityLevelShield(lineComment.suggestion.severity)
+            : '';
+
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
+        const actionStatement = lineComment?.body?.actionStatement
+            ? `${lineComment.body.actionStatement}\n\n`
+            : '';
+
+        const badges =
+            [
+                getCodeReviewBadge(),
+                lineComment?.suggestion
+                    ? getSuggestionShield(lineComment.suggestion)
+                    : '',
+                severityShield,
+            ].join(' ') + '\n\n';
+
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: lineComment?.body?.improvedCode,
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
+
+        const formatSub = (text: string) =>
+            text ? `<sub>${text}</sub>\n` : '';
+
+        return [
+            badges,
+            suggestionContent,
+            actionStatement,
+            copyPrompt,
+            formatSub(translations?.talkToKody || ''),
+            formatSub(translations?.feedback || '') +
+                '<!-- kody-codereview -->&#8203;\n&#8203;',
+        ]
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+    }
+
+    async formatReviewCommentBody(params: {
+        suggestion: any;
+        repository: { name: string; language: string };
+        includeHeader?: boolean;
+        includeFooter?: boolean;
+        language?: string;
+        organizationAndTeamData: OrganizationAndTeamData;
+        suggestionCopyPrompt?: boolean;
+    }): Promise<string> {
+        const translations = getTranslationsForLanguageByCategory(
+            (params.language || 'en') as LanguageValue,
+            TranslationsCategory.ReviewComment,
+        );
+
+        return this.formatBodyForForgejo(
+            { suggestion: params.suggestion, body: params.suggestion },
+            params.repository,
+            translations,
+            params.suggestionCopyPrompt ?? true,
+        );
+    }
+
+    async createCommentInPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        body: string;
+    }): Promise<any[] | null> {
+        try {
+            const result = await this.createIssueComment(params);
+            return result ? [result] : null;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error creating comment in PR',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async createIssueComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        body: string;
+    }): Promise<any | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'createIssueComment',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await issueCreateComment({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: { body: params.body },
+            });
+
+            return result.data;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error creating issue comment',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async createSingleIssueComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        body: string;
+    }): Promise<any | null> {
+        return this.createIssueComment(params);
+    }
+
+    async updateIssueComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        commentId: number;
+        body: string;
+    }): Promise<any | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'updateIssueComment',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await issueEditComment({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    id: params.commentId,
+                },
+                body: { body: params.body },
+            });
+
+            return result.data;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error updating issue comment',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getAllCommentsInPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        prNumber: number;
+        failOnError?: boolean;
+    }): Promise<any[]> {
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) {
+            throw new Error('Forgejo authentication unavailable');
+        }
+
+        const repoInfo = this.extractRepoInfo(
+            params.repository.name,
+            'getAllCommentsInPullRequest',
+        );
+        if (!repoInfo) {
+            throw new Error('Forgejo repository unavailable');
+        }
+
+        try {
+            const client = this.createForgejoClient(authDetail);
+            const result = await issueGetComments({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+            });
+
+            return result.data ?? [];
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting all comments in PR',
+                context: ForgejoService.name,
+                error,
+            });
+            if (params.failOnError) throw error;
+            return [];
+        }
+    }
+
+    async getPullRequestReviewComment(params: any): Promise<any | null> {
+        const { organizationAndTeamData, filters } = params;
+
+        try {
+            // The shared code-management contract fetches all review comments
+            // for a PR via `{ organizationAndTeamData, filters: { repository,
+            // pullRequestNumber } }` (the shape every other adapter consumes).
+            // The previous Forgejo-only `{ repository, prNumber, commentId }`
+            // signature never matched any caller, so for the reaction use-case
+            // it threw on undefined params and returned null, leaving
+            // countReactions with an empty comments array on Forgejo (#2061).
+            const comments = await this.getPullRequestReviewComments({
+                organizationAndTeamData,
+                repository: filters.repository,
+                prNumber: filters.pullRequestNumber,
+            });
+
+            // Sibling adapters honour `commentId`: a caller that passes one
+            // gets the matching comment back rather than the whole
+            // conversation (#2064 review).
+            if (params.commentId !== undefined) {
+                return comments?.find((c) => c.id === params.commentId) || null;
+            }
+
+            return comments ?? [];
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async getPullRequestReviewComments(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<PullRequestReviewComment[] | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name!,
+                'getPullRequestReviewComments',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            const reviews = await this.paginate<ForgejoPullReview>(
+                async (page, limit) => {
+                    const result = await repoListPullReviews({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                        query: { page, limit },
+                    });
+                    return result.data ?? [];
+                },
+            );
+
+            const allComments: PullRequestReviewComment[] = [];
+            for (const review of reviews) {
+                if (!review.id) continue;
+                try {
+                    const commentsResult = await repoGetPullReviewComments({
+                        client,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                            id: review.id,
+                        },
+                    });
+                    const comments = commentsResult.data ?? [];
+                    for (const c of comments) {
+                        if (hasKodyMarker(c.body)) continue;
+
+                        allComments.push(
+                            this.mapForgejoReviewComment(review, c),
+                        );
+                    }
+                } catch (reviewError) {
+                    this.logger.warn({
+                        message: `Error fetching comments for review ${review.id}`,
+                        context: ForgejoService.name,
+                        error: reviewError,
+                    });
+                }
+            }
+
+            return allComments;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting PR review comments',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async createResponseToComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        inReplyToId?: string;
+        commentId?: string;
+        body: string;
+    }): Promise<any | null> {
+        // Forgejo doesn't support threaded replies to review comments
+        // Create a regular issue comment instead
+        return this.createIssueComment({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repository: { name: params.repository.name! },
+            prNumber: params.prNumber,
+            body: params.body,
+        });
+    }
+
+    async updateResponseToComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        parentId: string;
+        commentId: string;
+        body: string;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any | null> {
+        return this.updateIssueComment({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repository: { name: params.repository.name! },
+            commentId: parseInt(params.commentId, 10),
+            body: params.body,
+        });
+    }
+
+    async getRepositoryContentFile(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string };
+        path?: string;
+        ref?: string;
+        file?: { filename?: string };
+        pullRequest?: { head?: { ref?: string }; base?: { ref?: string } };
+    }): Promise<any | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'getRepositoryContentFile',
+            );
+            if (!repoInfo) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const filePath = params.path ?? params.file?.filename;
+            const ref =
+                params.ref ??
+                params.pullRequest?.head?.ref ??
+                params.pullRequest?.base?.ref;
+            if (!filePath) return null;
+
+            const result = await repoGetContents({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    filepath: filePath,
+                },
+                query: { ref },
+            });
+            const content = result.data;
+
+            if (Array.isArray(content)) return null;
+
+            const decodedContent =
+                content?.encoding === 'base64'
+                    ? Buffer.from(content.content || '', 'base64').toString(
+                          'utf-8',
+                      )
+                    : content?.content;
+
+            const file = {
+                name: content?.name,
+                path: content?.path,
+                sha: content?.sha,
+                size: content?.size,
+                type: content?.type,
+                content: decodedContent,
+                encoding: 'utf-8',
+                html_url: content?.html_url,
+                download_url: content?.download_url,
+            };
+
+            return { data: file };
+        } catch (error) {
+            if ((error as any)?.status === 404) {
+                return null;
+            }
+            this.logger.error({
+                message: 'Error getting file content',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getRepositoryTree(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<TreeItem[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            const repo = repositories?.find(
+                (r: any) => r.id === params.repositoryId,
+            );
+            if (!repo) return [];
+
+            const repoInfo = this.extractRepoInfo(
+                repo.name,
+                'getRepositoryTree',
+            );
+            if (!repoInfo) return [];
+
+            const client = this.createForgejoClient(authDetail);
+
+            const repoResult = await repoGet({
+                client,
+                path: { owner: repoInfo.owner, repo: repoInfo.repo },
+            });
+            const defaultBranch = repoResult.data?.default_branch || 'main';
+
+            const treeResult = await getTree({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    sha: defaultBranch,
+                },
+                query: { recursive: true },
+            });
+            const tree = treeResult.data;
+
+            return (tree?.tree || []).map((item) => ({
+                path: item.path,
+                type:
+                    item.type === 'blob'
+                        ? ('file' as const)
+                        : ('directory' as const),
+                sha: item.sha,
+                size: item.size,
+                url: item.url || '',
+                hasChildren: item.type !== 'blob',
+            }));
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting repository tree',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getRepositoryTreeByDirectory(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+        directoryPath?: string;
+    }): Promise<TreeItem[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            const repo = repositories?.find(
+                (r: any) => r.id === params.repositoryId,
+            );
+            if (!repo) return [];
+
+            const repoInfo = this.extractRepoInfo(
+                repo.name,
+                'getRepositoryTreeByDirectory',
+            );
+            if (!repoInfo) return [];
+
+            const client = this.createForgejoClient(authDetail);
+
+            const path = params.directoryPath || '';
+            const result = await repoGetContents({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    filepath: path,
+                },
+            });
+
+            const contents = result.data;
+            if (!Array.isArray(contents)) {
+                return [];
+            }
+
+            return contents.map((item) => ({
+                path: item.path,
+                type:
+                    item.type === 'file'
+                        ? ('file' as const)
+                        : ('directory' as const),
+                sha: item.sha,
+                size: item.size,
+                url: item.html_url || item.download_url || '',
+                hasChildren: item.type !== 'file',
+            }));
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting repository tree by directory',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getRepositoryAllFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        filters?: {
+            branch?: string;
+            filePatterns?: string[];
+            excludePatterns?: string[];
+            maxFiles?: number;
+        };
+        throwOnError?: boolean;
+    }): Promise<RepositoryFile[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail)
+                return listingFailed(
+                    params.throwOnError,
+                    'Forgejo authentication details not found',
+                );
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'getRepositoryAllFiles',
+            );
+            if (!repoInfo)
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository name is not owner/repo',
+                );
+
+            const client = this.createForgejoClient(authDetail);
+
+            const branch =
+                params.filters?.branch ||
+                (await this.getDefaultBranch({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repository: params.repository,
+                }));
+
+            // A recursive tree comes in pages; `truncated` says more remain.
+            const entries: Array<{
+                path?: string;
+                type?: string;
+                sha?: string;
+                size?: number;
+            }> = [];
+            let truncated = false;
+            for (let page = 1; page <= MAX_TREE_PAGES; page++) {
+                const result = await getTree({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        sha: branch,
+                    },
+                    query: { recursive: true, page, per_page: TREE_PAGE_SIZE },
+                    throwOnError: true,
+                });
+                entries.push(...(result.data?.tree || []));
+                truncated = !!result.data?.truncated;
+                if (!truncated) break;
+            }
+            if (truncated) {
+                this.logger.warn({
+                    message: `Repository tree has more than ${MAX_TREE_PAGES * TREE_PAGE_SIZE} entries; the listing stops there`,
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        teamId: params.organizationAndTeamData?.teamId,
+                        repositoryId: params.repository?.id,
+                        branch,
+                        entries: entries.length,
+                    },
+                });
+            }
+
+            let files = entries
+                .filter((item) => item.type === 'blob')
+                .map((item) => ({
+                    path: item.path,
+                    type: 'file',
+                    filename: item.path?.split('/').pop() || item.path || '',
+                    sha: item.sha,
+                    size: item.size || 0,
+                }));
+
+            if (params.filters?.filePatterns?.length) {
+                files = files.filter((f) =>
+                    isFileMatchingGlobCaseInsensitive(
+                        f.path,
+                        params.filters!.filePatterns!,
+                    ),
+                );
+            }
+
+            if (params.filters?.excludePatterns?.length) {
+                files = files.filter(
+                    (f) =>
+                        !isFileMatchingGlob(
+                            f.path,
+                            params.filters!.excludePatterns!,
+                        ),
+                );
+            }
+
+            if (params.filters?.maxFiles) {
+                files = files.slice(0, params.filters.maxFiles);
+            }
+
+            return files;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting all repository files',
+                context: ForgejoService.name,
+                error,
+            });
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
+        }
+    }
+
+    async getUserByUsername(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        username: string;
+    }): Promise<any | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await userGet({
+                client,
+                path: { username: params.username },
+            });
+
+            const user = result.data;
+            return {
+                id: user!.id!.toString(),
+                login: user!.login,
+                name: user!.full_name || user!.login,
+                email: user!.email,
+                avatar_url: user!.avatar_url,
+            };
+        } catch (error) {
+            if (
+                error &&
+                typeof error === 'object' &&
+                'status' in error &&
+                error.status === 404
+            ) {
+                return null;
+            }
+            this.logger.error({
+                message: 'Error getting user by username',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getUserByEmailOrName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        email?: string;
+        userName: string;
+    }): Promise<any | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const client = this.createForgejoClient(authDetail);
+
+            try {
+                const result = await userGet({
+                    client,
+                    path: { username: params.userName },
+                });
+                const user = result.data;
+                return {
+                    id: user!.id!.toString(),
+                    login: user!.login,
+                    name: user!.full_name || user!.login,
+                    email: user!.email,
+                    avatar_url: user!.avatar_url,
+                };
+            } catch {
+                // Not found by username, try search
+            }
+
+            const searchResult = await userSearch({
+                client,
+                query: { q: params.userName, limit: 10 },
+            });
+            if (searchResult.data?.data && searchResult.data.data.length > 0) {
+                const user = searchResult.data.data[0];
+                return {
+                    id: user.id!.toString(),
+                    login: user.login,
+                    name: user.full_name || user.login,
+                    email: user.email,
+                    avatar_url: user.avatar_url,
+                };
+            }
+
+            return null;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting user by email or name',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async getCurrentUser(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<any | null> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return null;
+
+            const client = this.createForgejoClient(authDetail);
+            const result = await userGetCurrent({ client });
+
+            const user = result.data;
+            return {
+                id: user!.id!.toString(),
+                login: user!.login,
+                name: user!.full_name || user!.login,
+                email: user!.email,
+                avatar_url: user!.avatar_url,
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting current user',
+                context: ForgejoService.name,
+                error,
+            });
+            return null;
+        }
+    }
+
+    async deleteWebhook(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<void> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return;
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            if (!repositories) return;
+
+            const client = this.createForgejoClient(authDetail);
+            const webhookUrl = this.configService.get<string>(
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
+            );
+            // Without a URL there is nothing of ours to match; comparing
+            // against undefined would delete hooks that have no URL.
+            if (!webhookUrl) {
+                this.logger.warn({
+                    message:
+                        'Forgejo webhook URL not configured (API_FORGEJO_CODE_MANAGEMENT_WEBHOOK): nothing to delete, existing hooks are left in place',
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                    },
+                });
+                return;
+            }
+
+            for (const repo of repositories) {
+                const repoInfo = this.extractRepoInfo(
+                    repo.name,
+                    'deleteWebhook',
+                );
+                if (!repoInfo) continue;
+
+                try {
+                    const result = await repoListHooks({
+                        client,
+                        path: { owner: repoInfo.owner, repo: repoInfo.repo },
+                    });
+                    const hooks = result.data ?? [];
+                    for (const hook of hooks) {
+                        if (hook.config?.url === webhookUrl && hook.id) {
+                            await repoDeleteHook({
+                                client,
+                                path: {
+                                    owner: repoInfo.owner,
+                                    repo: repoInfo.repo,
+                                    id: hook.id,
+                                },
+                            });
+                            this.logger.log({
+                                message: `Deleted webhook for ${repo.name}`,
+                                context: ForgejoService.name,
+                            });
+                        }
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Error deleting webhook for ${repo.name}`,
+                        context: ForgejoService.name,
+                        error,
+                    });
+                }
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error deleting webhooks',
+                context: ForgejoService.name,
+                error,
+            });
+        }
+    }
+
+    /**
+     * Makes sure every selected repository has the Kodus hook and records
+     * the repositories that could not get one.
+     */
+    async createPullRequestWebhook(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        integrationId?: string;
+    }): Promise<void> {
+        const { organizationAndTeamData } = params;
+        const startedAt = new Date().toISOString();
+
+        try {
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            if (!repositories?.length) {
+                return;
+            }
+
+            const result = await this.ensureRepositoryWebhooks({
+                organizationAndTeamData,
+                repositories,
+            });
+
+            const integrationId =
+                params.integrationId ??
+                (
+                    await this.integrationService.findOne({
+                        organization: {
+                            uuid: organizationAndTeamData.organizationId,
+                        },
+                        team: { uuid: organizationAndTeamData.teamId },
+                        platform: PlatformType.FORGEJO,
+                    })
+                )?.uuid;
+
+            if (integrationId) {
+                await recordWebhookSetupOutcome(this.integrationConfigService, {
+                    organizationAndTeamData,
+                    integrationId,
+                    startedAt,
+                    result,
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error creating pull request webhooks',
+                context: ForgejoService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+        }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'Forgejo',
+            permissionHint:
+                'Creating a repository webhook needs admin access to the repository and the write:repository scope on the token.',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        const webhookUrl = this.configService.get<string>(
+            'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
+        );
+        let client: ReturnType<ForgejoService['createForgejoClient']>;
+
+        try {
+            if (!webhookUrl) {
+                throw new Error(
+                    'The Forgejo webhook URL is not configured (API_FORGEJO_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            const authDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!authDetail) {
+                throw new Error(
+                    'No Forgejo credential is stored for this team',
+                );
+            }
+
+            client = this.createForgejoClient(authDetail);
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start Forgejo webhook setup',
+                context: ForgejoService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
+
+        const desiredEvents = [
+            'push',
+            'pull_request',
+            'issue_comment',
+            'pull_request_review',
+            'pull_request_review_comment',
+        ];
+
+        const result = await runWebhookSetup(
+            repositories,
+            async (repo) => {
+                const repoInfo = this.extractRepoInfo(
+                    repo.name,
+                    'ensureRepositoryWebhooks',
+                );
+                if (!repoInfo) {
+                    throw new Error(
+                        `The repository name "${repo.name}" is not in owner/repo form`,
+                    );
+                }
+                const path = { owner: repoInfo.owner, repo: repoInfo.repo };
+
+                const listed = await repoListHooks({ client, path });
+                throwIfForgejoFailed(listed);
+
+                const existingHook = (listed.data ?? []).find(
+                    (hook) => hook.config?.url === webhookUrl,
+                );
+
+                if (!existingHook) {
+                    throwIfForgejoFailed(
+                        await repoCreateHook({
+                            client,
+                            path,
+                            body: {
+                                type: 'forgejo',
+                                config: {
+                                    url: webhookUrl,
+                                    content_type: 'json',
+                                },
+                                events: desiredEvents,
+                                active: true,
+                            },
+                        }),
+                    );
+
+                    this.logger.log({
+                        message: 'Forgejo webhook created',
+                        context: ForgejoService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repo.id,
+                        },
+                    });
+                    return;
+                }
+
+                const existingEvents = new Set(existingHook.events ?? []);
+                const missingEvents = desiredEvents.filter(
+                    (eventName) => !existingEvents.has(eventName),
+                );
+
+                if (missingEvents.length === 0) {
+                    return;
+                }
+
+                throwIfForgejoFailed(
+                    await repoEditHook({
+                        client,
+                        path: { ...path, id: existingHook.id! },
+                        body: {
+                            config: {
+                                url: webhookUrl,
+                                content_type: 'json',
+                            },
+                            events: desiredEvents,
+                            active: existingHook.active ?? true,
+                        },
+                    }),
+                );
+
+                this.logger.log({
+                    message: 'Forgejo webhook updated',
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repo.id,
+                        missingEvents,
+                    },
+                });
+            },
+            labels,
+        );
+
+        this.logger.log({
+            message: 'Forgejo webhook setup finished',
+            context: ForgejoService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
+    }
+
+    async isWebhookActive(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<boolean> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return false;
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            const repo = repositories?.find(
+                (r: any) => r.id === params.repositoryId,
+            );
+            if (!repo) return false;
+
+            const repoInfo = this.extractRepoInfo(repo.name, 'isWebhookActive');
+            if (!repoInfo) return false;
+
+            const client = this.createForgejoClient(authDetail);
+            const webhookUrl = this.configService.get<string>(
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
+            );
+            if (!webhookUrl) return false;
+
+            const result = await repoListHooks({
+                client,
+                path: { owner: repoInfo.owner, repo: repoInfo.repo },
+            });
+            const hooks = result.data ?? [];
+            return hooks.some(
+                (hook) => hook.config?.url === webhookUrl && hook.active,
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error checking webhook status',
+                context: ForgejoService.name,
+                error,
+            });
+            return false;
+        }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) {
+                result.error = 'Forgejo credential not found';
+                return result;
+            }
+
+            const repositories =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+            const configured = repositories?.find(
+                (r: any) => r.id === params.repository.id,
+            );
+
+            const repoInfo = this.extractRepoInfo(
+                configured?.name ??
+                    params.repository.fullName ??
+                    params.repository.name,
+                'diagnoseRepositoryAccess',
+            );
+            if (!repoInfo) {
+                result.error = 'Could not parse repository name';
+                return result;
+            }
+
+            const client = this.createForgejoClient(authDetail);
+            const path = { owner: repoInfo.owner, repo: repoInfo.repo };
+
+            try {
+                await repoGetAllCommits({
+                    client,
+                    path,
+                    query: {
+                        limit: 1,
+                        stat: false,
+                        verification: false,
+                        files: false,
+                    },
+                    throwOnError: true,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                // `permissions` describes the authenticated user on this
+                // repository; absent means the server did not say. Read
+                // access can still comment on pull requests, so only a user
+                // without `pull` is a definite no.
+                const { data } = await repoGet({
+                    client,
+                    path,
+                    throwOnError: true,
+                });
+                const permissions = data?.permissions;
+                if (permissions?.push || permissions?.admin) {
+                    result.write = 'ok';
+                } else if (permissions && permissions.pull === false) {
+                    result.write = 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl = this.configService.get<string>(
+                'API_FORGEJO_CODE_MANAGEMENT_WEBHOOK',
+            );
+
+            if (webhookUrl) {
+                try {
+                    const { data: hooks } = await repoListHooks({
+                        client,
+                        path,
+                        throwOnError: true,
+                    });
+                    result.hook = (hooks ?? []).some(
+                        (hook) =>
+                            hook.config?.url === webhookUrl && hook.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repository; without
+                    // it we cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
+    }
+
+    async addReactionToPR(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name?: string };
+        prNumber: number;
+        reaction: Reaction;
+    }): Promise<void> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail || !params.repository.name) return;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'addReactionToPR',
+            );
+            if (!repoInfo) return;
+
+            const client = this.createForgejoClient(authDetail);
+            await issuePostIssueReaction({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
+                body: { content: params.reaction },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Error adding reaction to PR',
+                context: ForgejoService.name,
+                error,
+            });
+        }
+    }
+
+    async addReactionToComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name?: string };
+        prNumber: number;
+        commentId: number;
+        reaction: Reaction;
+    }): Promise<void> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail || !params.repository.name) return;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'addReactionToComment',
+            );
+            if (!repoInfo) return;
+
+            const client = this.createForgejoClient(authDetail);
+            await issuePostCommentReaction({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    id: params.commentId,
+                },
+                body: { content: params.reaction },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Error adding reaction to comment',
+                context: ForgejoService.name,
+                error,
+            });
+        }
+    }
+
+    async removeReactionsFromPR(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name?: string };
+        prNumber: number;
+        reactions: Reaction[];
+    }): Promise<void> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail || !params.repository.name) return;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'removeReactionsFromPR',
+            );
+            if (!repoInfo) return;
+
+            const client = this.createForgejoClient(authDetail);
+            for (const reaction of params.reactions) {
+                await issueDeleteIssueReaction({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        index: params.prNumber,
+                    },
+                    body: { content: reaction },
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error removing reactions from PR',
+                context: ForgejoService.name,
+                error,
+            });
+        }
+    }
+
+    async removeReactionsFromComment(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name?: string };
+        prNumber: number;
+        commentId: number;
+        reactions: Reaction[];
+    }): Promise<void> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail || !params.repository.name) return;
+
+            const repoInfo = this.extractRepoInfo(
+                params.repository.name,
+                'removeReactionsFromComment',
+            );
+            if (!repoInfo) return;
+
+            const client = this.createForgejoClient(authDetail);
+            for (const reaction of params.reactions) {
+                await issueDeleteCommentReaction({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        id: params.commentId,
+                    },
+                    body: { content: reaction },
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error removing reactions from comment',
+                context: ForgejoService.name,
+                error,
+            });
+        }
+    }
+
+    async countReactions(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        comments: Array<{ id?: number; pull_request_review_id?: number }>;
+        pr: {
+            id?: number;
+            pull_number: number;
+            repository: { id?: string; name: string };
+        };
+    }): Promise<any[]> {
+        try {
+            const authDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!authDetail) return [];
+
+            // The shared countReactions contract is `{ organizationAndTeamData,
+            // comments, pr }` (the same shape GitHub/GitLab consume) — the
+            // reaction use-case passes the comments it already fetched and the
+            // PR. Downloading the top-level { repository, prNumber } shape here
+            // read `params.repository` as undefined, so every reaction lookup
+            // failed with "Cannot read properties of undefined (reading 'name')"
+            // and no feedback was stored (#2061).
+            const repoInfo = this.extractRepoInfo(
+                params.pr.repository.name,
+                'countReactions',
+            );
+            if (!repoInfo) return [];
+
+            const client = this.createForgejoClient(authDetail);
+
+            // Forgejo review comments do not carry their reactions in the
+            // comment payload, so each linked comment is queried for its
+            // reactions and the thumbs feedback is tallied per comment — the
+            // same shape the other adapters return. The fetch is bounded like
+            // GitLab's award-emoji calls so that 10 concurrent PRs cannot
+            // burst 10 x N requests at a self-hosted instance.
+            const limit = pLimit(FORGEJO_REACTIONS_CONCURRENCY);
+
+            const results = await Promise.all(
+                params.comments
+                    .filter((comment) => comment?.id != null)
+                    .map((comment) =>
+                        limit(async () => {
+                            // A transient failure on one comment must not
+                            // discard the reactions already counted for the
+                            // others (GitLab isolates each note the same way).
+                            let result;
+                            try {
+                                result = await issueGetCommentReactions({
+                                    client,
+                                    path: {
+                                        owner: repoInfo.owner,
+                                        repo: repoInfo.repo,
+                                        id: comment.id!,
+                                    },
+                                });
+                            } catch (error) {
+                                this.logger.warn({
+                                    message:
+                                        'Failed to fetch reactions for comment',
+                                    context: ForgejoService.name,
+                                    error,
+                                    metadata: {
+                                        organizationId:
+                                            params.organizationAndTeamData
+                                                ?.organizationId,
+                                        teamId: params.organizationAndTeamData
+                                            ?.teamId,
+                                        commentId: comment.id,
+                                        prNumber: params.pr?.pull_number,
+                                        repository: params.pr?.repository?.name,
+                                    },
+                                });
+                                return null;
+                            }
+
+                            // Forgejo answers a comment without reactions with
+                            // a `null` body, which the SDK returns as `{}`; a
+                            // non-array here means no reactions, and iterating
+                            // it would throw and lose the whole PR's counts.
+                            const reactions = Array.isArray(result?.data)
+                                ? result.data
+                                : [];
+                            let thumbsUp = 0;
+                            let thumbsDown = 0;
+                            for (const reaction of reactions) {
+                                if (
+                                    reaction.content === '+1' ||
+                                    reaction.content === 'thumbs_up'
+                                ) {
+                                    thumbsUp++;
+                                } else if (
+                                    reaction.content === '-1' ||
+                                    reaction.content === 'thumbs_down'
+                                ) {
+                                    thumbsDown++;
+                                }
+                            }
+
+                            if (thumbsUp === 0 && thumbsDown === 0) {
+                                return null;
+                            }
+
+                            return {
+                                reactions: { thumbsUp, thumbsDown },
+                                comment: {
+                                    id: comment.id,
+                                    pull_request_review_id:
+                                        comment.pull_request_review_id,
+                                },
+                                pullRequest: {
+                                    // A repository id is not a provider PR id.
+                                    // Match the other adapters: leave it absent
+                                    // when the shared caller does not supply it.
+                                    id: params.pr.id,
+                                    number: params.pr.pull_number,
+                                    repository: {
+                                        id: params.pr.repository.id,
+                                        fullName: params.pr.repository.name,
+                                    },
+                                },
+                            };
+                        }),
+                    ),
+            );
+
+            return results.filter(Boolean);
+        } catch (error) {
+            this.logger.error({
+                message: 'Error counting reactions',
+                context: ForgejoService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getRepositoryContentBatch(
+        _params: any,
+    ): Promise<Map<string, any> | null> {
+        // Not implemented for Forgejo — callers fall back to per-file
+        // `getRepositoryContentFile`.
+        return null;
+    }
+
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
+        // Not implemented for Forgejo — callers fall back to per-user
+        // `getUserByUsername`.
+        return null;
+    }
+}

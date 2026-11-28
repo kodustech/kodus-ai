@@ -2,6 +2,7 @@ import { createLogger } from '@libs/core/log/logger';
 import {
     AcquireResult,
     assertValidPrKey,
+    isGraphJobLeaseKey,
     ISandboxLeaseManager,
     SandboxCircuitOpenError,
     DEFAULT_CAPACITY_WAIT_MS,
@@ -631,18 +632,30 @@ export class SandboxLeaseManager
                 context: SandboxLeaseManager.name,
                 metadata: { prKey },
             });
-            const deadline = Date.now() + MAX_POLL_WAIT_MS;
+            const startedAt = Date.now();
+            const deadline = startedAt + MAX_POLL_WAIT_MS;
             // Doubling waits (0.5s, 1s, 2s, 2s...) instead of a read every
             // 0.5s: a cleanup takes seconds, and 60 reads per wait added up.
+            // A timed-out retry must leave the queue before it can create a new sandbox.
             for (let attempt = 0; Date.now() < deadline; attempt++) {
-                await sleep(
+                const outcome = await waitFor(
+                    null,
                     calculateBackoffInterval(attempt, {
                         baseInterval: POLL_INTERVAL_MS,
                         maxInterval: MAX_POLL_INTERVAL_MS,
                     }),
+                    signal,
                 );
+                if (outcome === 'aborted') break;
                 const check = await this.leaseRepo.findByPrKey(prKey);
                 if (!check) break; // Doc deleted — cleanup complete
+            }
+            if (signal?.aborted) {
+                throw new SandboxWaitAbortedError(
+                    prKey,
+                    Date.now() - startedAt,
+                    "the previous sandbox's cleanup",
+                );
             }
             // Retry acquire from scratch
             return this.acquireLease(
@@ -931,6 +944,12 @@ export class SandboxLeaseManager
             // killAt, which is all the idle-kill cron reads, is never missing
             // if this process dies between the claim and the kill.
             if (idleMs <= 0) {
+                const metadata = {
+                    organizationId:
+                        updated.organizationId ?? prKey.split(':')[0],
+                    prKey,
+                    sandboxId: updated.sandboxId,
+                };
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
                     updated.sandboxId,
@@ -941,7 +960,7 @@ export class SandboxLeaseManager
                     this.logger.log({
                         message: `SandboxLeaseManager: single-use release lost the cleanup claim, leaving the sandbox to its holder prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
-                        metadata: { prKey, sandboxId: updated.sandboxId },
+                        metadata,
                     });
                     return;
                 }
@@ -959,11 +978,7 @@ export class SandboxLeaseManager
                     this.logger.log({
                         message: `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
-                        metadata: {
-                            prKey,
-                            sandboxId: updated.sandboxId,
-                            idleTimeoutMs: 0,
-                        },
+                        metadata: { ...metadata, idleTimeoutMs: 0 },
                     });
                 } catch (err) {
                     // The claim and killAt stay: findReadyToKill ignores
@@ -974,7 +989,7 @@ export class SandboxLeaseManager
                         message: `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
                         error: err as Error,
-                        metadata: { prKey, sandboxId: updated.sandboxId },
+                        metadata,
                     });
                 }
                 return;
@@ -1663,6 +1678,24 @@ export class SandboxLeaseManager
         throw lastErr;
     }
 
+    /** Only the recovered graph job can own this job-specific checkout. */
+    async retireSingleUseCheckout(
+        prKey: string,
+        sandboxId: string,
+    ): Promise<void> {
+        if (!isGraphJobLeaseKey(prKey))
+            throw new Error(
+                'Only a single-use graph checkout can be retired immediately',
+            );
+        const now = new Date();
+        // Detach this sandbox ID before a fresh checkout can occupy the key.
+        // A dead worker's count must not postpone the retired sandbox's kill.
+        await this.leaseRepo.retire(prKey, sandboxId, {
+            idleKillAt: now,
+            busyKillAt: now,
+        });
+    }
+
     /**
      * One line per breaker state change. OPEN is a warn: from then on this
      * worker reviews without a sandbox until a probe succeeds. Search the
@@ -1909,6 +1942,13 @@ export class SandboxLeaseManager
         // Every command counts as running until it settles, so the release
         // waits for it (drainInFlight).
         let warnedUseAfterRelease = false;
+        const settled = () => {
+            inFlight.running -= 1;
+            inFlight.lastSettledAt = Date.now();
+            if (inFlight.running === 0) {
+                for (const resolve of inFlight.waiters.splice(0)) resolve();
+            }
+        };
         const stamped =
             <A extends unknown[], R>(command: (...args: A) => Promise<R>) =>
             async (...args: A): Promise<R> => {
@@ -1936,31 +1976,41 @@ export class SandboxLeaseManager
                         if (!use.releasedAt) use.lastUsedAt = new Date();
                     }
                 } finally {
-                    inFlight.running -= 1;
-                    inFlight.lastSettledAt = Date.now();
-                    if (inFlight.running === 0) {
-                        for (const resolve of inFlight.waiters.splice(0)) {
-                            resolve();
-                        }
-                    }
+                    settled();
                 }
             };
+
+        // A tool can wait on something else between two of its commands
+        // (astGrep reads its rule file from the target branch, then writes it
+        // and scans), so the release waits for the whole call, not only for
+        // its commands. Not a use: nothing is stamped (#2628).
+        const hold = async <T>(work: () => Promise<T>): Promise<T> => {
+            inFlight.running += 1;
+            try {
+                return await work();
+            } finally {
+                settled();
+            }
+        };
 
         // Every repository tool is one of these, so each one is stamped,
         // including a tool added later. Callers tell a missing command by its
         // absence (`sandbox?.run`), so only the ones present are wrapped.
         const remoteCommands =
             sandbox.remoteCommands &&
-            (Object.fromEntries(
-                Object.entries(sandbox.remoteCommands).map(
-                    ([name, command]) => [
-                        name,
-                        typeof command === 'function'
-                            ? stamped(command)
-                            : command,
-                    ],
+            ({
+                ...Object.fromEntries(
+                    Object.entries(sandbox.remoteCommands).map(
+                        ([name, command]) => [
+                            name,
+                            typeof command === 'function'
+                                ? stamped(command)
+                                : command,
+                        ],
+                    ),
                 ),
-            ) as unknown as RemoteCommands);
+                hold,
+            } as unknown as RemoteCommands);
 
         return {
             ...sandbox,

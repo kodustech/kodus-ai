@@ -14,6 +14,12 @@ import {
 export interface CodeReviewConfigLogParams extends BaseLogParams {
     oldConfig: any;
     newConfig: any;
+    /**
+     * Resolved config of the level above the one saved. A repository or
+     * directory delta only lists what differs from it, so a key it leaves out
+     * takes the parent's value, not the shipped default.
+     */
+    parentConfig?: any;
     isCreation?: boolean;
 }
 
@@ -160,6 +166,7 @@ export class CodeReviewConfigLogHandler {
             params.oldConfig,
             params.newConfig,
             params.userInfo,
+            params.parentConfig,
         );
 
         if (params.isCreation) {
@@ -222,9 +229,10 @@ export class CodeReviewConfigLogHandler {
         oldConfig: any,
         newConfig: any,
         userInfo: UserInfo,
+        parentConfig?: any,
     ): Promise<ChangedDataToExport[]> {
-        const resolvedOld = this.resolveWithDefaults(oldConfig);
-        const resolvedNew = this.resolveWithDefaults(newConfig);
+        const resolvedOld = this.resolveAgainstParent(oldConfig, parentConfig);
+        const resolvedNew = this.resolveAgainstParent(newConfig, parentConfig);
 
         const specialChanges = this.collectSpecialChanges(
             resolvedOld,
@@ -254,9 +262,12 @@ export class CodeReviewConfigLogHandler {
         return [];
     }
 
-    private resolveWithDefaults(deltaConfig: any): any {
+    private resolveAgainstParent(deltaConfig: any, parentConfig?: any): any {
         const defaults = getDefaultKodusConfigFile();
-        return this.deepMerge(defaults, deltaConfig || {});
+        const base = parentConfig
+            ? this.deepMerge(defaults, parentConfig)
+            : defaults;
+        return this.deepMerge(base, deltaConfig || {});
     }
 
     private deepMerge(target: any, source: any): any {

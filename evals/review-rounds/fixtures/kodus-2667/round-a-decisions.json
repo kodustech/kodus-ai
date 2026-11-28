@@ -1,0 +1,39 @@
+[
+ {
+  "suggestionId": "kodus-2667-r4669339444",
+  "relevantFile": "apps/web/src/features/ee/byok/_data/model-label.ts",
+  "relevantLinesStart": 106,
+  "relevantLinesEnd": 114,
+  "suggestionContent": "**Per-entry shares check makes same-label entries disagree on id**\n\nTwo entries for one model can now render differently—one with its id, one plain—so Routing shows the plain one naming no connection. Decide the id once per `byLabel` group, as `needsId` does, rather than per entry in `shares`.",
+  "improvedCode": "const needsId = new Set<string>();\nfor (const [label, group] of byLabel) {\n    if (\n        group.some((entry) =>\n            group.some(\n                (other) =>\n                    other.id !== entry.id &&\n                    (other.connection === entry.connection ||\n                        lastSegment(other.id) !== lastSegment(entry.id)),\n            ),\n        )\n    ) {\n        needsId.add(label);\n    }\n}\nconst shares: (id: string, connection?: string) => boolean = (id) =>\n    needsId.has(nameOf(id));\nconst labelOf = (id: string, connection?: string): string =>\n    shares(id, connection) ? `${nameOf(id)} (${id})` : nameOf(id);",
+  "label": "bug",
+  "commentId": "4669339444",
+  "outcome": "implemented",
+  "answered": true,
+  "decidedAt": "2026-11-23T17:20:12Z"
+ },
+ {
+  "suggestionId": "kodus-2667-r4669338135",
+  "relevantFile": "apps/web/src/features/ee/byok/_components/_modals/edit-key/_components/models.spec.tsx",
+  "relevantLinesStart": 622,
+  "relevantLinesEnd": 622,
+  "suggestionContent": "**Added picker case asserts shared-label ids that already worked before the fix**\n\nThe picker already appended ids for shared labels before this PR, so this case passes on both revisions and guards nothing. Assert the page-computed `lockedLabel` or a caller that uses `modelLabeler` instead.",
+  "label": "kody_rules",
+  "commentId": "4669338135",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-23T17:20:06Z"
+ },
+ {
+  "suggestionId": "kodus-2667-r4669338781",
+  "relevantFile": "apps/web/src/features/ee/byok/_components/_modals/edit-key/_components/models.spec.tsx",
+  "relevantLinesStart": 114,
+  "relevantLinesEnd": 118,
+  "suggestionContent": "**Locked-label test injects expected label, no longer drives page derivation**\n\nInjecting the finished `lockedLabel` only checks that `ModelLockedField` renders the string it is given. The page derivation in `page.client.tsx` (`visibleModelLabels(existing).get(editModelId ?? \"\") ?? formatModelLabel(existingConfig.model)`) can silently fall back to the id-less label and still pass; drive that lookup instead.",
+  "label": "bug",
+  "commentId": "4669338781",
+  "outcome": "not_implemented",
+  "answered": true,
+  "decidedAt": "2026-11-23T17:20:09Z"
+ }
+]

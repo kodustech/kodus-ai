@@ -312,6 +312,20 @@ describe('GitHubPullRequestHandler', () => {
             expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
         });
 
+        it('hands a quote reply that mentions Kody after the quote to the chat', async () => {
+            const chat = { execute: jest.fn() };
+            (handler as any).chatWithKodyFromGitUseCase = chat;
+
+            await handler.execute(
+                comment(
+                    '> Only teachers can download the export\n\n@kody this is done in the guard',
+                ) as any,
+            );
+
+            expect(chat.execute).toHaveBeenCalledTimes(1);
+            expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
+        });
+
         it('sets no agent on a plain review command', async () => {
             await handler.execute(comment('@kody start-review') as any);
 
