@@ -678,7 +678,7 @@ ssh_vm bash -s <<REMOTE
 set -e
 cd /opt/kodus-installer
 # _common.sh's env_set, shipped as written: values never enter a sed pattern.
-$(declare -f selfhosted_env_set)
+$(declare -f selfhosted_env_value selfhosted_env_set)
 env_set() { selfhosted_env_set "\$@"; }
 env_set IMAGE_TAG "$IMAGE_TAG"
 # "localhost" is the sentinel the web reads (helpers.ts): it makes the proxy
@@ -725,7 +725,7 @@ if [ -n "${SH_LICENSE_KEY:-}" ]; then
     ssh_vm bash -s <<REMOTE
 set -e
 cd /opt/kodus-installer
-$(declare -f selfhosted_env_set)
+$(declare -f selfhosted_env_value selfhosted_env_set)
 selfhosted_env_set KODUS_LICENSE_KEY $(printf '%q' "$SH_LICENSE_KEY")
 REMOTE
 else
