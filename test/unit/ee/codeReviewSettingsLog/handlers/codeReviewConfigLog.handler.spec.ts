@@ -117,6 +117,50 @@ describe('CodeReviewConfigLogHandler', () => {
             );
         });
 
+        it('logs a repository toggle while the global level is off', async () => {
+            const repoLevel = {
+                configLevel: ConfigLevel.REPOSITORY,
+                repository: { id: 'repo-1', name: 'athena' },
+                parentConfig: { conversation: { implicitReplies: false } },
+            };
+
+            await callHandler(
+                {},
+                { conversation: { implicitReplies: true } },
+                repoLevel,
+            );
+            // Back to the global value: the override is removed from the delta.
+            await callHandler(
+                { conversation: { implicitReplies: true } },
+                {},
+                repoLevel,
+            );
+
+            const [on, off] = mockUnified.saveLogEntry.mock.calls.map(
+                ([entry]: any) => entry.changedData,
+            );
+            expect(on[0].description).toEqual(
+                'User user@test.com changed Implicit Replies from disabled to enabled',
+            );
+            expect(off[0].description).toEqual(
+                'User user@test.com changed Implicit Replies from enabled to disabled',
+            );
+        });
+
+        it('does not log a repository override equal to its parent', async () => {
+            await callHandler(
+                {},
+                { runOnDraft: true },
+                {
+                    configLevel: ConfigLevel.REPOSITORY,
+                    repository: { id: 'repo-1', name: 'athena' },
+                    parentConfig: { runOnDraft: true },
+                },
+            );
+
+            expect(mockUnified.saveLogEntry).not.toHaveBeenCalled();
+        });
+
         it('detects languageResultPrompt string change', async () => {
             await callHandler(
                 { languageResultPrompt: 'English' },
@@ -713,11 +757,11 @@ describe('CodeReviewConfigLogHandler — deterministic units', () => {
         });
     });
 
-    // ─── resolveWithDefaults ───
+    // ─── resolveAgainstParent ───
 
-    describe('resolveWithDefaults', () => {
+    describe('resolveAgainstParent', () => {
         it('returns the defaults unchanged when the delta is null', () => {
-            const result = h().resolveWithDefaults(null);
+            const result = h().resolveAgainstParent(null);
             expect(result.pullRequestApprovalActive).toBe(false);
             expect(result.suggestionControl.maxSuggestions).toBe(15);
             expect(result.summary.behaviourForExistingDescription).toBe(
@@ -726,7 +770,7 @@ describe('CodeReviewConfigLogHandler — deterministic units', () => {
         });
 
         it('overlays the delta on top of the defaults (nested merge preserved)', () => {
-            const result = h().resolveWithDefaults({
+            const result = h().resolveAgainstParent({
                 pullRequestApprovalActive: true,
                 suggestionControl: { maxSuggestions: 42 },
             });
@@ -735,6 +779,18 @@ describe('CodeReviewConfigLogHandler — deterministic units', () => {
             // overridden nested key
             expect(result.suggestionControl.maxSuggestions).toBe(42);
             // sibling nested key survives from defaults
+            expect(result.suggestionControl.groupingMode).toBe('file');
+        });
+
+        it('fills a key the delta leaves out from the parent, not the defaults', () => {
+            const result = h().resolveAgainstParent(
+                { pullRequestApprovalActive: true },
+                { runOnDraft: true, suggestionControl: { maxSuggestions: 7 } },
+            );
+
+            expect(result.pullRequestApprovalActive).toBe(true);
+            expect(result.runOnDraft).toBe(true);
+            expect(result.suggestionControl.maxSuggestions).toBe(7);
             expect(result.suggestionControl.groupingMode).toBe('file');
         });
     });

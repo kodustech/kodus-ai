@@ -1549,6 +1549,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             organizationAndTeamData,
             oldConfig,
             newConfig: newDelta,
+            parentConfig,
             level,
             repository,
             directory,
@@ -2181,6 +2182,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         organizationAndTeamData: OrganizationAndTeamData;
         oldConfig: ConfigDelta;
         newConfig: ConfigDelta;
+        parentConfig?: ConfigDelta;
         level: ConfigLevel;
         repository?: RepositoryCodeReviewConfig;
         directory?: DirectoryCodeReviewConfig;
@@ -2191,6 +2193,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             organizationAndTeamData,
             oldConfig,
             newConfig,
+            parentConfig,
             level,
             repository,
             directory,
@@ -2222,6 +2225,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 // secrets go in masked, like on every other read path.
                 oldConfig: maskCliSecrets(oldConfig),
                 newConfig: maskCliSecrets(newConfig),
+                parentConfig: maskCliSecrets(parentConfig),
                 actionType: ActionType.EDIT,
                 configLevel: level,
                 repository: maskCliSecrets(repository),
