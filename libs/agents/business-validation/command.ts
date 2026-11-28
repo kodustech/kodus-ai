@@ -4,6 +4,7 @@ import type {
     Task,
     TaskReference,
 } from './business-validation.types';
+import { countBlockers } from './check-policy';
 
 const COMMAND = /@kody\s+-v\s+business-logic\b/i;
 
@@ -46,7 +47,7 @@ export function replyFor(
     }
     const verdict =
         outcome.kind === 'validated'
-            ? `${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}`
+            ? `${outcome.checks.map((c) => c.task.id).join(', ')} ${verdictWords(outcome)}`
             : undefined;
     if (comment === 'none') {
         return outcome.kind === 'validated'
@@ -66,6 +67,26 @@ export function replyFor(
             ? `: the result changed${verdict ? `, ${verdict}` : ''}`
             : '';
     return `Business logic re-checked${news}. The Kody · Business Logic comment on this pull request is updated.`;
+}
+
+/**
+ * "met" only when nothing is left open. PARTIAL does not fail a task
+ * (`taskPasses`), so a passing run can still have partial requirements, and
+ * calling it met hid them (QA of #2681).
+ */
+function verdictWords(
+    outcome: Extract<BusinessValidationOutcome, { kind: 'validated' }>,
+): string {
+    if (!outcome.passed) {
+        return 'has open requirements';
+    }
+    const partial = outcome.checks.reduce(
+        (n, c) => n + (c.verdict ? countBlockers(c.verdict).partial : 0),
+        0,
+    );
+    return partial
+        ? `has ${partial} partial requirement${partial === 1 ? '' : 's'} and none missing`
+        : 'met';
 }
 
 /** Text given to the command that is not a reference is the task itself. */
