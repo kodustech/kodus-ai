@@ -239,9 +239,11 @@ export class BitbucketDataCenterService implements Omit<
             token,
             username,
             email,
-            host,
             authMode = AuthMode.TOKEN,
         } = params;
+        // Typed or pasted from the browser bar: spaces around it, and often
+        // no scheme, which no request can be built from.
+        const host = params.host?.trim();
         const authDetails: BitbucketAuthDetail = {
             username: username || '',
             appPassword: encrypt(token),
@@ -251,13 +253,19 @@ export class BitbucketDataCenterService implements Omit<
         };
 
         try {
-            await assertGitServerUrlAllowed(host);
-
             if (!host) {
                 throw new BadRequestException(
                     'Host is required for Bitbucket Data Center.',
                 );
             }
+
+            if (!/^https?:\/\//i.test(host)) {
+                throw new BadRequestException(
+                    'Include https:// in the Bitbucket Data Center URL, for example https://bitbucket.example.com.',
+                );
+            }
+
+            await assertGitServerUrlAllowed(host);
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
