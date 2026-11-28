@@ -8,8 +8,12 @@ import { z } from 'zod';
 
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
+import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { slotContextWindow, slotInputRoom } from '@libs/llm/slot-window';
+import { structuredCallAnswerTokens } from '@libs/llm/structured-review-call';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
     FIX_STATUSES,
     type FixStatus,
@@ -68,9 +72,10 @@ const ONE_SHOT = `
 
 Return only the JSON object {"title", "fixStatus", "improvedCode"}.`;
 
-export function buildEnrichmentPrompt(
-    input: EnrichmentInput,
-): { system: string; user: string } {
+export function buildEnrichmentPrompt(input: EnrichmentInput): {
+    system: string;
+    user: string;
+} {
     const f = input.finding;
     const user = [
         `<Finding>`,
@@ -115,6 +120,86 @@ function stripFence(code: string): string {
 /** One enrichment call; past it the suggestion keeps its cited code. */
 const ENRICH_TIMEOUT_MS = 200_000;
 
+const logger = createLogger('EnrichContent');
+
+/** The window share kept for the answer when the slot declares none: the
+ *  quarter the implementation check keeps too. */
+const UNDECLARED_ANSWER_SHARE = 0.25;
+
+/** Of the room, what the prompt may take: the rest is for the schema the
+ *  call carries and the tokenizer the provider counts with. */
+const ROOM_SAFETY = 0.9;
+
+/** A line longer than this in the file window or the diff is cut: minified
+ *  or generated text, which a fix of the cited lines does not need whole. */
+export const ENRICH_MAX_LINE_CHARS = 2_000;
+
+const LEFT_OUT = '(left out: too large for the model window)';
+
+/**
+ * The input as it fits `roomTokens`, counted at its worst like every other
+ * window check (#2233): first whole; then with the long lines of the file
+ * window and the diff cut; then without the diff; then without the window
+ * either. The cited code and the finding are never cut, since the fix must
+ * replace exactly those lines: when they alone do not fit, undefined, and no
+ * call is sent.
+ */
+export function fitEnrichmentInput(
+    input: EnrichmentInput,
+    roomTokens: number,
+): EnrichmentInput | undefined {
+    const fits = (candidate: EnrichmentInput) => {
+        const { system, user } = buildEnrichmentPrompt(candidate);
+        return (
+            estimateTextTokens(system, { worstCase: true }) +
+                estimateTextTokens(user, { worstCase: true }) <=
+            roomTokens
+        );
+    };
+    const shortLines = {
+        ...input,
+        fileWindow: cutLongLines(input.fileWindow),
+        filePatch: cutLongLines(input.filePatch),
+    };
+    return [
+        input,
+        shortLines,
+        { ...shortLines, filePatch: LEFT_OUT },
+        { ...shortLines, filePatch: LEFT_OUT, fileWindow: LEFT_OUT },
+    ].find(fits);
+}
+
+function cutLongLines(text: string): string {
+    // A caller outside enrichSuggestions (an eval) may send no window.
+    if (!text) return text;
+    return text
+        .split('\n')
+        .map((line) => {
+            if (line.length <= ENRICH_MAX_LINE_CHARS) return line;
+            const kept = line.slice(0, ENRICH_MAX_LINE_CHARS);
+            // Never end on half a surrogate pair: JSON escapes it alone and
+            // the provider rejects what it decodes to.
+            const whole = /[\ud800-\udbff]$/.test(kept)
+                ? kept.slice(0, -1)
+                : kept;
+            return `${whole} … (line cut: ${line.length} characters)`;
+        })
+        .join('\n');
+}
+
+/** The input tokens an enrichment call on this slot has, on every attempt. */
+async function enrichmentRoom(
+    slot: NormalizedModel | undefined,
+): Promise<number> {
+    const room = await slotInputRoom(
+        slot,
+        async (model) =>
+            (await structuredCallAnswerTokens(model)) ??
+            Math.ceil(slotContextWindow(model) * UNDECLARED_ANSWER_SHARE),
+    );
+    return Math.floor(room * ROOM_SAFETY);
+}
+
 export async function enrichOneShot(
     input: EnrichmentInput,
     opts: {
@@ -128,7 +213,25 @@ export async function enrichOneShot(
         attrs?: Record<string, unknown>;
     },
 ): Promise<ContentEnrichment | null> {
-    const { system, user } = buildEnrichmentPrompt(input);
+    const fitted = fitEnrichmentInput(
+        input,
+        await enrichmentRoom(opts.byokConfig),
+    );
+    if (!fitted) {
+        // The suggestion keeps its cited code and gets its title from its
+        // text, as after a failed call.
+        logger.warn({
+            message: `[ENRICH] ${input.finding.relevantFile ?? '?'}:${input.finding.relevantLinesStart ?? '?'} not enriched: its cited code does not fit the model window`,
+            context: 'EnrichContent',
+            metadata: {
+                organizationId: opts.organizationId,
+                teamId: opts.attrs?.teamId,
+                prNumber: opts.attrs?.prNumber,
+            },
+        });
+        return null;
+    }
+    const { system, user } = buildEnrichmentPrompt(fitted);
     const out = await LLM.run({
         system,
         user,
