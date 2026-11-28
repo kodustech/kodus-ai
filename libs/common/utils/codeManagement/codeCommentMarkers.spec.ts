@@ -232,6 +232,13 @@ describe('a mention after a quote (GitHub "Quote reply")', () => {
         expect(isKodyMentionNonReview('> a\n\u00a0\n@kody hi')).toBe(false);
     });
 
+    it('stays fast on a long table-like line under a quote', () => {
+        const body = `> a\n> |-${' '.repeat(256_000)}x\n\n@kody help`;
+        const started = Date.now();
+        expect(isKodyMentionNonReview(body)).toBe(true);
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
     it('reads a GitLab `>>>` quote as one block, mention inside or after it', () => {
         expect(
             isKodyMentionNonReview(

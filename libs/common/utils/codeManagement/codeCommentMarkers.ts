@@ -390,9 +390,12 @@ const CODE_FENCE = /^(`{3,}|~{3,})(.*)$/;
 /** `===` under a paragraph turns it into a heading. */
 const SETEXT_UNDERLINE = /^=+[ \t]*$/;
 
-/** A table's `|---|---|` row: the paragraph above it becomes the header. */
+/**
+ * A table's `|---|---|` row: the paragraph above it becomes the header.
+ * Read on a trimmed line; no two whitespace runs touch, so it stays linear.
+ */
 const TABLE_DELIMITER =
-    /^(?=.*\|)\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
+    /^(?=.*\|)\|?[ \t]*:?-+:?(?:[ \t]*\|[ \t]*:?-+:?)*(?:[ \t]*\|)?$/;
 
 /** The cells of a table row: `| a | b |` and `a | b` both hold two. */
 const tableCells = (row: string): number =>
