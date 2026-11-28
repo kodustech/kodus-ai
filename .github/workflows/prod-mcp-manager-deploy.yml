@@ -90,6 +90,7 @@ jobs:
                   docker buildx build \
                       --file docker/Dockerfile \
                       --target mcp-manager \
+                      --build-arg API_CLOUD_MODE=true \
                       --secret id=github_token,env=GITHUB_TOKEN \
                       --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION \
                       --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA \

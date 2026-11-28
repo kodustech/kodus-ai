@@ -38,6 +38,13 @@ const code = (text: string): string => `\`${text.replace(/`/g, "'")}\``;
 const NOT_REVIEWED =
     'This pull request was not reviewed. `@kody start-review --heavy` or `--balanced` reviews it on one model.';
 
+/** Why an Ultra review was refused for an organization outside its alpha. */
+export const ULTRA_REVIEW_NOT_ENABLED = `Ultra review is not available for this organization yet. ${NOT_REVIEWED}`;
+
+/** Why a save of the Ultra models was refused outside the alpha. */
+export const ULTRA_MODELS_NOT_ENABLED_MESSAGE =
+    'Ultra review is not available for this organization yet, so the Ultra models were not saved.';
+
 /** Why an Ultra review was refused on the plan. */
 export const ULTRA_REVIEW_PLAN_REQUIRED =
     'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and this organization is not on one. This pull request was not reviewed. `@kody start-review --balanced` reviews it in Balanced mode.';
@@ -72,8 +79,11 @@ export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
  * web shows the API's message only on that prefix.
  */
 export function ultraSaveRefusalMessage(
-    refusal: UltraTrioRefusal | 'plan' | 'plan_unreadable',
+    refusal: UltraTrioRefusal | 'not_enabled' | 'plan' | 'plan_unreadable',
 ): string {
+    if (refusal === 'not_enabled') {
+        return 'Ultra review is not available for this organization yet, so the review mode was not changed.';
+    }
     if (refusal === 'plan') {
         return 'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and this organization is not on one, so the review mode was not changed.';
     }

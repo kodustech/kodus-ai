@@ -1,0 +1,265 @@
+---
+title: "PostgreSQL detrás de un connection pooler"
+description: "Ejecuta Kodus con PgBouncer u otro pooler delante de PostgreSQL, incluidos clústeres de alta disponibilidad."
+icon: "database"
+---
+
+Kodus funciona con PostgreSQL detrás de un connection pooler como PgBouncer,
+en modo de pool **session o transaction**. En cada cambio, el CI ejecuta los
+locks de coordinación de Kodus y el puente de eventos entre api y worker a
+través de PgBouncer 1.26 en modo transaction.
+
+<Warning>
+Requiere una release self-hosted de Kodus posterior a 2.2.12. La 2.2.12 y las
+anteriores ignoran la conexión directa, así que las migraciones, LISTEN y los
+locks de coordinación pasan por el pooler y fallan en modo transaction.
+Revisa `IMAGE_TAG` (Docker Compose) o `imageTag` (Helm) antes de activar el
+pooler.
+</Warning>
+
+Esta página explica qué configurar en el pooler, las dos conexiones que usa
+Kodus y cómo comprobar el resultado.
+
+## Dos conexiones
+
+| Conexión | Variables | Se usa para | ¿Puede apuntar al pooler? |
+| --- | --- | --- | --- |
+| Pooled | `API_PG_DB_HOST`, `API_PG_DB_PORT` (o `DATABASE_URL`) | Todas las consultas de api, worker y webhooks | Sí |
+| Directa | `API_PG_DB_DIRECT_HOST`, `API_PG_DB_DIRECT_PORT` (o `DATABASE_DIRECT_URL`) | Migraciones de la base y la conexión LISTEN que lleva eventos en vivo del worker a la api | **No**: debe llegar al propio PostgreSQL |
+
+La conexión directa reutiliza `API_PG_DB_USERNAME`, `API_PG_DB_PASSWORD` y
+`API_PG_DB_DATABASE`, así que normalmente solo cambia el host. Si no está
+definida, Kodus usa la conexión pooled para todo, igual que sin pooler.
+
+Por qué importa la conexión directa en modo transaction:
+
+- **Eventos en vivo.** LISTEN necesita una sesión que permanezca abierta.
+  Detrás de un pooler en modo transaction se conecta y nunca recibe nada. El
+  estado del review en la UI y la sincronización de reglas tras un merge
+  llegan entonces por polling, hasta 10 segundos tarde.
+- **Migraciones.** Algunas migraciones crean índices con `CREATE INDEX
+  CONCURRENTLY` después de cambiar el statement timeout de su sesión. En modo
+  transaction ambos comandos pueden caer en sesiones distintas del servidor.
+
+## Configura PgBouncer
+
+```ini
+[pgbouncer]
+pool_mode = transaction
+; Kodus sets these two limits on each connection (PgBouncer 1.20 or later).
+; Without this line PgBouncer refuses every Kodus connection with
+; "unsupported startup parameter: statement_timeout".
+track_extra_parameters = statement_timeout,idle_in_transaction_session_timeout
+; Each Kodus process opens its own pool (api 30, webhooks 30, worker 60
+; by default, plus up to 6 for internal events). Budget for every replica.
+max_client_conn = 1000
+default_pool_size = 40
+```
+
+Si tu pooler no puede seguir estos parámetros (un PgBouncer antiguo o un
+pooler gestionado que no puedes configurar), desactívalos del lado de Kodus y
+define límites equivalentes en el rol de la base:
+
+```bash
+DB_STATEMENT_TIMEOUT_MS=0
+DB_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
+```
+
+```sql
+ALTER ROLE kodusdev IN DATABASE kodus_db SET statement_timeout = '30s';
+ALTER ROLE kodusdev IN DATABASE kodus_db SET idle_in_transaction_session_timeout = '60s';
+```
+
+## Configura Kodus
+
+Define estas variables en **api, worker, worker-analytics, webhooks** y en lo
+que ejecute las migraciones (`RUN_MIGRATIONS=true`):
+
+```bash
+API_PG_DB_HOST=pgbouncer.internal          # the pooler
+API_PG_DB_PORT=6432
+API_PG_DB_DIRECT_HOST=postgres-primary.internal   # PostgreSQL itself
+API_PG_DB_DIRECT_PORT=5432
+```
+
+Con connection strings:
+
+```bash
+DATABASE_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_db
+DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus_db
+```
+
+## Actívalo con el installer
+
+El `kodus-installer` conecta el pooler en cada forma de ejecutar Kodus y
+rellena por ti la configuración de arriba.
+
+Configurar la conexión directa también cambia los locks de coordinación de
+Kodus de locks de sesión a filas en la base. Los pods que aún corren sin ella
+no ven los nuevos locks, así que activa el pooler con los pods anteriores
+detenidos: ejecuta `docker compose down` antes, o escala los Deployments de
+api, worker, worker-analytics y webhooks a 0 antes del `helm upgrade` y de
+vuelta después (a `autoscaling.minReplicas`, 2 por defecto): el HPA no escala
+un Deployment que está en 0.
+
+### Docker Compose
+
+El profile `pgbouncer` levanta PgBouncer 1.26 en modo transaction delante del
+PostgreSQL incluido, con `track_extra_parameters` ya configurado. Apunta Kodus a
+él en `.env` y deja PostgreSQL como conexión directa:
+
+```bash
+API_PG_DB_HOST=db_kodus_pgbouncer
+API_PG_DB_PORT=5432
+API_PG_DB_DIRECT_HOST=db_kodus_postgres
+```
+
+```bash
+COMPOSE_PROFILES=pgbouncer docker compose up -d
+```
+
+Para usar tu propio pooler, configura las cuatro variables de
+Configura Kodus, arriba, con tus hosts y deja el profile apagado.
+
+### Helm, con el operador CloudNativePG
+
+Con `postgres.mode: operator`, `postgres.operator.pooler.enabled: true` añade un
+`Pooler` de CloudNativePG delante de `<release>-postgres-rw`. La aplicación se
+conecta a `<release>-postgres-pooler-rw`; las migraciones y LISTEN siguen en
+`<release>-postgres-rw`. El chart siempre añade `track_extra_parameters`, además
+de los `parameters` que definas.
+
+```yaml
+postgres:
+  mode: operator
+  operator:
+    image: <cnpg-image-with-pgvector>
+    pooler:
+      enabled: true
+      poolMode: transaction   # or session
+      instances: 2
+      parameters:
+        max_client_conn: "1000"
+        default_pool_size: "40"
+```
+
+`poolMode` acepta `transaction` (por defecto) o `session`. Dimensiona
+`max_client_conn` para todas las réplicas de api, worker y webhooks en
+`autoscaling.maxReplicas`.
+
+### Helm, con tu propio pooler
+
+Con `postgres.mode: external`, apunta `host`/`port` al pooler y
+`directHost`/`directPort` a PostgreSQL. Si la conexión directa necesita una
+connection string, usa `directUrlKey` (siguiente sección).
+
+```yaml
+postgres:
+  mode: external
+  external:
+    host: pgbouncer.internal
+    port: 6432
+    directHost: postgres-primary.internal
+    directPort: 5432
+    existingSecret: kodus-postgres
+```
+
+`postgres.mode: bundled` no tiene pooler. Usa `operator` o `external` para
+ejecutar Kodus detrás de uno.
+
+## Tu propio PgBouncer o pooler gestionado
+
+Si PostgreSQL y su pooler ya funcionan de tu lado, apunta Kodus a ellos,
+tanto con Docker Compose como con el chart de Helm. Revisa tu configuración
+con esta tabla:
+
+| Tu configuración | Qué hacer |
+| --- | --- |
+| Pool mode `session` | Funciona sin conexión directa. Cada conexión de Kodus ocupa una conexión del servidor mientras está abierta, así que dimensiona el pool para todos los pools de Kodus, en cada réplica |
+| Pool mode `transaction` | Configura la conexión directa (arriba) |
+| Pool mode `statement` | No soportado: Kodus ejecuta transacciones con varias sentencias |
+| El pooler expone la base con otro nombre, o Kodus entra con otro usuario | La forma por host de la conexión directa reutiliza `API_PG_DB_DATABASE` y `API_PG_DB_USERNAME`, que no existen en PostgreSQL. Usa `DATABASE_DIRECT_URL` con los valores reales |
+| Kodus alcanza el pooler pero no PostgreSQL | Añade una entrada en session mode en el mismo PgBouncer y úsala como conexión directa (abajo) |
+| PgBouncer anterior a 1.20, o un pooler gestionado donde no puedes definir `track_extra_parameters` | Pon los dos timeouts en `0` y llévalos al rol de la base (arriba) |
+| El TLS difiere entre el pooler y PostgreSQL | Dale a la conexión directa su propio `sslmode` en `DATABASE_DIRECT_URL` (abajo) |
+
+**Solo el pooler es alcanzable.** PgBouncer puede tener una entrada en
+session mode junto a la de transaction mode. Kodus la usa para las migraciones
+y para una conexión LISTEN de larga duración por proceso, así que basta un
+pool pequeño:
+
+```ini
+[databases]
+kodus = host=postgres-primary.internal dbname=kodus_db pool_mode=transaction
+kodus_session = host=postgres-primary.internal dbname=kodus_db pool_mode=session
+```
+
+```bash
+API_PG_DB_HOST=pgbouncer.internal
+API_PG_DB_PORT=6432
+API_PG_DB_DATABASE=kodus
+DATABASE_DIRECT_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_session
+```
+
+**TLS.** `API_DATABASE_DISABLE_SSL` se aplica a todas las conexiones. Cuando
+el pooler habla TCP sin TLS y PostgreSQL exige TLS (o al revés), deja la
+configuración de la conexión por el pooler como está y pon `sslmode` en
+`DATABASE_DIRECT_URL`: el `sslmode` de la URL manda en esa conexión. El driver
+PostgreSQL de Kodus lee `sslmode=require` y `sslmode=prefer` como
+`verify-full`, así que el certificado del servidor debe validar (añade tu CA
+con `NODE_EXTRA_CA_CERTS`). Usa `sslmode=no-verify` para cifrar sin
+comprobar el certificado y `sslmode=disable` para TCP sin TLS.
+
+**Chart de Helm.** En modo `external`, guarda la cadena de conexión directa
+en el Secret de `postgres.external.existingSecret` e indica su clave en
+`postgres.external.directUrlKey`. Todos los pods de Kodus y el Job de
+migraciones la reciben como `DATABASE_DIRECT_URL`.
+
+## PostgreSQL de alta disponibilidad
+
+Kodus se conecta a un host por conexión; no acepta una lista de hosts ni
+`target_session_attrs`. Apunta ambas conexiones a endpoints que siempre lleven
+al **primary actual**: una IP virtual, HAProxy con health checks de Patroni,
+el service `-rw` de CloudNativePG o un PgBouncer que siga al primary. Todos los
+componentes de Kodus escriben, así que no se usan réplicas de lectura.
+
+Durante un failover, las consultas en curso fallan y los pools se reconectan
+en la siguiente petición. Con la conexión directa configurada, los locks de
+coordinación son filas en la base, así que sobreviven al failover junto con los
+datos; sin ella (sin pooler, o con un pooler en modo session) son locks de
+sesión, liberados cuando caen las sesiones con el primario anterior.
+
+## Comprueba la configuración
+
+Ejecuta el doctor desde el directorio `kodus-installer`: `./scripts/doctor.sh`,
+o `./scripts/doctor-k8s.sh -n <namespace>` en Kubernetes (ver
+[Troubleshooting](/es/how_to_deploy/deploy_kodus/troubleshooting)). Dos líneas
+cubren esta página:
+
+- `database.locks`: Kodus puede tomar sus locks de coordinación. Un fallo aquí
+  suele significar que las migraciones no se ejecutaron.
+- `database.listen`: los eventos en vivo entre api y worker llegan. Un aviso
+  aquí significa que la conexión LISTEN pasa por un pooler en modo
+  transaction; configura la conexión directa.
+
+La api también registra el resultado en cuanto se conecta:
+
+```text
+Cross-process LISTEN verified: notifications reach this process
+```
+
+o, cuando los eventos no llegan:
+
+```text
+Cross-process LISTEN is connected but notifications never arrive. ...
+```
+
+## Referencia
+
+| Variable | Por defecto | Qué hace |
+| --- | --- | --- |
+| `API_PG_DB_DIRECT_HOST` | vacío | Host de PostgreSQL para migraciones y LISTEN. Vacío = host pooled |
+| `API_PG_DB_DIRECT_PORT` | `5432` | Puerto del host directo |
+| `DATABASE_DIRECT_URL` | vacío | Connection string directa completa; gana sobre la forma por host |
+| `DB_STATEMENT_TIMEOUT_MS` | `30000` | Tiempo máximo de un comando. `0` hace que Kodus no lo envíe |
+| `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` | `60000` | Tiempo máximo de una transacción inactiva. `0` hace que Kodus no lo envíe |

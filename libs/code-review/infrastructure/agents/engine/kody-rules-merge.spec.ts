@@ -90,7 +90,8 @@ describe('mergeKodyRuleFindings', () => {
     });
 
     it('does not carry a location with no known line into the merged list', () => {
-        const merges: Array<{ otherLocations: number }> = [];
+        const merges: Array<{ scope: 'pr' | 'file'; otherLocations: number }> =
+            [];
 
         const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>(
             [
@@ -123,36 +124,149 @@ describe('mergeKodyRuleFindings', () => {
             (merge) => merges.push(merge),
         );
 
-        expect(out).toHaveLength(1);
+        expect(out).toHaveLength(3);
         expect(out[0].kodyRuleOtherLocations).toEqual(['c.ts:5-6']);
-        expect(merges[0].otherLocations).toBe(1);
+        expect(out.slice(1).map((s) => s.suggestionContent)).toEqual([
+            'no line cited',
+            'lines but no file',
+        ]);
+        expect(merges).toEqual([
+            expect.objectContaining({ scope: 'file', otherLocations: 1 }),
+        ]);
     });
 
-    it('reports the scope of the kept finding, not of the group', () => {
-        const merges: Array<{ scope: 'pr' | 'file' }> = [];
+    // QA M6/M7 on #2420: the line-less finding had the longest text, so it
+    // was kept and posted PR-level, and the lined AverageDues.cs:1-1 lived on
+    // only as text in its "Also found in": the PR-level record has no field
+    // for it, and the implementation check never read it.
+    it('never folds a lined finding under a line-less one', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'AverageDues.cs',
+                relevantLinesStart: 1,
+                relevantLinesEnd: 1,
+                suggestionContent: 'short',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'CheckinReport.cs',
+                suggestionContent:
+                    'the file name must start with the qa2420_ prefix, and this one does not',
+            },
+        ]);
 
-        mergeKodyRuleFindings<Partial<CodeSuggestion>>(
-            [
-                {
-                    brokenKodyRulesIds: ['rule-1'],
-                    relevantFile: 'a.ts',
-                    relevantLinesStart: 1,
-                    relevantLinesEnd: 2,
-                    suggestionContent: 'short',
-                },
-                {
-                    // A rule about the PR itself: the longest text, so it is
-                    // the finding the comment is written from.
-                    brokenKodyRulesIds: ['rule-1'],
-                    relevantFile: 'b.ts',
-                    suggestionContent:
-                        'the title must name the affected module and the change',
-                },
-            ],
-            (merge) => merges.push(merge),
+        expect(out).toEqual([
+            expect.objectContaining({
+                relevantFile: 'AverageDues.cs',
+                relevantLinesStart: 1,
+            }),
+            expect.objectContaining({ relevantFile: 'CheckinReport.cs' }),
+        ]);
+        expect(out[1].relevantLinesStart).toBeUndefined();
+        expect(out[1].kodyRuleOtherLocations).toBeUndefined();
+    });
+
+    // Kody review on #2751: a file-anchored finding is posted PR-level, so it
+    // is never folded into an inline one, and keeps its own file.
+    it('never folds a file-anchored finding inline and keeps it apart from line-less ones', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'a.cs',
+                relevantLinesStart: 4,
+                suggestionContent: 'inline',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.cs',
+                relevantLinesStart: 90,
+                fileAnchored: true,
+                suggestionContent: 'outside the diff, the longest text of all',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'c.cs',
+                suggestionContent: 'c.cs lacks the prefix',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'd.cs',
+                suggestionContent: 'd.cs lacks the prefix',
+            },
+        ]);
+
+        expect(out.map((s) => s.relevantFile)).toEqual([
+            'a.cs',
+            'b.cs',
+            'c.cs',
+        ]);
+        expect(out[0].kodyRuleOtherLocations).toBeUndefined();
+        expect(out[2].kodyRuleOtherLocations).toEqual(['d.cs']);
+    });
+
+    // Junior's review of #2751: every file shard sees the PR title, so a
+    // title rule scoped to files flags each matching file. One comment per
+    // file posted the same claim four times where main posted one.
+    it('posts a line-less rule finding flagged on several files once, naming the others', () => {
+        const title = (file: string) => ({
+            brokenKodyRulesIds: ['rule-title'],
+            relevantFile: file,
+            suggestionContent: 'The PR title "fix stuff" names no scope.',
+        });
+
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>(
+            ['src/A.cs', 'src/B.cs', 'src/C.cs', 'src/D.cs'].map(title),
         );
 
-        expect(merges[0].scope).toBe('pr');
+        expect(out).toHaveLength(1);
+        expect(out[0].relevantFile).toBe('src/A.cs');
+        expect(out[0].kodyRuleOtherLocations).toEqual([
+            'src/B.cs',
+            'src/C.cs',
+            'src/D.cs',
+        ]);
+    });
+
+    it('keeps the claim of every file a line-less finding folded', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>(
+            ['src/A.cs', 'src/B.cs'].map((file) => ({
+                brokenKodyRulesIds: ['rule-name'],
+                relevantFile: file,
+                suggestionContent: `${file} lacks the prefix, rewritten`,
+                repeatClaim: `${file} lacks the prefix.`,
+            })),
+        );
+
+        expect(out).toHaveLength(1);
+        expect(out[0].repeatClaims).toEqual([
+            { file: 'src/A.cs', claim: 'src/A.cs lacks the prefix.' },
+            { file: 'src/B.cs', claim: 'src/B.cs lacks the prefix.' },
+        ]);
+    });
+
+    it('keeps the lines of file-anchored findings collapsed on one file', () => {
+        const out = mergeKodyRuleFindings<Partial<CodeSuggestion>>([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.cs',
+                relevantLinesStart: 90,
+                fileAnchored: true,
+                suggestionContent: 'outside the diff, the longest',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.cs',
+                relevantLinesStart: 120,
+                relevantLinesEnd: 122,
+                fileAnchored: true,
+                suggestionContent: 'also outside',
+            },
+        ]);
+
+        expect(out).toHaveLength(1);
+        expect(out[0].relevantLinesStart).toBe(90);
+        expect(out[0].kodyRuleOtherLocations).toEqual(['b.cs:120-122']);
     });
 
     // #2656: atoms of one decomposed rule share its uuid but are different

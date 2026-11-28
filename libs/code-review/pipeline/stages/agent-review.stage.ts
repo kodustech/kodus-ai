@@ -294,8 +294,14 @@ export function snapLinesToDiff(
 ): Partial<CodeSuggestion> | null {
     if (validRanges.length === 0) return suggestion;
 
-    const start = suggestion.relevantLinesStart;
-    const end = suggestion.relevantLinesEnd;
+    // A model sometimes writes the range backwards (30-19). Both ends are
+    // real lines, only their order is not: measured as given, a reversed
+    // range overlaps no hunk and the finding was dropped as out of diff.
+    const [start, end] =
+        (suggestion.relevantLinesStart ?? 0) >
+        (suggestion.relevantLinesEnd ?? 0)
+            ? [suggestion.relevantLinesEnd, suggestion.relevantLinesStart]
+            : [suggestion.relevantLinesStart, suggestion.relevantLinesEnd];
 
     if (!start || !end) {
         // No lines specified — use the first valid range
@@ -1270,6 +1276,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 stageWarnings.push(
                     buildSandboxUnavailableWarning({
                         modelName: effectiveModelName || 'unknown',
+                        cause: context.sandboxUnavailableDetail,
                     }),
                 );
             }
@@ -1779,6 +1786,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 telemetryMeta,
             );
             let severityNormalized = repeatCheck.kept;
+            for (const s of severityNormalized) {
+                if (
+                    s.label === 'kody_rules' &&
+                    s.relevantFile &&
+                    !s.relevantLinesStart &&
+                    s.suggestionContent
+                ) {
+                    s.repeatClaim = s.suggestionContent;
+                }
+            }
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -2302,31 +2319,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // they recovered, so a lockfile advisory would never reach the PR.
         // A file moved without a content change is the second: a 100%
         // similarity rename has no hunks at all, and the host rejects the
-        // comment with "could not be resolved". Route both PR-level,
-        // citing file:line: the first covers analyzer findings, the second
-        // covers anything a model or an analyzer found on that file.
-        const withoutPatch = (f: FileChange) => Boolean(f.filename) && !f.patch;
+        // comment with "could not be resolved". A patch can also be there
+        // and still hold no hunk: GitLab sends "Binary files ... differ"
+        // for a binary rename, and a mode-only change comes as GitHub
+        // `changed` with no patch or GitLab `modified` with an empty one.
+        // Route those PR-level, citing file:line, whoever found it. A plain
+        // edit with no patch at all is only withheld (analyzers alone).
         const allChanges = [
             ...changedFiles,
             ...(context.ignoredFileChanges ?? []),
         ];
         const withheldDiffs = new Set(
-            allChanges.filter(withoutPatch).map((f) => f.filename),
-        );
-        const movedWithoutHunks = new Set(
             allChanges
-                .filter(
-                    (f) =>
-                        withoutPatch(f) &&
-                        (f.status === 'renamed' || f.status === 'copied'),
+                .filter((f) => f.filename && !f.patch)
+                .map((f) => f.filename),
+        );
+        const withoutHunks = new Set(
+            allChanges
+                .filter((f) =>
+                    !f.filename
+                        ? false
+                        : typeof f.patch === 'string'
+                          ? !/^@@ /m.test(f.patch)
+                          : ['renamed', 'copied', 'changed'].includes(f.status),
                 )
                 .map((f) => f.filename),
         );
         const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
             (!!s.relevantFile &&
-                (isAnalyzerSuggestion(s)
-                    ? withheldDiffs.has(s.relevantFile)
-                    : movedWithoutHunks.has(s.relevantFile))) ||
+                (withoutHunks.has(s.relevantFile) ||
+                    (isAnalyzerSuggestion(s) &&
+                        withheldDiffs.has(s.relevantFile)))) ||
             (s.label === 'kody_rules' &&
                 (!s.relevantFile ||
                     s.fileAnchored === true ||
@@ -2507,6 +2530,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.validSuggestionsByPR.push(
                     ...prLevelSuggestions.map((s) => ({
                         id: crypto.randomUUID(),
+                        // Kept on the record, not only in the text: the
+                        // repeat check of the next round compares a finding
+                        // with the comments on the same file (#2420).
+                        ...(s.relevantFile && { relevantFile: s.relevantFile }),
+                        ...(s.repeatClaim && { repeatClaim: s.repeatClaim }),
+                        ...(s.repeatClaims && {
+                            repeatClaims: s.repeatClaims,
+                        }),
                         // Any finding that named a file has to say WHERE,
                         // since a PR-level comment carries no anchor of
                         // its own — true whether it's fileAnchored
@@ -2534,6 +2565,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             s.severity,
                         ) as SeverityLevel,
                         brokenKodyRulesIds: s.brokenKodyRulesIds,
+                        // A custom agent's finding keeps its agent: the
+                        // comment's tag, the agent's status line and its
+                        // decision history all read it from here.
+                        ...(s.customAgent && { customAgent: s.customAgent }),
                         deliveryStatus: DeliveryStatus.NOT_SENT,
                     })),
                 );
@@ -2844,6 +2879,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             allDiscarded.push({
                 ...s,
                 priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        for (const s of repeatCheck.reversals) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_REVERSAL,
                 deliveryStatus: DeliveryStatus.NOT_SENT,
             });
         }
@@ -3379,6 +3421,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<{
         kept: Partial<CodeSuggestion>[];
         repeats: Partial<CodeSuggestion>[];
+        reversals: Partial<CodeSuggestion>[];
         withheld: Partial<CodeSuggestion>[];
         history: readonly PrDecisionRecord[] | undefined;
     }> {
@@ -3386,7 +3429,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         let history: readonly PrDecisionRecord[] | undefined =
             context.previousDecisions;
         if (!history?.length || !findings.length) {
-            return { kept: findings, repeats: [], withheld: [], history };
+            return {
+                kept: findings,
+                repeats: [],
+                reversals: [],
+                withheld: [],
+                history,
+            };
         }
 
         const repositoryFullName =
@@ -3417,6 +3466,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         }
 
+        history = await this.markAnsweredThreads(context, history);
+
         const ruleTitleByUuid = new Map<string, string>();
         for (const [uuid, rule] of kodyRulesById) {
             if (rule.title) ruleTitleByUuid.set(uuid, rule.title);
@@ -3435,13 +3486,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         }
 
+        const answeredRepeats = result.repeats.filter(
+            (r) => r.earlier.answered,
+        ).length;
         this.logger.log({
-            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} repeats, ${result.withheld.length} withheld without a verdict, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
+            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} repeats (${answeredRepeats} of answered threads), ${result.reversals.length} reversals, ${result.withheld.length} withheld without a verdict, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
                 prNumber,
                 teamId: context.organizationAndTeamData.teamId,
+                discarded: {
+                    reversesEarlier: result.reversals.length,
+                    answeredThread: answeredRepeats,
+                    repeat: result.repeats.length - answeredRepeats,
+                    noVerdict: result.withheld.length,
+                },
+                reversals: result.reversals.map((r) => ({
+                    file: r.finding.relevantFile,
+                    line: r.finding.relevantLinesStart,
+                    label: r.finding.label,
+                    earlierId: r.earlier.suggestionId,
+                    earlierOutcome: r.earlier.outcome,
+                })),
                 withheld: result.withheld.map((finding) => ({
                     file: finding.relevantFile,
                     line: finding.relevantLinesStart,
@@ -3458,12 +3525,64 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             },
         });
 
+        if (result.withheld.length) {
+            // A spike of findings dropped unjudged means the check is failing.
+            this.logger.warn({
+                message: `[REPEAT-CHECK] PR#${prNumber}: ${result.withheld.length} finding(s) discarded without a verdict`,
+                context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData.teamId,
+                    prNumber,
+                    noVerdict: result.withheld.length,
+                },
+            });
+        }
+
         return {
             kept: result.kept,
             repeats: result.repeats.map((r) => r.finding),
+            reversals: result.reversals.map((r) => r.finding),
             withheld: result.withheld,
             history,
         };
+    }
+
+    /**
+     * #2676: a comment whose thread got a reply is a point already answered.
+     * Read from the host now, not stored from the reply webhook, which races
+     * the next round. Without an answer from the host the history stays as
+     * loaded.
+     */
+    private async markAnsweredThreads(
+        context: CodeReviewPipelineContext,
+        history: readonly PrDecisionRecord[],
+    ): Promise<readonly PrDecisionRecord[]> {
+        if (!history.some((earlier) => earlier.commentId)) return history;
+        const answered =
+            await this.codeManagementService?.getAnsweredReviewThreadRootIds?.(
+                {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository,
+                    prNumber: context.pullRequest?.number,
+                },
+                context.platformType,
+            );
+        if (!answered?.size) return history;
+        // The host answers for file threads only: GitHub posts a PR-level
+        // finding as an issue comment, with no thread, and Azure stores it by
+        // its id inside the thread, 1 in every thread.
+        const fileLevelOnly =
+            context.platformType === PlatformType.AZURE_REPOS ||
+            context.platformType === PlatformType.GITHUB;
+        return history.map((earlier) =>
+            earlier.commentId &&
+            answered.has(earlier.commentId) &&
+            !(fileLevelOnly && !earlier.relevantFile)
+                ? { ...earlier, answered: true }
+                : earlier,
+        );
     }
 
     /**

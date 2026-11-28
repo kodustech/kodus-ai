@@ -53,6 +53,9 @@ export function noReferenceMessage(): string {
 This pull request doesn't reference a task. Reference it in the title, description or branch (\`PROJ-123\`, \`#123\` or a link), or run ${RERUN} followed by the task id or link. A \`#123\` the description only mentions isn't read as the task: write \`Closes #123\`.`;
 }
 
+/** How to name the task, for every message that asks for one. */
+const REFERENCE_A_TASK = `Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}.`;
+
 /** No task referenced, and the repository's settings ask for one. */
 export function taskRequiredMessage(): string {
     return `## 🤔 Which task is this?
@@ -60,7 +63,7 @@ export function taskRequiredMessage(): string {
 This pull request doesn't reference a task, and this repository asks for one so Kody can check the PR against it.
 
 ### 💡 Next step
-Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}.`;
+${REFERENCE_A_TASK}`;
 }
 
 export function noTrackerMessage(
@@ -98,18 +101,47 @@ export function noReadToolMessage(trackers: string[]): string {
 Kody reads tasks from ${names}, but no tool that reads one task by its id is picked. In the Business Logic settings, choose which ${names} tool reads a task, then comment ${RERUN}.`;
 }
 
-export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
-    // A tracker that couldn't read (no tool picked) never said it isn't there.
-    const tried = [
+/**
+ * What was looked for and where, once each. A tracker that couldn't read (no
+ * tool picked) never said the task isn't there, so it is left out.
+ */
+function triedReferences(attempts: ResolutionAttempt[]): string[] {
+    return [
         ...new Set(
             attempts
                 .filter((a) => a.status === 'not_found')
                 .map((a) => `${a.reference} in ${a.tracker}`),
         ),
     ];
+}
+
+export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
+    const tried = triedReferences(attempts);
     return `## 🤔 Task not found
 
 I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them exists' : "it doesn't exist there"}. Check the reference in the title, description or branch, then comment ${RERUN}.`;
+}
+
+/**
+ * The repository asks for a task and none the PR names was found. What was
+ * looked for can be a real key the tracker can't see (#2422) or a word that
+ * only looks like one (`UTF-8`, a branch's `404`): the guidance to reference
+ * the task comes first, the connection check only for a reference that is
+ * the task.
+ */
+export function taskRequiredNotFoundMessage(
+    attempts: ResolutionAttempt[],
+): string {
+    const tried = triedReferences(attempts);
+    if (!tried.length) {
+        return taskRequiredMessage();
+    }
+    return `## 🤔 Which task is this?
+
+This repository asks for a task so Kody can check the PR against it, and none was found: I looked for ${tried.join(', ')}.
+
+### 💡 Next step
+${REFERENCE_A_TASK} If ${tried.length > 1 ? 'one of these is' : 'that is'} the task, check that the Kodus connection can see its project.`;
 }
 
 export function trackerUnavailableMessage(
@@ -126,6 +158,24 @@ export function diffUnavailableMessage(): string {
     return `## 🤔 Need Pull Request Diff
 
 I found the task, but I couldn't load the pull request diff, so I can't compare the implementation with it. Try ${RERUN} again.`;
+}
+
+export function tooLargeForModelMessage(
+    contextWindowTokens: number,
+    /**
+     * Set when the answer the slot declares is what kept the code out: the
+     * code would fit beside the answer the judge itself asks for.
+     */
+    answerTokens?: number,
+): string {
+    if (answerTokens !== undefined) {
+        return `## 🤔 The model's answer limit leaves no room for the code
+
+The model that checks business logic is set to write up to ${answerTokens} tokens (its max output tokens, plus its thinking budget on Anthropic and Bedrock), and its input window is ${contextWindowTokens} tokens: the provider counts both against the window, so this PR's changes don't fit beside the task and the answer. Nothing was checked. Lower that model's max output tokens or reasoning effort in the Business Logic settings, or pick a model with a larger window.`;
+    }
+    return `## 🤔 Too large for the model
+
+The task, the pull request description and this PR's changes don't fit the input window of the model that checks business logic (${contextWindowTokens} tokens): not one changed file fits beside the task. Nothing was checked. A model with a larger window in the Business Logic settings, or a shorter task, lets Kody read the code.`;
 }
 
 export function judgeFailedMessage(): string {

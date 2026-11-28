@@ -1,5 +1,5 @@
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
-import { AgentReviewStage } from './agent-review.stage';
+import { AgentReviewStage, snapLinesToDiff } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { resolveAgentPrompt } from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { LLM } from '@libs/llm/llm';
@@ -401,6 +401,11 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
         expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
             /src\/user\.ts:/,
         );
+        // QA M14 on #2420: the posted text is cited and formatted, so the
+        // claim the next round's repeat check compares is kept as it was.
+        expect(result.validSuggestionsByPR[0].repeatClaim).toBe(
+            'this function is far too long',
+        );
     });
 
     // The input that made the first revision's `!isFileAnchored` exemption
@@ -606,5 +611,132 @@ describe('a finding on a file with no hunks (a pure rename)', () => {
 
         expect(result.validSuggestionsByPR).toHaveLength(1);
         expect(inlineSuggestionsOf(result)).toEqual([]);
+    });
+
+    // A patch can be present and still hold no hunk. GitLab sends a binary
+    // rename's diff as the bare "Binary files ... differ" line, and a change
+    // of mode alone comes without a patch (GitHub `changed`) or with an empty
+    // one (GitLab `modified`). None has a line a comment can sit on.
+    it.each([
+        [
+            'a GitLab binary rename',
+            {
+                filename: 'assets/logo-new.png',
+                status: 'renamed',
+                patch: 'Binary files a/assets/logo.png and b/assets/logo-new.png differ\n',
+            },
+        ],
+        [
+            'a GitHub mode-only change',
+            { filename: 'bin/deploy.sh', status: 'changed' },
+        ],
+        [
+            'a GitLab mode-only change',
+            { filename: 'bin/deploy.sh', status: 'modified', patch: '' },
+        ],
+    ])('is delivered PR-level for %s', async (_, file) => {
+        const result = await run([findingOn(file.filename, [3, 3])], {
+            changedFiles: [{ filename: 'src/user.ts', patch: PATCH }, file],
+        });
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            `\`${file.filename}:3\``,
+        );
+        expect(inlineSuggestionsOf(result)).toEqual([]);
+        expect(result.validSuggestions ?? []).toEqual([]);
+    });
+
+    // QA M32: the PR-level record was rebuilt from label, severity and rule
+    // ids only, so the agent's name and color fell off the comment's tag and
+    // the stored record no longer named the agent.
+    it("keeps a custom agent's finding attached to its agent", async () => {
+        const customAgent = {
+            id: 'agent-ledger',
+            name: 'Ledger Rules',
+            color: '#7B1FA2',
+        };
+        const result = await run(
+            [
+                {
+                    ...findingOn(RENAMED, [19, 19]),
+                    label: 'custom_agent',
+                    language: 'typescript',
+                    existingCode: 'line 19',
+                    customAgent,
+                },
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: RENAMED, status: 'renamed' },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0]).toMatchObject({
+            label: 'custom_agent',
+            customAgent,
+        });
+    });
+});
+
+/**
+ * QA M19 on #2671: a model wrote a range backwards (30-19) on a file whose
+ * hunk covers 19-30. The overlap was measured with the ends as given, found
+ * none, and the finding was dropped as out of diff before the providers'
+ * own normalization could swap the ends.
+ */
+describe('a reversed line range on a file with hunks', () => {
+    // One hunk covering lines 19-30 of the new file.
+    const WIDE_PATCH = [
+        '@@ -19,11 +19,12 @@',
+        ...Array.from({ length: 11 }, (_, i) => ` line ${19 + i}`),
+        '+line 30',
+    ].join('\n');
+
+    it('is snapped to the hunk instead of being dropped', () => {
+        expect(
+            snapLinesToDiff(
+                { relevantLinesStart: 30, relevantLinesEnd: 19 },
+                [[19, 30]],
+            ),
+        ).toMatchObject({ relevantLinesStart: 19, relevantLinesEnd: 30 });
+    });
+
+    it.each([
+        ['a model finding', { label: 'bug' }],
+        [
+            'a Kody Rule finding',
+            { label: 'kody_rules', brokenKodyRulesIds: [DIFF_ONLY_RULE] },
+        ],
+    ])('stays inline, ascending, for %s', async (_, over) => {
+        const result = await run(
+            [
+                {
+                    relevantFile: 'src/user.ts',
+                    relevantLinesStart: 30,
+                    relevantLinesEnd: 19,
+                    severity: 'high',
+                    oneSentenceSummary: 'the session id leaks',
+                    suggestionContent: 'the session id leaks into every event',
+                    improvedCode: '',
+                    ...over,
+                },
+            ],
+            { changedFiles: [{ filename: 'src/user.ts', patch: WIDE_PATCH }] },
+        );
+
+        expect(
+            (result.discardedSuggestions ?? []).map(
+                (s: any) => s.priorityStatus,
+            ),
+        ).toEqual([]);
+        expect(inlineSuggestionsOf(result)).toHaveLength(1);
+        expect(inlineSuggestionsOf(result)[0]).toMatchObject({
+            relevantLinesStart: 19,
+            relevantLinesEnd: 30,
+        });
     });
 });

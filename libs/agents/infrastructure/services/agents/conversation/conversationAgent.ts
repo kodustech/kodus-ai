@@ -43,6 +43,7 @@ import {
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
     auditWriteTools,
+    performedWrites,
     writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
@@ -52,6 +53,8 @@ import {
 } from './write-authorization';
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
+import { DecisionLoopPolicy } from './decision-loop.policy';
+import { conversationCompression } from './conversation-window';
 import {
     buildSystemPrompt,
     buildUserPrompt,
@@ -132,10 +135,15 @@ export class ConversationAgentProvider {
             organizationAndTeamData: OrganizationAndTeamData;
             prepareContext?: ConversationThreadContext;
             thread?: ConversationThread;
-            sandbox?: SandboxInstance;
+            /**
+             * Opens the PR's checkout on the first repository tool call, the
+             * same sandbox for every call (`openOnFirstUse`). Absent: no
+             * repository tools.
+             */
+            openSandbox?: () => Promise<SandboxInstance>;
         },
     ): Promise<string> {
-        const { organizationAndTeamData, prepareContext, thread, sandbox } =
+        const { organizationAndTeamData, prepareContext, thread, openSandbox } =
             context || ({} as any);
 
         if (!organizationAndTeamData?.organizationId) {
@@ -199,7 +207,7 @@ export class ConversationAgentProvider {
             auditWriteTools(
                 {
                     ...mcp.tools,
-                    ...(sandbox ? buildNativeTools(sandbox) : {}),
+                    ...(openSandbox ? buildNativeTools(openSandbox) : {}),
                     // Grants within the step it runs in, so a decision and a
                     // write emitted together are not refused.
                     ...buildDecisionTool((decision) =>
@@ -244,18 +252,31 @@ export class ConversationAgentProvider {
                 ? (e) => void this.byokErrorCounter!.record(e)
                 : undefined,
         });
+        const systemPrompt = buildSystemPrompt(userLanguage);
+        const registry = new AiSdkToolRegistry(tools);
         const spec: AgentSpec = {
             id: 'conversation',
             agentName: 'ConversationalAgent',
             runName: 'conversationAgent',
             phase: 'conversation',
             spanName: 'ConversationalAgent::conversationAgent',
-            systemPrompt: buildSystemPrompt(userLanguage),
-            tools: new AiSdkToolRegistry(tools),
+            systemPrompt,
+            tools: registry,
             resultToolName: CONVERSATION_DECISION_TOOL,
             policies: [
                 new WriteGatePolicy(prompt, writeAuthorization),
-                new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
+                // Only writes that reached the tool and returned: a refused
+                // call never reaches the audit, a failed one carries `error`.
+                new WriteTruthPolicy(() => performedWrites(writes)),
+                new DecisionLoopPolicy(),
+                // A PR diff a tool read is re-sent on every step: without
+                // this, one large PR overflowed the model's window (#2233).
+                await conversationCompression({
+                    slot,
+                    systemPrompt,
+                    tools: registry.list(),
+                    answerTokens: this.maxOutputTokensFallback,
+                }),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.
@@ -281,7 +302,7 @@ export class ConversationAgentProvider {
                 organizationAndTeamData,
                 availableTools: Object.keys(tools),
                 toolMetadata: mcp.metadata,
-                hasSandbox: Boolean(sandbox && sandbox.type !== 'null'),
+                hasSandbox: Boolean(openSandbox),
                 priorTurns: seedMessages,
             });
 

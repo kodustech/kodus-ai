@@ -1,3 +1,4 @@
+import { sliceWhole } from './pull-request-diff';
 import type {
     BusinessValidationOutcome,
     TaskCheck,
@@ -131,10 +132,12 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
     ];
     if (allMet) {
         const met = requirements.filter((r) => r.state === 'met');
+        const labels = labelCounts(requirements);
         lines.push(
-            `✅ ${met.length} of ${requirements.length} met: ${met
-                .map((r) => metLabel(r, requirements))
-                .join(', ')}`,
+            `✅ ${met.length} of ${requirements.length} met: ${metNames(
+                met,
+                labels,
+            ).join(', ')}`,
         );
         if (rows.length) {
             lines.push('');
@@ -213,8 +216,16 @@ function headline(check: TaskCheck): string {
  */
 function displayRequirementSource(source: string): string {
     const normalized = source.trim();
-    const criterion = /^AC\s*#\s*(\d+)$/i.exec(normalized);
-    return criterion ? `AC${criterion[1].padStart(2, '0')}` : normalized;
+    // `AC #1`, `AC#1`, `AC-1`, `AC1` and `AC01` all name criterion 1: the
+    // model writes the source freely, and two spellings read as two rows.
+    // One digit run, its zeros stripped after: `0*(\d+)` backtracks
+    // polynomially on `AC000…x` (CodeQL).
+    const criterion = /^AC[\s#-]*(\d+)$/i.exec(normalized);
+    if (!criterion) {
+        return normalized;
+    }
+    const number = criterion[1].replace(/^0+(?=\d)/, '');
+    return `AC${number.padStart(2, '0')}`;
 }
 
 function requirementRow(requirement: RequirementVerdict): string {
@@ -357,22 +368,94 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
     return lines.join('\n');
 }
 
+/** The label a requirement shows (`AC #1` and `AC01` both read AC01), if any. */
+function shownLabel(requirement: RequirementVerdict): string | undefined {
+    return requirement.source?.trim()
+        ? displayRequirementSource(requirement.source)
+        : undefined;
+}
+
+/** How many rows show each label, counted once per task. */
+function labelCounts(requirements: RequirementVerdict[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const requirement of requirements) {
+        const label = shownLabel(requirement);
+        if (label) {
+            counts.set(label, (counts.get(label) ?? 0) + 1);
+        }
+    }
+    return counts;
+}
+
 /**
  * A met requirement in the one-line summary: its label (`AC02`) when that
- * names only it, else its own words, so "Parent" never stands for a row.
+ * names only it, compared as shown, else its own words, so "Parent" never
+ * stands for a row.
  */
 function metLabel(
     requirement: RequirementVerdict,
-    all: RequirementVerdict[],
+    labels: Map<string, number>,
 ): string {
-    const source = requirement.source?.trim();
-    if (
-        source &&
-        source !== 'Parent' &&
-        all.filter((r) => r.source?.trim() === source).length === 1
-    ) {
-        return displayRequirementSource(source);
+    const label = shownLabel(requirement);
+    if (label && label !== 'Parent' && labels.get(label) === 1) {
+        return label;
     }
     const text = requirement.requirement.trim();
-    return text.length > 60 ? `${text.slice(0, 57)}…` : text;
+    return text.length > 60 ? `${sliceWhole(text, 57)}…` : text;
+}
+
+/**
+ * The met rows' names, each once: two requirements whose shortened words read
+ * the same (BDD criteria share a long "Given …" prefix) are named from where
+ * their words differ. Each is shown from its furthest first difference with
+ * any twin, so it parts from all of them; a name still shared then gets its
+ * place among the twins.
+ */
+function metNames(
+    met: RequirementVerdict[],
+    labels: Map<string, number>,
+): string[] {
+    const names = met.map((r) => metLabel(r, labels));
+    const byName = new Map<string, RequirementVerdict[]>();
+    names.forEach((name, i) => {
+        byName.set(name, [...(byName.get(name) ?? []), met[i]]);
+    });
+    const shown = names.map((name, i) => {
+        const twins = byName.get(name)!;
+        if (twins.length < 2) {
+            return name;
+        }
+        const text = met[i].requirement.trim();
+        const others = twins
+            .map((r) => r.requirement.trim())
+            .filter((other) => other !== text);
+        if (!others.length) {
+            return name;
+        }
+        const differsAt = Math.max(
+            ...others.map((other) => {
+                let at = 0;
+                while (at < text.length && text[at] === other[at]) at++;
+                return at;
+            }),
+        );
+        let from = Math.max(0, differsAt - 20);
+        const first = text.charCodeAt(from);
+        if (from > 0 && first >= 0xdc00 && first <= 0xdfff) from -= 1;
+        const part = text.slice(from);
+        return `${from > 0 ? '…' : ''}${
+            part.length > 57 ? `${sliceWhole(part, 57)}…` : part
+        }`;
+    });
+    const times = new Map<string, number>();
+    shown.forEach((name) => times.set(name, (times.get(name) ?? 0) + 1));
+    const seen = new Map<string, number>();
+    return shown.map((name) => {
+        if (times.get(name)! < 2) {
+            return name;
+        }
+        const nth = (seen.get(name) ?? 0) + 1;
+        seen.set(name, nth);
+        return `${name} (${nth})`;
+    });
 }

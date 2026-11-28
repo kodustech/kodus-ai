@@ -28,7 +28,7 @@ export const DEFAULT_MODEL = {
 
 /**
  * The `defaultModelOverride` to force for an entitlement flow that must run on
- * Kodus's dime (the 14-day subscription trial OR the anonymous public demo),
+ * Kodus's dime (the subscription trial OR the anonymous public demo),
  * or `undefined` when the caller should fall through to the production/env
  * default. The SINGLE place this "who pays → which default" decision lives, so
  * a new trial signal (or a change to the trial model) touches one function, not

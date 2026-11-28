@@ -1,0 +1,97 @@
+diff --git a/libs/common/utils/webhooks/webhook-source-host.ts b/libs/common/utils/webhooks/webhook-source-host.ts
+index a810f803a..3588800ea 100644
+--- a/libs/common/utils/webhooks/webhook-source-host.ts
++++ b/libs/common/utils/webhooks/webhook-source-host.ts
+@@ -14,6 +14,11 @@ export function normalizeHost(
+     if (!trimmed) {
+         return undefined;
+     }
++    // An SSH remote: git@host:group/repo.git
++    const sshRemote = /^[^@/\s]+@([^:/\s]+):/.exec(trimmed);
++    if (sshRemote) {
++        return sshRemote[1].toLowerCase();
++    }
+     try {
+         const url = new URL(
+             trimmed.includes('://') ? trimmed : `https://${trimmed}`,
+@@ -110,14 +115,14 @@ export function webhookConfigsOfInstance<T>(
+  * The configs that hold the repository a webhook comes from, on a platform
+  * that numbers repositories per instance. A config on the sending host takes
+  * it: the host of the repository it lists under that id, or of its
+- * integration. Renaming or moving the repository keeps the host. When none
+- * is on that host, a config that keeps the same `owner/repo` under that id
+- * takes it: Kodus may reach the instance at another address than the one
+- * the instance builds its URLs from, such as a docker service name or an
+- * IP. None otherwise: a config of another instance must never take the
+- * webhook, even when it is the only one with that id. Only configs that
+- * store no host at all, with none of the candidates on a known instance,
+- * keep taking it as before.
++ * integration. Renaming or moving the repository keeps the host. A config
++ * whose listed repository URL is on another host is on another instance,
++ * since the instance builds that URL, and never takes it, even when it is
++ * the only one with that id. Its integration host alone does not tell:
++ * Kodus may reach the instance at another address, such as a docker service
++ * name or an IP. Among the configs that list no repository URL, one that
++ * keeps the same `owner/repo` under that id takes it, and otherwise those
++ * that store no host at all, as before.
+  */
+ export function instanceConfigsForWebhook<T>(
+     configs: T[] | null | undefined,
+@@ -136,10 +141,14 @@ export function instanceConfigsForWebhook<T>(
+         return onHost;
+     }
+ 
++    const unlisted = candidates.filter(
++        (config) => !listedHostOf(config, repositoryId),
++    );
++
+     const fullName = normalizeFullName(source?.repositoryFullName);
+     const sameRepository =
+         fullName && repositoryId
+-            ? candidates.filter((config) => {
++            ? unlisted.filter((config) => {
+                   const listed = listedRepositoryOf(config, repositoryId);
+                   return (
+                       !!listed &&
+@@ -153,15 +162,11 @@ export function instanceConfigsForWebhook<T>(
+         return sameRepository;
+     }
+ 
+-    // Data written before configs stored any host: when no candidate's
+-    // instance is known, nothing tells them apart, as before. One known
+-    // instance is enough to refuse the others.
+-    const noneKnown =
+-        candidates.length > 0 &&
+-        candidates.every(
+-            (config) => configHostsOf(config, repositoryId).length === 0,
+-        );
+-    return noneKnown ? candidates : [];
++    // Data written before configs stored any host: nothing tells them
++    // apart, as before.
++    return unlisted.filter(
++        (config) => configHostsOf(config, repositoryId).length === 0,
++    );
+ }
+ 
+ /** Forgejo's name for `instanceConfigsForWebhook`. */
+@@ -169,13 +174,18 @@ export const forgejoConfigsForWebhook = instanceConfigsForWebhook;
+ 
+ /** The hosts a config is known to be on, for the repository `repositoryId`. */
+ function configHostsOf(config: any, repositoryId: string): string[] {
+-    const listed = listedRepositoryOf(config, repositoryId);
+     return [
+-        normalizeHost(listed?.http_url ?? listed?.web_url ?? listed?.url),
++        listedHostOf(config, repositoryId),
+         normalizeHost(storedHostOf(config)),
+     ].filter((host): host is string => !!host);
+ }
+ 
++/** The host of the repository URL a config lists under that id. */
++function listedHostOf(config: any, repositoryId: string): string | undefined {
++    const listed = listedRepositoryOf(config, repositoryId);
++    return normalizeHost(listed?.http_url ?? listed?.web_url ?? listed?.url);
++}
++
+ function listedRepositoryOf(config: any, repositoryId: string): any {
+     if (!repositoryId) return undefined;
+     return (Array.isArray(config?.configValue) ? config.configValue : []).find(

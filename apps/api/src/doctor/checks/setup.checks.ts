@@ -14,6 +14,7 @@ import {
  */
 export const setupCheck: DoctorCheck = {
     id: 'setup',
+    blocking: true,
     async run(ctx: DoctorContext): Promise<DoctorResult[]> {
         const results: DoctorResult[] = [];
 
@@ -39,26 +40,36 @@ export const setupCheck: DoctorCheck = {
             return results;
         }
 
+        // A team's broken setup stops the install only when no other team
+        // reviews: on a multi-team install it stops that team alone, and a
+        // team that turned automation off did so on purpose.
+        const reviews = (t: DoctorTeam) =>
+            t.teamStatus === 'active' &&
+            t.integrationActive &&
+            t.repositories.length > 0 &&
+            t.codeReviewAutomationActive;
+        const installReviews = connected.some(reviews);
+
         for (const team of connected) {
             const scope = teamScope(team);
             const git = platformLabel(team.platform);
             const problems: DoctorResult[] = [];
-            const push = (title: string, fix: string) =>
+            const push = (title: string, fix: string, onPurpose = false) =>
                 problems.push({
                     check: 'setup.team',
-                    status: 'fail',
+                    status: !installReviews
+                        ? 'fail'
+                        : onPurpose
+                          ? 'skip'
+                          : 'warn',
                     scope,
                     title,
-                    impact: 'Git events for this team are ignored, so its pull requests are not reviewed.',
+                    impact: installReviews
+                        ? "Git events for this team are ignored, so this team's pull requests are not reviewed."
+                        : 'Git events for this team are ignored, so its pull requests are not reviewed.',
                     fix,
                 });
 
-            if (!team.organizationActive) {
-                push(
-                    'The organization is disabled.',
-                    'Re-enable the organization (organizations.status) or contact Kodus support.',
-                );
-            }
             if (team.teamStatus !== 'active') {
                 push(
                     `The team is not active (status "${team.teamStatus}").`,
@@ -81,13 +92,28 @@ export const setupCheck: DoctorCheck = {
                 push(
                     'Automatic code review is turned off for this team.',
                     'Turn on code review for the team in Settings > Code Review (team_automations.status).',
+                    true,
                 );
+            }
+            // No gate in the webhook or review path reads the organization
+            // status (webhook-context.service.ts, integrationConfig.repository
+            // findIntegrationConfigWithTeams), so it is reported, not failed.
+            if (!team.organizationActive) {
+                problems.push({
+                    check: 'setup.organization',
+                    status: 'info',
+                    scope,
+                    title: 'The organization is marked disabled.',
+                    impact: 'Reviews do not check this flag; other parts of the app may.',
+                    fix: 'If this is not intended, re-enable the organization (organizations.status).',
+                });
             }
 
             results.push(
-                ...(problems.length
+                ...(problems.some((p) => p.check === 'setup.team')
                     ? problems
                     : [
+                          ...problems,
                           {
                               check: 'setup.team',
                               status: 'ok' as const,
@@ -223,6 +249,7 @@ export function seatsCheck(
 ): DoctorCheck {
     return {
         id: 'license.seats',
+        blocking: true,
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             if (!ctx.licensed) {
                 return [];
@@ -300,11 +327,18 @@ export function astGraphCheck(
     };
 }
 
-/** Effective sandbox and a read-only test clone (git ls-remote). */
+/** Teams whose clone is tested: one repository each, so a token per team. */
+export const MAX_CLONE_TESTS = 5;
+
+export interface CloneOutcome {
+    team: DoctorTeam;
+    repository: string;
+    error?: string;
+}
+
+/** Effective sandbox and a read-only test clone (git ls-remote) per team. */
 export function sandboxCheck(
-    testClone: (
-        ctx: DoctorContext,
-    ) => Promise<{ repository: string; error?: string } | null>,
+    testClones: (ctx: DoctorContext) => Promise<CloneOutcome[]>,
 ): DoctorCheck {
     return {
         id: 'sandbox',
@@ -331,8 +365,8 @@ export function sandboxCheck(
                 ];
             }
 
-            const outcome = await testClone(ctx);
-            if (!outcome) {
+            const outcomes = await testClones(ctx);
+            if (!outcomes.length) {
                 return [
                     {
                         check: 'sandbox.clone',
@@ -341,24 +375,25 @@ export function sandboxCheck(
                     },
                 ];
             }
-            if (outcome.error) {
-                return [
-                    {
-                        check: 'sandbox.clone',
-                        status: 'warn',
-                        title: `The server cannot clone ${outcome.repository}.`,
-                        impact: 'Kody reviews only the diff: no cross-file context, and the code graph cannot be built.',
-                        fix: `Check that the worker can reach your Git host over HTTPS and that the token can clone. git said: ${outcome.error}`,
-                    },
-                ];
-            }
-            return [
-                {
+            const results: DoctorResult[] = outcomes
+                .filter((o) => o.error)
+                .map((o) => ({
+                    check: 'sandbox.clone',
+                    status: 'warn' as const,
+                    scope: teamScope(o.team),
+                    title: `The server cannot clone ${o.repository}.`,
+                    impact: 'Kody reviews only the diff: no cross-file context, and the code graph cannot be built.',
+                    fix: `Check that the worker can reach ${platformLabel(o.team.platform)} over HTTPS and that the token can clone (GitLab group or project tokens need read_repository). git said: ${o.error}`,
+                }));
+            const cloned = outcomes.filter((o) => !o.error);
+            if (cloned.length) {
+                results.push({
                     check: 'sandbox.clone',
                     status: 'ok',
-                    title: `Local sandbox: the server can clone ${outcome.repository}.`,
-                },
-            ];
+                    title: `Local sandbox: the server can clone ${cloned.map((o) => o.repository).join(', ')}.`,
+                });
+            }
+            return results;
         },
     };
 }
@@ -396,9 +431,9 @@ export function versionCheck(
                 return [
                     {
                         check: 'version',
-                        status: 'warn',
+                        status: 'info',
                         title: `Kodus ${status.current} is behind the latest release ${status.latest}.`,
-                        impact: 'Review fixes and improvements released since then are missing.',
+                        impact: 'Review fixes and improvements released since then are missing; the reviews that run are not affected otherwise.',
                         fix: `Upgrade (see ${status.releaseUrl ?? 'the release notes'}).`,
                     },
                 ];
@@ -414,26 +449,113 @@ export function versionCheck(
     };
 }
 
+/** Days before expiry when the edition line starts to say so. */
+export const LICENSE_EXPIRY_NOTICE_DAYS = 14;
+
+/** What the Community Edition turns off (shouldLimitResources, custom-agents-plan.ts). */
+const COMMUNITY_LIMITS =
+    'Only the first 10 Kody Rules are applied during reviews, custom agents do not run, and analytics, SSO and seat management are off.';
+
 export const editionCheck: DoctorCheck = {
     id: 'edition',
     async run(ctx: DoctorContext): Promise<DoctorResult[]> {
+        const license = ctx.license ?? {
+            status: ctx.licensed ? 'valid' : 'none',
+        };
+        if (license.status === 'valid') {
+            const expires = license.expiresAt
+                ? new Date(license.expiresAt)
+                : null;
+            const daysLeft = expires
+                ? Math.floor((expires.getTime() - Date.now()) / 86_400_000)
+                : null;
+            if (daysLeft !== null && daysLeft < LICENSE_EXPIRY_NOTICE_DAYS) {
+                return [
+                    {
+                        check: 'edition',
+                        status: 'info',
+                        title: `The Enterprise license expires on ${license.expiresAt!.slice(0, 10)} (${Math.max(daysLeft, 0)} day(s) left).`,
+                        impact: `After that the install runs as the Community Edition: ${COMMUNITY_LIMITS}`,
+                        fix: 'Renew the license with Kodus and update KODUS_LICENSE_KEY (or Settings > Subscription).',
+                    },
+                ];
+            }
+            return [
+                {
+                    check: 'edition',
+                    status: 'ok',
+                    title: `Enterprise license is valid${license.expiresAt ? ` until ${license.expiresAt.slice(0, 10)}` : ''}.`,
+                },
+            ];
+        }
+        if (license.status === 'expired') {
+            return [
+                {
+                    check: 'edition',
+                    status: 'warn',
+                    title: 'The Enterprise license has expired; the install runs as the Community Edition.',
+                    impact: COMMUNITY_LIMITS,
+                    fix: 'Renew the license with Kodus and update KODUS_LICENSE_KEY (or Settings > Subscription).',
+                },
+            ];
+        }
+        if (license.status === 'invalid') {
+            return [
+                {
+                    check: 'edition',
+                    status: 'warn',
+                    title: 'KODUS_LICENSE_KEY is set but is not a valid license key; the install runs as the Community Edition.',
+                    impact: COMMUNITY_LIMITS,
+                    fix: 'Paste the key exactly as Kodus sent it (one line, no quotes or spaces), then restart api and worker.',
+                },
+            ];
+        }
+        const misnamed = !!ctx.env.API_KODUS_LICENSE_KEY?.trim();
         return [
-            ctx.licensed
-                ? {
-                      check: 'edition',
-                      status: 'ok',
-                      title: 'Enterprise license is valid.',
-                  }
-                : {
-                      check: 'edition',
-                      status: 'info',
-                      title: 'Running the Community Edition (no license key).',
-                      impact: 'Enterprise features such as analytics dashboards, SSO and seat management are not available.',
-                      fix: 'Optional: set KODUS_LICENSE_KEY.',
-                  },
+            {
+                check: 'edition',
+                status: misnamed ? 'warn' : 'info',
+                title: misnamed
+                    ? 'API_KODUS_LICENSE_KEY is set, but Kodus reads the license from KODUS_LICENSE_KEY: the install runs as the Community Edition.'
+                    : 'Running the Community Edition (no license key).',
+                impact: COMMUNITY_LIMITS,
+                fix: misnamed
+                    ? 'Rename the variable to KODUS_LICENSE_KEY on api and worker, then restart them.'
+                    : 'Optional: set KODUS_LICENSE_KEY.',
+            },
         ];
     },
 };
+
+/** MongoDB answers: pull requests and findings live there. */
+export function mongoCheck(ping: () => Promise<void>): DoctorCheck {
+    return {
+        id: 'database.mongo',
+        blocking: true,
+        async run(): Promise<DoctorResult[]> {
+            try {
+                await ping();
+                return [
+                    {
+                        check: 'database.mongo',
+                        status: 'ok',
+                        title: 'MongoDB answers.',
+                    },
+                ];
+            } catch (error) {
+                return [
+                    {
+                        check: 'database.mongo',
+                        status: 'fail',
+                        title: 'Cannot reach MongoDB.',
+                        impact: 'Reviews cannot load or save pull requests and their findings, so they fail.',
+                        fix: `Check that MongoDB is running and that API_MG_DB_* (or MONGODB_URI) is right on api and worker. Error: ${String((error as Error)?.message ?? error).slice(0, 160)}`,
+                    },
+                ];
+            }
+        },
+    };
+}
 
 /** Enterprise only: the analytics worker ingests (analytics.ingestion_runs). */
 export function analyticsCheck(

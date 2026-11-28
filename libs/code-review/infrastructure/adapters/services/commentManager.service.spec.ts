@@ -61,6 +61,7 @@ import { JSONParseError, NoObjectGeneratedError } from 'ai';
 import { getClassification } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/prompts/repeatedCodeReviewSuggestionClustering';
 
 import {
@@ -486,6 +487,213 @@ describe('CommentManagerService.generateSummaryPR', () => {
         // name suggests rejected the single summary call ("Your input exceeds
         // the context window of this model"), and the retry re-sent the same
         // oversized prompt. With no maxInputTokens configured nothing split it.
+        // #2233: the summary sent 4.7M-token requests to 1M-token models.
+        describe("within the model's window (#2233)", () => {
+            // Numbers with no space between them: about 1.2 characters a
+            // token, where the old character split assumed 3.5.
+            const dense = (chars: number, seed: number) => {
+                let out = '+';
+                while (out.length < chars) {
+                    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+                    out += `${seed % 256},`;
+                }
+                return out.slice(0, chars);
+            };
+            const worst = (text: string) =>
+                estimateTextTokens(text, { worstCase: true });
+            const summarize = (slot: unknown, files: any[]) => {
+                permissionValidationService.resolveTaskSlot = jest.fn(
+                    async () => slot,
+                );
+                return service.generateSummaryPR(
+                    { ...stubPR, body: '' },
+                    stubRepository,
+                    files,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+            };
+            const sent = () => {
+                const system = capturedPrompts.find((p) => p.role === 'system');
+                return capturedPrompts
+                    .filter((p) => p.role === 'user')
+                    .map((p) => worst(p.prompt) + worst(system?.prompt ?? ''));
+            };
+
+            it('splits dense files by their real tokens, so no call overflows the slot', async () => {
+                const files = ['a', 'b', 'c'].map((name, i) => ({
+                    filename: `icons/${name}.svg`,
+                    patch: dense(9_000, i + 1),
+                    status: 'added',
+                }));
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    files,
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(16_000);
+                }
+            });
+
+            it('cuts a file larger than one call instead of sending it whole', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 7),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(users.length).toBeGreaterThan(0);
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('fixtures/catalog.json'),
+                    ),
+                ).toBe(true);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(16_000);
+                }
+            });
+
+            it('never splits a character when it cuts a file', async () => {
+                // Where the cut lands depends on the length: every offset
+                // puts it on each side of a pair at least once.
+                for (const lead of [
+                    '+',
+                    '++',
+                    '+++',
+                    '++++',
+                    '+++++',
+                    '++++++',
+                ]) {
+                    capturedPrompts.length = 0;
+                    await summarize(
+                        {
+                            provider: 'openai_compatible',
+                            model: 'local-open-weights',
+                            maxInputTokens: 16_000,
+                        },
+                        [
+                            {
+                                filename: 'docs/emoji.md',
+                                patch: `${lead}${'😀'.repeat(40_000 + lead.length * 7)}`,
+                                status: 'added',
+                            },
+                        ],
+                    );
+                    const users = capturedPrompts.filter(
+                        (p) => p.role === 'user',
+                    );
+                    expect(users.length).toBeGreaterThan(0);
+                    for (const { prompt } of users) {
+                        // A lone high surrogate is invalid in the request
+                        // body: raw, or as the escape JSON.stringify writes.
+                        expect(prompt).not.toMatch(
+                            /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/,
+                        );
+                        expect(prompt).not.toMatch(
+                            /\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})/i,
+                        );
+                    }
+                }
+            });
+
+            it('says a file was cut in its own field, not inside the patch the author wrote', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 11),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('"patchTruncated":true'),
+                    ),
+                ).toBe(true);
+                expect(users.some((p) => /\(cut:/.test(p.prompt))).toBe(false);
+            });
+
+            it("keeps room for the output limit Anthropic's adapter declares when the slot sets none", async () => {
+                await summarize(
+                    {
+                        provider: 'anthropic',
+                        model: 'claude-haiku-4-5-20251001',
+                        apiKey: 'k',
+                        maxInputTokens: 100_000,
+                    },
+                    [
+                        {
+                            filename: 'src/catalog.ts',
+                            patch: Array.from(
+                                { length: 6_000 },
+                                (_, line) =>
+                                    `+export const item${line} = load('${line}');`,
+                            ).join('\n'),
+                            status: 'added',
+                        },
+                    ],
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    // The adapter sends max_tokens = 64,000 for Haiku 4.5.
+                    expect(tokens + 64_000).toBeLessThanOrEqual(100_000);
+                }
+            });
+
+            it('asks the model nothing when the prompt alone leaves no room', async () => {
+                const result = await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 300,
+                    },
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                );
+                expect(capturedPrompts).toHaveLength(0);
+                expect(result).toBeNull();
+            });
+
+            it("sizes the calls by the model's known window when the slot sets none", async () => {
+                const files = ['a', 'b', 'c'].map((name, i) => ({
+                    filename: `src/${name}.ts`,
+                    patch: Array.from(
+                        { length: 500 },
+                        (_, line) =>
+                            `+export const ${name}${line} = load('${i}-${line}');`,
+                    ).join('\n'),
+                    status: 'modified',
+                }));
+                expect(worst(JSON.stringify(files))).toBeGreaterThan(8_192);
+                await summarize({ provider: 'openai', model: 'gpt-4' }, files);
+                expect(sent().length).toBeGreaterThan(1);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(8_192);
+                }
+            });
+        });
+
         describe('context overflow on the single call', () => {
             const overflow = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',
@@ -731,6 +939,82 @@ describe('CommentManagerService GitLab status note reuse (#1721)', () => {
         await expect(publish()).rejects.toThrow(
             'Could not create initial review status for PR#42',
         );
+    });
+});
+
+/**
+ * QA M11 on #2671: a rename-only PR got two findings posted at PR level and
+ * no line comment, then the end-of-review comment was edited to "No issues
+ * were found". updateOverallComment never looked at the PR-level results.
+ */
+describe('CommentManagerService.updateOverallComment — PR-level findings', () => {
+    const updateIssueComment = jest.fn().mockResolvedValue({ id: 1 });
+    const service = new CommentManagerService(
+        {} as any,
+        { processTemplate: async () => '' } as any,
+        {} as any,
+        {} as any,
+        { updateIssueComment } as any,
+        {} as any,
+    );
+    const prLevel = (deliveryStatus: string) => ({
+        comment: { type: 'pr_level', suggestion: { id: 's-1' } },
+        deliveryStatus,
+    });
+    const update = (
+        lineComments: any[],
+        prLevelCommentResults: any[],
+        finalCommentBody?: string,
+    ) =>
+        service.updateOverallComment(
+            { organizationId: 'org', teamId: 'team' } as any,
+            13,
+            { id: 'repo-1', name: 'repo' },
+            1,
+            1,
+            PlatformType.GITHUB,
+            lineComments,
+            { languageResultPrompt: LanguageValue.ENGLISH } as any,
+            undefined,
+            finalCommentBody,
+            false,
+            undefined,
+            false,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            undefined,
+            undefined,
+            prLevelCommentResults,
+        );
+    const postedBody = () => updateIssueComment.mock.calls.at(-1)[0].body;
+
+    beforeEach(() => updateIssueComment.mockClear());
+
+    it('does not call a PR with only PR-level findings clean', async () => {
+        await update([], [prLevel('sent'), prLevel('sent')]);
+
+        expect(postedBody()).not.toContain('No issues were found');
+        expect(postedBody()).toContain('Code Review Completed');
+    });
+
+    it('still says no issues when nothing was found at all', async () => {
+        await update([], []);
+
+        expect(postedBody()).toContain('No issues were found');
+    });
+
+    // A team's end-review template is replaced only when no comment reached
+    // the PR; a PR-level comment that did is a delivered comment.
+    it("keeps the team's template when only the PR-level comments were posted", async () => {
+        await update(
+            [{ comment: {}, deliveryStatus: 'failed' }],
+            [prLevel('sent')],
+            'Team template',
+        );
+
+        expect(postedBody()).toBe('Team template');
     });
 });
 
@@ -1843,6 +2127,28 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
             }),
             undefined,
         );
+    });
+
+    // QA M11 on #2420: Azure numbers comments within a thread, so every
+    // PR-level comment came back as id 1 and two records shared it.
+    it('stores the Azure thread id, not the in-thread comment id', async () => {
+        codeManagementService.createIssueComment
+            .mockResolvedValueOnce({ id: 1, threadId: 501 })
+            .mockResolvedValueOnce({ id: 1, threadId: 502 });
+
+        const { commentResults } = await service.createPrLevelReviewComments(
+            { organizationId: 'org-1', teamId: 'team-1' } as never,
+            7,
+            { name: 'sample', id: 'repo-id', language: 'typescript' } as never,
+            [suggestion(), { ...suggestion(), id: 'uuid-2' }] as never,
+            'typescript',
+            undefined,
+            PlatformType.AZURE_REPOS,
+        );
+
+        expect(
+            commentResults.map((r) => r.codeReviewFeedbackData.commentId),
+        ).toEqual([501, 502]);
     });
 
     it('does not duplicate the marker when the formatted body already carries it', async () => {

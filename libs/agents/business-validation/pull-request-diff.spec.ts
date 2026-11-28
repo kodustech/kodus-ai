@@ -1,4 +1,23 @@
-import { diffFor, fitDiff, formatPullRequestDiff } from './pull-request-diff';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+import {
+    diffFor,
+    diffTokenBudget,
+    fitDiff,
+    formatPullRequestDiff,
+    sliceWhole,
+} from './pull-request-diff';
+
+/** How the budget counts: what the tokenizer can't encode, at its worst. */
+const worst = (text: string) => estimateTextTokens(text, { worstCase: true });
+
+/** SVG path data: few characters per token, the shape behind #2233. */
+const svgPatch = (chars: number) => {
+    let out = '';
+    for (let i = 0; out.length < chars; i++) {
+        out += `+<path d="M${i % 97}.${i % 7} ${i % 13}.5L${i % 31} ${i % 11}z"/>\n`;
+    }
+    return out.slice(0, chars);
+};
 
 describe('fitDiff (UC-32)', () => {
     const diff = formatPullRequestDiff([
@@ -8,7 +27,11 @@ describe('fitDiff (UC-32)', () => {
     ]);
 
     it('keeps a diff under budget whole', () => {
-        expect(fitDiff(diff, 10_000)).toEqual({ diff, unseenFiles: [] });
+        expect(fitDiff(diff, 10_000)).toEqual({
+            diff,
+            unseenFiles: [],
+            cutByTokens: false,
+        });
     });
 
     it('skips a file that does not fit and keeps the smaller ones after it', () => {
@@ -73,5 +96,146 @@ describe('diffFor: what one second look re-reads on every step', () => {
         expect(sent).toContain('=== FILE: huge.ts');
         expect(sent).toContain('read the rest of huge.ts with read_file');
         expect(sent.length).toBeLessThanOrEqual(24_000);
+    });
+});
+
+describe("fitDiff within the model's window (#2233)", () => {
+    const diff = formatPullRequestDiff([
+        { filename: 'src/a.ts', patch: svgPatch(30_000) },
+        { filename: 'icons/big.svg', patch: svgPatch(120_000) },
+        { filename: 'src/b.ts', patch: svgPatch(30_000) },
+    ]);
+
+    it('leaves out the files that would take the diff past the tokens, and names them, even under the character cap', () => {
+        const tokens = 30_000;
+        const { diff: sent, unseenFiles } = fitDiff(diff, {
+            chars: 200_000,
+            tokens,
+        });
+        expect(diff.length).toBeLessThan(200_000);
+        expect(worst(sent)).toBeLessThanOrEqual(tokens);
+        expect(unseenFiles).toContain('icons/big.svg');
+        expect(sent).toContain('=== FILE: src/a.ts');
+    });
+
+    it('cuts a diff with no file headers to the tokens too', () => {
+        const { diff: sent, unseenFiles } = fitDiff(svgPatch(100_000), {
+            chars: 200_000,
+            tokens: 5_000,
+        });
+        expect(worst(sent)).toBeLessThanOrEqual(5_000);
+        expect(sent.length).toBeGreaterThan(0);
+        expect(unseenFiles).toEqual(['(rest of the diff)']);
+    });
+
+    it('keeps the whole diff when the window holds it', () => {
+        expect(fitDiff(diff, { chars: 200_000, tokens: 1_000_000 })).toEqual({
+            diff,
+            unseenFiles: [],
+            cutByTokens: false,
+        });
+    });
+});
+
+describe('diffTokenBudget (#2233)', () => {
+    it('gives the diff what the window holds after the prompt, the answer and a margin', () => {
+        expect(
+            diffTokenBudget({
+                contextWindowTokens: 100_000,
+                promptTokens: 10_000,
+                outputTokens: 20_000,
+            }),
+        ).toBe(55_000);
+    });
+
+    it('leaves nothing for the diff when the window cannot hold the prompt and the answer', () => {
+        expect(
+            diffTokenBudget({
+                contextWindowTokens: 16_000,
+                promptTokens: 4_000,
+                outputTokens: 20_000,
+            }),
+        ).toBe(0);
+    });
+});
+
+describe("diffFor within the model's window (#2233)", () => {
+    it("keeps a second look's diff within its tokens and still names the files left out", () => {
+        const diff = formatPullRequestDiff(
+            Array.from({ length: 12 }, (_, i) => ({
+                filename: `icons/icon-${i}.svg`,
+                patch: svgPatch(4_000),
+            })),
+        );
+        const sent = diffFor(diff, {}, { chars: 24_000, tokens: 2_000 });
+        expect(worst(sent)).toBeLessThanOrEqual(2_000);
+        expect(sent).toContain('Also changed, not shown here');
+    });
+});
+
+describe('fitDiff counts what the tokenizer cannot encode at its worst', () => {
+    it('leaves out an inline base64 image that would slip past the window at three characters per token', () => {
+        const blob = `+<img src="data:image/png;base64,${Buffer.alloc(45_000, 7).toString('base64').replace(/A/g, 'Bq9')}">`;
+        const diff = formatPullRequestDiff([
+            { filename: 'src/a.ts', patch: '+export const a = 1;' },
+            { filename: 'public/logo.html', patch: blob },
+        ]);
+        const { unseenFiles } = fitDiff(diff, {
+            chars: 200_000,
+            tokens: 30_000,
+        });
+        expect(estimateTextTokens(blob)).toBeLessThan(30_000);
+        expect(unseenFiles).toEqual(['public/logo.html']);
+    });
+});
+
+describe('cuts that stay within the window and stay valid text', () => {
+    it("keeps a second look's diff under the character cap but over the tokens, instead of sending none", () => {
+        const diff = formatPullRequestDiff([
+            {
+                filename: 'src/a.ts',
+                patch: Array.from(
+                    { length: 120 },
+                    (_, i) => `+export const value${i} = compute(${i});`,
+                ).join('\n'),
+            },
+            {
+                filename: 'dist/app.min.js',
+                patch: `+${'a=b+c;d=e*f;'.repeat(300)}`,
+            },
+        ]);
+        expect(diff.length).toBeLessThan(24_000);
+        const tokens = Math.floor(worst(diff) * 0.9);
+        const sent = diffFor(diff, {}, { chars: 24_000, tokens });
+        expect(sent.length).toBeGreaterThan(0);
+        expect(worst(sent)).toBeLessThanOrEqual(tokens);
+    });
+
+    it('sends no diff, and names every file, when the window has no room for one', () => {
+        const diff = formatPullRequestDiff([
+            { filename: 'src/a.ts', patch: '+export const a = 1;' },
+            { filename: 'src/b.ts', patch: '+export const b = 2;' },
+        ]);
+        expect(fitDiff(diff, { chars: 200_000, tokens: 0 })).toEqual({
+            diff: '',
+            unseenFiles: ['src/a.ts', 'src/b.ts'],
+            cutByTokens: true,
+        });
+        expect(diffFor(diff, {}, { chars: 24_000, tokens: 0 })).toBe('');
+    });
+
+    it('never ends a cut on half of an emoji', () => {
+        const isLoneHigh = (text: string) => {
+            const last = text.charCodeAt(text.length - 1);
+            return last >= 0xd800 && last <= 0xdbff;
+        };
+        const emoji = '+' + '😀'.repeat(50_000);
+        // Budgets whose proportional cut lands on either half of a pair.
+        const cuts = Array.from({ length: 60 }, (_, i) => 700 + i).map(
+            (tokens) => fitDiff(emoji, { chars: 200_000, tokens }).diff,
+        );
+        expect(cuts.every((cut) => cut.length > 0)).toBe(true);
+        expect(cuts.filter(isLoneHigh)).toEqual([]);
+        expect(isLoneHigh(sliceWhole('a😀', 2))).toBe(false);
     });
 });

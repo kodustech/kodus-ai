@@ -26,6 +26,17 @@ describe('readDecision', () => {
         expect(decision?.tool).toBe('KODUS_CREATE_MEMORY');
     });
 
+    // gpt-luna named the tool with OpenAI's internal namespace, and the write
+    // the developer asked for was never authorized.
+    it("drops a leading 'functions.' from the tool the agent names", () => {
+        expect(
+            readDecision([call({ intent: 'act', tool: 'functions.kodus_save_memory' })])?.tool,
+        ).toBe('kodus_save_memory');
+        expect(
+            readDecision([call({ intent: 'act', tool: 'kodus.functions.save' })])?.tool,
+        ).toBe('kodus.functions.save');
+    });
+
     it('accepts the input as a JSON string, as providers send it', () => {
         expect(
             readDecision([call(JSON.stringify({ intent: 'offer' }))])?.intent,

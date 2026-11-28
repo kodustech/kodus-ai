@@ -1,0 +1,38 @@
+diff --git a/libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case.spec.ts b/libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case.spec.ts
+index 3e7a488e1..3d325d4de 100644
+--- a/libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case.spec.ts
++++ b/libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case.spec.ts
+@@ -281,11 +281,11 @@ describe('ChatWithKodyFromGitUseCase', () => {
+                 user: { id: 7, username: 'bob' },
+                 project: {
+                     id: 9,
+-                    name: 'mgm-api',
+-                    path_with_namespace: 'managerium/mgm-api',
+-                    web_url: 'https://gitlab-b.example/managerium/mgm-api',
++                    name: 'billing-api',
++                    path_with_namespace: 'globex/billing-api',
++                    web_url: 'https://gitlab-b.example/globex/billing-api',
+                     git_http_url:
+-                        'https://gitlab-b.example/managerium/mgm-api.git',
++                        'https://gitlab-b.example/globex/billing-api.git',
+                 },
+                 object_attributes: {
+                     id: 123,
+@@ -301,7 +301,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
+         ).toHaveBeenCalledWith(
+             expect.objectContaining({
+                 host: 'gitlab-b.example',
+-                repositoryFullName: 'managerium/mgm-api',
++                repositoryFullName: 'globex/billing-api',
+             }),
+             PlatformType.GITLAB,
+         );
+@@ -310,7 +310,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
+             '9',
+             {
+                 host: 'gitlab-b.example',
+-                repositoryFullName: 'managerium/mgm-api',
++                repositoryFullName: 'globex/billing-api',
+             },
+         );
+     });

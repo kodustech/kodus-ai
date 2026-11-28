@@ -23,9 +23,14 @@ export interface DoctorResult {
     fix?: string;
     /** Where it applies: `org/team`, `org/team/repo`. Absent = whole install. */
     scope?: string;
+    /**
+     * On an `unknown`: what could not be verified may be stopping reviews, so
+     * the report cannot say they run (verdict UNVERIFIED, not OK).
+     */
+    blocking?: boolean;
 }
 
-export type ReviewsVerdict = 'NOT_RUNNING' | 'DEGRADED' | 'OK';
+export type ReviewsVerdict = 'NOT_RUNNING' | 'UNVERIFIED' | 'DEGRADED' | 'OK';
 
 export interface DoctorReport {
     verdict: ReviewsVerdict;
@@ -60,11 +65,25 @@ export interface DoctorContext {
     codeReviewAutomationSeeded: boolean;
     /** Valid self-hosted license (Enterprise); false = Community Edition. */
     licensed: boolean;
+    /** Why the install is or is not licensed (editionCheck). */
+    license?: LicenseState;
     env: NodeJS.ProcessEnv;
+}
+
+/**
+ * `expired` and `invalid` run as the Community Edition like `none`, but a key
+ * was set: the admin believes the install is licensed.
+ */
+export interface LicenseState {
+    status: 'valid' | 'expired' | 'invalid' | 'none';
+    /** ISO date, for a valid license. */
+    expiresAt?: string;
 }
 
 export interface DoctorCheck {
     id: string;
+    /** Can report a ✘, so a run that does not complete leaves reviews unverified. */
+    blocking?: boolean;
     run(ctx: DoctorContext): Promise<DoctorResult[]>;
 }
 

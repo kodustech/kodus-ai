@@ -26,10 +26,7 @@ import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useFinishOnboardingReviewingPR } from "src/features/ee/onboarding/_hooks/use-finish-onboarding-reviewing-pr";
 import { useFinishOnboardingWithoutSelectingPR } from "src/features/ee/onboarding/_hooks/use-finish-onboarding-without-selecting-pr";
-import {
-    TRIAL_DAYS,
-    TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED,
-} from "src/features/ee/subscription/_constants/trial";
+import { TrialTermsAlert } from "src/features/ee/subscription/_components/trial-terms-alert";
 
 type PullRequestOption = ComponentProps<typeof SelectPullRequest>["value"];
 
@@ -135,37 +132,27 @@ export default function App() {
                                 </>
                             ) : (
                                 <>
-                                    <Alert variant="info" className="mb-1">
-                                        <InfoIcon />
-                                        <AlertTitle>
-                                            {hasBYOK
-                                                ? "This review uses your AI key"
-                                                : `Your first ${TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED} PR reviews are on us`}
-                                        </AlertTitle>
-                                        <AlertDescription>
-                                            {hasBYOK ? (
+                                    {hasBYOK ? (
+                                        <Alert variant="info" className="mb-1">
+                                            <InfoIcon />
+                                            <AlertTitle>
+                                                This review uses your AI key
+                                            </AlertTitle>
+                                            <AlertDescription>
                                                 <p>
                                                     Your AI key is connected, so
                                                     this review runs on your key
                                                     — unlimited, and it doesn't
                                                     use your trial reviews.
                                                 </p>
-                                            ) : (
-                                                <p>
-                                                    During your {TRIAL_DAYS}-day
-                                                    trial, this review uses 1 of
-                                                    the{" "}
-                                                    {
-                                                        TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED
-                                                    }{" "}
-                                                    we cover for you. After
-                                                    that, connect your AI key
-                                                    for unlimited reviews (free,
-                                                    on any plan).
-                                                </p>
-                                            )}
-                                        </AlertDescription>
-                                    </Alert>
+                                            </AlertDescription>
+                                        </Alert>
+                                    ) : (
+                                        <TrialTermsAlert
+                                            variant="pull-request"
+                                            className="mb-1"
+                                        />
+                                    )}
 
                                     <FormControl.Root>
                                         <FormControl.Label htmlFor="select-pull-request">

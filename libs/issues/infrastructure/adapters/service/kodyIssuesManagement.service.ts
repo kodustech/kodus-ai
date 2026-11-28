@@ -592,6 +592,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             PriorityStatus.DISCARDED_BY_CODE_DIFF,
             // An earlier comment on the PR already raised it (#2097).
             PriorityStatus.DISCARDED_BY_REPEAT,
+            PriorityStatus.DISCARDED_BY_REVERSAL,
             PriorityStatus.WITHHELD_BY_REPEAT_CHECK,
             // Its verify run failed; nobody judged it (#2171).
             PriorityStatus.DISCARDED_BY_VERIFY_ERROR,

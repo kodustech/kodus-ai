@@ -47,12 +47,21 @@ const buildUseCase = (
         directoryConfigs?: Record<string, unknown>;
         license?: Record<string, unknown>;
         byok?: unknown;
+        /** On the Ultra review alpha; on unless a test says otherwise. */
+        ultraEnabled?: boolean;
     } = {},
 ) => {
     const createOrUpdateParametersUseCase = {
         execute: jest.fn().mockResolvedValue(true),
     };
     const eventEmitter = { emit: jest.fn() };
+    const validateOrganizationLicense = jest.fn().mockResolvedValue(
+        stored.license ?? {
+            valid: true,
+            subscriptionStatus: 'active',
+            planType: 'teams_byok',
+        },
+    );
     const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
         {
             findByKey: jest.fn().mockResolvedValue({
@@ -122,16 +131,14 @@ const buildUseCase = (
             getSubscriptionStatus: jest.fn(),
         } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
-        {
-            validateOrganizationLicense: jest.fn().mockResolvedValue(
-                stored.license ?? {
-                    valid: true,
-                    subscriptionStatus: 'active',
-                    planType: 'teams_byok',
-                },
-            ),
-        } as any,
+        { validateOrganizationLicense } as any,
         { codeReviewSettingsUpdated: jest.fn() } as any,
+        undefined,
+        {
+            isEnabledFor: jest
+                .fn()
+                .mockResolvedValue(stored.ultraEnabled ?? true),
+        } as any,
     );
 
     const save = async (
@@ -166,7 +173,13 @@ const buildUseCase = (
             : repository.configs;
     };
 
-    return { save, eventEmitter, useCase, createOrUpdateParametersUseCase };
+    return {
+        save,
+        eventEmitter,
+        useCase,
+        createOrUpdateParametersUseCase,
+        validateOrganizationLicense,
+    };
 };
 
 describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
@@ -704,6 +717,25 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
             { source: 'web' },
         );
         expect(configs.riskReviewRouting?.riskFound).toBe('ultra');
+    });
+
+    it('refuses Ultra outside its alpha, from the mode or a risk route, before reading the plan', async () => {
+        for (const configValue of [
+            { reviewMode: 'ultra' },
+            { riskReviewRouting: { riskFound: 'ultra' } },
+        ]) {
+            const { save, validateOrganizationLicense } = buildUseCase(
+                {},
+                {
+                    ultraEnabled: false,
+                    byok: trioConfig(['m1', 'm2', 'm3']),
+                },
+            );
+            await expect(save(configValue, { source: 'web' })).rejects.toThrow(
+                'Ultra review is not available for this organization yet',
+            );
+            expect(validateOrganizationLicense).not.toHaveBeenCalled();
+        }
     });
 
     it('refuses Ultra on free, from the mode or a risk route', async () => {

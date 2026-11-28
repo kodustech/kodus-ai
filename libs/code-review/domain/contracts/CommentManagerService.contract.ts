@@ -99,6 +99,7 @@ export interface ICommentManagerService {
         singleAgentRun?: boolean,
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
         extraLine?: string,
+        prLevelCommentResults?: Array<CommentResult>,
     ): Promise<void>;
 
     updateSummarizationInPR(

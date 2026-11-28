@@ -41,6 +41,31 @@ import { get_encoding, type Tiktoken } from 'tiktoken';
  */
 export const FALLBACK_CHARS_PER_TOKEN = 3;
 
+/**
+ * The fallback for a caller whose limit is a hard one (a request that must
+ * fit the model's window): one token per ASCII character. Dense text runs far
+ * below 3 characters per token in o200k_base — measured 1.14 for SVG path
+ * data, 1.45 for base64, 1.75 for hex — so the ordinary fallback can let
+ * such a text through at less than half its real size.
+ */
+export const WORST_CASE_CHARS_PER_TOKEN = 1;
+
+/**
+ * The worst case for one non-ASCII UTF-16 code unit: a byte-level BPE never
+ * spends more than a token per UTF-8 byte, and a code unit is at most three
+ * bytes (a surrogate pair is four bytes over two units). o200k spends 1.5 per
+ * unit on 🫠 and 2 on 𠮷 and U+2000.
+ */
+const WORST_CASE_TOKENS_PER_NON_ASCII_UNIT = 3;
+
+/** Tokens a text can never exceed: what `worstCase` counts uncounted text at. */
+function worstCaseTokens(length: number, nonAscii: number): number {
+    return (
+        Math.ceil((length - nonAscii) / WORST_CASE_CHARS_PER_TOKEN) +
+        nonAscii * WORST_CASE_TOKENS_PER_NON_ASCII_UNIT
+    );
+}
+
 let encoder: Tiktoken | null = null;
 let encoderFailed = false;
 
@@ -183,54 +208,94 @@ function isWhitespace(code: number): boolean {
     );
 }
 
+/** What tiktoken's pre-tokenizer keeps in one piece, as far as cost goes. */
+const enum Stretch {
+    Whitespace,
+    /** Letters and anything else outside ASCII: one piece can span them. */
+    Letters,
+    /** o200k cuts digits into pieces of three: never one long piece. */
+    Digits,
+    /** ASCII punctuation and symbols: a run of them is one piece. */
+    Symbols,
+}
+
+function stretchOf(code: number): Stretch {
+    if (isWhitespace(code)) return Stretch.Whitespace;
+    if (code >= 48 && code <= 57) return Stretch.Digits;
+    if (
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        code > 0x7f
+    ) {
+        return Stretch.Letters;
+    }
+    return Stretch.Symbols;
+}
+
 /**
- * tiktoken count, except that any run of more than MAX_ENCODED_RUN_CHARS
- * characters of one kind (whitespace, or anything but whitespace) is
- * estimated instead: tiktoken is quadratic on both, since a whitespace run is
- * one pre-token piece too (80k spaces took 3.8s). A whitespace run counts by
- * the fallback ratio (conservative: tiktoken packs many spaces per token).
- * In any other run, ASCII characters count by the fallback ratio and every
- * other character as one token (CJK and other scripts written without spaces
- * run about 1-1.5 characters per token, so 3 would under-count them). One
- * linear pass over the text; no regex (a `\S{n,}` scan would itself be
- * O(n·k)).
+ * tiktoken count, except that a stretch of more than MAX_ENCODED_RUN_CHARS
+ * characters that tiktoken keeps in one pre-token piece (whitespace, letters,
+ * or symbols) is estimated instead: its BPE is quadratic in a piece's length,
+ * and a piece never spans two of these. Measured at 40k chars: a letter run
+ * 0.64s, a repeated `=` 0.98s; base64, hex, minified JSON and digit runs,
+ * whose pieces are short, 4-9ms. So those are counted exactly. They used to
+ * be estimated as one whitespace-free run, at ~4 characters a token, which
+ * read a 0.5MB base64 image at half its size (#2233) and a tool's JSON
+ * result, which has no spaces, the same way.
+ *
+ * A whitespace stretch counts by the fallback ratio (conservative: tiktoken
+ * packs many spaces per token). In a letter or symbol stretch, ASCII
+ * characters count by the fallback ratio and every other character as one
+ * token (CJK and other scripts written without spaces run about 1-1.5
+ * characters per token, so 3 would under-count them). One linear pass over
+ * the text; no regex (a `\S{n,}` scan would itself be O(n·k)).
  */
-function countTokens(enc: Tiktoken, text: string): number {
+function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
     if (text.length <= MAX_ENCODED_RUN_CHARS) {
         return enc.encode_ordinary(text).length;
     }
     let tokens = 0;
     let segmentStart = 0;
     let runStart = 0;
-    let runIsWhitespace = isWhitespace(text.charCodeAt(0));
+    let runKind = stretchOf(text.charCodeAt(0));
     let longRuns = false;
-    // Non-ASCII code units in the current (non-whitespace) run.
+    // Non-ASCII code units in the current stretch.
     let runNonAscii = 0;
     const flushRun = (runEnd: number) => {
         const length = runEnd - runStart;
-        if (length <= MAX_ENCODED_RUN_CHARS) return;
+        // A long digit run is encoded (o200k cuts it in threes, never one
+        // long piece), except for a limit: some tokenizers spend a token per
+        // digit, and the worst case is held to that.
+        if (
+            length <= MAX_ENCODED_RUN_CHARS ||
+            (runKind === Stretch.Digits && !worstCase)
+        ) {
+            return;
+        }
         longRuns = true;
         if (runStart > segmentStart) {
             tokens += enc.encode_ordinary(
                 text.slice(segmentStart, runStart),
             ).length;
         }
-        tokens += runIsWhitespace
-            ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
-            : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
-              runNonAscii;
+        tokens += worstCase
+            ? worstCaseTokens(length, runNonAscii)
+            : runKind === Stretch.Whitespace
+              ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
+              : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
+                runNonAscii;
         segmentStart = runEnd;
     };
     for (let i = 0; i < text.length; i++) {
         const code = text.charCodeAt(i);
-        const whitespace = isWhitespace(code);
-        if (whitespace !== runIsWhitespace) {
+        const kind = stretchOf(code);
+        if (kind !== runKind) {
             flushRun(i);
             runStart = i;
-            runIsWhitespace = whitespace;
+            runKind = kind;
             runNonAscii = 0;
         }
-        if (!whitespace && code > 0x7f) runNonAscii++;
+        if (code > 0x7f) runNonAscii++;
     }
     flushRun(text.length);
     if (!longRuns) return enc.encode_ordinary(text).length;
@@ -243,12 +308,23 @@ function countTokens(enc: Tiktoken, text: string): number {
 /** Token count of a single string; transient slices can bypass the shared memo. */
 export function estimateTextTokens(
     text: string,
-    options?: { cache?: boolean },
+    options?: {
+        cache?: boolean;
+        /**
+         * Count what the tokenizer can't (it failed to load, or a run too
+         * long to encode) at its worst: a token per ASCII character, three
+         * per other code unit, a long digit run included (some tokenizers
+         * spend a token per digit). For a limit the text must never
+         * exceed. Not memoized, so a cached ordinary count never answers it.
+         */
+        worstCase?: boolean;
+    },
 ): number {
     if (!text) {
         return 0;
     }
-    const useMemo = options?.cache !== false;
+    const worstCase = options?.worstCase === true;
+    const useMemo = options?.cache !== false && !options?.worstCase;
     let hit: number | undefined;
     if (useMemo) {
         hit = text.length > MEMO_MAX_CHARS ? recallLarge(text) : memo.get(text);
@@ -259,11 +335,14 @@ export function estimateTextTokens(
     const enc = getEncoder();
     if (enc) {
         try {
-            const tokens = countTokens(enc, text);
+            const tokens = countTokens(enc, text, worstCase);
             return useMemo ? remember(text, tokens) : tokens;
         } catch {
             // fall through to the char estimate
         }
     }
-    return Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
+    // A byte-level BPE spends at most a token per UTF-8 byte.
+    return worstCase
+        ? Buffer.byteLength(text, 'utf8')
+        : Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
 }

@@ -66,7 +66,12 @@ function instanceOf(schema, root = schema, depth = 0, prefer = []) {
             const out = {};
             const props = schema.properties || {};
             for (const name of Object.keys(props)) {
-                out[name] = instanceOf(props[name] || {}, root, depth + 1, prefer);
+                // A scripted medium-risk judgment is the only one that matches
+                // a rule; every other scripted level, the default included, matches none.
+                out[name] =
+                    name === 'matchedRules' && !prefer.includes('medium')
+                        ? []
+                        : instanceOf(props[name] || {}, root, depth + 1, prefer);
             }
             return out;
         }

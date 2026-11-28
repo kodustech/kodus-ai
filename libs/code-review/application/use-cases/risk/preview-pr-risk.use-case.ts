@@ -32,6 +32,8 @@ export class PreviewPrRiskUseCase {
         if (!Number.isSafeInteger(input.prNumber) || input.prNumber < 1) {
             throw new BadRequestException('Enter a valid PR number.');
         }
+        // Read like the assessment reads stored settings: an entry it would
+        // drop must not stop the preview of the rest.
         const criteria = riskCriteriaSchema.safeParse(input.criteria ?? []);
         if (!criteria.success)
             throw new BadRequestException('Risk criteria are invalid.');

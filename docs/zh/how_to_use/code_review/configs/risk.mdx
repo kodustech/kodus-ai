@@ -29,25 +29,39 @@ Kody 会评估整个 PR。[审查模式](/zh/how_to_use/code_review/configs/rout
 
 ## 结果
 
-- **Risk found:** 以风险为条件的智能体可能会运行,Routing 使用其 risk-found 模式,并且自动批准会被阻止。
+- **Risk found:** PR 符合至少一条已启用的[风险规则](#风险规则)。以风险为条件的智能体可能会运行,Routing 使用其 risk-found 模式,并且自动批准会被阻止。批准评论会列出这些规则。
 - **No risk found:** Routing 使用其 no-risk 模式。批准仍然需要一次干净的审查和匹配的策略。
-- **Unavailable:** Routing 使用配置的默认审查模式。自动批准会被阻止,需要确认存在风险的智能体不会自动运行。
+- **Unavailable:** Routing 使用配置的默认审查模式。自动批准会被阻止,需要确认存在风险的智能体不会自动运行。批准评论会说明原因,例如 Git 提供商没有返回某个代码文件的 diff。
 
 关闭评估后,Routing 对所有 PR 使用同一种配置的模式。没有确认存在风险时,条件性智能体不会运行;显式的手动智能体命令会绕过该条件。
 
-一次评估对应一个 PR 的 head、标题和描述。新的提交,或标题、描述的更改,会让自动批准暂停,直到进行新的审查。
+一次评估对应一个 PR 的 head、标题和描述。新的提交会让自动批准暂停,直到完成对它的审查。如果只更改了标题、描述或风险设置,Kody 会在决定是否批准之前重新评估相同的提交。
 
 ## 在 PR 上预览
 
-**Preview on a PR** 会打开一个侧边面板。选择一个已连接的代码库和 PR 编号,即可试用当前的准则,包括未保存的修改。它使用配置的风险评估模型,不会发布评论,也不会批准 PR。
+**Preview on a PR** 会打开一个侧边面板。选择一个已连接的代码库和 PR 编号,即可试用当前的规则,包括未保存的修改。它使用配置的风险评估模型,不会发布评论,也不会批准 PR。
 
-## 可选的团队准则
+## 风险规则
 
-没有团队准则时,Kody 也会评估风险。准则会补充团队上下文,例如更改账户权限或删除客户数据的后果。
+当 PR 符合某条已启用的规则时,Kody 会判定存在风险。Kodus 提供以下规则,默认全部开启:
 
-一条准则包含名称、说明、开关,以及可选的包含/排除文件模式。最多可以添加 50 条。名称最长 120 个字符,说明最长 4,000 个字符;在文件中,每个 `id` 必须唯一。其文件过滤器用于限定指引的范围;匹配到某个文件并不会自动将 PR 判定为有风险。Kody 仍会评估变更的其余部分。
+- `kodus-security` **Security and permissions:** 身份验证、授权、权限、租户隔离、输入校验,或任何保护数据或操作的检查,包括读取或更改数据、却缺少相邻代码所具备防护的新端点、处理程序或任务。
+- `kodus-money` **Money, billing and licensing:** 支付、价格、收费、额度、发票、订阅或许可。
+- `kodus-data` **Stored data and migrations:** 数据或 schema 迁移、删除或重写已存储的数据,或持久化数据的结构以及读写这些数据的查询。
+- `kodus-infrastructure` **Secrets and infrastructure:** 密钥、凭据、基础设施、网络或运行时环境。
+- `kodus-ci-build` **CI, build, release and dependencies:** CI、构建、发布或部署配置,或某个依赖项或工具的版本。
+- `kodus-shared-contract` **Shared contracts and public interfaces:** 其他代码、用户或集成所依赖的内容,例如公共 API、库函数或 CLI 的结果。
+- `kodus-concurrency` **Concurrency, retries, queues and caching.**
+- `kodus-ai-behavior` **Production prompts and model behavior:** 生产功能运行时所使用的提示词、模型选择或模型设置。
+- `kodus-broad-change` **Broad or mixed changes:** 对核心路径的大范围重写,或一个混合了多项重大变更的 PR。
 
-评估使用 diff 以及可用的代码/历史上下文。缺失的历史属于未知信息,不能作为安全的证据。
+你可以关闭某条 Kodus 规则,或编辑它的名称、说明或文件过滤器。在你点击 **Reset** 之前,你的修改会取代 Kodus 的版本;你没有修改的部分会跟随 Kodus 的更新。你可以添加自己的规则来补充团队上下文,例如更改账户权限或删除客户数据的后果。
+
+一条规则包含名称、说明、开关,以及可选的包含/排除文件模式。设置中最多保存 50 个条目,包括你的规则和你修改过的 Kodus 规则。名称最长 120 个字符,说明最长 4,000 个字符;在文件中,每个 `id` 必须唯一。带有文件过滤器的规则只适用于匹配文件中的变更;Kody 仍会依据其他规则评估 PR 的其余部分。如果没有任何已启用的规则适用于变更的文件,Kody 会在不调用模型的情况下判定没有风险,因此一次干净的审查即可批准。
+
+在风险规则出现之前保存的风险说明会显示为 **Team context**。Kody 会将其作为上下文而不是规则来读取:它们可以说明某个变更需要人工审核,也可以说明不需要。当它们要求人工审核时,批准评论会列出 **Team context**。
+
+评估会读取 diff、PR 的标题和描述,以及变更区域的 bug 修复历史。缺失的历史属于未知信息,不能作为安全的证据。
 
 ## YAML
 
@@ -56,6 +70,12 @@ Kody 会评估整个 PR。[审查模式](/zh/how_to_use/code_review/configs/rout
 ```yaml
 riskAssessmentActive: true
 riskCriteria:
+  - id: kodus-shared-contract # A Kodus rule, turned off
+    enabled: false
+  - id: kodus-ci-build # A Kodus rule, limited to release workflows
+    enabled: true
+    includedFiles:
+      - '.github/workflows/release*.yml'
   - id: access-control
     name: Access control
     enabled: true
@@ -66,6 +86,6 @@ riskCriteria:
       - '**/*.test.ts'
 ```
 
-`riskCriteria: []` 会保留 Kody 的标准评估。要停止评估,请设置 `riskAssessmentActive: false`。
+Kodus 规则通过其 `id` 列出,只需写出你要更改的内容。`id` 与任何 Kodus 规则都不匹配的条目需要名称和说明。`riskCriteria: []` 会按原样应用 Kodus 的规则。设置了 `riskCriteria` 的代码库或目录会替换其继承的列表,因此请在那里列出它需要的所有更改,包括组织自己的规则。`kodus config remote risk-rules .` 会列出当前生效的规则及其 id。要停止评估,请设置 `riskAssessmentActive: false`。
 
 从未设置过 **Risk assessment** 的配置,在你更改此设置之前会保持其现有的批准风险行为。开启或关闭自动批准不会改变 **Risk assessment** 开关。

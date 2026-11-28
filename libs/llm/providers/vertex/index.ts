@@ -10,6 +10,7 @@ import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
+import { vertexLocation } from './location';
 import { registerProvider } from '../kernel/registry';
 import { reasoningConfigForModel } from '../kernel/model-reasoning';
 import {
@@ -115,7 +116,7 @@ export const vertexModule: ProviderModule = {
         const model = vertexModelFromSaJson(
             cfg.apiKey,
             cfg.model,
-            cfg.vertexLocation,
+            vertexLocation(cfg.vertexLocation),
         );
         if (model) return model;
         // Degraded fallback: not a valid SA JSON (e.g. a plain AIzaSy… key typed

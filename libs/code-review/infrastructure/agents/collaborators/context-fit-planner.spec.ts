@@ -4,8 +4,9 @@
  */
 import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
 
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
 import {
-    CHARS_PER_TOKEN,
     assertContextWindowFitsOverhead,
     chunkFilesByTokenBudget,
     estimateDiffTokens,
@@ -16,15 +17,46 @@ import {
 
 const file = (filename: string, patch: string): any => ({ filename, patch });
 
+/** Text of at least `tokens` tokens: distinct words, which BPE cannot fold. */
+const textOf = (tokens: number): string => {
+    let text = '';
+    let i = 0;
+    while (estimateTextTokens(text) < tokens) text += ` w${i++}`;
+    return text;
+};
+
 describe('context-fit-planner', () => {
     describe('estimateDiffTokens', () => {
-        it('sums ceil(diffChars / CHARS_PER_TOKEN) across files', () => {
-            const files = [file('a.ts', 'x'.repeat(40)), file('b.ts', 'y'.repeat(4))];
-            expect(estimateDiffTokens(files)).toBe(40 / CHARS_PER_TOKEN + 1);
+        it('counts each diff with the tokenizer, not a character ratio', () => {
+            // Line-numbered data runs well under 4 chars/token: a flat ratio
+            // undercounted it by a third.
+            const dense = Array.from(
+                { length: 400 },
+                (_, i) =>
+                    `${i + 1} +  { code: 'P${i}', min: ${i % 80}, max: ${(i % 80) + 9} },`,
+            ).join('\n');
+            const files = [file('a.ts', dense), file('b.ts', 'const x = 1;')];
+            expect(estimateDiffTokens(files)).toBe(
+                estimateTextTokens(dense) + estimateTextTokens('const x = 1;'),
+            );
+            expect(estimateDiffTokens([files[0]])).toBeGreaterThan(
+                dense.length / 4,
+            );
         });
         it('prefers patchWithLinesStr over patch', () => {
-            const f: any = { filename: 'a.ts', patch: 'short', patchWithLinesStr: 'x'.repeat(8) };
-            expect(estimateDiffTokens([f])).toBe(2);
+            const withLines = textOf(50);
+            const f: any = {
+                filename: 'a.ts',
+                patch: 'short',
+                patchWithLinesStr: withLines,
+            };
+            expect(estimateDiffTokens([f])).toBe(estimateTextTokens(withLines));
+        });
+        it('recounts a file whose diff was replaced', () => {
+            const f: any = file('a.ts', textOf(10));
+            const before = estimateDiffTokens([f]);
+            f.patch = textOf(40);
+            expect(estimateDiffTokens([f])).toBeGreaterThan(before);
         });
     });
 
@@ -45,11 +77,11 @@ describe('context-fit-planner', () => {
     });
 
     describe('assertContextWindowFitsOverhead', () => {
-        it('throws when static overhead alone exceeds the window', () => {
+        it('throws when the overhead alone fills the window', () => {
             expect(() =>
                 assertContextWindowFitsOverhead({
-                    input: { changedFiles: [] },
-                    contextWindow: 100, // tiny — 62K-char overhead won't fit
+                    overheadTokens: 100,
+                    contextWindow: 100,
                     modelName: 'tiny',
                 }),
             ).toThrow(AgentContextWindowTooSmallError);
@@ -57,7 +89,7 @@ describe('context-fit-planner', () => {
         it('passes for a normal window', () => {
             expect(() =>
                 assertContextWindowFitsOverhead({
-                    input: { changedFiles: [] },
+                    overheadTokens: 8_000,
                     contextWindow: 200_000,
                     modelName: 'big',
                 }),
@@ -70,36 +102,36 @@ describe('context-fit-planner', () => {
             expect(chunkFilesByTokenBudget([], 100)).toEqual([[]]);
         });
         it('packs files under budget into one chunk', () => {
-            const files = [file('a.ts', 'x'.repeat(4)), file('b.ts', 'y'.repeat(4))];
+            const files = [
+                file('a.ts', 'x'.repeat(4)),
+                file('b.ts', 'y'.repeat(4)),
+            ];
             expect(chunkFilesByTokenBudget(files, 100)).toHaveLength(1);
         });
         it('splits when the running total exceeds budget', () => {
-            const files = [
-                file('a.ts', 'x'.repeat(40)), // 10 tokens
-                file('b.ts', 'y'.repeat(40)), // 10 tokens
-            ];
-            // budget 12 → a fills chunk 1, b overflows → chunk 2
-            expect(chunkFilesByTokenBudget(files, 12)).toHaveLength(2);
+            const files = [file('a.ts', textOf(10)), file('b.ts', textOf(10))];
+            const budget = estimateDiffTokens([files[0]]) + 1;
+            expect(chunkFilesByTokenBudget(files, budget)).toHaveLength(2);
         });
         it('gives an oversized file its own chunk', () => {
             const files = [
-                file('a.ts', 'x'.repeat(4)),
-                file('big.ts', 'z'.repeat(400)), // 100 tokens > budget
+                file('a.ts', textOf(4)),
+                file('big.ts', textOf(100)),
             ];
             const chunks = chunkFilesByTokenBudget(files, 12);
-            expect(chunks.some((c) => c.length === 1 && c[0].filename === 'big.ts')).toBe(true);
+            expect(
+                chunks.some(
+                    (c) => c.length === 1 && c[0].filename === 'big.ts',
+                ),
+            ).toBe(true);
         });
     });
 
     describe('estimatePromptTokens', () => {
-        it('counts an optional-tier file at its full diff, as the prompt sends it', () => {
-            const f = file('a.ts', '@@ -1,1 +1,1 @@\n' + 'x'.repeat(4000));
-            const tiered = {
-                changedFiles: [f],
-                fileTiers: new Map([['a.ts', 'optional' as const]]),
-            };
-            expect(estimatePromptTokens(tiered)).toBe(
-                estimatePromptTokens({ changedFiles: [f] }),
+        it('adds the measured overhead to every diff, counted whole', () => {
+            const f = file('a.ts', '@@ -1,1 +1,1 @@\n' + textOf(200));
+            expect(estimatePromptTokens([f], 5_000)).toBe(
+                estimateDiffTokens([f]) + 5_000,
             );
         });
     });

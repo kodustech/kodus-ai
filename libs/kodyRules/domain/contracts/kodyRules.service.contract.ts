@@ -11,6 +11,7 @@ import {
     FindMemoriesFilters,
     FindMemoriesResult,
     IKodyRule,
+    KodyRuleCompileInput,
     IKodyRuleContextNeed,
     KodyRuleSourceFileIssue,
     IKodyRuleFileScope,
@@ -92,6 +93,7 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         detector: IKodyRuleDetector | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null>;
 
     /**
@@ -113,6 +115,7 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         contextNeed: IKodyRuleContextNeed | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null>;
 
     /**
@@ -125,6 +128,7 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         fileScope: IKodyRuleFileScope | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null>;
 
     /**
@@ -137,6 +141,7 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         compileAttempt: IKodyRuleCompileAttempt | null,
+        expectedInput?: KodyRuleCompileInput,
     ): Promise<IKodyRule | null>;
 
     getRulesLimitStatus(
@@ -145,9 +150,7 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         total: number;
     }>;
 
-    countRulesByRepository(
-        organizationId: string,
-    ): Promise<
+    countRulesByRepository(organizationId: string): Promise<
         Array<{
             repositoryId: string;
             directoryId: string | null;

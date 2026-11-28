@@ -1,4 +1,7 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
+import { assertGitServerUrlAllowed } from '../git-server-url.guard';
+import { integrationGuardedFetch } from '@libs/llm/gateway-address-guard';
 import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -10,6 +13,11 @@ import {
     Injectable,
     InternalServerErrorException,
 } from '@nestjs/common';
+import {
+    isIntegrationLinkRefusal,
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
@@ -369,10 +377,15 @@ export class GithubService
             }) as unknown as Octokit;
         }
 
+        // A GHES host is the org's: every connection to it is judged by what
+        // it resolves to then (gateway-address-guard.ts).
         return new this.enterpriseOctokit({
             auth: params.auth,
             ...(baseUrl && { baseUrl }),
-            request: { retries: params.retries ?? 0 },
+            request: {
+                retries: params.retries ?? 0,
+                fetch: integrationGuardedFetch(undefined, 'Git server'),
+            },
             ...(params.retry && { retry: params.retry }),
             throttle: throttleConfig,
         }) as unknown as Octokit;
@@ -602,23 +615,25 @@ export class GithubService
 
             return res;
         } catch (err) {
-            // Named fields only: params carries the PAT and GitHub's
-            // authorization code and state.
-            this.logger.error({
-                message:
-                    'Failed to list repositories when creating integration',
+            // An App link words and logs its own failures, with the step it
+            // reached; mapping again would turn its faults into refusals.
+            if (params?.authMode === AuthMode.OAUTH) {
+                throw err;
+            }
+            const linkError = toIntegrationLinkError(err, 'GitHub');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'GitHub',
                 context: GithubService.name,
-                serviceName: GithubService.name,
-                error: err,
+                err,
+                linkError,
+                // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData: params?.organizationAndTeamData,
                     authMode: params?.authMode,
                     host: params?.host,
-                    // Never `code` itself: it may be GitHub's OAuth code.
-                    hasInstallationId: isInstallationId(params?.code),
                 },
             });
-            throw new BadRequestException(err);
+            throw linkError;
         }
     }
 
@@ -895,29 +910,32 @@ export class GithubService
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            const metadata = installationLinkLogMetadata(params, progress);
-            if (err instanceof BadRequestException) {
-                // An expected refusal (state, access, another org's link):
-                // the reason is the message the user sees.
+            const metadata = {
+                ...installationLinkLogMetadata(params, progress),
+                githubStatus: err?.status,
+            };
+            // The user gives no token here: a 401 is GitHub refusing the
+            // App's own credentials.
+            const linkError = toIntegrationLinkError(err, 'GitHub', {
+                kodusCredentials: true,
+            });
+            if (isIntegrationLinkRefusal(linkError)) {
+                // An expected refusal (state, access, another org's link,
+                // GitHub refusing the App): the reason is what the user sees.
                 this.logger.warn({
                     message: 'GitHub App installation link refused',
                     context: GithubService.name,
-                    metadata: { ...metadata, reason: err.message },
+                    metadata: { ...metadata, reason: linkError.message },
                 });
-                throw err;
+                throw linkError;
             }
-            // Unexpected: keep the original error and its stack, which the
-            // client-facing BadRequestException below does not carry.
             this.logger.error({
                 message: 'GitHub App installation link failed',
                 context: GithubService.name,
                 error: err,
-                metadata: { ...metadata, githubStatus: err?.status },
+                metadata,
             });
-            throw new BadRequestException(
-                err?.message || 'Error authenticating with OAUTH.',
-                { cause: err },
-            );
+            throw linkError;
         }
     }
 
@@ -927,6 +945,7 @@ export class GithubService
         try {
             const { token } = params;
             const normalizedHost = this.normalizeGithubHost(params.host);
+            await assertGitServerUrlAllowed(normalizedHost);
             const userOctokit = this.createUserOctokitClient({
                 auth: token,
                 host: normalizedHost,
@@ -978,9 +997,7 @@ export class GithubService
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            throw new BadRequestException(
-                err.message || 'Error authenticating with GITHUB PAT.',
-            );
+            throw toIntegrationLinkError(err, 'GitHub');
         }
     }
 
@@ -4157,7 +4174,15 @@ export class GithubService
                 );
 
                 const graphqlClient = graphql.defaults({
-                    ...(graphQlBaseUrl && { baseUrl: graphQlBaseUrl }),
+                    ...(graphQlBaseUrl && {
+                        baseUrl: graphQlBaseUrl,
+                        request: {
+                            fetch: integrationGuardedFetch(
+                                undefined,
+                                'Git server',
+                            ),
+                        },
+                    }),
                     headers: {
                         authorization: `token ${decryptedPAT}`,
                     },
@@ -5467,6 +5492,94 @@ This is an experimental feature that generates committable changes. Review the d
                 },
             });
 
+            return null;
+        }
+    }
+
+    /**
+     * PR-level findings are issue comments on GitHub, which have no threads,
+     * so only review threads are covered.
+     */
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+
+        const query = `
+           query ($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $number) {
+                  reviewThreads(first: 100, after: $cursor) {
+                    nodes {
+                      comments(first: 1) {
+                        totalCount
+                        nodes {
+                          fullDatabaseId
+                        }
+                      }
+                    }
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                  }
+                }
+              }
+            }
+        `;
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const graphql = await this.instanceGraphQL(organizationAndTeamData);
+
+            const variables = {
+                owner: this.ownerOf(repository, githubAuthDetail),
+                name: repository.name,
+                number: prNumber,
+                cursor: null as string | null,
+            };
+
+            const answered = new Set<string>();
+            let hasNextPage = true;
+            while (hasNextPage) {
+                const response: any = await graphql(query, { ...variables });
+                const reviewThreads =
+                    response?.repository?.pullRequest?.reviewThreads;
+
+                const threads = (reviewThreads?.nodes ?? []).map((thread) => ({
+                    // fullDatabaseId is the REST id the posted comment is saved under.
+                    rootIds: [thread?.comments?.nodes?.[0]?.fullDatabaseId],
+                    replies:
+                        (thread?.comments?.totalCount ?? 0) > 1 ? [{}] : [],
+                }));
+                answeredThreadRootIds(threads).forEach((id) =>
+                    answered.add(id),
+                );
+
+                const endCursor = reviewThreads?.pageInfo?.endCursor ?? null;
+                // Without a cursor the next request would read the first page again.
+                hasNextPage =
+                    !!reviewThreads?.pageInfo?.hasNextPage && !!endCursor;
+                variables.cursor = endCursor;
+            }
+
+            return answered;
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
+            });
             return null;
         }
     }

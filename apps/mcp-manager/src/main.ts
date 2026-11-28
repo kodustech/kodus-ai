@@ -7,11 +7,13 @@ import {
 } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { parseBasicAuth, validateBasicAuth } from './common/utils/docs-auth';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 async function bootstrap() {
     const app = await NestFactory.create<NestFastifyApplication>(
         AppModule,
         new FastifyAdapter(),
+        { ...NEST_APP_OPTIONS },
     );
 
     const origin = process.env.API_MCP_MANAGER_CORS_ORIGINS?.split(',') || '*';

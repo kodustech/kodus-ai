@@ -51,9 +51,25 @@ export type IssueSecurityDetails = {
             executed: boolean;
             exitCode?: number;
             reproduced?: boolean;
+            /** It ran but could not exercise the code (missing dependency or runner). */
+            inconclusive?: boolean;
             output?: string;
         };
+        /** The deployment or configuration fact the finding depends on. */
+        assumption?: string;
     };
+    /** Other places of the same root cause, folded into this issue. */
+    occurrences?: {
+        fingerprint: string;
+        title: string;
+        cwe?: string;
+        filePath: string;
+        startLine: number;
+        endLine: number;
+        symbol?: string;
+    }[];
+    /** Set when this issue was folded into another as a duplicate. */
+    duplicateOf?: string;
 };
 
 export type IssueListItem = {

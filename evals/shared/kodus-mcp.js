@@ -15,6 +15,7 @@
 //
 // One stack serves a whole run; each case is its own organization, so the
 // stores answer per organization as the databases do.
+const { allowLoopback } = require('./loopback-allowance');
 const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
@@ -63,6 +64,7 @@ const copy = (v) => structuredClone(v);
 
 async function startKodusMcp({ storedConfig = null } = {}) {
     const { mapSimpleModelToEntity, mapSimpleModelsToEntities } = lib('core/infrastructure/repositories/mappers.ts');
+    const { ruleCompileHash } = lib('common/utils/kody-rules/compile-hash.ts');
     const { KodyRulesEntity } = lib('kodyRules/domain/entities/kodyRules.entity.ts');
     const { IssuesEntity } = lib('issues/domain/entities/issues.entity.ts');
     const { PullRequestsEntity } = lib('platformData/domain/pullRequests/entities/pullRequests.entity.ts');
@@ -105,6 +107,32 @@ async function startKodusMcp({ storedConfig = null } = {}) {
         },
         // Field by field, as kodyRules.repository.ts sets `rules.$.<field>`.
         updateRule,
+        // The compiler writes one field only while the rule still has the inputs it read.
+        updateRuleFieldsByOrganization: async (
+            organizationId,
+            ruleId,
+            patch,
+            expected,
+        ) => {
+            const saved = db.kodyRules.find(
+                (d) => d.organizationId === organizationId,
+            );
+            const rule = saved?.rules.find((r) => r.uuid === ruleId);
+            if (!rule) return null;
+            if (
+                expected &&
+                ((rule.title ?? null) !== (expected.title ?? null) ||
+                    (rule.rule ?? null) !== (expected.rule ?? null) ||
+                    ruleCompileHash(rule) !== ruleCompileHash(expected) ||
+                    (patch.contextNeed !== undefined &&
+                        rule.contextNeed?.source === 'author') ||
+                    (patch.fileScope !== undefined &&
+                        rule.fileScope?.source === 'author'))
+            )
+                return null;
+            const updated = await updateRule(saved._id, ruleId, patch);
+            return updated.rules.find((r) => r.uuid === ruleId);
+        },
         // The plan sync's per-rule writes in one call; returns the ids it missed.
         updateRulesFields: async (_organizationId, uuid, changes) => {
             const failed = [];
@@ -242,6 +270,12 @@ async function startKodusMcp({ storedConfig = null } = {}) {
     const { KodyRulesService } = lib('ee/kodyRules/service/kodyRules.service.ts');
     const { CentralizedConfigPrService } = lib('centralized-config/infrastructure/adapters/services/centralized-config-pr.service.ts');
     const CodeBaseConfigService = lib('ee/codeBase/codeBaseConfig.service.ts').default;
+    const { CreateOrUpdateKodyRulesUseCase } = lib(
+        'kodyRules/application/use-cases/create-or-update.use-case.ts',
+    );
+    const { KodyRuleDetectorCompilerService } = lib(
+        'ee/kodyRules/service/kody-rule-detector-compiler.service.ts',
+    );
     const { DeleteRuleInOrganizationByIdKodyRulesUseCase } = lib('kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case.ts');
     const { TelemetryService } = lib('telemetry/application/services/telemetry.service.ts');
     const { PostHogProvider } = lib('telemetry/infrastructure/providers/posthog.provider.ts');
@@ -316,11 +350,31 @@ async function startKodusMcp({ storedConfig = null } = {}) {
         permissionValidationService,
         cacheService,
     );
+    const detectorCompiler = new KodyRuleDetectorCompilerService(
+        permissionValidationService,
+        unreached('observabilityService'),
+        kodyRulesService,
+    );
+    const createOrUpdateRule = new CreateOrUpdateKodyRulesUseCase(
+        kodyRulesService,
+        unreached('contextResolutionService'),
+        unreached('authorizationService'),
+        unreached('contextReferenceDetectionService'),
+        centralizedConfigPrService,
+        permissionValidationService,
+        detectorCompiler,
+        telemetry,
+    );
     const deleteRule = new DeleteRuleInOrganizationByIdKodyRulesUseCase(kodyRulesService, centralizedConfigPrService, unreached('authorizationService'), telemetry, teamService);
 
     const factory = new McpServerFactory(
         new CodeManagementTools(codeManagementService),
-        new KodyRulesTools(kodyRulesService, centralizedConfigPrService, deleteRule),
+        new KodyRulesTools(
+            kodyRulesService,
+            centralizedConfigPrService,
+            deleteRule,
+            createOrUpdateRule,
+        ),
         new KodyIssuesTools(new IssuesService(issuesRepository), new PullRequestsService(pullRequestsRepository, codeManagementService)),
         new McpToolAuthorizer(teamService),
     );
@@ -407,11 +461,17 @@ async function startKodusMcp({ storedConfig = null } = {}) {
     };
 }
 
+/** The origin, allowed as the eval's own loopback server (loopback-allowance.js). */
+function allowedOrigin(origin) {
+    allowLoopback(origin);
+    return origin;
+}
+
 function listen(handler) {
     const server = handler instanceof http.Server ? handler : http.createServer(handler);
     return new Promise((resolve) => {
         server.listen(0, '127.0.0.1', () =>
-            resolve({ origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => (server.closeAllConnections?.(), server.close(() => r()))) }),
+            resolve({ origin: allowedOrigin(`http://127.0.0.1:${server.address().port}`), close: () => new Promise((r) => (server.closeAllConnections?.(), server.close(() => r()))) }),
         );
     });
 }

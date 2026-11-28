@@ -14,6 +14,9 @@ export type RepositoryHookState =
     // GitHub App installs receive events through the app-level webhook, so a
     // missing repository hook is expected there.
     | 'app-level'
+    // A hook points at Kodus, but carries a token this install rejects (Azure
+    // Repos, after CODE_MANAGEMENT_SECRET or the webhook token changed).
+    | 'stale'
     | 'unknown';
 
 export type RepositoryAccessDiagnosis = {

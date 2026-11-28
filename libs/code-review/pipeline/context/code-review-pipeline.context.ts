@@ -385,6 +385,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     sandboxSuperseded?: boolean;
 
     /**
+     * Why the review has no sandbox, in words for the team, when the reason
+     * is theirs to act on: today only a Git host that refused Kodus's shared
+     * network for a team without the fixed outbound IP. The "sandbox
+     * unavailable" warning carries it instead of the generic text.
+     */
+    sandboxUnavailableDetail?: string;
+
+    /**
      * Team CLIs installed and fenced in the E2B sandbox for the custom agents
      * that will run (#2172), keyed by agent id, plus the CLI_INSTALL_FAILED
      * warnings for the ones that could not be. Absent on the local sandbox,

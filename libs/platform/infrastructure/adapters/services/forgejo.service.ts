@@ -1,4 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { assertGitServerUrlAllowed } from './git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -172,6 +174,10 @@ import {
     WebhookSetupResult,
 } from './webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from './webhook-setup/webhook-setup-failures.service';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from './integration-link-error';
 
 /**
  * The Forgejo client returns failures instead of throwing. Turns one into an
@@ -277,6 +283,12 @@ export class ForgejoService implements Omit<
             headers: {
                 Authorization: `token ${token}`,
             },
+            // The host is the org's: the socket judges what it resolves to,
+            // and every redirect hop is judged again (gateway-address-guard.ts).
+            ...integrationRequestGuard(
+                `${authDetail.host}/api/v1`,
+                'Git server',
+            ),
         });
     }
 
@@ -1118,10 +1130,17 @@ export class ForgejoService implements Omit<
         try {
             const { token, host, organizationAndTeamData } = params;
 
-            if (!host) throw new Error('Forgejo host URL is required');
-            if (!token) throw new Error('Forgejo access token is required');
+            if (!host) {
+                throw new BadRequestException('Forgejo host URL is required');
+            }
+            if (!token) {
+                throw new BadRequestException(
+                    'Forgejo access token is required',
+                );
+            }
 
             const normalizedHost = host.replace(/\/+$/, '');
+            await assertGitServerUrlAllowed(normalizedHost);
 
             const authDetails: ForgejoAuthDetail = {
                 accessToken: encrypt(token),
@@ -1156,17 +1175,19 @@ export class ForgejoService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            const errorMessage =
-                err?.response?.data?.message || err?.message || 'Unknown error';
-            this.logger.error({
-                message: 'Error authenticating with Forgejo token',
+            const linkError = toIntegrationLinkError(err, 'Forgejo');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Forgejo',
                 context: ForgejoService.name,
-                error: err,
-                metadata: { errorMessage },
+                err,
+                linkError,
+                // Named fields only: params carries the token.
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    host: params?.host,
+                },
             });
-            throw new BadRequestException(
-                `Error authenticating with Forgejo: ${errorMessage}`,
-            );
+            throw linkError;
         }
     }
 

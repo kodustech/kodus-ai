@@ -6,13 +6,21 @@ import { SeederOptions } from 'typeorm-extension';
 
 import MainSeeder from './seed/main.seeder';
 import { ENTITIES } from './entities';
+import { resolveSessionConnection } from './postgres-connection-env';
 
 const env = process.env.API_DATABASE_ENV ?? process.env.API_NODE_ENV;
 const isProduction = !['development', 'test'].includes(env);
 const disableSSL = process.env.API_DATABASE_DISABLE_SSL === 'true';
 const useSSL = isProduction && !disableSSL;
 
-const connectionUrl = process.env.DATABASE_URL ?? process.env.API_PG_DB_URL;
+// Migrations and seeds run on the DIRECT connection when one is configured:
+// several migrations `SET statement_timeout = 0` and then run `CREATE INDEX
+// CONCURRENTLY` outside a transaction, which only holds on a real session.
+// Behind a transaction-mode pooler the SET would land on one server
+// connection and the index build on another. Without a direct connection
+// this is the pooled one, as before (postgres-connection-env.ts).
+const connection = resolveSessionConnection();
+const connectionUrl = connection.url;
 
 // When the URL already declares SSL behavior via ?sslmode=, defer to the
 // driver. Forcing ssl=true here breaks setups where pgbouncer / a TCP proxy
@@ -23,11 +31,11 @@ const urlControlsSsl =
 const connectionConfig = connectionUrl
     ? { url: connectionUrl }
     : {
-          host: process.env.API_PG_DB_HOST,
-          port: parseInt(process.env.API_PG_DB_PORT!, 10),
-          username: process.env.API_PG_DB_USERNAME,
-          password: process.env.API_PG_DB_PASSWORD,
-          database: process.env.API_PG_DB_DATABASE,
+          host: connection.host,
+          port: connection.port,
+          username: connection.username,
+          password: connection.password,
+          database: connection.database,
       };
 
 const optionsDataBase: DataSourceOptions = {

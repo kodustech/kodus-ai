@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -133,6 +134,10 @@ import {
     runWebhookSetup,
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -2524,6 +2529,69 @@ export class AzureReposService implements Omit<
         }
     }
 
+    /**
+     * File-level threads only: a PR-level finding is saved under its first
+     * comment's id, which is 1 in every thread and so names no thread.
+     */
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const threads =
+                await this.azureReposRequestHelper.getPullRequestComments({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                });
+
+            return answeredThreadRootIds(
+                (threads ?? [])
+                    .filter(
+                        (thread) => !thread?.isDeleted && thread?.threadContext,
+                    )
+                    .map((thread) => ({
+                        rootIds: [thread.id],
+                        // comments[0] is the root, deleted or not.
+                        replies: (thread.comments ?? [])
+                            .slice(1)
+                            .filter(
+                                (comment) =>
+                                    !(comment as any)?.isDeleted &&
+                                    comment?.commentType !== 'system',
+                            )
+                            .map((comment) => ({ body: comment.content })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: AzureReposService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
+            });
+            return null;
+        }
+    }
+
     async getCloneParams(params: {
         repository: Pick<
             Repository,
@@ -3100,7 +3168,7 @@ export class AzureReposService implements Omit<
                 status?: CreateAuthIntegrationStatus;
             } = { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
             if (params && params?.authMode === AuthMode.OAUTH) {
-                throw new Error(
+                throw new BadRequestException(
                     'Authenticating on Azure Devops Repos via OAuth not implemented',
                 );
             } else if (
@@ -3126,18 +3194,9 @@ export class AzureReposService implements Omit<
 
             return res;
         } catch (err) {
-            this.logger.error({
-                message: 'Error to create auth integration',
-                context: this.createAuthIntegration.name,
-                error: err,
-                // Named fields only: params carries the PAT.
-                metadata: {
-                    organizationAndTeamData: params?.organizationAndTeamData,
-                    authMode: params?.authMode,
-                    host: params?.host ?? params?.orgUrl,
-                },
-            });
-            throw new BadRequestException(err);
+            // authenticateWithToken logged its own failure; the exception
+            // filter logs this answer.
+            throw toIntegrationLinkError(err, 'Azure Repos');
         }
     }
 
@@ -3186,19 +3245,19 @@ export class AzureReposService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            this.logger.error({
-                message: 'Error to authenticate with token',
-                context: this.authenticateWithToken.name,
-                error: err,
+            const linkError = toIntegrationLinkError(err, 'Azure Repos');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Azure Repos',
+                context: AzureReposService.name,
+                err,
+                linkError,
                 // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData: params?.organizationAndTeamData,
                     orgUrl: params?.orgUrl,
                 },
             });
-            throw new BadRequestException(
-                'Error authenticating with Azure Devops PAT.',
-            );
+            throw linkError;
         }
     }
 
@@ -5688,16 +5747,25 @@ export class AzureReposService implements Omit<
                                 projectId,
                             },
                         );
-                    result.hook = subscriptions.some(
+                    const ours = subscriptions.filter(
                         (subscription) =>
                             subscription.publisherInputs?.repository ===
                                 params.repository.id &&
                             subscription.consumerInputs?.url?.includes(
                                 webhookUrl,
                             ),
-                    )
-                        ? 'present'
-                        : 'missing';
+                    );
+                    // A token minted before CODE_MANAGEMENT_SECRET or the
+                    // webhook token changed gets every delivery a 403.
+                    result.hook = !ours.length
+                        ? 'missing'
+                        : ours.some((subscription) =>
+                                this.hasUsableWebhookToken(
+                                    subscription.consumerInputs?.url,
+                                ),
+                            )
+                          ? 'present'
+                          : 'stale';
                 } catch (error) {
                     result.error ??= summarizeProviderError(error);
                 }

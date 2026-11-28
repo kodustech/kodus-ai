@@ -82,6 +82,96 @@ describe('findFile — resilient to a missing fd binary', () => {
     });
 });
 
+describe('findFile — a find walk the exec cap stopped', () => {
+    // The E2B template has no fd. On a large monorepo, `find -iname '*.test.ts'`
+    // passes the 2M exec cap and is stopped (exit -1). The listDir fallback
+    // filters by a literal substring, so it answered "No files matching
+    // \"*.test.ts\"" and the agent could report missing tests.
+    it('answers with the first 30 files of the walk', async () => {
+        const found = Array.from({ length: 40_000 }, (_, i) => `pkg/m${i}/a.test.ts`);
+        const listDir = jest.fn(async () => 'pkg/m0/a.test.ts');
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : {
+                          // Cut mid-line, as the cap cuts.
+                          stdout: found.join('\n').slice(0, 2_000_000),
+                          stderr: '',
+                          exitCode: -1,
+                          truncated: true,
+                      },
+            listDir,
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({
+            pattern: '*.test.ts',
+        });
+
+        expect(out).toBe(found.slice(0, 30).join('\n'));
+        expect(listDir).not.toHaveBeenCalled();
+    });
+
+    // stderr counts toward the cap: a walk flooded with permission errors
+    // can be stopped with few names printed, the last one cut.
+    it('says a short list from a stopped walk may be incomplete', async () => {
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : {
+                          stdout: 'pkg/a.test.ts\npkg/b.test.ts\npkg/c.te',
+                          stderr: 'find: Permission denied\n'.repeat(80_000),
+                          exitCode: -1,
+                          truncated: true,
+                      },
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({
+            pattern: '*.test.ts',
+        });
+
+        expect(out).toBe(
+            'pkg/a.test.ts\npkg/b.test.ts\n... (the search output was cut: more files may match — narrow with a path or glob)',
+        );
+    });
+
+    // A walk stopped before it printed a whole name has not shown there is
+    // no match, and the literal listDir fallback cannot match a glob.
+    it('says the search was cut when a stopped walk listed no whole name', async () => {
+        const listDir = jest.fn(async () => 'src/foo.ts');
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : { stdout: 'pkg/a.te', stderr: 'find: Permission denied\n'.repeat(80_000), exitCode: -1, truncated: true },
+            listDir,
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({ pattern: '*.test.ts' });
+
+        expect(out).toBe(
+            'The search for "*.test.ts" was cut before it listed a whole file name — narrow it with a path or glob.',
+        );
+        expect(listDir).not.toHaveBeenCalled();
+    });
+
+    it('keeps a last name that ends with its newline', async () => {
+        const remote = makeRemote({
+            exec: async (cmd: string) =>
+                cmd.startsWith('fd ')
+                    ? { stdout: '', stderr: 'fd: command not found', exitCode: 127 }
+                    : { stdout: 'pkg/a.test.ts\n', stderr: 'x'.repeat(2_000_000), exitCode: -1, truncated: true },
+        });
+
+        const out = await buildAgentTools(remote).findFile.execute({ pattern: '*.test.ts' });
+
+        expect(out).toBe(
+            'pkg/a.test.ts\n... (the search output was cut: more files may match — narrow with a path or glob)',
+        );
+    });
+});
+
 describe('readFile — clear signal when a read produces no content', () => {
     it('surfaces a near-miss suggestion when the path does not exist (read throws)', async () => {
         const remote = makeRemote({

@@ -170,7 +170,7 @@ it('names a failed shared assessment in the hold and does not record it twice', 
     });
     expect(result.approvalDecision).toMatchObject({
         kind: 'hold',
-        reason: 'Risk assessment is unavailable for the current PR head.',
+        reason: 'Risk assessment is unavailable: Kody could not assess risk for this PR.',
     });
     expect(result.errors).toEqual([sharedRiskFailure]);
 });
@@ -287,11 +287,11 @@ it('preserves unknown risk and hold while recording an assessment failure as par
     );
 });
 
-it.each(['medium', 'high'])(
-    'treats a valid %s judgment as a successful assessment that holds approval',
-    async (level) => {
+it.each([[['kodus-security']], [['kodus-data', 'kodus-ci-build']]])(
+    'treats matched rules %j as a successful assessment that holds approval',
+    async (matchedRules) => {
         (LLM.run as jest.Mock).mockResolvedValueOnce({
-            level,
+            matchedRules,
             reason: 'A person should review this change.',
         });
         const result = await stage.execute(
@@ -351,7 +351,7 @@ it('skips risk assessment for an author outside the approval scope', async () =>
 
 it('judges an in-scope PR with the review model and records the map version', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'Limited change with focused tests.',
     });
     areaMaps.read.mockResolvedValue({
@@ -376,7 +376,7 @@ it('judges an in-scope PR with the review model and records the map version', as
 
 it('passes positive evidence and coverage from an unfinished history scan', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'medium',
+        matchedRules: ['kodus-shared-contract'],
         reason: 'The change needs human review.',
     });
     areaMaps.read.mockResolvedValue({
@@ -404,7 +404,7 @@ it('passes positive evidence and coverage from an unfinished history scan', asyn
 
 it('passes capped historical coverage into the risk judgment', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'Small isolated change.',
     });
     areaMaps.read.mockResolvedValue({
@@ -425,6 +425,44 @@ it('passes capped historical coverage into the risk judgment', async () => {
     const request = (LLM.run as jest.Mock).mock.calls[0][0];
     expect(JSON.parse(request.user)).toMatchObject({
         historyCoverage: { scannedPrs: 100, scanComplete: true, sampled: true },
+    });
+});
+
+it('judges the legacy approval path against the rules the team configured', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        matchedRules: [],
+        reason: 'Small isolated change.',
+    });
+    await stage.execute(
+        context({
+            approvalRiskActive: true,
+            riskCriteria: [
+                { id: 'kodus-security', enabled: false },
+                {
+                    id: 'tenant',
+                    name: 'Tenant isolation',
+                    enabled: true,
+                    instructions: 'Data must not cross tenants.',
+                },
+            ],
+        }),
+    );
+    const ids = JSON.parse(
+        (LLM.run as jest.Mock).mock.calls[0][0].user,
+    ).riskRules.map((rule: { id: string }) => rule.id);
+    expect(ids).not.toContain('kodus-security');
+    expect(ids).toContain('tenant');
+});
+
+it('records that risk alone held a PR, so the cron can lift it after a low reassessment', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        matchedRules: ['kodus-security'],
+        reason: 'A person should review this change.',
+    });
+    const result = await stage.execute(context({ approvalRiskActive: true }));
+    expect(result.approvalDecision).toMatchObject({
+        kind: 'hold',
+        heldBy: 'risk',
     });
 });
 
@@ -478,7 +516,7 @@ it('holds when the complete PR diff cannot be loaded', async () => {
 
 it('saves risk outside label scope so a later label can be checked by the cron', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'medium',
+        matchedRules: ['kodus-shared-contract'],
         reason: 'The change affects authentication behavior.',
     });
     const result = await stage.execute(

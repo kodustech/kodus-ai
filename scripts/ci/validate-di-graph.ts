@@ -37,6 +37,7 @@ import { NestFactory } from '@nestjs/core';
 import { ApiModule } from '../../apps/api/src/api.module';
 import { WorkerModule } from '../../apps/worker/src/worker.module';
 import { CONSUMING_WORKER_ROLES as WORKER_ROLES } from '../../apps/worker/src/worker-role';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 /**
  * Belt-and-braces: the whole point of this job is to be fast and
@@ -62,6 +63,8 @@ async function main(): Promise<void> {
     console.log('[di-graph] building ApiModule graph (preview mode)...');
 
     const context = await NestFactory.createApplicationContext(ApiModule, {
+        // The graph the apps boot, not a different one.
+        ...NEST_APP_OPTIONS,
         // Resolve every dependency, instantiate nothing.
         preview: true,
         // Throw on failure instead of process.exit()-ing with a truncated log.
@@ -80,7 +83,12 @@ async function main(): Promise<void> {
         process.env.WORKER_ROLE = role;
         const worker = await NestFactory.createApplicationContext(
             WorkerModule.forRoot(),
-            { preview: true, abortOnError: false, logger: ['error', 'warn'] },
+            {
+                ...NEST_APP_OPTIONS,
+                preview: true,
+                abortOnError: false,
+                logger: ['error', 'warn'],
+            },
         );
         await worker.close();
     }
@@ -99,7 +107,9 @@ main()
         process.exit(0);
     })
     .catch((error: unknown) => {
-        console.error('\n[di-graph] FAILED — the module graph does not resolve.\n');
+        console.error(
+            '\n[di-graph] FAILED — the module graph does not resolve.\n',
+        );
         console.error(error instanceof Error ? error.message : error);
 
         if (error instanceof Error && error.stack) {

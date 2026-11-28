@@ -1096,6 +1096,72 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         });
     });
 
+    // Every shard calls the same model: once the provider refuses it for a
+    // reason no retry fixes, the rest are skipped, and the refusal is logged
+    // where the review's ids are (Nov 2026: 14k such shard calls in a day).
+    it('stops calling a provider that refused the review and logs it with the PR', async () => {
+        const { provider } = makeProvider([]);
+        const warnSpy = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => undefined);
+        const { APICallError } = jest.requireActual('ai');
+        mockRunStructuredReviewCall.mockReset();
+        mockRunStructuredReviewCall.mockRejectedValue(
+            new APICallError({
+                message: 'Incorrect API key provided',
+                url: 'https://provider.example/v1/chat',
+                requestBodyValues: {},
+                statusCode: 401,
+                responseBody: '{"error":{"message":"Incorrect API key provided"}}',
+                isRetryable: false,
+            }),
+        );
+        const rule = {
+            uuid: 'no-any',
+            title: 'no any',
+            rule: 'do not use any',
+            status: 'active',
+            severity: 'high',
+            path: '**/*.ts',
+        };
+
+        await expect(
+            provider.execute(
+                input({
+                    prNumber: 4242,
+                    changedFiles: Array.from({ length: 12 }, (_, n) => ({
+                        filename: `src/f${n}.ts`,
+                        patch: `11 +const v${n}: any = 1`,
+                    })),
+                    kodyRules: [rule],
+                }) as any,
+            ),
+        ).rejects.toHaveProperty(
+            'message',
+            'Kody Rules could not be evaluated: all 12 rule check(s) failed to run. Your Kody Rules were not applied to this PR.',
+        );
+
+        // The four shards already in flight (concurrency 4) fail; the other
+        // eight are skipped instead of called.
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(4);
+        const refusals = warnSpy.mock.calls.filter(
+            (c) =>
+                (c[0] as any)?.message ===
+                '[kody-rules] the model provider refused PR#4242 (AUTH_INVALID); the remaining shards were skipped instead of called',
+        );
+        expect(refusals).toHaveLength(1);
+        expect((refusals[0][0] as any).metadata).toEqual({
+            organizationAndTeamData: {
+                organizationId: '11111111-1111-1111-1111-111111111111',
+                teamId: '22222222-2222-2222-2222-222222222222',
+            },
+            prNumber: 4242,
+            category: 'AUTH_INVALID',
+            shardsRun: 12,
+            shardsErrored: 12,
+        });
+    });
+
     // The healthy path must stay quiet: no partial-degrade warn when every
     // shard succeeds (guards against a noisy false alert on green reviews).
     it('does NOT warn about partial failure when all shards succeed', async () => {

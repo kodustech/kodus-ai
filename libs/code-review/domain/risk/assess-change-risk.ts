@@ -14,7 +14,6 @@ import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { createLogger } from '@libs/core/log/logger';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
-import { addedCodeLines } from './added-code-lines';
 import { estimateRiskPromptTokens } from './estimate-risk-prompt-tokens';
 
 /** Internal judgment retained for compatibility; public PR risk is binary. */
@@ -23,6 +22,8 @@ export interface ChangeRiskAssessment {
     reason: string;
     reviewedHeadSha: string;
     areaMapVersion?: string;
+    /** The risk rules the change fell under, by id and name. */
+    matchedRules?: Array<{ id: string; name: string }>;
     failure?: {
         category: string;
         errorName: string;
@@ -32,59 +33,110 @@ export interface ChangeRiskAssessment {
 }
 
 export const approvalRiskOutputSchema = z.object({
-    level: z.enum(['low', 'medium', 'high']),
+    /** Ids of the risk rules the change falls under; none means low risk. */
+    matchedRules: z.array(z.string()),
     // Length alone must not discard a valid risk judgment.
     reason: z.string().min(8),
 });
 
+/** One rule the model judges the change against. */
+export interface RiskRule {
+    id: string;
+    name: string;
+    instructions: string;
+    /** A rule with file filters applies only to these changed paths. */
+    files?: string[];
+}
+
 const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
-const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
-const TEST_FILE =
-    /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
-const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
-// Parentheses may follow newlines or comments that only the lexer can mask.
-const POSSIBLE_ADDED_CONTROL_FLOW = /\b(?:if|return|throw)\b/;
 
-function controlFlowEvidence(
-    files: FileChange[],
-): 'none' | 'untested' | 'unverifiable' {
-    if (
-        files.some(
-            (file) =>
-                file.status !== 'removed' &&
-                TEST_FILE.test(file.filename) &&
-                /\S/.test(
-                    addedCodeLines(file.patch ?? '', file.filename) ?? '',
-                ),
-        )
-    )
-        return 'none';
-    let unverifiable = false;
-    for (const file of files) {
+// Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests
+// and fixtures under a test root. Extensions compare without case (a .PNG is an
+// image); names compare with case, as toolchains do (auth_TEST.go and
+// Contest.java are code). A `fixtures/` outside a test root can be production
+// seed data, and a `.test.yml` can be CI config, so those stay unshown code.
+const JUDGEABLE_EXTENSION =
+    /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$/i;
+const JUDGEABLE_NAME =
+    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|testdata)\/|\.(?:test|spec)\.(?:[cm]?[jt]sx?|py|rb|go|rs|java|kt|cs|php|swift|scala|exs?|dart)$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/;
+
+const usablePath = (path: unknown): path is string =>
+    typeof path === 'string' && !!path.trim();
+
+const hasDiff = (file: FileChange) =>
+    typeof file.patch === 'string' && !!file.patch.trim();
+
+/**
+ * Providers omit binary and oversized patches but keep the file. The model
+ * judges such a file only when its path says what it holds; any other path
+ * the provider did not show, or a blank one, could hide code. Zero counters
+ * cannot prove a pure rename: adapters can default missing counts to zero.
+ */
+export function unshownCodePath(files: FileChange[]): string | undefined {
+    for (const file of files.filter((file) => !hasDiff(file))) {
+        if (!usablePath(file.filename)) return '(unnamed file)';
+        // Absent on a plain change; any other unusable value hides a rename.
         if (
-            file.status === 'removed' ||
-            !SOURCE_FILE.test(file.filename) ||
-            TEST_FILE.test(file.filename)
+            file.previous_filename != null &&
+            !usablePath(file.previous_filename)
         )
-            continue;
-        const code = addedCodeLines(
-            file.patch ?? '',
-            file.filename,
-            POSSIBLE_ADDED_CONTROL_FLOW,
-        );
-        if (code === undefined) unverifiable = true;
-        else if (ADDED_CONTROL_FLOW.test(code)) return 'untested';
+            return file.filename;
+        const path = [file.filename, file.previous_filename]
+            .filter(usablePath)
+            .find(
+                (path) =>
+                    !JUDGEABLE_EXTENSION.test(path) &&
+                    !JUDGEABLE_NAME.test(path),
+            );
+        if (path) return path;
     }
-    return unverifiable ? 'unverifiable' : 'none';
+    return undefined;
+}
+
+/** What the model returns when the team's free-text guidance asks for a person. */
+export const TEAM_CONTEXT_RULE: RiskRule = {
+    id: 'team-context',
+    name: 'Team context',
+    instructions: '',
+};
+
+/**
+ * The rules the model named, resolved by id, then by name, ignoring case and
+ * surrounding space. A blank entry is dropped; any other entry that names no
+ * rule still counts as risk, but only resolved rules are named on the PR.
+ */
+export function matchRules(
+    returned: readonly string[],
+    rules: readonly RiskRule[],
+): { count: number; known: Array<{ id: string; name: string }> } {
+    const key = (value: string) => value.trim().toLowerCase();
+    const byKey = new Map<string, RiskRule>();
+    for (const rule of rules) byKey.set(key(rule.name), rule);
+    for (const rule of rules) byKey.set(key(rule.id), rule);
+    const entries = [...new Set(returned.map(key).filter((entry) => !!entry))];
+    const known = new Map<string, { id: string; name: string }>();
+    for (const entry of entries) {
+        const rule = byKey.get(entry);
+        if (rule) known.set(rule.id, { id: rule.id, name: rule.name });
+    }
+    return { count: entries.length, known: [...known.values()] };
+}
+
+/** A provider path as inert inline code in a published reason. */
+function quotedPath(path: string): string {
+    let cut = path.replace(/[`\s]+/g, ' ').slice(0, 200);
+    // Never end on half of a surrogate pair.
+    if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+    return `\`${cut}\``;
 }
 
 export function buildChangeRiskDiff(files: FileChange[]): string {
     return files
         .map(
             (file) =>
-                `${file.filename}${file.previous_filename && file.previous_filename !== file.filename ? ` (renamed from ${file.previous_filename})` : ''} (${file.status}; +${file.additions}/-${file.deletions})\n${file.patch ?? '[patch unavailable]'}`,
+                `${file.filename}${file.previous_filename && file.previous_filename !== file.filename ? ` (renamed from ${file.previous_filename})` : ''} (${file.status}; +${file.additions}/-${file.deletions})${hasDiff(file) ? `\n${file.patch}` : ''}`,
         )
         .join('\n\n');
 }
@@ -97,12 +149,31 @@ export async function assessChangeRisk(input: {
     body?: string;
     headSha: string;
     files: FileChange[];
-    teamInstructions?: string;
+    /** What this team treats as needing a person: defaults and its own. */
+    rules: RiskRule[];
+    /** The team's free-text guidance from before risk rules existed. */
+    teamContext?: string;
     language?: string;
     areaMap?: CodeAreaRiskMap | null;
     modelSlot?: NormalizedModel;
     trace?: { baseSha: string; assessmentKey: string };
 }): Promise<ChangeRiskAssessment> {
+    const unshown = unshownCodePath(input.files);
+    if (unshown)
+        return {
+            level: 'unknown',
+            reason: `Kody could not read the diff of ${quotedPath(unshown)}: the Git provider did not return it.`,
+            reviewedHeadSha: input.headSha,
+            areaMapVersion: input.areaMap?.version,
+        };
+    // Nothing can match: no model call, and no id it could return by mistake.
+    if (!input.rules.length && !input.teamContext?.trim())
+        return {
+            level: 'low',
+            reason: 'No enabled risk rule applies to the changed files.',
+            reviewedHeadSha: input.headSha,
+            areaMapVersion: input.areaMap?.version,
+        };
     const areaByPath = new Map(
         (input.areaMap?.files ?? []).map((area) => [area.path, area]),
     );
@@ -160,11 +231,23 @@ export async function assessChangeRisk(input: {
         const user = JSON.stringify({
             title: input.title,
             body: input.body ?? '',
-            teamRiskInstructions: input.teamInstructions ?? '',
+            riskRules: input.rules.map((rule) => ({
+                id: rule.id,
+                name: rule.name,
+                instructions: rule.instructions,
+                ...(rule.files ? { appliesToFiles: rule.files } : {}),
+            })),
+            ...(input.teamContext?.trim()
+                ? { teamRiskContext: input.teamContext.trim() }
+                : {}),
             reviewLanguage: input.language ?? 'en-US',
             fileCount: input.files.length,
             diffWasTruncated: false,
             diff,
+            // Out of band: patch text is author content and could imitate a marker.
+            filesWithoutDiff: input.files
+                .filter((file) => !hasDiff(file))
+                .map((file) => file.filename),
             historicalAreas: relevantAreas.slice(0, MAX_AREA_FILES),
             areaEvidenceTruncated: input.files.length > MAX_AREA_FILES,
             historyCoverage: input.areaMap?.coverage ?? null,
@@ -233,27 +316,13 @@ export async function assessChangeRisk(input: {
         ) {
             throw new Error('Empty approval risk judgment');
         }
-        const flow =
-            result.level === 'low' ? controlFlowEvidence(input.files) : 'none';
-        if (flow === 'unverifiable')
-            return {
-                level: 'unknown',
-                reason: 'Kody could not verify control-flow and test evidence in this diff.',
-                reviewedHeadSha: input.headSha,
-                areaMapVersion: input.areaMap?.version,
-            };
-        if (flow === 'untested') {
-            return {
-                level: 'medium',
-                reason: input.language?.toLowerCase().startsWith('pt')
-                    ? 'O fluxo do código mudou sem evidência de testes no PR; uma pessoa deve conferir o comportamento.'
-                    : 'Control flow changed without test evidence in this PR; a person should verify the behavior.',
-                reviewedHeadSha: input.headSha,
-                areaMapVersion: input.areaMap?.version,
-            };
-        }
+        const matched = matchRules(result.matchedRules, [
+            ...input.rules,
+            ...(input.teamContext?.trim() ? [TEAM_CONTEXT_RULE] : []),
+        ]);
         return {
-            level: result.level,
+            level: matched.count ? 'medium' : 'low',
+            ...(matched.known.length ? { matchedRules: matched.known } : {}),
             // Bound persisted/published text after validation, preserving the judgment.
             reason:
                 result.reason.trim().length > MAX_REASON_CHARS

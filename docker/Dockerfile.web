@@ -50,6 +50,14 @@ RUN --mount=type=cache,target=/pnpm-store,sharing=private \
 #   - libs/common/utils/safe-regex.ts — the Business Logic settings preview
 #     runs the same ReDoS guard (isRegexSafe) the server applies to a team's
 #     task id pattern. A zero-dependency leaf, so only the file is copied.
+#   - libs/core/infrastructure/config/types/general/risk-rule-ids.ts — the risk
+#     page reads the same cap on stored risk rules (MAX_RISK_CRITERIA) the
+#     settings schema enforces. A zero-dependency leaf, so only the file is copied.
+#   - libs/security-scan/domain/scan-schedule.ts — the deep-scan schedules dialog
+#     shows the next run with the same nextRunAt the scheduler uses. Its imports
+#     are type-only (erased, and the build skips type checks), so only the file
+#     is copied.
+# docker/dockerfile-web.spec.ts fails when the web imports a lib not copied here.
 # Anything else in the repo (apps/api, libs/code-review, etc.) would just
 # bloat the build context without being touched by Next.
 COPY apps/web ./apps/web
@@ -59,6 +67,8 @@ COPY libs/llm/llm-tasks.ts ./libs/llm/llm-tasks.ts
 COPY libs/llm/routing-refusal.ts ./libs/llm/routing-refusal.ts
 COPY libs/common/utils/safe-regex.ts ./libs/common/utils/safe-regex.ts
 COPY libs/common/utils/glob-pattern-validation.ts ./libs/common/utils/glob-pattern-validation.ts
+COPY libs/core/infrastructure/config/types/general/risk-rule-ids.ts ./libs/core/infrastructure/config/types/general/risk-rule-ids.ts
+COPY libs/security-scan/domain/scan-schedule.ts ./libs/security-scan/domain/scan-schedule.ts
 
 WORKDIR /usr/src/app/apps/web
 # Turbopack persists its compiler artifacts to .next/cache, and since Next 16.3

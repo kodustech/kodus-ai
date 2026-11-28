@@ -46,9 +46,17 @@ export interface RemoteCommands {
      * stdout and stderr are returned SEPARATELY (not merged) so consumers can
      * distinguish real output from error/diagnostic text and gate on exitCode.
      */
-    exec?: (
-        command: string,
-    ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+    exec?: (command: string) => Promise<{
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        /**
+         * The provider stopped the command at its output cap: stdout and
+         * stderr hold only the start, and `exitCode` is the kill's, not the
+         * command's. A caller reads the partial output, never retries.
+         */
+        truncated?: boolean;
+    }>;
 }
 
 export type CrossFileContextSnippet = {

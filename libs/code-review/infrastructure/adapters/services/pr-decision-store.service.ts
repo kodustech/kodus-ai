@@ -51,6 +51,10 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
         existingCode: suggestion.existingCode || undefined,
+        improvedCode: suggestion.improvedCode || undefined,
+        ...(suggestion.comment?.id != null && {
+            commentId: String(suggestion.comment.id),
+        }),
         ...(suggestion.customAgent?.id && {
             customAgentId: suggestion.customAgent.id,
         }),
@@ -60,10 +64,11 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
 }
 
 /** PR-level suggestions (`ISuggestionByPR`, stored in `prLevelSuggestions`)
- *  carry no `relevantFile` and no `implementationStatus` — the implementation
- *  check only diffs file patches, so there is no signal to derive an outcome
- *  from. Always `pending`: descriptive context ("this was already flagged"),
- *  never refutation evidence. */
+ *  carry no line and no `implementationStatus` — the implementation check
+ *  only diffs file patches, so there is no signal to derive an outcome from.
+ *  Always `pending`: descriptive context ("this was already flagged"), never
+ *  refutation evidence. A Kody Rule finding that named a file without a line
+ *  is posted here too (#2420) and keeps that file. */
 export function toRecordFromPrLevel(
     suggestion: ISuggestionByPR,
 ): PrDecisionRecord {
@@ -83,10 +88,20 @@ export function toRecordFromPrLevel(
                       ]),
                   )
                   .digest('hex')}`,
+        ...(suggestion.relevantFile && {
+            relevantFile: suggestion.relevantFile,
+        }),
+        ...(suggestion.repeatClaim && { claim: suggestion.repeatClaim }),
+        ...(suggestion.repeatClaims?.length && {
+            claims: suggestion.repeatClaims,
+        }),
         suggestionContent:
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
+        ...(suggestion.comment?.id != null && {
+            commentId: String(suggestion.comment.id),
+        }),
         ...(suggestion.customAgent?.id && {
             customAgentId: suggestion.customAgent.id,
         }),

@@ -14,6 +14,7 @@ import type {
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
+import type { AgentPolicy } from '@libs/agent-harness/domain/contracts/policy.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
 import type {
     RunState,
@@ -761,6 +762,9 @@ export interface RunFinderWithVerifyParams {
     verifyFallbackModelId?: string;
     /** Provider options built for `verifyRunner`'s model. */
     verifyProviderOptions?: Readonly<Record<string, unknown>>;
+    /** The window guard for `verifyRunner`'s model, sized to its own window:
+     *  the finder's would budget a different model (#2233). */
+    verifyCompressor?: Compressor;
     /** Verify concurrency (default 4). */
     concurrency?: number;
     /** Provider options (reasoning/thinking config) forwarded to verifier runs. */
@@ -1130,6 +1134,14 @@ export async function runFinderWithVerify(
     const hv2 = await verifyFindings(
         {
             ...params,
+            // A verify run reads and re-sends files on up to ten steps
+            // (#2233): the check model's own window guard when the caller
+            // built one, else the finder's.
+            compression: params.verifyCompressor
+                ? new CompressionPolicy(params.verifyCompressor)
+                : params.finderSpec.policies.find(
+                      (p) => p.name === 'compression',
+                  ),
             runner: verify.runner,
             modelId: verify.modelId,
             fallbackModelId: verify.fallbackModelId,
@@ -1275,7 +1287,10 @@ export async function verifyFindings(
         | 'repoInstructions'
         | 'checksInstructionCitations'
         | 'laneFocus'
-    >,
+    > & {
+        /** The finder's compression, for every verify run (#2233). */
+        compression?: AgentPolicy;
+    },
     suggestions: FinderSuggestion[],
     investigated: Set<string>,
     ctx: ToolContext,
@@ -1346,6 +1361,7 @@ export async function verifyFindings(
     // evidence gate below re-verifies at the full depth.
     const verifier = new LlmVerifier(params.runner, {
         modelId: params.modelId,
+        compression: params.compression,
         fallbackModelId: params.fallbackModelId,
         tools: params.tools,
         providerOptions: params.providerOptions,
@@ -1381,6 +1397,7 @@ export async function verifyFindings(
     if (unevidenced.length > 0) {
         const fullVerifier = new LlmVerifier(params.runner, {
             modelId: params.modelId,
+            compression: params.compression,
             fallbackModelId: params.fallbackModelId,
             tools: params.tools,
             forceFull: true,

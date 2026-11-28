@@ -18,7 +18,6 @@ import {
 import {
     PROMPT_BUDGET_RATIO,
     assertContextWindowFitsOverhead,
-    estimateNonDiffOverheadTokens,
     estimatePromptTokens,
     applyLargePrAggressiveFilter,
     chunkFilesByTokenBudget,
@@ -37,6 +36,10 @@ import {
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
+import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
+import { submitResultTool } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
     type AgentLoopSecrets,
     type ReviewAgentIdentity,
@@ -427,8 +430,12 @@ export abstract class BaseCodeReviewAgentProvider {
         // would run to AGENT_TIMEOUT_MS (30 min) while the LLM 400s on
         // every retry — see runAgentLoop. Surfaces as CONTEXT_OVERFLOW
         // via classifyLLMError → friendlyMessage on lastReviewError.
+        const toolSchemaTokens = this.measureToolSchemaTokens(input);
+        const fixedPromptTokens = (current: ReviewAgentInput) =>
+            this.measureFixedPromptTokens(current, toolSchemaTokens);
         assertContextWindowFitsOverhead({
-            input,
+            overheadTokens: fixedPromptTokens(input),
+            adaptiveProfile,
             contextWindow,
             modelName,
         });
@@ -478,7 +485,10 @@ export abstract class BaseCodeReviewAgentProvider {
             }
         }
 
-        let estimatedPromptTokens = estimatePromptTokens(input);
+        let estimatedPromptTokens = estimatePromptTokens(
+            input.changedFiles,
+            fixedPromptTokens(input),
+        );
 
         // Large-PR aggressive filter + priority tiering: when the estimated
         // prompt already exceeds the single-batch budget AND we're not in
@@ -513,7 +523,10 @@ export abstract class BaseCodeReviewAgentProvider {
 
             if (filteredFiles.length < filesBefore) {
                 input = { ...input, changedFiles: filteredFiles };
-                const filteredTokens = estimatePromptTokens(input);
+                const filteredTokens = estimatePromptTokens(
+                    input.changedFiles,
+                    fixedPromptTokens(input),
+                );
 
                 this.agentLogger.log({
                     message: `[AGENT] ${identity.name} large-PR aggressive filter dropped ${filesBefore - filteredFiles.length} low-signal files (tests/md/css): ${estimatedPromptTokens} → ${filteredTokens} prompt tokens`,
@@ -611,7 +624,7 @@ export abstract class BaseCodeReviewAgentProvider {
             // review. Aligning this with estimatePromptTokens (which uses
             // the same helper for the split decision) keeps the two ends
             // from drifting.
-            const overheadTokens = estimateNonDiffOverheadTokens(input);
+            const overheadTokens = fixedPromptTokens(input);
             const chunkDiffBudget = Math.max(
                 promptBudget - overheadTokens,
                 Math.floor(contextWindow * 0.3),
@@ -1209,6 +1222,58 @@ export abstract class BaseCodeReviewAgentProvider {
             conventionGuides: this.getConventionGuides(input),
             knowledgeSection: renderKnowledgeSection(input.knowledge),
         };
+    }
+
+    /**
+     * Tokens of the finder's tool schemas, as the loop counts them for its
+     * compressor. The agent's own tools (custom agents, knowledge) are built
+     * later and are not counted here.
+     */
+    private measureToolSchemaTokens(input: ReviewAgentInput): number {
+        const { registry } = buildFinderToolRegistry({
+            remoteCommands: input.remoteCommands,
+            gitHubToken: input.gitHubToken,
+            repositoryFullName: input.repositoryFullName,
+            documentationSearchService: this.documentationSearchService,
+            callGraph: input.callGraph,
+            linkedRepoAccess: input.linkedRepoAccess,
+            referenceRepositories: knowledgeRepositories(
+                input.knowledge,
+                input.knowledgeReader,
+            ),
+        });
+        return estimateOverheadTokens(undefined, [
+            ...registry.list(),
+            submitResultTool,
+        ]);
+    }
+
+    /**
+     * Everything the first call sends besides the diffs: system prompt,
+     * user prompt with every diff emptied, and the tool schemas. Rendered by
+     * the same builders as the real prompt, so it follows the profile and
+     * whatever the prompt carries. The callGraph is counted on its own: the
+     * same string every pass, so a large one is tokenized once.
+     */
+    private measureFixedPromptTokens(
+        input: ReviewAgentInput,
+        toolSchemaTokens: number,
+    ): number {
+        const withoutDiffs: ReviewAgentInput = {
+            ...input,
+            callGraph: undefined,
+            changedFiles: input.changedFiles.map((f) => ({
+                ...f,
+                patch: '',
+                patchWithLinesStr: '',
+            })),
+        };
+        return (
+            estimateTextTokens(this.buildSystemPrompt(input)) +
+            estimateTextTokens(this.buildUserPrompt(withoutDiffs)) +
+            estimateTextTokens(input.callGraph ?? '') +
+            toolSchemaTokens
+        );
     }
 
     private buildSystemPrompt(input: ReviewAgentInput): string {

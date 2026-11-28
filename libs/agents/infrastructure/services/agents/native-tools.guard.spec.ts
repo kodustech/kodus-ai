@@ -4,9 +4,31 @@ import {
     runActivity,
 } from '@libs/core/infrastructure/activity/activity-registry';
 
+import { cutLongLines } from '@libs/common/utils/tool-output/long-lines';
+import { withoutSecretFileLines } from '@libs/common/utils/tool-output/secret-files';
+
+// Real guards, recorded: a test checks how much of an answer they read.
+jest.mock('@libs/common/utils/tool-output/secret-files', () => {
+    const actual = jest.requireActual(
+        '@libs/common/utils/tool-output/secret-files',
+    );
+    return {
+        ...actual,
+        withoutSecretFileLines: jest.fn(actual.withoutSecretFileLines),
+    };
+});
+jest.mock('@libs/common/utils/tool-output/long-lines', () => {
+    const actual = jest.requireActual(
+        '@libs/common/utils/tool-output/long-lines',
+    );
+    return { ...actual, cutLongLines: jest.fn(actual.cutLongLines) };
+});
+
 import {
     buildNativeToolConfigs,
+    CUT_HINT,
     MAX_CONVERSATION_TOOL_OUTPUT_CHARS,
+    MAX_CONVERSATION_TOOL_SCAN_CHARS,
 } from './native-tools.factory';
 
 /**
@@ -26,11 +48,14 @@ describe('conversation tools — guarded outputs', () => {
                 .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
             ...over,
         };
-        const tools = buildNativeToolConfigs({
-            remoteCommands: remote,
-            cleanup: jest.fn(),
-            type: 'local',
-        } as unknown as SandboxInstance);
+        const tools = buildNativeToolConfigs(
+            async () =>
+                ({
+                    remoteCommands: remote,
+                    cleanup: jest.fn(),
+                    type: 'local',
+                }) as unknown as SandboxInstance,
+        );
         const run = (name: string, input: unknown) =>
             tools.find((t) => t.name === name)!.execute(input);
         return { remote, run };
@@ -80,17 +105,55 @@ describe('conversation tools — guarded outputs', () => {
             .matches as string;
         expect(grep.length).toBeLessThan(3_000);
         expect(grep).toContain('more characters on this line not shown');
-        const read = (
-            (await run('readFile', {
-                path: 'a.ts',
-                start: 1,
-                end: 9_999,
-            })) as any
-        ).content as string;
-        expect(read.length).toBeLessThanOrEqual(
-            MAX_CONVERSATION_TOOL_OUTPUT_CHARS + 200,
+        const answer = (await run('readFile', {
+            path: 'a.ts',
+            start: 1,
+            end: 9_999,
+        })) as any;
+        // The content is only content; the cut is reported beside it.
+        expect(answer.content).toBe(many.slice(0, MAX_CONVERSATION_TOOL_OUTPUT_CHARS));
+        expect(answer.cut).toEqual({
+            hiddenChars: { content: many.length - MAX_CONVERSATION_TOOL_OUTPUT_CHARS },
+            hint: CUT_HINT,
+        });
+    });
+
+    it('reads only a bounded head of a huge exec answer', async () => {
+        // A `git log -p` of a big repo: tens of MB the agent never sees.
+        const line = '+  "scene": "2026-11-25 take 12-3-4", "ok": true,';
+        const lines = Math.ceil(60_000_000 / (line.length + 1));
+        const stdout = [
+            '.env:1:API_TOKEN=FAKE_VALUE',
+            ...Array.from({ length: lines }, () => line),
+        ].join('\n');
+        const { run } = make({
+            exec: jest
+                .fn()
+                .mockResolvedValue({ stdout, stderr: '', exitCode: 0 }),
+        });
+        const filter = withoutSecretFileLines as jest.Mock;
+        const cut = cutLongLines as jest.Mock;
+        filter.mockClear();
+        cut.mockClear();
+        const out = (await run('exec', { command: 'git log -p' })) as any;
+        // The synchronous guards read the head, never the 60 MB.
+        const read = [...filter.mock.calls, ...cut.mock.calls].map(
+            ([text]) => (text as string).length,
         );
-        expect(read).toContain('more characters not shown');
+        expect(read.length).toBeGreaterThan(0);
+        expect(Math.max(...read)).toBeLessThanOrEqual(
+            MAX_CONVERSATION_TOOL_SCAN_CHARS,
+        );
+
+        expect(out.exitCode).toBe(0);
+        expect(out.stdout).not.toContain('API_TOKEN');
+        expect(out.stdout).toHaveLength(MAX_CONVERSATION_TOOL_OUTPUT_CHARS);
+        // Everything not shown is counted: the dropped secret line aside,
+        // shown + hidden is the whole answer.
+        const secretLine = '.env:1:API_TOKEN=FAKE_VALUE\n';
+        expect(out.stdout.length + out.cut.hiddenChars.stdout).toBe(
+            stdout.length - secretLine.length,
+        );
     });
 
     it('marks the call in flight with its path, and an exec only by its program', async () => {

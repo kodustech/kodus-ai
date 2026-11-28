@@ -41,6 +41,11 @@ describe('SandboxLeaseReaperService', () => {
         completeCleanup: jest.fn(),
         failCleanup: jest.fn(),
         bumpKillRetry: jest.fn().mockResolvedValue(undefined),
+        // The idle lease comes off its prKey onto a retired doc before the kill
+        detachIdle: jest.fn(
+            async (_id: string, sandboxId: string) =>
+                `org:retired:${sandboxId}`,
+        ),
         findSandboxIdsWithLease: jest.fn().mockResolvedValue(new Set()),
     };
 
@@ -90,7 +95,9 @@ describe('SandboxLeaseReaperService', () => {
                 { _id: 'org:repo:1', sandboxId: 'sbx-1', state: 'READY' },
             ]);
             mockKill.mockRejectedValue(
-                new Error('TimeoutError: The operation was aborted due to timeout'),
+                new Error(
+                    'TimeoutError: The operation was aborted due to timeout',
+                ),
             );
 
             await service.reapExpiredLeases();
@@ -244,7 +251,7 @@ describe('SandboxLeaseReaperService', () => {
             await service.killIdleSandboxes();
 
             expect(leaseRepository.bumpKillRetry).toHaveBeenCalledWith(
-                'org:repo:1',
+                'org:retired:sbx-1',
             );
             expect(leaseRepository.delete).not.toHaveBeenCalled();
         });
@@ -264,7 +271,9 @@ describe('SandboxLeaseReaperService', () => {
             await service.killIdleSandboxes();
 
             expect(leaseRepository.bumpKillRetry).not.toHaveBeenCalled();
-            expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
+            expect(leaseRepository.delete).toHaveBeenCalledWith(
+                'org:retired:sbx-1',
+            );
         });
 
         it('deletes the lease when the sandbox is already gone', async () => {
@@ -275,7 +284,44 @@ describe('SandboxLeaseReaperService', () => {
 
             await service.killIdleSandboxes();
 
-            expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
+            expect(leaseRepository.delete).toHaveBeenCalledWith(
+                'org:retired:sbx-1',
+            );
+        });
+
+        // findReadyToKill is a read; a holder can join before the kill (#2628)
+        it('kills nothing when a holder joined after the read', async () => {
+            const now = new Date();
+            leaseRepository.findReadyToKill.mockResolvedValue([
+                { _id: 'org:repo:1', sandboxId: 'sbx-1', killAt: now },
+            ]);
+            leaseRepository.detachIdle.mockResolvedValueOnce(null as any);
+
+            await service.killIdleSandboxes();
+
+            expect(leaseRepository.detachIdle).toHaveBeenCalledWith(
+                'org:repo:1',
+                'sbx-1',
+                leaseRepository.findReadyToKill.mock.calls[0][0],
+            );
+            expect(mockKill).not.toHaveBeenCalled();
+            expect(leaseRepository.delete).not.toHaveBeenCalled();
+        });
+
+        it('kills a detached lease and removes its retired doc', async () => {
+            leaseRepository.findReadyToKill.mockResolvedValue([
+                { _id: 'org:repo:1', sandboxId: 'sbx-1', killAt: new Date() },
+            ]);
+            mockKill.mockResolvedValue(true);
+
+            await service.killIdleSandboxes();
+
+            expect(mockKill).toHaveBeenCalledWith('sbx-1', {
+                apiKey: 'fake-api-key',
+            });
+            expect(leaseRepository.delete).toHaveBeenCalledWith(
+                'org:retired:sbx-1',
+            );
         });
     });
     describe('sweepOrphanedSandboxes', () => {

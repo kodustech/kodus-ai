@@ -55,14 +55,83 @@ existing_gh_token="${GH_DEV_TOKEN:-}"
 existing_openai_key="${API_OPEN_AI_API_KEY:-}"
 existing_openai_base_url="${API_OPENAI_FORCE_BASE_URL:-}"
 existing_llm_model="${API_LLM_PROVIDER_MODEL:-}"
+existing_llm_provider="${API_LLM_PROVIDER:-}"
+existing_llm_api_key="${API_LLM_API_KEY:-}"
+existing_llm_base_url="${API_LLM_BASE_URL:-}"
+existing_llm_reasoning_effort="${API_LLM_REASONING_EFFORT:-}"
 existing_installer_path="${KODUS_INSTALLER_PATH:-}"
 
 # Team-wide LLM defaults (Kimi K2.6 via Moonshot OpenAI-compatible endpoint).
 # Used on first setup when the user hasn't picked anything. External
-# contributors can override at the prompt or pick OpenAI by leaving the
-# base URL empty and using a gpt-* model.
+# contributors can override at the prompt with another provider.
+DEFAULT_LLM_PROVIDER="openai_compatible"
 DEFAULT_LLM_MODEL="kimi-k2.6"
 DEFAULT_OPENAI_BASE_URL="https://api.moonshot.ai/v1"
+
+# The values API_LLM_PROVIDER accepts (libs/llm/env-declared-provider.ts).
+LLM_PROVIDERS="openai openai_compatible anthropic anthropic_compatible google_gemini google_vertex"
+
+lowercase() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# The provider a config written before API_LLM_PROVIDER was running on, so a
+# re-run keeps it. Gemini behind its OpenAI endpoint becomes google_gemini:
+# that endpoint drops the thought signatures Gemini 3 needs (#1161).
+legacy_llm_provider() {
+    local host model
+    host=$(lowercase "$existing_openai_base_url" | sed -E 's|^[a-z]+://||; s|[/:?].*$||')
+    model=$(lowercase "$existing_llm_model")
+    case "$host" in
+        generativelanguage.googleapis.com) echo google_gemini; return ;;
+        api.anthropic.com) echo anthropic; return ;;
+        ""|api.openai.com) ;;
+        *) echo openai_compatible; return ;;
+    esac
+    case "$model" in
+        claude-*|claude_*) echo anthropic ;;
+        gemini-*|gemini_*) echo google_gemini ;;
+        *) echo openai ;;
+    esac
+}
+
+# How API_LLM_BASE_URL applies: the runtime rejects it for the Google
+# providers and cannot run the *_compatible ones without it.
+llm_base_url_mode() {
+    case "$1" in
+        openai|anthropic) echo optional ;;
+        openai_compatible|anthropic_compatible) echo required ;;
+        *) echo none ;;
+    esac
+}
+
+# The saved key when the provider is unchanged (a key saved for another one
+# would go to the wrong host), else the provider's own key var, else the
+# OpenAI slot that configs written before API_LLM_PROVIDER kept every key in.
+default_llm_key() {
+    local provider=$1 own=""
+    if [ "$provider" = "$default_llm_provider" ] && [ -n "$existing_llm_api_key" ]; then
+        echo "$existing_llm_api_key"; return
+    fi
+    case "$provider" in
+        # The legacy OpenAI slot held whatever upstream API_OPENAI_FORCE_BASE_URL
+        # pointed at (Gemini, Moonshot…): offered to native OpenAI only when it
+        # pointed nowhere else, so that key never goes to api.openai.com.
+        openai)
+            case "$(lowercase "$existing_openai_base_url")" in
+                ""|*api.openai.com*) own="$existing_openai_key" ;;
+            esac ;;
+        # In a config this setup wrote, that slot is the OpenAI embeddings key,
+        # not an LLM key: offered only when it came from a legacy config.
+        openai_compatible)
+            [ "$llm_from_legacy" = "1" ] && own="$existing_openai_key" ;;
+        anthropic) own="${API_ANTHROPIC_API_KEY:-}" ;;
+        google_gemini) own="${API_GOOGLE_AI_API_KEY:-${GOOGLE_GENERATIVE_AI_API_KEY:-}}" ;;
+        google_vertex) own="${API_VERTEX_AI_API_KEY:-}" ;;
+    esac
+    if [ -z "$own" ] && [ "$llm_from_legacy" = "1" ] && [ "$provider" = "$default_llm_provider" ]; then
+        own="$existing_openai_key"
+    fi
+    echo "$own"
+}
 
 mask() {
     local val="$1"
@@ -99,9 +168,15 @@ if [ "$mode" = "show" ]; then
     echo -e "  ${BLUE}DIGITALOCEAN_TOKEN${NC}          $(mask "$existing_do_token")"
     echo -e "  ${BLUE}SH_LICENSE_KEY${NC}              $(mask "$existing_license")"
     echo -e "  ${BLUE}GH_DEV_TOKEN${NC}                $(mask "$existing_gh_token")"
-    echo -e "  ${BLUE}API_OPEN_AI_API_KEY${NC}         $(mask "$existing_openai_key")"
-    echo -e "  ${BLUE}API_OPENAI_FORCE_BASE_URL${NC}   ${existing_openai_base_url:-${GRAY}(not set)${NC}}"
+    echo -e "  ${BLUE}API_LLM_PROVIDER${NC}            ${existing_llm_provider:-${GRAY}(not set)${NC}}"
     echo -e "  ${BLUE}API_LLM_PROVIDER_MODEL${NC}      ${existing_llm_model:-${GRAY}(not set)${NC}}"
+    echo -e "  ${BLUE}API_LLM_API_KEY${NC}             $(mask "$existing_llm_api_key")"
+    echo -e "  ${BLUE}API_LLM_BASE_URL${NC}            ${existing_llm_base_url:-${GRAY}(not set)${NC}}"
+    [ -n "$existing_llm_reasoning_effort" ] && \
+        echo -e "  ${BLUE}API_LLM_REASONING_EFFORT${NC}    $existing_llm_reasoning_effort"
+    echo -e "  ${BLUE}API_OPEN_AI_API_KEY${NC}         $(mask "$existing_openai_key")"
+    [ -n "$existing_openai_base_url" ] && \
+        echo -e "  ${BLUE}API_OPENAI_FORCE_BASE_URL${NC}   $existing_openai_base_url  ${GRAY}(legacy; re-run setup to move it)${NC}"
     echo -e "  ${BLUE}KODUS_INSTALLER_PATH${NC}        ${existing_installer_path:-${GRAY}(not set)${NC}}"
     echo ""
     exit 0
@@ -111,7 +186,7 @@ fi
 
 prompt_secret() {
     local label="$1" current="$2" hint="$3"
-    local current_display
+    local current_display=""
     if [ -n "$current" ]; then
         current_display="  (current: $(mask "$current"))"
     fi
@@ -177,26 +252,114 @@ if [ -z "$new_gh_token" ] && [ -n "$existing_gh_token" ]; then
     new_gh_token="$existing_gh_token"
 fi
 
-new_openai_key=$(prompt_secret "OpenAI-compatible API key" "$existing_openai_key" \
-    "Required for Kodus to review PRs. Team default uses Kimi/Moonshot — get a key at https://platform.moonshot.ai. For native OpenAI, use https://platform.openai.com/api-keys.${OP_HINT}")
-if [ -z "$new_openai_key" ] && [ -n "$existing_openai_key" ]; then
-    new_openai_key="$existing_openai_key"
+# LLM: written as API_LLM_PROVIDER + API_LLM_* so the runtime uses the
+# provider as given. The OpenAI-named vars alone make it guess from the model
+# name and base URL, which sent Gemini through its OpenAI endpoint (#1161).
+llm_from_legacy=0
+if [ -n "$existing_llm_provider" ]; then
+    default_llm_provider="$existing_llm_provider"
+elif [ "$existing_llm_model" = "auto" ]; then
+    # `auto` ran no env model: the key next to it was only the embeddings key,
+    # and no base URL is read under it (the old setup stored one anyway, the
+    # Moonshot URL on Enter). A re-run keeps it instead of guessing a provider.
+    default_llm_provider="auto"
+elif [ -n "$existing_openai_key$existing_openai_base_url" ] \
+    || { [ -n "$existing_llm_model" ] && [ "$existing_llm_model" != "auto" ]; }; then
+    default_llm_provider=$(legacy_llm_provider)
+    llm_from_legacy=1
+else
+    default_llm_provider="$DEFAULT_LLM_PROVIDER"
+fi
+new_llm_provider=$(prompt_plain "LLM provider" "$default_llm_provider" \
+    "One of: ${LLM_PROVIDERS// /, }, or auto (no env model, as before). Team default: $DEFAULT_LLM_PROVIDER (Kimi on Moonshot). Gemini: google_gemini with an AI Studio key, not openai_compatible.")
+case " $LLM_PROVIDERS auto " in
+    *" $new_llm_provider "*) ;;
+    *) warn "API_LLM_PROVIDER must be one of: $LLM_PROVIDERS (got '$new_llm_provider'). Aborting."; exit 1 ;;
+esac
+if [ "$llm_from_legacy" = "1" ] && [ "$new_llm_provider" = "$default_llm_provider" ]; then
+    dim "  Provider guessed from your old API_OPENAI_FORCE_BASE_URL / model; it is now written as API_LLM_PROVIDER."
 fi
 
-# Default base URL + model to Kimi on first setup; keep whatever the user
-# had on re-runs.
-default_base_url="${existing_openai_base_url:-$DEFAULT_OPENAI_BASE_URL}"
-new_openai_base_url=$(prompt_plain "OpenAI-compatible base URL" "$default_base_url" \
-    "Team default: $DEFAULT_OPENAI_BASE_URL (Moonshot for Kimi). For native OpenAI, set to https://api.openai.com/v1 (or leave empty — the app treats empty as OpenAI default).")
-if [ -z "$new_openai_base_url" ] && [ -n "$existing_openai_base_url" ]; then
-    new_openai_base_url="$existing_openai_base_url"
+new_llm_model=""; new_llm_api_key=""; new_llm_base_url=""
+if [ "$new_llm_provider" = "auto" ]; then
+    # No env model: API_LLM_PROVIDER and the API_LLM_* vars stay empty (the
+    # runtime refuses them next to `auto`).
+    new_llm_provider=""
+    new_llm_model="auto"
 fi
 
-default_llm_model="${existing_llm_model:-$DEFAULT_LLM_MODEL}"
+if [ "$new_llm_model" != "auto" ]; then
+default_llm_model="$existing_llm_model"
+[ "$default_llm_model" = "auto" ] && default_llm_model=""
+if [ -z "$default_llm_model" ] && [ "$new_llm_provider" = "$DEFAULT_LLM_PROVIDER" ]; then
+    default_llm_model="$DEFAULT_LLM_MODEL"
+fi
 new_llm_model=$(prompt_plain "LLM model" "$default_llm_model" \
-    "Team default: $DEFAULT_LLM_MODEL (Moonshot Kimi K2.6). For OpenAI, use 'gpt-4o' or 'auto' to let Kodus router pick.")
-if [ -z "$new_llm_model" ] && [ -n "$existing_llm_model" ]; then
-    new_llm_model="$existing_llm_model"
+    "The model id the provider serves, e.g. $DEFAULT_LLM_MODEL (Moonshot), gpt-5.4 (openai), gemini-3.5-flash (google_gemini).")
+if [ -z "$new_llm_model" ] || [ "$new_llm_model" = "auto" ]; then
+    warn "API_LLM_PROVIDER needs a model id (not empty or 'auto'). Aborting."
+    exit 1
+fi
+
+current_llm_key=$(default_llm_key "$new_llm_provider")
+key_hint="Required for Kodus to review PRs."
+case "$new_llm_provider" in
+    google_gemini) key_hint="$key_hint AI Studio key from https://aistudio.google.com/apikey." ;;
+    google_vertex) key_hint="$key_hint Base64 service-account JSON." ;;
+    openai) key_hint="$key_hint https://platform.openai.com/api-keys." ;;
+    *) [ "$new_llm_provider" = "$DEFAULT_LLM_PROVIDER" ] && key_hint="$key_hint Team default: Moonshot key from https://platform.moonshot.ai." ;;
+esac
+new_llm_api_key=$(prompt_secret "LLM API key ($new_llm_provider)" "$current_llm_key" "${key_hint}${OP_HINT}")
+if [ -z "$new_llm_api_key" ] && [ -n "$current_llm_key" ]; then
+    new_llm_api_key="$current_llm_key"
+fi
+if [ -z "$new_llm_api_key" ]; then
+    warn "No LLM API key: the dashboard will show 'No LLM provider configured' until you set one."
+fi
+
+new_llm_base_url=""
+base_url_mode=$(llm_base_url_mode "$new_llm_provider")
+if [ "$base_url_mode" != "none" ]; then
+    default_llm_base_url=""
+    [ "$new_llm_provider" = "$default_llm_provider" ] && default_llm_base_url="$existing_llm_base_url"
+    # The old base URL var is the openai path's own fallback, and was every
+    # provider's endpoint in a config written before API_LLM_PROVIDER.
+    case "$new_llm_provider" in
+        openai|openai_compatible) default_llm_base_url="${default_llm_base_url:-$existing_openai_base_url}" ;;
+        *) [ "$llm_from_legacy" = "1" ] && [ "$new_llm_provider" = "$default_llm_provider" ] \
+            && default_llm_base_url="${default_llm_base_url:-$existing_openai_base_url}" ;;
+    esac
+    if [ -z "$default_llm_base_url" ] && [ "$new_llm_provider" = "$DEFAULT_LLM_PROVIDER" ]; then
+        default_llm_base_url="$DEFAULT_OPENAI_BASE_URL"
+    fi
+    new_llm_base_url=$(prompt_plain "LLM base URL ($new_llm_provider)" "$default_llm_base_url" \
+        "$( [ "$base_url_mode" = "required" ] && echo "Required: the provider's API root, e.g. $DEFAULT_OPENAI_BASE_URL." || echo "Optional. Empty uses the provider's own endpoint.")")
+    if [ "$base_url_mode" = "required" ] && [ -z "$new_llm_base_url" ]; then
+        warn "API_LLM_PROVIDER=$new_llm_provider needs a base URL. Aborting."
+        exit 1
+    fi
+    case "$(lowercase "$new_llm_base_url")" in
+        *generativelanguage.googleapis.com*)
+            warn "Gemini's OpenAI endpoint drops the thought signatures Gemini 3 needs for tool calls. Use API_LLM_PROVIDER=google_gemini." ;;
+    esac
+fi
+fi
+
+# API_OPEN_AI_API_KEY is also the platform embeddings key (always sent to
+# api.openai.com), so it is kept apart from the LLM key.
+default_embeddings_key="$existing_openai_key"
+# In a legacy config whose provider was not OpenAI, that slot held the LLM key
+# of another upstream (Gemini, Moonshot, Anthropic): not an embeddings key.
+if [ "$llm_from_legacy" = "1" ] && [ "$default_llm_provider" != "openai" ]; then
+    default_embeddings_key=""
+fi
+if [ -z "$default_embeddings_key" ] && [ "$new_llm_provider" = "openai" ]; then
+    default_embeddings_key="$new_llm_api_key"
+fi
+new_openai_key=$(prompt_secret "OpenAI API key for embeddings (optional)" "$default_embeddings_key" \
+    "Written to API_OPEN_AI_API_KEY. Empty = no embeddings (review dedup falls back to text matching).${OP_HINT}")
+if [ -z "$new_openai_key" ] && [ -n "$default_embeddings_key" ]; then
+    new_openai_key="$default_embeddings_key"
 fi
 
 # If any tracked secret looks like an op:// ref, validate it now so the user
@@ -219,6 +382,7 @@ if [ "$OP_AVAILABLE" = "1" ]; then
     validate_op_ref "DIGITALOCEAN_TOKEN" "$new_do_token"
     validate_op_ref "SH_LICENSE_KEY" "$new_license"
     validate_op_ref "GH_DEV_TOKEN" "$new_gh_token"
+    validate_op_ref "API_LLM_API_KEY" "$new_llm_api_key"
     validate_op_ref "API_OPEN_AI_API_KEY" "$new_openai_key"
 fi
 
@@ -242,9 +406,12 @@ cat > "$tmp_file" <<EOF
 DIGITALOCEAN_TOKEN=$new_do_token
 SH_LICENSE_KEY=$new_license
 GH_DEV_TOKEN=$new_gh_token
-API_OPEN_AI_API_KEY=$new_openai_key
-API_OPENAI_FORCE_BASE_URL=$new_openai_base_url
+API_LLM_PROVIDER=$new_llm_provider
 API_LLM_PROVIDER_MODEL=$new_llm_model
+API_LLM_API_KEY=$new_llm_api_key
+API_LLM_BASE_URL=$new_llm_base_url
+API_LLM_REASONING_EFFORT=$existing_llm_reasoning_effort
+API_OPEN_AI_API_KEY=$new_openai_key
 KODUS_INSTALLER_PATH=$new_installer_path
 EOF
 chmod 600 "$tmp_file"
