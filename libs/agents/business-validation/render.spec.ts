@@ -161,6 +161,15 @@ describe('files too large to read', () => {
         }
     });
 
+    it('quotes a real path that starts with a parenthesis', () => {
+        expect(
+            renderComment({
+                ...outcome(),
+                unseenFiles: ['(app)/settings/page.tsx'],
+            }),
+        ).toContain('this PR: `(app)/settings/page.tsx`.');
+    });
+
     it('names the rest of a diff with no file headers as it is', () => {
         expect(
             renderComment({

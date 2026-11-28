@@ -45,6 +45,9 @@ export interface DiffBudget {
     tokens?: number;
 }
 
+/** What `fitDiff` names as left out of a diff with no file headers. */
+export const REST_OF_THE_DIFF = '(rest of the diff)';
+
 const FILE_HEADER = /^(?:=== FILE: (.+?) ===|diff --git a\/\S+ b\/(\S+))$/gm;
 
 /**
@@ -91,7 +94,7 @@ export function fitDiff(
         const cut = cutToTokens(byChars, tokens);
         return {
             diff: cut,
-            unseenFiles: ['(rest of the diff)'],
+            unseenFiles: [REST_OF_THE_DIFF],
             cutByTokens: cut !== byChars,
         };
     }

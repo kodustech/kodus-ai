@@ -1,4 +1,4 @@
-import { sliceWhole } from './pull-request-diff';
+import { REST_OF_THE_DIFF, sliceWhole } from './pull-request-diff';
 import type {
     BusinessValidationOutcome,
     TaskCheck,
@@ -94,7 +94,7 @@ function unreadLine(unseenFiles: string[] | undefined): string[] {
     }
     const named = files
         .slice(0, MAX_UNREAD_NAMED)
-        .map((file) => (file.startsWith('(') ? file : `\`${file}\``));
+        .map((file) => (file === REST_OF_THE_DIFF ? file : `\`${file}\``));
     const more =
         files.length > MAX_UNREAD_NAMED
             ? ` and ${files.length - MAX_UNREAD_NAMED} more`
