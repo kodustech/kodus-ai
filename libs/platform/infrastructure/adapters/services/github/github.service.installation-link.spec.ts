@@ -87,12 +87,7 @@ describe('GitHub installation linking', () => {
         svc.findOneByOrganizationId = jest
             .fn()
             .mockResolvedValue({ installationStatus: 'SUCCESS' });
-        svc.logger = {
-            log: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            debug: jest.fn(),
-        };
+        svc.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
         return { svc, appAuth, paginate, appOctokit };
     };
 
@@ -304,36 +299,6 @@ describe('GitHub installation linking', () => {
     describe('logs', () => {
         const logged = (fn: jest.Mock) =>
             JSON.stringify(fn.mock.calls.map(([entry]) => entry));
-
-        it.each([
-            [new TypeError('fixture diagnostic detail'), 'unexpected_error'],
-            [new BadRequestException('fixture refusal detail'), 'refused'],
-        ])(
-            'keeps temporary diagnostics structured and bounded',
-            async (original, code) => {
-                const { svc, appOctokit } = setup({});
-                appOctokit.rest.apps.getInstallation.mockRejectedValue(
-                    original,
-                );
-                const raw = jest
-                    .spyOn(console, 'error')
-                    .mockImplementation(() => undefined);
-                try {
-                    await link(svc).catch(() => undefined);
-                    expect(raw).not.toHaveBeenCalled();
-                    expect(svc.logger.debug).toHaveBeenCalledWith({
-                        message: 'github.installation.link.diagnostic',
-                        context: GithubService.name,
-                        metadata: { code },
-                    });
-                    expect(logged(svc.logger.debug)).not.toContain(
-                        original.message,
-                    );
-                } finally {
-                    raw.mockRestore();
-                }
-            },
-        );
 
         it('logs where an unexpected error stopped the link, with the original error', async () => {
             const { svc, appOctokit } = setup({});

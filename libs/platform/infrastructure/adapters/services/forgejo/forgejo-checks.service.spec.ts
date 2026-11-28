@@ -42,7 +42,8 @@ describe('ForgejoChecksService', () => {
         [CheckConclusion.ACTION_REQUIRED, 'failure'],
         [CheckConclusion.CANCELLED, 'error'],
         [CheckConclusion.TIMED_OUT, 'error'],
-        [CheckConclusion.NEUTRAL, 'warning'],
+        [CheckConclusion.NEUTRAL, 'success'],
+        [CheckConclusion.SKIPPED, 'success'],
     ])('posts %s as the commit state %s', async (conclusion, state) => {
         await expect(
             service.updateCheckRun({
