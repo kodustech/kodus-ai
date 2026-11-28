@@ -938,7 +938,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         await stage.execute(context(undefined, undefined));
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
         expect(
-            commentManagerService.updateOverallComment.mock.calls[0][20],
+            commentManagerService.updateOverallComment.mock.calls[0][18],
         ).toBeUndefined();
     });
 

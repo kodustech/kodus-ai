@@ -98,10 +98,10 @@ export interface ICommentManagerService {
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         singleAgentRun?: boolean,
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
-        /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
         extraLine?: string,
         prLevelCommentResults?: Array<CommentResult>,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string,
     ): Promise<void>;
 
     updateSummarizationInPR(

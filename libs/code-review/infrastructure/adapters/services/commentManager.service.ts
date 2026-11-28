@@ -1378,6 +1378,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                         commentBody,
                         reviewErrorMessage,
                         reviewErrorAgentName,
+                        language,
                     );
                 }
                 const skippedNotice = this.resolveSkippedRulesNotice(
@@ -2135,13 +2136,29 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         body: string,
         reviewErrorMessage: string | undefined,
         reviewErrorAgentName: string | undefined,
+        language: string,
     ): string {
         const agentName = reviewErrorAgentName?.trim();
         const reason = reviewErrorMessage?.trim();
         if (!agentName || !reason || !isPrimaryReviewAgent(agentName)) {
             return body;
         }
-        return `${body}\n\nThe ${agentName} review did not run: ${reason}`;
+        const template =
+            getTranslationsForLanguageByCategory(
+                language as LanguageValue,
+                TranslationsCategory.PullRequestFinishSummaryMarkdown,
+            )?.primaryAgentDidNotRun ??
+            getTranslationsForLanguageByCategory(
+                LanguageValue.ENGLISH,
+                TranslationsCategory.PullRequestFinishSummaryMarkdown,
+            )?.primaryAgentDidNotRun;
+        if (!template) {
+            return body;
+        }
+        const sentence = template
+            .replace(/\{\{agentName\}\}/g, () => agentName)
+            .replace(/\{\{reason\}\}/g, () => reason);
+        return `${body}\n\n${sentence}`;
     }
 
     /**
@@ -2318,6 +2335,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                         resultText,
                         reviewErrorMessage,
                         reviewErrorAgentName,
+                        language,
                     );
                 }
             }
@@ -3379,6 +3397,7 @@ ${reviewOptions}
                     commentBody,
                     reviewErrorMessage,
                     reviewErrorAgentName,
+                    language ?? LanguageValue.ENGLISH,
                 );
             }
             // Adaptive-fit fidelity warnings are NOT appended to the PR

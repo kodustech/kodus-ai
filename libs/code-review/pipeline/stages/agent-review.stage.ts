@@ -1605,6 +1605,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     criticalFailures.length > 0 ? criticalFailures : failures
                 ).slice();
                 ranked.sort((a, b) => {
+                    // A partial run has no critical failure; the primary
+                    // reviewer that did not run is the one the notice names,
+                    // not an auxiliary agent (Kody Rules, a custom agent).
+                    const aPrimary = CRITICAL_AGENTS.has(a.agentName);
+                    const bPrimary = CRITICAL_AGENTS.has(b.agentName);
+                    if (aPrimary !== bPrimary) return aPrimary ? -1 : 1;
                     const aMapped =
                         classifyFailure(a).category !==
                         LlmErrorCategory.UNKNOWN;

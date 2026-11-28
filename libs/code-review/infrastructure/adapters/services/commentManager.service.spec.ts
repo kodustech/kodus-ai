@@ -1599,6 +1599,29 @@ describe('partial primary-agent failures name the reviewer that did not run', ()
         );
     });
 
+    it('names the security review in the configured review language', async () => {
+        const body = await summaryService().generatePullRequestFinishSummaryMarkdown(
+            org,
+            7,
+            [],
+            { languageResultPrompt: LanguageValue.PORTUGUESE_BR },
+            [],
+            false,
+            securityOutOfCredits,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            'security',
+        );
+
+        expect(body).toContain(
+            `A revisão de security não foi executada: ${securityOutOfCredits}`,
+        );
+        expect(body).not.toContain('review did not run');
+    });
+
     it('stays silent for a summary-only failure', async () => {
         const body = await summary(
             false,

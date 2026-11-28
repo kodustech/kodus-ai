@@ -450,6 +450,25 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
 
             expect(context.lastReviewError?.agentName).toBe('performance');
         });
+
+        it('attributes a partial run to the failed primary reviewer, not an auxiliary agent', async () => {
+            const { stage } = makeStage({
+                suggestions: [],
+                agentResults: [bugAgent([])],
+                failures: [
+                    failedAgent('kodyRules', 429),
+                    failedAgent('security', 402),
+                ],
+            });
+
+            const context = await run(stage, reviewContext(true));
+
+            expect(context.errors).toMatchObject([
+                { substage: 'agent:kodyRules', severity: 'partial' },
+                { substage: 'agent:security', severity: 'partial' },
+            ]);
+            expect(context.lastReviewError?.agentName).toBe('security');
+        });
     });
 
     it('judges ownership by the attempt that failed, not the pre-run slot', async () => {
