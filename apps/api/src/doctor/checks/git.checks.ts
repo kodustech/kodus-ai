@@ -165,6 +165,8 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const hookUncovered: string[] = [];
                 /** GitHub App install that delivered nothing in the window. */
                 const appSilent: string[] = [];
+                /** GitHub App repos without a matching repo id in the recent event sample. */
+                const appUncovered: string[] = [];
                 /** No hook seen, and the received events could not be read. */
                 const hookUnreadable: string[] = [];
                 /** GitHub App install whose delivery could not be measured. */
@@ -223,10 +225,11 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                             ? hookUncovered
                             : hookMissing
                         ).push(repo.name);
-                    } else if (d.hook === 'app-level') {
-                        if (!delivered!.platformEvents) {
-                            appSilent.push(repo.name);
-                        }
+                    } else if (d.hook === 'app-level' && !deliveredHere) {
+                        (delivered!.platformEvents
+                            ? appUncovered
+                            : appSilent
+                        ).push(repo.name);
                     } else if (d.hook === 'unknown' && !deliveredHere) {
                         unverified.hook.push(repo.name);
                     }
@@ -358,6 +361,16 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         blocking: true,
                     });
                 }
+                if (appUncovered.length) {
+                    results.push({
+                        check: 'git.webhook',
+                        status: 'unknown',
+                        scope,
+                        title: `Could not confirm GitHub App delivery for ${names(appUncovered)}. The recent sample of ${git} events showed no matching repository ID.`,
+                        fix: `Fine if no pull request was opened there recently. Otherwise open a pull request to confirm, or check the app's webhook URL (${webhookUrl}) and its "Recent deliveries" in GitHub > Settings > Developer settings > GitHub Apps.`,
+                        blocking: true,
+                    });
+                }
                 if (appSilent.length) {
                     results.push({
                         check: 'git.webhook',
@@ -444,6 +457,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                             hookUncovered,
                             hookUnreadable,
                             appUnreadable,
+                            appUncovered,
                             appSilent,
                             unverified.hook,
                         ),

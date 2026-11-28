@@ -698,7 +698,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ]);
         });
 
-        it('GitHub App installs use the app-level hook: fine once events arrive', async () => {
+        it('GitHub App installs use the app-level hook: fine once events arrive from that repository', async () => {
             const git = {
                 ...healthyGit({ hook: 'app-level' }),
                 deliveredEvents: jest.fn(async () => ({
@@ -708,18 +708,191 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             };
             const results = await gitAccessCheck(git).run(ctx());
             expect(problems(results)).toEqual([]);
-            expect(results.find((r) => r.check === 'git.webhook')?.status).toBe(
-                'ok',
+            expect(results.filter((r) => r.check === 'git.webhook')).toEqual([
+                {
+                    check: 'git.webhook',
+                    status: 'ok',
+                    scope: 'acme/core',
+                    title: 'Kodus receives pull request events from 1 repository.',
+                },
+            ]);
+        });
+
+        it('GitHub App with only unrelated repo events does not claim delivery for this repo (#2708)', async () => {
+            const git = {
+                ...healthyGit({ hook: 'app-level' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 1,
+                    repositoryIds: new Set(['999']),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(
+                ctx({
+                    teams: [
+                        team({
+                            repositories: [
+                                {
+                                    id: '101',
+                                    name: 'api',
+                                    fullName: 'acme/api',
+                                },
+                            ],
+                        }),
+                    ],
+                }),
             );
+            expect(problems(results)).toEqual([]);
+            const webhookLines = results.filter(
+                (r) => r.check === 'git.webhook',
+            );
+            expect(webhookLines).toHaveLength(1);
+            expect(webhookLines[0]).toMatchObject({
+                check: 'git.webhook',
+                status: 'unknown',
+                blocking: true,
+                scope: 'acme/core',
+            });
+            expect(webhookLines[0].title).toContain('GitHub App');
+            expect(webhookLines[0].title).toContain('api');
+            expect(webhookLines[0].title).toContain('recent sample');
+            expect(webhookLines[0].title).toContain('repository ID');
+            expect(webhookLines[0].title).not.toContain(
+                'other GitHub repositories do deliver',
+            );
+            expect(webhookLines[0].title).not.toContain(
+                `in the last ${RECENT_DAYS} days`,
+            );
+            expect(webhookLines[0].title).not.toContain(
+                'No repository webhook',
+            );
+            expect(webhookLines[0].fix).toContain('GitHub Apps');
+            expect(webhookLines[0].fix).toContain(
+                'https://api.acme.dev/github/webhook',
+            );
+            expect(
+                results.filter((r) => r.status === 'ok').map((r) => r.check),
+            ).toEqual(['git.read', 'git.write']);
+        });
+
+        it('GitHub App with platform events lacking repository IDs stays unverified without claiming other repos delivered (#2708)', async () => {
+            const git = {
+                ...healthyGit({ hook: 'app-level' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 2,
+                    repositoryIds: new Set<string>(),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(problems(results)).toEqual([]);
+            const webhookLines = results.filter(
+                (r) => r.check === 'git.webhook',
+            );
+            expect(webhookLines).toHaveLength(1);
+            expect(webhookLines[0]).toMatchObject({
+                check: 'git.webhook',
+                status: 'unknown',
+                blocking: true,
+                scope: 'acme/core',
+            });
+            expect(webhookLines[0].title).toContain('GitHub App');
+            expect(webhookLines[0].title).toContain('recent sample');
+            expect(webhookLines[0].title).toContain('repository ID');
+            expect(webhookLines[0].title).not.toContain(
+                'other GitHub repositories do deliver',
+            );
+            expect(webhookLines[0].title).not.toContain(
+                `in the last ${RECENT_DAYS} days`,
+            );
+            expect(webhookLines[0].fix).toContain('GitHub Apps');
+            expect(
+                results.filter((r) => r.status === 'ok').map((r) => r.check),
+            ).toEqual(['git.read', 'git.write']);
+        });
+
+        it('GitHub App with one confirmed repo and one unconfirmed repo reports ok for 1 and unverified for the other (#2708)', async () => {
+            const git = {
+                ...healthyGit({ hook: 'app-level' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 3,
+                    repositoryIds: new Set(['101', '999']),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(
+                ctx({
+                    teams: [
+                        team({
+                            repositories: [
+                                {
+                                    id: '101',
+                                    name: 'api',
+                                    fullName: 'acme/api',
+                                },
+                                {
+                                    id: '102',
+                                    name: 'web',
+                                    fullName: 'acme/web',
+                                },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(problems(results)).toEqual([]);
+            const webhookLines = results.filter(
+                (r) => r.check === 'git.webhook',
+            );
+            expect(webhookLines).toHaveLength(2);
+            expect(webhookLines.find((r) => r.status === 'ok')).toMatchObject({
+                status: 'ok',
+                title: 'Kodus receives pull request events from 1 repository.',
+            });
+            const unknownLine = webhookLines.find(
+                (r) => r.status === 'unknown',
+            );
+            expect(unknownLine).toMatchObject({
+                status: 'unknown',
+                blocking: true,
+            });
+            expect(unknownLine?.title).toContain('web');
+            expect(unknownLine?.title).toContain('recent sample');
+            expect(unknownLine?.title).not.toContain('api');
         });
 
         it('a GitHub App that delivered nothing is unverified, not "receives events"', async () => {
+            const git = {
+                ...healthyGit({ hook: 'app-level' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 0,
+                    repositoryIds: new Set<string>(),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(problems(results)).toEqual([]);
+            const webhookLines = results.filter(
+                (r) => r.check === 'git.webhook',
+            );
+            expect(webhookLines).toHaveLength(1);
+            expect(webhookLines[0]).toMatchObject({
+                status: 'unknown',
+                blocking: true,
+                title: `The GitHub App delivered no event to Kodus in the last ${RECENT_DAYS} days.`,
+            });
+            expect(webhookLines[0].fix).toContain('GitHub Apps');
+        });
+
+        it('a GitHub App with omitted deliveredEvents defaults to no events and stays unverified', async () => {
             const results = await gitAccessCheck(
                 healthyGit({ hook: 'app-level' }),
             ).run(ctx());
-            const line = results.find((r) => r.check === 'git.webhook');
-            expect(line).toMatchObject({ status: 'unknown', blocking: true });
-            expect(line?.fix).toContain('GitHub Apps');
+            expect(problems(results)).toEqual([]);
+            expect(results.filter((r) => r.check === 'git.webhook')).toEqual([
+                expect.objectContaining({
+                    check: 'git.webhook',
+                    status: 'unknown',
+                    blocking: true,
+                    title: `The GitHub App delivered no event to Kodus in the last ${RECENT_DAYS} days.`,
+                }),
+            ]);
         });
 
         it('a repository hook the provider no longer accepts (stale token) fails', async () => {
@@ -759,6 +932,38 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const line = results.find((r) => r.check === 'git.webhook');
             expect(line).toMatchObject({ status: 'unknown', blocking: true });
             expect(line?.fix).toContain('organization or group webhook');
+        });
+
+        it('preserves group-hook unverified handling on non-GitHub hosts (GitLab)', async () => {
+            const env = cleanEnv();
+            env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK =
+                'https://api.acme.dev/gitlab/webhook';
+            const git = {
+                ...healthyGit({ hook: 'missing' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 2,
+                    repositoryIds: new Set(['999']),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(
+                ctx({
+                    env,
+                    teams: [team({ platform: 'GITLAB' })],
+                }),
+            );
+            expect(problems(results)).toEqual([]);
+            const webhookLines = results.filter(
+                (r) => r.check === 'git.webhook',
+            );
+            expect(webhookLines).toHaveLength(1);
+            expect(webhookLines[0]).toMatchObject({
+                status: 'unknown',
+                blocking: true,
+            });
+            expect(webhookLines[0].title).toContain('No repository webhook');
+            expect(webhookLines[0].fix).toContain(
+                'organization or group webhook',
+            );
         });
 
         it('events that could not be read are not "no event arrived": a missing hook is unverified, not failed', async () => {
