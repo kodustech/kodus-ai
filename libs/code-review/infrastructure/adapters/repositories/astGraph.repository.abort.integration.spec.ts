@@ -693,6 +693,7 @@ const run =
                                     .findOneByOrFail({ uuid: repoId }),
                         } as never,
                         new GraphJobSandbox(),
+                        { enqueue: async () => '' } as never,
                     );
                     await retry.process(job.jobId);
                     expect((await jobs.findOne(job.jobId)).status).toBe(
@@ -811,6 +812,7 @@ const run =
                                 .findOneByOrFail({ uuid: repoId }),
                     } as never,
                     new GraphJobSandbox(),
+                    { enqueue: async () => '' } as never,
                 );
                 const unused = {} as never;
                 const router = new JobProcessorRouterService(
