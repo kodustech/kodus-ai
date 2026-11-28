@@ -243,6 +243,12 @@ export type CodeSuggestion = {
      */
     kodyRuleOtherLocations?: string[];
     /**
+     * The atom of a decomposed Kody Rule the finding broke. Atoms share the
+     * rule's uuid in `brokenKodyRulesIds`, so findings are merged per atom
+     * by this id instead (#2656). Unset for a rule that was not decomposed.
+     */
+    kodyRuleUnitId?: string;
+    /**
      * The claim of a Kody Rule finding that named a file and no line, as the
      * repeat check saw it, before the formatter, the file citation and the
      * rule link rewrite the text (#2420). It is posted PR-level, and the next

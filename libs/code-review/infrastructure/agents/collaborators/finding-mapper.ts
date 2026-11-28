@@ -119,6 +119,8 @@ export function resolveSuggestionLabel(
 export interface RawFinding {
     suggestionContent?: string;
     ruleUuid?: string;
+    /** Kody Rules: the atom unit of a decomposed rule the finding is for. */
+    reviewUnitId?: string;
     revisesSuggestionId?: string;
     relevantFile?: string;
     oneSentenceSummary?: string;
@@ -404,6 +406,8 @@ export function mapAgentFindings(
                 : s.severity || 'medium',
             llmPrompt: s.suggestionContent,
             ...(s.ruleUuid && { brokenKodyRulesIds: [s.ruleUuid] }),
+            ...(s.ruleUuid &&
+                s.reviewUnitId && { kodyRuleUnitId: s.reviewUnitId }),
             ...(s.revisesSuggestionId && {
                 revisesSuggestionId: s.revisesSuggestionId,
             }),
