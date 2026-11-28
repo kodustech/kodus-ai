@@ -748,6 +748,28 @@ describe('normalizeError → fromHttpStatus mapping (via AI SDK error facts)', (
         expect(res.ok).toBe(true);
     });
 
+    // QA of #2700: the review comment said "out of credits" for this key and
+    // the Test said "throttling". Both read the 429 the same way now.
+    it.each([
+        'You exceeded your current quota, please check your plan and billing details.',
+        'Quota exceeded. Please retry in 61s.',
+    ])('429 with a spent quota (%s) → payment, ok:false', (message) => {
+        const res = normalize(sdkErr(429, message));
+        expect(res.code).toBe('payment');
+        expect(res.ok).toBe(false);
+    });
+
+    it('429 per-minute window → rate_limit, ok:true', () => {
+        const res = normalize(
+            sdkErr(
+                429,
+                'You exceeded your current quota, please check your plan and billing details. Please retry in 17.3s.',
+            ),
+        );
+        expect(res.code).toBe('rate_limit');
+        expect(res.ok).toBe(true);
+    });
+
     it('500 → server_error (>= 500 boundary, low end)', () => {
         expect(normalize(sdkErr(500)).code).toBe('server_error');
     });
