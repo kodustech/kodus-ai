@@ -1370,7 +1370,12 @@ export class ChatWithKodyFromGitUseCase {
             organizationAndTeamData,
             repositoryId: repository.id,
             pullRequestNumber,
-            originalKodyCommentId: originalKodyComment?.id,
+            // Azure numbers comments per thread, and the stored suggestion
+            // carries the thread id.
+            originalKodyCommentId:
+                params.platformType === PlatformType.AZURE_REPOS
+                    ? originalKodyComment?.threadId
+                    : originalKodyComment?.id,
         });
 
         const prepareContext = this.prepareContext({
