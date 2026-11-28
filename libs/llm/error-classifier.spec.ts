@@ -1,5 +1,6 @@
 import {
     isAbortOrHardTimeout,
+    isConnectTimeout,
     LlmErrorCategory,
     attachClassification,
     classifyLLMError,
@@ -1104,23 +1105,283 @@ describe('transport failures before any HTTP status (#1844)', () => {
         expect(classifyLLMError(err).category).toBe(LlmErrorCategory.TRANSIENT);
     });
 
-    // What the shared gate must keep doing. These pass before and after the fix.
-    describe('impact: what must not change', () => {
-        it('a connect timeout stays out of the cascade (the abort/timeout rule)', () => {
-            const err = cannotConnect(
+    // QA of #2700: the issue's outage was a connect timeout (3 attempts of
+    // ~127 s), and it never reached the fallback. The endpoint never
+    // answered, the fallback is another one, and the cost is the connect
+    // timeout, not a call's budget.
+    describe('a connect timeout reaches the fallback', () => {
+        const connectTimeout = () =>
+            cannotConnect(
                 'Connect Timeout Error (attempted address: 10.0.0.9:443, timeout: 10000ms)',
                 'UND_ERR_CONNECT_TIMEOUT',
             );
-            expect(shouldFailoverToNextModel(err)).toBe(false);
+
+        it("undici's ConnectTimeoutError (what Node 22's fetch throws)", () => {
+            expect(classifyLLMError(connectTimeout()).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+            expect(shouldFailoverToNextModel(connectTimeout())).toBe(true);
         });
 
-        it('an ETIMEDOUT stays out of the cascade', () => {
+        it("the kernel's connect ETIMEDOUT, single address or dual stack", () => {
+            const socket = (address: string) =>
+                Object.assign(new Error(`connect ETIMEDOUT ${address}:443`), {
+                    code: 'ETIMEDOUT',
+                    syscall: 'connect',
+                    address,
+                    port: 443,
+                });
+            const single = new APICallError({
+                message:
+                    'Cannot connect to API: connect ETIMEDOUT 10.0.0.9:443',
+                url: 'https://llm.example.invalid/v1',
+                requestBodyValues: {},
+                cause: socket('10.0.0.9'),
+                isRetryable: true,
+            });
+            const dual = new APICallError({
+                message: 'Cannot connect to API: ',
+                url: 'https://llm.example.invalid/v1',
+                requestBodyValues: {},
+                cause: Object.assign(
+                    new AggregateError([
+                        socket('2001:db8::9'),
+                        socket('10.0.0.9'),
+                    ]),
+                    { code: 'ETIMEDOUT' },
+                ),
+                isRetryable: true,
+            });
+            expect(shouldFailoverToNextModel(single)).toBe(true);
+            expect(shouldFailoverToNextModel(dual)).toBe(true);
+        });
+
+        // The agent runner keeps an error's name and message only.
+        it('the same failure after the SDK retries, as text', () => {
+            const retried = Object.assign(
+                new Error(
+                    'Failed after 4 attempts. Last error: Cannot connect to API: Connect Timeout Error (attempted address: 10.0.0.9:443, timeout: 10000ms)',
+                ),
+                { name: 'AI_RetryError' },
+            );
+            expect(shouldFailoverToNextModel(retried)).toBe(true);
+        });
+
+        it('says it timed out and where, in the published message', () => {
+            const { friendlyMessage } = classifyLLMError(
+                connectTimeout(),
+                'openai_compatible',
+            );
+            expect(friendlyMessage).toContain(
+                'the connection to 10.0.0.9:443 timed out after 10 s',
+            );
+        });
+    });
+
+    // Each shape on its own, with no SDK wording to lean on: the structure
+    // alone must say it, and nothing else may.
+    describe('isConnectTimeout', () => {
+        const socket = (syscall: string, address = '10.0.0.9', port?: number) =>
+            Object.assign(new Error(''), {
+                code: 'ETIMEDOUT',
+                syscall,
+                address,
+                ...(port ? { port } : {}),
+            });
+        const wrap = (cause: unknown) =>
+            Object.assign(new Error('fetch failed'), { cause });
+
+        it.each([
+            [
+                "undici's ConnectTimeoutError",
+                wrap(
+                    Object.assign(new Error(''), {
+                        code: 'UND_ERR_CONNECT_TIMEOUT',
+                    }),
+                ),
+            ],
+            ['an ETIMEDOUT on connect', wrap(socket('connect'))],
+            [
+                'a dual-stack connect that timed out on every address',
+                wrap(
+                    Object.assign(
+                        new AggregateError([
+                            socket('connect', '2001:db8::9'),
+                            socket('connect'),
+                        ]),
+                        { code: 'ETIMEDOUT' },
+                    ),
+                ),
+            ],
+            [
+                'the kernel wording after the SDK retries',
+                {
+                    name: 'AI_RetryError',
+                    message:
+                        'Failed after 2 attempts. Last error: Cannot connect to API: connect ETIMEDOUT 10.0.0.9:443',
+                },
+            ],
+        ])('is true for %s', (_label, err) => {
+            expect(isConnectTimeout(err)).toBe(true);
+        });
+
+        it.each([
+            ['an ETIMEDOUT on a read', wrap(socket('read'))],
+            [
+                'a dual-stack aggregate whose parts are not connects',
+                wrap(
+                    Object.assign(new AggregateError([socket('read')]), {
+                        code: 'ETIMEDOUT',
+                    }),
+                ),
+            ],
+            [
+                'an ETIMEDOUT aggregate with no parts',
+                wrap(
+                    Object.assign(new AggregateError([]), {
+                        code: 'ETIMEDOUT',
+                    }),
+                ),
+            ],
+            [
+                'a refused connect',
+                wrap(
+                    Object.assign(new Error(''), {
+                        code: 'ECONNREFUSED',
+                        syscall: 'connect',
+                    }),
+                ),
+            ],
+            [
+                'an abort, whatever it wraps',
+                Object.assign(new Error('aborted'), {
+                    name: 'AbortError',
+                    cause: socket('connect'),
+                }),
+            ],
+            [
+                "an earlier attempt's timeout before a 503",
+                {
+                    name: 'AI_RetryError',
+                    message: 'Failed after 2 attempts.',
+                    errors: [wrap(socket('connect'))],
+                    lastError: Object.assign(new Error('Service Unavailable'), {
+                        statusCode: 503,
+                    }),
+                },
+            ],
+            ['a message that is not text', { message: { connect: 1 } }],
+            [
+                'a headers timeout in words',
+                new Error('Cannot connect to API: Headers Timeout Error'),
+            ],
+            ['nothing', undefined],
+        ])('is false for %s', (_label, err) => {
+            expect(isConnectTimeout(err)).toBe(false);
+        });
+
+        it.each([
+            [
+                'the socket address and port',
+                wrap(socket('connect', '10.0.0.9', 443)),
+                'the connection to 10.0.0.9:443 timed out.',
+            ],
+            [
+                'the address alone when no port came with it',
+                wrap(socket('connect', '10.0.0.9')),
+                'the connection to 10.0.0.9 timed out.',
+            ],
+            [
+                'the address in the kernel wording',
+                new Error(
+                    'Failed after 2 attempts. Last error: Cannot connect to API: connect ETIMEDOUT 203.0.113.7:443',
+                ),
+                'the connection to 203.0.113.7:443 timed out.',
+            ],
+            [
+                'no address when none is known',
+                wrap(
+                    Object.assign(new Error(''), {
+                        code: 'UND_ERR_CONNECT_TIMEOUT',
+                    }),
+                ),
+                'the connection timed out.',
+            ],
+        ])('the published message names %s', (_label, err, said) => {
+            expect(classifyLLMError(err, 'openai').friendlyMessage).toBe(
+                `Couldn't connect to the provider (openai): ${said} If it keeps failing, check the base URL.`,
+            );
+        });
+
+        it("names the final attempt's address, not an earlier one's", () => {
+            const retry = {
+                name: 'AI_RetryError',
+                message: 'Failed after 2 attempts.',
+                errors: [
+                    wrap(socket('connect', '198.51.100.1', 443)),
+                    wrap(socket('connect', '203.0.113.7', 443)),
+                ],
+                lastError: wrap(socket('connect', '203.0.113.7', 443)),
+            };
+            const { friendlyMessage } = classifyLLMError(retry);
+            expect(friendlyMessage).toContain('203.0.113.7:443 timed out');
+            expect(friendlyMessage).not.toContain('198.51.100.1');
+        });
+
+        it("caps undici's attempted addresses at 120 characters too", () => {
+            const many = Array.from(
+                { length: 20 },
+                (_, i) => `10.0.0.${i}:443`,
+            );
+            const { friendlyMessage } = classifyLLMError(
+                wrap(
+                    Object.assign(
+                        new Error(
+                            `Connect Timeout Error (attempted addresses: ${many.join(', ')}, timeout: 10000ms)`,
+                        ),
+                        { code: 'UND_ERR_CONNECT_TIMEOUT' },
+                    ),
+                ),
+            );
+            expect(friendlyMessage).toContain(
+                `the connection to ${many.join(', ').slice(0, 120)} timed out after 10 s`,
+            );
+        });
+
+        it('never publishes more than 120 characters of an address', () => {
+            const { friendlyMessage } = classifyLLMError(
+                wrap(socket('connect', 'a'.repeat(300))),
+            );
+            expect(friendlyMessage).toContain(`${'a'.repeat(120)} timed out`);
+            expect(friendlyMessage).not.toContain('a'.repeat(121));
+        });
+    });
+
+    // What the shared gate must keep doing. These pass before and after the fix.
+    describe('impact: what must not change', () => {
+        // The provider answered the connection; the model is slow. Trying the
+        // fallback would spend another call's budget.
+        it.each([
+            ['Headers Timeout Error', 'UND_ERR_HEADERS_TIMEOUT'],
+            ['Body Timeout Error', 'UND_ERR_BODY_TIMEOUT'],
+        ])('a %s stays out of the cascade', (message, code) => {
+            expect(
+                shouldFailoverToNextModel(cannotConnect(message, code)),
+            ).toBe(false);
+        });
+
+        it('an ETIMEDOUT on an open socket (a read) stays out of the cascade', () => {
+            const read = Object.assign(new Error('read ETIMEDOUT'), {
+                code: 'ETIMEDOUT',
+                syscall: 'read',
+            });
+            expect(shouldFailoverToNextModel(read)).toBe(false);
+        });
+
+        it('our own hard timeout stays out of the cascade', () => {
             expect(
                 shouldFailoverToNextModel(
-                    cannotConnect(
-                        'connect ETIMEDOUT 10.0.0.9:443',
-                        'ETIMEDOUT',
-                    ),
+                    new Error('[HARD-TIMEOUT] generalist exceeded 900000ms'),
                 ),
             ).toBe(false);
         });
