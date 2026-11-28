@@ -61,6 +61,8 @@ interface AstGraphBuildJobPayload {
     organizationAndTeamData: OrganizationAndTeamData;
 }
 
+const GIT_SHA = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
+
 @Injectable()
 export class AstGraphBuildJobProcessor implements IJobProcessorService {
     private readonly logger = createLogger(AstGraphBuildJobProcessor.name);
@@ -444,7 +446,9 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             payload: {
                 repositoryId: payload.repositoryId,
                 changedFiles: [],
-                newSha: mergedDuringBuild || undefined,
+                newSha: GIT_SHA.test(mergedDuringBuild)
+                    ? mergedDuringBuild
+                    : undefined,
                 cloneUrl: '',
                 defaultBranch: payload.defaultBranch,
                 fullName: payload.fullName,
@@ -479,8 +483,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         signal?: AbortSignal,
     ): Promise<boolean> {
         if (merge === headSha) return true;
-        // '' means the merge SHA is unknown: only a catch-up is safe.
-        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(merge)) return false;
+        // 'unknown:<uuid>' means the merge SHA is unknown: only a catch-up is safe.
+        if (!GIT_SHA.test(merge)) return false;
         // Exit 0 only when the merge is in the built history. A merge newer
         // than the clone is absent, so it gets the catch-up.
         const result = await sandbox.run(

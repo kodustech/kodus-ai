@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AST_GRAPH_BUILD_TIMEOUT_MS } from '@libs/code-review/domain/graph-job-attempt';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -130,8 +131,10 @@ export class RepositoryRepository implements IRepositoryRepository {
     ): Promise<boolean> {
         // Conditional on BUILDING so a build that just published sends the
         // caller back to the normal incremental path. Webhooks can arrive out
-        // of order, so two different merges become '' (unknown), which always
-        // gets a catch-up instead of trusting whichever landed last.
+        // of order, so two different merges, or one without a SHA, become a
+        // fresh 'unknown:<uuid>' that always gets a catch-up instead of
+        // trusting whichever landed last. Each unknown is unique, so a build
+        // clearing the one it settled cannot clear a later one.
         // A full build holds this row locked while it writes its rows, which on
         // a large graph outlasts the statement timeout. Wait in short attempts
         // that give the connection back between them, for as long as the
@@ -153,13 +156,16 @@ export class RepositoryRepository implements IRepositoryRepository {
                         .update()
                         .set({
                             astGraphMergedDuringBuild: () =>
-                                `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE '' END`,
+                                `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE 'unknown:' || gen_random_uuid() END`,
                         })
                         .where(
                             'uuid = :uuid AND ast_graph_status = :building',
                             { uuid, building: AstGraphStatus.BUILDING },
                         )
-                        .setParameter('sha', mergeSha ?? '')
+                        .setParameter(
+                            'sha',
+                            mergeSha ?? `unknown:${randomUUID()}`,
+                        )
                         .execute();
                     return !!result.affected;
                 });

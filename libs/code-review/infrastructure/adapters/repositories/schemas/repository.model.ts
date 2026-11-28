@@ -47,7 +47,8 @@ export class RepositoryModel extends CoreModel {
 
     /**
      * Head of the latest merge that arrived while a full build ran. The build
-     * consumes it when it publishes; '' means the merge SHA was unknown.
+     * consumes it when it publishes; 'unknown:<uuid>' means the merge SHA
+     * was unknown or several merges arrived.
      */
     @Column({
         type: 'text',
