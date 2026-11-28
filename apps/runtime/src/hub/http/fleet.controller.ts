@@ -11,13 +11,13 @@ const MintBody = z.strictObject({
     hostId: HostId,
     poolId: z.string().min(1).max(160),
     /**
-     * A perRun host's Run (run:<organizationId>/<runId>), a template's setup host (template:<organizationId>/<environmentId>),
+     * A perRun host's Run (run:<organizationId>/<runId>, or run:<organizationId>/<runId>/<base|pr> for one side of a pair that does not fit one host), a template's setup host (template:<organizationId>/<environmentId>),
      * one setup of an environment (setup:<organizationId>/<hash of the setup key>) or one shard of a suite run
      * (suite:<organizationId>/<suiteRunId>/<shard>).
      */
     boundKey: z
         .string()
-        .regex(/^(?:(?:run|template|setup):[^/\s]{1,128}\/[^/\s]{1,128}|suite:[^/\s]{1,128}\/[^/\s]{1,128}\/\d{1,3})$/)
+        .regex(/^(?:(?:run|template|setup):[^/\s]{1,128}\/[^/\s]{1,128}|run:[^/\s]{1,128}\/[^/\s]{1,128}\/(?:base|pr)|suite:[^/\s]{1,128}\/[^/\s]{1,128}\/\d{1,3})$/)
         .nullable(),
     ttlSeconds: z.number().int().min(60).max(3600),
 });

@@ -30,6 +30,16 @@ describe('the hub fleet routes', () => {
     };
     const body = { hostId: 'host-1', poolId: 'boat-eu-perrun', boundKey: 'run:org-a/r-1', ttlSeconds: 600 };
 
+    // Behavior: a Run whose pair does not fit one host gets a token per side (run:<org>/<run>/<base|pr>); any other third segment is refused.
+    it('mints a token bound to one side of a Run (run:<org>/<run>/<base|pr>) and refuses another side name', async () => {
+        const { controller, tokens } = setup();
+        await controller.mint({}, { ...body, hostId: 'side-1', boundKey: 'run:org-a/r-1/base' });
+        await controller.mint({}, { ...body, hostId: 'side-2', boundKey: 'run:org-a/r-1/pr' });
+        const keys = [...(tokens.records?.values?.() ?? [])].map((x: any) => x.boundKey);
+        expect(keys).toEqual(expect.arrayContaining(['run:org-a/r-1/base', 'run:org-a/r-1/pr']));
+        expect(await status(controller.mint({}, { ...body, hostId: 'side-3', boundKey: 'run:org-a/r-1/main' }))).toBe(400);
+    });
+
     it("mints a token bound to a template's environment (template:<org>/<env>) and refuses other shapes", async () => {
         const { controller, tokens } = setup();
         const r = await controller.mint({}, { ...body, hostId: 'tpl-1', boundKey: 'template:org-a/env-1' });

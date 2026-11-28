@@ -536,3 +536,28 @@ func TestBakeAdoptOrgNeedsAFleetHostAndAHubGivenKey(t *testing.T) {
 		t.Fatalf("no key file adopted for %q", got)
 	}
 }
+
+// A Run whose two sides do not fit one host binds each side's host to run:<org>/<run>/<base|pr>: the cell reads the org
+// from it like any fleet key, and another side name is no key.
+func TestFleetBoundKeyAcceptsOneSideOfARun(t *testing.T) {
+	dir := t.TempDir()
+	cert := filepath.Join(dir, "cert.pem")
+	unit := filepath.Join(dir, "kodus-cell-seal.service")
+	if err := os.WriteFile(unit, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{
+		"run:org-1/run-9/base\n": "org-1",
+		"run:org-1/run-9/pr\n":   "org-1",
+		"run:org-1/run-9/main\n": "",
+		"run:org-1/run-9/pr/x\n": "",
+		"suite:org-3/sr-1/2\n":   "org-3",
+	} {
+		if err := os.WriteFile(boundKeyFile(cert), []byte(key), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := bakeAdoptOrg(unit, cert, "kodus"); got != want {
+			t.Fatalf("key %q: org %q, want %q", key, got, want)
+		}
+	}
+}
