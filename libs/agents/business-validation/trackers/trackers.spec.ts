@@ -656,6 +656,46 @@ describe('GitIssuesTracker: the parent and sub-issues GitHub links', () => {
         const task = await found('#20');
         expect(task.parent).toEqual({ id: 'acme/specs#3', title: undefined });
     });
+
+    // A re-check reads the task back by its URL (#1941 QA): a second id for
+    // the same issue made the run "change" and dropped what was accepted.
+    it.each([
+        '#12',
+        'acme/web#12',
+        'Acme/Web#12',
+        'https://github.com/acme/web/issues/12',
+    ])(
+        "gives an issue of the PR's own repository one id, named as %s",
+        async (text) => {
+            const read = await git().read(ref(text), context);
+            expect(read).toMatchObject({
+                status: 'found',
+                task: { id: '#12' },
+            });
+        },
+    );
+
+    it('keeps the repository in the id of an issue from another one', async () => {
+        for (const text of [
+            'acme/specs#12',
+            'https://github.com/acme/specs/issues/12',
+        ]) {
+            const read = await git().read(ref(text), context);
+            expect(read).toMatchObject({
+                status: 'found',
+                task: { id: 'acme/specs#12' },
+            });
+        }
+        // No PR repository to compare with (a CLI run named the issue).
+        const { repository: _none, ...withoutPr } = context;
+        await expect(
+            git().read(ref('acme/web#12'), withoutPr),
+        ).resolves.toMatchObject({
+            status: 'found',
+            task: { id: 'acme/web#12' },
+        });
+    });
+
     it("reads a number the team's pattern captured only when Git Issues is the chosen source (#2018)", () => {
         const [fromPattern] = extractTaskReferences(
             { branch: 'nina/T1234-gift-cards' },

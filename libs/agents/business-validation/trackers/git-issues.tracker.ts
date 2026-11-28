@@ -92,10 +92,13 @@ export class GitIssuesTracker extends McpTaskTracker {
             status: 'found',
             task: {
                 tracker: this.name,
-                id:
-                    reference.kind === 'git_issue' && reference.repository
-                        ? `${repository.owner}/${repository.name}#${reference.id}`
-                        : `#${reference.id}`,
+                // One id per issue, however the PR names it: a re-check reads
+                // the task back by its URL, and `acme/web#12` there next to
+                // `#12` in the run before was another task to the run's
+                // comparison and to what a reviewer accepted (#1941).
+                id: isSameRepository(repository, context.repository)
+                    ? `#${reference.id}`
+                    : `${repository.owner}/${repository.name}#${reference.id}`,
                 title:
                     typeof issue.title === 'string' ? issue.title : undefined,
                 description:
@@ -105,6 +108,18 @@ export class GitIssuesTracker extends McpTaskTracker {
             },
         };
     }
+}
+
+/** Hosts compare owners and names without case: `Acme/Web` is `acme/web`. */
+function isSameRepository(
+    a: { owner?: string; name: string },
+    b: { owner?: string; name: string } | undefined,
+): boolean {
+    return (
+        !!b &&
+        `${a.owner}/${a.name}`.toLowerCase() ===
+            `${b.owner}/${b.name}`.toLowerCase()
+    );
 }
 
 /**
