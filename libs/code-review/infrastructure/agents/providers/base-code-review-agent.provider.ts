@@ -29,6 +29,7 @@ import {
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
+import { cappedByFallback } from '@libs/llm/slot-window';
 import {
     buildPathMismatchWarning,
     buildVerifyUnavailableWarning,
@@ -375,15 +376,24 @@ export abstract class BaseCodeReviewAgentProvider {
         // Looked up by the bare model id: the `provider:model` label misses the
         // mirror's exact and normalized keys.
         const windowModelId = mainModel.modelId ?? modelName;
-        const { tokens: contextWindow, source: contextWindowSource } =
-            resolveContextWindowWithSource({
-                byokMaxInputTokens: mainModel.maxInputTokens,
-                modelName: windowModelId,
-            });
+        const primaryWindow = resolveContextWindowWithSource({
+            byokMaxInputTokens: mainModel.maxInputTokens,
+            modelName: windowModelId,
+        });
+        // LLM.run re-sends a failed call to the fallback: the review and its
+        // verify must fit the smaller window too (#2233).
+        const contextWindow = cappedByFallback(
+            primaryWindow.tokens,
+            byokConfig,
+        );
+        const contextWindowSource =
+            contextWindow < primaryWindow.tokens
+                ? ('fallback' as const)
+                : primaryWindow.source;
         // The window is otherwise invisible: a model the mirror does not know
         // gets the 128k default with no error, and the review plans against it.
         this.agentLogger.log({
-            message: `[AGENT] ${identity.name} context window: ${contextWindow} tokens for ${modelName}`,
+            message: `[AGENT] ${identity.name} context window: ${contextWindow} tokens for ${modelName}${contextWindowSource === 'fallback' ? " (its fallback's, the smaller)" : ''}`,
             context: identity.name,
             metadata: {
                 organizationId: input.organizationAndTeamData?.organizationId,

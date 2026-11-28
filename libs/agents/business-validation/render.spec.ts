@@ -132,6 +132,54 @@ describe('renderComment', () => {
     });
 });
 
+// QA of #2681: the comment never said which files of the PR were not read.
+describe('files too large to read', () => {
+    it('names them, five at most', () => {
+        const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts'];
+        const body = renderComment({ ...outcome(), unseenFiles: files });
+        expect(body).toContain(
+            'Too large to read with the rest of this PR: `a.ts`, `b.ts`, `c.ts`, `d.ts`, `e.ts` and 2 more.',
+        );
+    });
+
+    it('names five without a count of more', () => {
+        const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'];
+        expect(renderComment({ ...outcome(), unseenFiles: files })).toContain(
+            '`e.ts`.</sub>\n\n<sub>Disagree',
+        );
+    });
+
+    it('says nothing when every file was read, or a run kept no list', () => {
+        for (const unseenFiles of [[], undefined as unknown as string[]]) {
+            const lines = renderComment({ ...outcome(), unseenFiles }).split(
+                '\n',
+            );
+            expect(lines.join('\n')).not.toContain('Too large to read');
+            // The task section, a blank line, then the footer.
+            expect(lines.at(-2)).toBe('');
+            expect(lines.at(-1)).toMatch(/^<sub>Disagree/);
+        }
+    });
+
+    it('quotes a real path that starts with a parenthesis', () => {
+        expect(
+            renderComment({
+                ...outcome(),
+                unseenFiles: ['(app)/settings/page.tsx'],
+            }),
+        ).toContain('this PR: `(app)/settings/page.tsx`.');
+    });
+
+    it('names the rest of a diff with no file headers as it is', () => {
+        expect(
+            renderComment({
+                ...outcome(),
+                unseenFiles: ['(rest of the diff)'],
+            }),
+        ).toContain('this PR: (rest of the diff).');
+    });
+});
+
 describe('the trail of earlier commits', () => {
     it('shows how the PR got here, with the commit this check read', () => {
         const comment = renderComment(outcome(), {

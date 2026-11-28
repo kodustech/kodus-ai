@@ -188,6 +188,59 @@ describe('ConversationAgentProvider (harness wiring)', () => {
         }
     });
 
+    // Review of #2793, round 2: on a small slot a question written above a
+    // pasted stack trace was dropped, the long PR description kept.
+    it('sends the developer question whole beside a PR description far over a small window', async () => {
+        const prompts: unknown[] = [];
+        modelRef.model = new MockLanguageModelV3({
+            doGenerate: async (options: any) => {
+                prompts.push(options.prompt);
+                return {
+                    content: [{ type: 'text', text: 'answered' }],
+                    finishReason: { unified: 'stop', raw: 'stop' },
+                    usage: {
+                        inputTokens: {
+                            total: 10,
+                            noCache: 10,
+                            cacheRead: 0,
+                            cacheWrite: 0,
+                        },
+                        outputTokens: { total: 5, text: 5, reasoning: 0 },
+                    },
+                    warnings: [],
+                } as any;
+            },
+        });
+        const { provider } = build({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            apiKey: '',
+            maxInputTokens: 12_000,
+        });
+        const question = 'Why does the second sibling pay full price?';
+        const trace = Array.from(
+            { length: 500 },
+            (_, i) => `    at fee.service.ts:${i + 10}:17`,
+        ).join('\n');
+
+        await provider.execute(`${question}\n\n${trace}`, {
+            ...ctx,
+            prepareContext: {
+                pullRequest: { pullRequestNumber: 37 },
+                repository: { id: 'r1', name: 'school' },
+                pullRequestDescription:
+                    'The fee applies a sibling discount. '.repeat(3_000),
+            },
+        });
+
+        expect(prompts.length).toBeGreaterThan(0);
+        const sent = JSON.stringify(prompts[0]);
+        expect(sent).toContain(question);
+        expect(
+            estimateTextTokens(sent, { worstCase: true }),
+        ).toBeLessThanOrEqual(12_000);
+    });
+
     it('falls back when the model produces no usable text', async () => {
         modelRef.model = makeModel('');
         const { provider } = build();

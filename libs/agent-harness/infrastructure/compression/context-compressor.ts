@@ -261,6 +261,24 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 /**
+ * Truncates a text to `maxChars` from its middle, keeping both ends. For the
+ * developer's own message: a prompt states its context first and its question
+ * last, and the head-only cut answered "I didn't get an actual question"
+ * (#2233 QA). Never splits a surrogate pair at either cut.
+ */
+export function truncateMiddle(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    let headEnd = Math.ceil(maxChars / 2);
+    let tailStart = text.length - Math.floor(maxChars / 2);
+    if (isHighSurrogate(text.charCodeAt(headEnd - 1))) headEnd--;
+    if (isLowSurrogate(text.charCodeAt(tailStart))) tailStart++;
+    return `${text.slice(0, headEnd)}…[truncated]…${text.slice(tailStart)}`;
+}
+
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
+/**
  * Truncates a structured tool-result payload while keeping it serializable.
  *
  * A tool-result's `output` is a discriminated object the provider switches on:
@@ -368,6 +386,7 @@ function truncateStructuredValue(
 function truncateToolMessage(
     msg: ModelMessage,
     maxChars: number,
+    cut: (text: string, maxChars: number) => string = truncateText,
 ): { msg: ModelMessage; truncated: boolean } {
     const content = msg.content;
     let truncated = false;
@@ -376,7 +395,7 @@ function truncateToolMessage(
         if (content.length > maxChars) {
             truncated = true;
             return {
-                msg: { ...msg, content: truncateText(content, maxChars) },
+                msg: { ...msg, content: cut(content, maxChars) },
                 truncated,
             };
         }
@@ -391,7 +410,7 @@ function truncateToolMessage(
             for (const field of ['text', 'output', 'result', 'content']) {
                 const v = next[field];
                 if (typeof v === 'string' && v.length > maxChars) {
-                    next[field] = truncateText(v, maxChars);
+                    next[field] = cut(v, maxChars);
                     truncated = true;
                 } else if (v && typeof v === 'object') {
                     // Structured output ({ type, value }) — shrink the inner text
@@ -575,30 +594,69 @@ function evictOldestRounds(
 }
 
 /**
- * Last-resort clamp: shrink every message's text content with a geometrically
- * decreasing cap until the window estimates under `budgetTokens`. Truncates
- * only text/output/result/content fields (never tool-call `input`/`args`), so
- * assistant tool-call parts stay structurally intact. Bounded iteration count —
- * returns the best effort if a pathological window can't be reduced further.
+ * Last-resort clamp: shrink every message's text content to a cap until the
+ * window estimates under `budgetTokens`. The cap starts at the longest
+ * message and shrinks in proportion to the overflow, so the room the budget
+ * leaves is used: from a fixed 500 characters, a 16k slot kept ~120 tokens of
+ * the developer's message beside 3,000 free and cut the question (#2233
+ * review). Truncates only text/output/result/content fields (never tool-call
+ * `input`/`args`), so assistant tool-call parts stay structurally intact. A
+ * user message keeps both ends, where a prompt puts its question; the rest
+ * keep their start. Bounded iteration count — returns the best effort if a
+ * pathological window can't be reduced further.
  */
 function hardTruncateToFit(
     messages: ModelMessage[],
     budgetTokens: number,
     counts?: MessageTokenCounts,
 ): ModelMessage[] {
-    let cap = HARD_CLAMP_MAX_CHARS_PER_RESULT;
+    let cap = Math.max(
+        HARD_CLAMP_MAX_CHARS_PER_RESULT,
+        ...messages.map((m) => contentChars(m.content)),
+    );
     let work = messages;
-    for (let i = 0; i < 12; i++) {
-        work = messages.map((m) => truncateToolMessage(m, cap).msg);
-        if (estimateMessagesTokens(work, counts) <= budgetTokens) {
+    for (let i = 0; i < HARD_CLAMP_STEPS; i++) {
+        work = messages.map(
+            (m) =>
+                truncateToolMessage(
+                    m,
+                    cap,
+                    m.role === 'user' ? truncateMiddle : truncateText,
+                ).msg,
+        );
+        const tokens = estimateMessagesTokens(work, counts);
+        if (tokens <= budgetTokens) {
             return work;
         }
-        if (cap <= 80) {
+        if (cap <= HARD_CLAMP_MIN_CHARS) {
             break;
         }
-        cap = Math.max(80, Math.floor(cap / 2));
+        // In proportion to the overflow, and at least a tenth each step.
+        cap = Math.max(
+            HARD_CLAMP_MIN_CHARS,
+            Math.min(
+                Math.floor(cap * 0.9),
+                Math.floor((cap * budgetTokens * 0.9) / tokens),
+            ),
+        );
     }
     return work;
+}
+
+/** The smallest cap the last-resort clamp cuts a text to. */
+const HARD_CLAMP_MIN_CHARS = 80;
+
+/** Steps before the clamp settles for its best effort. */
+const HARD_CLAMP_STEPS = 24;
+
+/** The characters of a message's content: an upper bound on any field. */
+function contentChars(content: ModelMessage['content']): number {
+    if (typeof content === 'string') return content.length;
+    try {
+        return JSON.stringify(content)?.length ?? 0;
+    } catch {
+        return 0;
+    }
 }
 
 /**

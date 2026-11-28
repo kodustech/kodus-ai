@@ -45,14 +45,36 @@ export interface DiffBudget {
     tokens?: number;
 }
 
+/** What `fitDiff` names as left out of a diff with no file headers. */
+export const REST_OF_THE_DIFF = '(rest of the diff)';
+
 const FILE_HEADER = /^(?:=== FILE: (.+?) ===|diff --git a\/\S+ b\/(\S+))$/gm;
 
 /**
+ * How late a file takes the diff budget: code first, then data and config,
+ * then what carries no business rule (fixtures, snapshots, assets, lockfiles,
+ * minified or generated files). In path order a 24k window spent itself on
+ * `fixtures/students.min.json` and left `src/enrollment/fee.service.ts`
+ * unread (#2233 QA).
+ */
+export function readingTier(file: string): 0 | 1 | 2 {
+    if (NO_BUSINESS_RULE.test(file)) return 2;
+    if (DATA_FILE.test(file)) return 1;
+    return 0;
+}
+
+const NO_BUSINESS_RULE =
+    /(?:^|\/)(?:fixtures?|__fixtures__|__snapshots__|__mocks__|testdata|test-data|vendor|dist|generated)\/|\.(?:min\.[a-z]+|map|snap|lock|svg|png|jpe?g|gif|ico|webp|bmp|pdf|woff2?|ttf|otf|eot|mp[34]|zip|gz)$|(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|composer\.lock|Gemfile\.lock|Cargo\.lock|poetry\.lock|go\.sum)$/i;
+
+const DATA_FILE = /\.(?:json|ya?ml|csv|tsv|xml|toml|txt|md)$/i;
+
+/**
  * The diff the judge can read whole, and the files it had to leave out. Files
- * are kept in order; one that doesn't fit is skipped so smaller ones after it
- * still get in. A requirement that may live in a skipped file becomes CHECK
- * MANUALLY instead of MISSING (UC-32). `cutByTokens`: the model's window, not
- * the character cap, kept something out.
+ * take the budget by `readingTier`, in order within a tier, and are shown in
+ * their order in the PR; one that doesn't fit is skipped so smaller ones
+ * after it still get in. A requirement that may live in a skipped file
+ * becomes CHECK MANUALLY instead of MISSING (UC-32). `cutByTokens`: the
+ * model's window, not the character cap, kept something out.
  */
 export function fitDiff(
     diff: string,
@@ -72,16 +94,20 @@ export function fitDiff(
         const cut = cutToTokens(byChars, tokens);
         return {
             diff: cut,
-            unseenFiles: ['(rest of the diff)'],
+            unseenFiles: [REST_OF_THE_DIFF],
             cutByTokens: cut !== byChars,
         };
     }
-    const kept: string[] = [];
+    const keptAt = new Set<number>();
     const unseenFiles: string[] = [];
     let used = 0;
     let usedTokens = 0;
     let cutByTokens = false;
-    for (const chunk of chunks) {
+    const byTier = chunks
+        .map((chunk, at) => ({ chunk, at, tier: readingTier(chunk.file) }))
+        // A stable sort: the PR's order stays within a tier.
+        .sort((a, b) => a.tier - b.tier);
+    for (const { chunk, at } of byTier) {
         // The character check first: it is free, and it keeps a huge file
         // from being tokenized only to be left out.
         // Nor is a file tokenized once the tokens are spent: on a small
@@ -93,7 +119,7 @@ export function fitDiff(
             !exceedsByPrefix(chunk.text, tokens - usedTokens);
         const count = room ? tokensOf(chunk.text) : 0;
         if (room && usedTokens + count <= tokens) {
-            kept.push(chunk.text);
+            keptAt.add(at);
             used += chunk.text.length;
             usedTokens += count;
         } else {
@@ -101,7 +127,17 @@ export function fitDiff(
             cutByTokens ||= withinChars;
         }
     }
-    return { diff: kept.join(''), unseenFiles, cutByTokens };
+    const order = new Map(chunks.map((chunk, at) => [chunk.file, at]));
+    return {
+        diff: chunks
+            .filter((_, at) => keptAt.has(at))
+            .map((chunk) => chunk.text)
+            .join(''),
+        unseenFiles: unseenFiles.sort(
+            (a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0),
+        ),
+        cutByTokens,
+    };
 }
 
 /**

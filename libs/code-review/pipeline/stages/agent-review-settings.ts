@@ -1,6 +1,7 @@
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { cappedByFallback } from '@libs/llm/slot-window';
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -41,10 +42,14 @@ export function resolveAgentReviewSettings(
     // Same model-name formatter the agent uses (provider:model), so
     // stage-emitted and agent-emitted warnings share a dedup key.
     const effectiveModelName = getModelName(effectiveSlot ?? undefined);
-    const effectiveContextWindow = resolveContextWindow({
-        byokMaxInputTokens: resolvedSlot?.maxInputTokens,
-        modelName: overrideModel || resolvedSlot?.model || '',
-    });
+    // Capped at the fallback's window, as the agent caps its own (#2233).
+    const effectiveContextWindow = cappedByFallback(
+        resolveContextWindow({
+            byokMaxInputTokens: resolvedSlot?.maxInputTokens,
+            modelName: overrideModel || resolvedSlot?.model || '',
+        }),
+        resolvedSlot ?? undefined,
+    );
     const adaptiveProfile = resolveAdaptiveProfile(effectiveContextWindow);
 
     return {

@@ -1,8 +1,14 @@
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
 import {
     buildContextBlock,
     buildSystemPrompt,
     buildUserPrompt,
+    DESCRIPTION_LEFT_OUT,
+    fitConversationPrompt,
+    fitUserPrompt,
     type ConversationThreadContext,
+    type UserPromptInput,
 } from './conversation-prompt';
 
 const ORG = { organizationId: 'org-1', teamId: 'team-1' };
@@ -256,3 +262,132 @@ describe('buildUserPrompt', () => {
         expect(userPrompt({ hasSandbox: true })).toContain('grep / readFile');
     });
 });
+
+// Review of #2793, round 3: cut from its middle, the context kept the start of
+// a long PR description and lost the Kody suggestion under discussion (its
+// text, hunk and suggestionId), which no tool can read again, and the
+// identifiers after it.
+describe('a reply under a Kody suggestion on a small slot', () => {
+    const question = 'Is this really a bug? The sibling count starts at 1.';
+    const reply = (descriptionLines: number): UserPromptInput => ({
+        prompt: question,
+        userLanguage: 'en-US',
+        prepareContext: {
+            pullRequest: {
+                pullRequestNumber: 37,
+                headRef: 'feat',
+                baseRef: 'main',
+            },
+            repository: { id: 'r1', name: 'school' },
+            platformType: 'GITHUB',
+            pullRequestDescription: Array.from(
+                { length: descriptionLines },
+                (_, i) =>
+                    `- Step ${i + 1}: the enrollment fee service reads the sibling table, applies the discount and rounds the total to two decimals.`,
+            ).join('\n'),
+            codeManagementContext: {
+                originalComment: {
+                    suggestionCommentId: 9001,
+                    suggestionFilePath: 'src/enrollment/discount-lookup.ts',
+                    suggestionText:
+                        'The discount is applied twice when a family has two siblings.',
+                    diffHunk:
+                        '@@ -10,2 +10,2 @@\n-return fee;\n+return fee - fee * 0.1;',
+                    suggestionId: 'sugg-7f3a',
+                },
+            },
+        },
+        organizationAndTeamData: { organizationId: 'o1', teamId: 't1' },
+        availableTools: ['KODUS_FIND_MEMORIES', 'KODUS_CREATE_KODY_RULE'],
+        toolMetadata: {
+            KODUS_CREATE_KODY_RULE: {
+                proactiveHint:
+                    'the developer states a convention the team should follow on every PR',
+            },
+        } as never,
+        hasSandbox: true,
+    });
+    const budget = 1_300;
+
+    it('cuts the PR description and keeps the suggestion, the identifiers and the question', () => {
+        const input = reply(40);
+        const whole = buildUserPrompt(input);
+        expect(estimateTokens(whole)).toBeGreaterThan(budget);
+        const fitted = fitConversationPrompt(input, budget);
+        expect(estimateTokens(fitted)).toBeLessThanOrEqual(budget);
+        expect(fitted).toContain('suggestionId: sugg-7f3a');
+        expect(fitted).toContain('The discount is applied twice');
+        expect(fitted).toContain('- originalKodyCommentId: 9001');
+        expect(fitted.endsWith(`USER MESSAGE:\n${question}`)).toBe(true);
+        expect(fitted).toContain('- Step 1:');
+        expect(fitted).toContain('…[truncated]…');
+    });
+
+    it('is what the cut of the whole context lost', () => {
+        const fitted = fitUserPrompt(buildUserPrompt(reply(40)), budget);
+        expect(fitted).not.toContain('suggestionId: sugg-7f3a');
+    });
+
+    it('leaves the description out, and only then cuts the rest', () => {
+        const input = reply(40);
+        const noDescription = buildUserPrompt({
+            ...input,
+            prepareContext: {
+                ...input.prepareContext,
+                pullRequestDescription: DESCRIPTION_LEFT_OUT,
+            },
+        });
+        const tight = estimateTokens(noDescription);
+        expect(fitConversationPrompt(input, tight)).toBe(noDescription);
+        expect(fitConversationPrompt(input, tight - 1)).toBe(
+            fitUserPrompt(noDescription, tight - 1),
+        );
+    });
+
+    it('sends what the whole cut sends when no description fits at all', () => {
+        const input = reply(40);
+        const noDescription = buildUserPrompt({
+            ...input,
+            prepareContext: {
+                ...input.prepareContext,
+                pullRequestDescription: DESCRIPTION_LEFT_OUT,
+            },
+        });
+        expect(fitConversationPrompt(input, 10)).toBe(
+            fitUserPrompt(noDescription, 10),
+        );
+    });
+
+    it('cuts the rest as before on a PR with no description', () => {
+        const input = reply(40);
+        const noDescription: UserPromptInput = {
+            ...input,
+            prepareContext: {
+                ...input.prepareContext,
+                pullRequestDescription: undefined,
+            },
+        };
+        const whole = buildUserPrompt(noDescription);
+        expect(fitConversationPrompt(noDescription, 400)).toBe(
+            fitUserPrompt(whole, 400),
+        );
+        expect(fitConversationPrompt(noDescription, 400)).not.toBe(whole);
+        const noThread = { ...input, prepareContext: undefined };
+        expect(fitConversationPrompt(noThread, 200)).toBe(
+            fitUserPrompt(buildUserPrompt(noThread), 200),
+        );
+    });
+
+    it('leaves a prompt that fits as it is', () => {
+        const input = reply(2);
+        const whole = buildUserPrompt(input);
+        expect(fitConversationPrompt(input, estimateTokens(whole))).toBe(whole);
+    });
+});
+
+/** Counted as `fitUserPrompt` counts: the serialized message, at its worst. */
+function estimateTokens(text: string): number {
+    return estimateTextTokens(JSON.stringify({ role: 'user', content: text }), {
+        worstCase: true,
+    });
+}

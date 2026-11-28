@@ -27,6 +27,7 @@ const REASONS: Record<string, string> = {
     tracker_unavailable: "tracker didn't answer",
     no_capable_tracker: "no connected tracker reads the reference",
     task_too_thin: "task too thin to check",
+    too_large_for_model: "pull request too large for the model",
 };
 
 /**

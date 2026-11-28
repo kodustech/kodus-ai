@@ -549,6 +549,40 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         });
     });
 
+    // QA of #2681: `local/qwen-coder`, no maxInputTokens, six generated
+    // files: one 274,140-token summary request. The review sized the same PR
+    // to the 128,000 window it resolves for a model the table doesn't know.
+    describe('a model the table does not know, without maxInputTokens', () => {
+        it('chunks to the window the review resolves for it', async () => {
+            const promptSpy = jest.spyOn(service as any, 'runSummaryPromptV5');
+            const files = ['a', 'b', 'c'].map((name) =>
+                makeFile(`${name}.generated.ts`, 60_000),
+            );
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue({
+                provider: 'openai',
+                model: 'local/qwen-coder',
+            });
+
+            await service.generateSummaryPR(
+                mockPullRequest,
+                mockRepository,
+                files,
+                mockOrganizationAndTeamData as any,
+                'en-US',
+                defaultSummaryConfig as any,
+            );
+
+            const prompts = promptSpy.mock.calls.map(([p]: any) => p);
+            expect(prompts.length).toBeGreaterThan(1);
+            for (const prompt of prompts) {
+                expect(
+                    estimateTokens(prompt.systemPrompt) +
+                        estimateTokens(prompt.userPrompt),
+                ).toBeLessThanOrEqual(128_000);
+            }
+        });
+    });
+
     describe('with maxInputTokens, files fit in budget', () => {
         it('should make a single LLM call', async () => {
             const files = [makeFile('a.ts', 50)];

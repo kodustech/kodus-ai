@@ -56,10 +56,14 @@ import {
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
 import { DecisionLoopPolicy } from './decision-loop.policy';
-import { conversationCompression } from './conversation-window';
+import {
+    conversationAnswerTokens,
+    conversationMessageBudget,
+    conversationCompression,
+} from './conversation-window';
 import {
     buildSystemPrompt,
-    buildUserPrompt,
+    fitConversationPrompt,
     type ConversationThreadContext,
 } from './conversation-prompt';
 import {
@@ -75,6 +79,10 @@ import {
  * exploration, bounded so a stuck loop can't run away.
  */
 const CONVERSATION_MAX_STEPS = 12;
+
+/** Of the message budget, what the first prompt may take: the rest is for
+ *  the tool results of the steps after it. */
+const PROMPT_SHARE_OF_BUDGET = 0.75;
 
 /**
  * How many prior messages of the thread travel back into the prompt. Enough to
@@ -109,14 +117,6 @@ interface ConversationThread {
 @Injectable()
 export class ConversationAgentProvider {
     private readonly logger = createLogger(ConversationAgentProvider.name);
-
-    /**
-     * Task-level max-output fallback: LLM.run applies it only when the BYOK slot
-     * leaves `maxOutputTokens` unset (`slot ?? this`). Temperature is deliberately
-     * NOT set here — the slot owns it, and LLM.run withholds it for providers that
-     * reject a fixed value (e.g. Anthropic 4.7+, kimi-k2.7-code).
-     */
-    private readonly maxOutputTokensFallback = 20000;
 
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -249,6 +249,7 @@ export class ConversationAgentProvider {
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
         // reasoning from the slot and records the cost span; the spec carries only
         // the harness concerns + the cost labels. maxSteps applies the ReAct bound.
+        const answerTokens = conversationAnswerTokens(slot);
         const runner = new AiSdkAgentRunner(slot, {
             organizationId: organizationAndTeamData.organizationId?.toString(),
             reporter: this.byokErrorCounter
@@ -257,6 +258,13 @@ export class ConversationAgentProvider {
         });
         const systemPrompt = buildSystemPrompt(userLanguage);
         const registry = new AiSdkToolRegistry(tools);
+        const windowParams = {
+            slot,
+            systemPrompt,
+            // With their input schemas: what the provider is sent.
+            tools: registry.definitions(),
+            answerTokens,
+        };
         const spec: AgentSpec = {
             id: 'conversation',
             agentName: 'ConversationalAgent',
@@ -274,16 +282,15 @@ export class ConversationAgentProvider {
                 new DecisionLoopPolicy(),
                 // A PR diff a tool read is re-sent on every step: without
                 // this, one large PR overflowed the model's window (#2233).
-                await conversationCompression({
-                    slot,
-                    systemPrompt,
-                    tools: registry.list(),
-                    answerTokens: this.maxOutputTokensFallback,
-                }),
+                await conversationCompression(windowParams),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,
-            // Conversation keeps its own max-output default when the slot omits one.
-            maxOutputTokens: this.maxOutputTokensFallback,
+            // Conversation keeps its own max-output default, sized to the
+            // slot's window (#2233): LLM.run applies it only when the slot
+            // leaves `maxOutputTokens` unset. Temperature is deliberately not
+            // set: the slot owns it, and LLM.run withholds it for providers
+            // that reject a fixed value (e.g. Anthropic 4.7+, kimi-k2.7-code).
+            maxOutputTokens: answerTokens,
         };
 
         // Standard run context: signal + hard timeout, same guarantee as the
@@ -298,16 +305,26 @@ export class ConversationAgentProvider {
             // Replay it — otherwise a bare "yes, do it" resolves to nothing.
             const seedMessages = await this.loadThreadHistory(thread);
 
-            const preparedPrompt = buildUserPrompt({
-                prompt,
-                userLanguage,
-                prepareContext,
-                organizationAndTeamData,
-                availableTools: Object.keys(tools),
-                toolMetadata: mcp.metadata,
-                hasSandbox: Boolean(openSandbox),
-                priorTurns: seedMessages,
-            });
+            // The developer's message goes whole; the context around it
+            // takes the cut, the PR description first. A quarter of the
+            // budget stays for what the tools read in later steps (#2793
+            // review).
+            const preparedPrompt = fitConversationPrompt(
+                {
+                    prompt,
+                    userLanguage,
+                    prepareContext,
+                    organizationAndTeamData,
+                    availableTools: Object.keys(tools),
+                    toolMetadata: mcp.metadata,
+                    hasSandbox: Boolean(openSandbox),
+                    priorTurns: seedMessages,
+                },
+                Math.floor(
+                    (await conversationMessageBudget(windowParams)) *
+                        PROMPT_SHARE_OF_BUDGET,
+                ),
+            );
 
             // withLangfuseTrace -> TRACE level (session/user): a thread is a
             // session, so every turn of the same conversation reads as one unit.
@@ -402,6 +419,7 @@ export class ConversationAgentProvider {
                     userLanguage,
                     prompt,
                     ctx,
+                    answerTokens,
                 );
             }
 
@@ -458,6 +476,7 @@ export class ConversationAgentProvider {
         userLanguage: string,
         prompt: string,
         ctx: ToolContext,
+        answerTokens: number,
     ): Promise<string | null> {
         try {
             const spec: AgentSpec = {
@@ -470,7 +489,7 @@ export class ConversationAgentProvider {
                 tools: new AiSdkToolRegistry({}),
                 policies: [],
                 maxSteps: 1,
-                maxOutputTokens: this.maxOutputTokensFallback,
+                maxOutputTokens: answerTokens,
             };
 
             const state = await runner.run(

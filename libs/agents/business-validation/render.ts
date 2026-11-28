@@ -1,4 +1,4 @@
-import { sliceWhole } from './pull-request-diff';
+import { REST_OF_THE_DIFF, sliceWhole } from './pull-request-diff';
 import type {
     BusinessValidationOutcome,
     TaskCheck,
@@ -73,9 +73,36 @@ export function renderComment(
         '',
         sections.join('\n\n---\n\n'),
         '',
+        ...unreadLine(outcome.unseenFiles),
         ...historyLine(context.history),
         `<sub>Disagree with a line? Reply here and mention @kody. Fixed it? Comment \`${RERUN_COMMAND}\` and this comment is updated.</sub>`,
     ].join('\n');
+}
+
+/** Most files the comment names as not read; the rest are counted. */
+const MAX_UNREAD_NAMED = 5;
+
+/**
+ * The files of this PR the judge could not read with the rest. The comment
+ * said nothing of them, and a requirement found in one later read as code
+ * outside the PR (#2233 QA).
+ */
+function unreadLine(unseenFiles: string[] | undefined): string[] {
+    const files = unseenFiles ?? [];
+    if (!files.length) {
+        return [];
+    }
+    const named = files
+        .slice(0, MAX_UNREAD_NAMED)
+        .map((file) => (file === REST_OF_THE_DIFF ? file : `\`${file}\``));
+    const more =
+        files.length > MAX_UNREAD_NAMED
+            ? ` and ${files.length - MAX_UNREAD_NAMED} more`
+            : '';
+    return [
+        `<sub>Too large to read with the rest of this PR: ${named.join(', ')}${more}.</sub>`,
+        '',
+    ];
 }
 
 function historyLine(history: CheckedCommit[] | undefined): string[] {

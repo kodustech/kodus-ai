@@ -294,6 +294,55 @@ describe('BusinessValidationService · a MISSING the repository refutes', () => 
         expect(result.status).not.toBe('issues_found');
     });
 
+    // QA of #2681: the judge left `fee.service.ts` out on a 24k window, the
+    // second look found the requirement there, and the comment said
+    // "already in the code, outside this PR's diff". The file is the PR's.
+    it('does not call code outside the diff when it is in a file of this PR the judge left out', async () => {
+        const result = await (
+            new Service({
+                state: 'met',
+                evidence: [{ file: 'src/enrollment/fee.service.ts', line: 19 }],
+                note: 'Starts from the base fee.',
+            }) as any
+        ).checkGaps(
+            {
+                door: 'auto',
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repositoryReader: reader,
+            },
+            verdict,
+            'task',
+            '=== FILE: fixtures/students.min.json ===\nStatus: added\n\n+[]',
+            'en-US',
+            async () => ({ modelSlot: undefined }),
+            ['src/enrollment/fee.service.ts'],
+        );
+        expect(result.requirements[0].state).toBe('met');
+        expect(result.requirements[0].foundOutsideDiff).toBeUndefined();
+    });
+
+    it('does not call code outside the diff when it is in a file the judge read', async () => {
+        const result = await (
+            new Service({
+                state: 'met',
+                evidence: [{ file: 'src/filter.ts', line: 3 }],
+                note: 'x',
+            }) as any
+        ).checkGaps(
+            {
+                door: 'auto',
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repositoryReader: reader,
+            },
+            verdict,
+            'task',
+            '=== FILE: src/filter.ts ===\nStatus: modified\n\n+x',
+            'en-US',
+            async () => ({ modelSlot: undefined }),
+        );
+        expect(result.requirements[0].foundOutsideDiff).toBeUndefined();
+    });
+
     it('keeps it MISSING when nothing is found, or there is no repository to read', async () => {
         expect(
             (await check(new Service(undefined), reader)).requirements[0].state,

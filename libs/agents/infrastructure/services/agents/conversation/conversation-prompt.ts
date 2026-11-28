@@ -5,7 +5,9 @@
  * agent's whole behavior contract — can be asserted directly instead of through
  * a mocked model.
  */
+import { truncateMiddle } from '@libs/agent-harness/infrastructure/compression/context-compressor';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 import type { McpToolMetadata } from '../../ai-sdk/mcp-tools';
 import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
@@ -164,6 +166,108 @@ export function buildUserPrompt(input: UserPromptInput): string {
     );
 
     return sections.join('\n');
+}
+
+/** Where the developer's own message starts in `buildUserPrompt`. */
+const USER_MESSAGE_MARKER = '\nUSER MESSAGE:\n';
+
+/**
+ * The prompt within `budgetTokens`, the developer's message kept whole when it
+ * can be: what comes before it (the PR description, the thread, the
+ * instructions) is cut from its middle instead. Left to the last-resort
+ * clamp, the cut fell wherever the message was long: a question written
+ * above a pasted stack trace was dropped on a 16k slot (#2793 review). A
+ * message that cannot go whole keeps both its ends, where a question and the
+ * end of a paste are, beside a quarter of the budget for the context.
+ */
+export function fitUserPrompt(prompt: string, budgetTokens: number): string {
+    const at = prompt.lastIndexOf(USER_MESSAGE_MARKER);
+    if (at < 0 || promptTokens(prompt) <= budgetTokens) return prompt;
+    const head = prompt.slice(0, at);
+    const message = prompt.slice(at + USER_MESSAGE_MARKER.length);
+    const marker = promptTokens(USER_MESSAGE_MARKER);
+    const minHead = Math.floor(budgetTokens * CONTEXT_SHARE_WHEN_CUT);
+    const headRoom = budgetTokens - marker - promptTokens(message);
+    if (headRoom >= minHead) {
+        const cut = cutToTokens(head, headRoom);
+        return cut === undefined ? prompt : cut + USER_MESSAGE_MARKER + message;
+    }
+    const cutHead = cutToTokens(head, minHead);
+    const cutMessage = cutToTokens(message, budgetTokens - marker - minHead);
+    return cutHead === undefined || cutMessage === undefined
+        ? prompt
+        : cutHead + USER_MESSAGE_MARKER + cutMessage;
+}
+
+/**
+ * The prompt for `input` within `budgetTokens`, cut in order of what the agent
+ * can spare. The PR description goes first: it is the longest part and the
+ * least about this reply. Cut from the middle with the rest of the context,
+ * a long description kept its start while the Kody suggestion under
+ * discussion, which no tool can read again, and the identifiers were lost
+ * (#2793 review). Only with the description left out is the rest cut, by
+ * `fitUserPrompt`.
+ */
+export function fitConversationPrompt(
+    input: UserPromptInput,
+    budgetTokens: number,
+): string {
+    const description = input.prepareContext?.pullRequestDescription;
+    if (!description) return fitUserPrompt(buildUserPrompt(input), budgetTokens);
+    const withDescription = (pullRequestDescription: string) =>
+        buildUserPrompt({
+            ...input,
+            prepareContext: { ...input.prepareContext, pullRequestDescription },
+        });
+    // Each cut is smaller than the last, so this ends.
+    let kept = String(description);
+    let prompt = withDescription(kept);
+    while (promptTokens(prompt) > budgetTokens) {
+        const over = promptTokens(prompt) - budgetTokens;
+        const cut = cutToTokens(kept, promptTokens(kept) - over);
+        if (cut === undefined || cut.length < DESCRIPTION_MIN_CHARS) {
+            return fitUserPrompt(
+                withDescription(DESCRIPTION_LEFT_OUT),
+                budgetTokens,
+            );
+        }
+        kept = cut;
+        prompt = withDescription(kept);
+    }
+    return prompt;
+}
+
+/** Less of the description than this says nothing, and is left out. */
+const DESCRIPTION_MIN_CHARS = 200;
+
+/** Where the PR description was, when none of it fits. */
+export const DESCRIPTION_LEFT_OUT =
+    "(The PR description is left out: it does not fit this model's window.)";
+
+/** What the context keeps when the message itself must be cut. */
+const CONTEXT_SHARE_WHEN_CUT = 0.25;
+
+/** The text cut from its middle until it is within `tokens`. */
+function cutToTokens(text: string, tokens: number): string | undefined {
+    if (tokens <= 0) return undefined;
+    let cap = text.length;
+    for (let i = 0; i < 16 && cap > 0; i++) {
+        const cut = truncateMiddle(text, cap);
+        const count = promptTokens(cut);
+        if (count <= tokens) return cut;
+        cap = Math.min(
+            Math.floor(cap * 0.9),
+            Math.floor((cap * tokens * 0.9) / count),
+        );
+    }
+    return undefined;
+}
+
+/** Counted as the compressor counts the message: serialized, at its worst. */
+function promptTokens(text: string): number {
+    return estimateTextTokens(JSON.stringify({ role: 'user', content: text }), {
+        worstCase: true,
+    });
 }
 
 /**

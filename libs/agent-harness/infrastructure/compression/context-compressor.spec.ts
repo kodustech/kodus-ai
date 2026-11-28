@@ -13,6 +13,7 @@ import {
     clampMessagesToBudget,
     compressMessages,
     estimateMessagesTokens,
+    truncateMiddle,
     type ModelMessage,
 } from './context-compressor';
 
@@ -118,6 +119,67 @@ describe('clampMessagesToBudget', () => {
         const clamped = clampMessagesToBudget(msgs, budget);
         expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
         expect(hasOrphanToolResult(clamped)).toBe(false);
+    });
+
+    // QA of #2681: the chat prompt states the PR first and the developer's
+    // question last; the last-resort cut kept the start and the model
+    // answered "I didn't get an actual question".
+    it("keeps the end of the developer's message, where the question is", () => {
+        const question = 'Question: why does applyDiscount run twice?';
+        const msgs: ModelMessage[] = [
+            {
+                role: 'user',
+                content: `PR context:\n${'lorem ipsum dolor '.repeat(2_000)}\n${question}`,
+            },
+        ];
+        const clamped = clampMessagesToBudget(msgs, 300);
+        expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(300);
+        expect(String(clamped[0].content)).toContain(question);
+        expect(String(clamped[0].content)).toContain('PR context');
+    });
+
+    // Review of #2793: the cut started at 500 characters whatever the room,
+    // so a 16k slot kept ~120 tokens of the message beside 3,000 free, and a
+    // question longer than the tail lost its start.
+    it('uses the room the budget leaves, so a long question survives whole', () => {
+        const question = `Question: ${'why does the discount apply twice when a sibling enrolls? '.repeat(12)}`;
+        const msgs: ModelMessage[] = [
+            {
+                role: 'user',
+                content: `PR description:\n${'lorem ipsum dolor sit amet '.repeat(3_000)}\n${question}`,
+            },
+        ];
+        const budget = 3_000;
+        const clamped = clampMessagesToBudget(msgs, budget);
+        const tokens = estimateMessagesTokens(clamped);
+        expect(tokens).toBeLessThanOrEqual(budget);
+        expect(tokens).toBeGreaterThan(budget * 0.5);
+        expect(String(clamped[0].content)).toContain(question);
+    });
+
+    it('keeps the end of a user message given as text parts too', () => {
+        const msgs: ModelMessage[] = [
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: `${'lorem ipsum dolor '.repeat(2_000)}\nQuestion: why?`,
+                    },
+                ],
+            },
+        ];
+        const clamped = clampMessagesToBudget(msgs, 300);
+        expect((clamped[0].content as any)[0].text).toMatch(/Question: why\?$/);
+    });
+
+    it('never splits a surrogate pair at either end of the cut', () => {
+        const msgs: ModelMessage[] = [
+            { role: 'user', content: '😀'.repeat(3_000) },
+        ];
+        const content = String(clampMessagesToBudget(msgs, 300)[0].content);
+        expect(content).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/);
+        expect(content).not.toMatch(/(?<![\ud800-\udbff])[\udc00-\udfff]/);
     });
 
     it('is a no-op for a non-positive budget (nonsensical window)', () => {
@@ -345,6 +407,50 @@ describe('estimateMessagesTokens — per-run counts bounds', () => {
         const odd = [null, undefined, 42] as any[];
         expect(estimateMessagesTokens(odd, counts)).toBe(
             estimateMessagesTokens(odd),
+        );
+    });
+});
+
+describe('truncateMiddle', () => {
+    it('keeps the first and last halves around the marker', () => {
+        expect(truncateMiddle(`${'a'.repeat(10)}${'b'.repeat(10)}`, 10)).toBe(
+            'aaaaa…[truncated]…bbbbb',
+        );
+        expect(truncateMiddle(`${'a'.repeat(10)}${'b'.repeat(10)}`, 11)).toBe(
+            'aaaaaa…[truncated]…bbbbb',
+        );
+    });
+
+    it('keeps a character just past the surrogate range where the tail starts', () => {
+        expect(truncateMiddle(`${'a'.repeat(10)}\ue000bbbb`, 10)).toBe(
+            'aaaaa…[truncated]…\ue000bbbb',
+        );
+    });
+
+    it('returns a text at or under the cap as it is', () => {
+        expect(truncateMiddle('abcdefghij', 10)).toBe('abcdefghij');
+        expect(truncateMiddle('abc', 10)).toBe('abc');
+    });
+
+    // U+10000 is \ud800\udc00 and U+10FFFF is \udbff\udfff: the edges of
+    // both surrogate ranges.
+    it.each([
+        ['U+10000', '\u{10000}'],
+        ['U+10FFFF', '\u{10FFFF}'],
+    ])('never ends the head on half of %s', (_, pair) => {
+        // head = 5 code units: the 5th is the pair's high half.
+        expect(truncateMiddle(`aaaa${pair}${'b'.repeat(10)}`, 10)).toBe(
+            'aaaa…[truncated]…bbbbb',
+        );
+    });
+
+    it.each([
+        ['U+10000', '\u{10000}'],
+        ['U+10FFFF', '\u{10FFFF}'],
+    ])('never starts the tail on half of %s', (_, pair) => {
+        // tail = last 5 code units: the first is the pair's low half.
+        expect(truncateMiddle(`${'a'.repeat(10)}${pair}bbbb`, 10)).toBe(
+            'aaaaa…[truncated]…bbbb',
         );
     });
 });
