@@ -206,6 +206,68 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         expect(args[15]).toEqual(reviewWarnings);
     });
 
+    it('forwards the failing primary agent so the end comment can name it', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const lastReviewError = {
+            category: 'QUOTA_EXCEEDED',
+            friendlyMessage: 'out of credits',
+            agentName: 'security',
+            occurredAt: new Date(),
+        };
+        const partial = {
+            stage: 'AgentReviewStage',
+            error: new Error('out of credits'),
+            severity: 'partial' as const,
+        };
+
+        await (stage as any).executeStage(
+            baseContext({
+                lastReviewError,
+                errors: [partial],
+                pullRequestMessagesConfig: {
+                    startReviewMessage: {
+                        status: PullRequestMessageStatus.ACTIVE,
+                        content: 'Review started',
+                    },
+                    endReviewMessage: undefined,
+                },
+            }),
+        );
+        expect(
+            commentManagerService.updateOverallComment.mock.calls[0][20],
+        ).toBe('security');
+
+        await (stage as any).executeStage(
+            baseContext({
+                lastReviewError,
+                errors: [partial],
+            }),
+        );
+        expect(
+            commentManagerService.updateOverallComment.mock.calls[1][20],
+        ).toBe('security');
+
+        await (stage as any).executeStage(
+            baseContext({
+                lastReviewError,
+                errors: [partial],
+                pullRequestMessagesConfig: {
+                    startReviewMessage: {
+                        status: PullRequestMessageStatus.OFF,
+                        content: 'Review started',
+                    },
+                    endReviewMessage: {
+                        status: PullRequestMessageStatus.ACTIVE,
+                        content: 'Done!',
+                    },
+                },
+            }),
+        );
+        expect(commentManagerService.createComment.mock.calls[0][17]).toBe(
+            'security',
+        );
+    });
+
     it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {
         const { stage, commentManagerService } = makeStage();
         const reviewWarnings = [

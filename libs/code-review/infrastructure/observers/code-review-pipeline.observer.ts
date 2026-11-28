@@ -23,6 +23,7 @@ import {
 } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-observer.interface';
 import { CheckStageNames } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -193,18 +194,36 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
                     e.metadata?.orgOwnedKey === true,
             )
         ) {
-            // A partial error from another agent (truncated or unverified
-            // results) still needs to show: the review is degraded, not skipped.
-            const otherPartialError = errors.some(
-                (e) => e.severity === 'partial',
-            );
+            // An auxiliary agent can still publish a finding when every
+            // primary agent runs out of credits. The posting stages record delivery.
+            // That same auxiliary agent dying on the exhausted org key is the
+            // outage, not a partial review: a Kody Rule on the same 402 must
+            // not turn a skipped check into "completed with warnings".
+            const partialReview =
+                context.statusInfo.status === AutomationStatus.PARTIAL_ERROR ||
+                errors.some(
+                    (e) =>
+                        e.severity === 'partial' &&
+                        !(
+                            e.metadata?.errorCategory ===
+                                LlmErrorCategory.QUOTA_EXCEEDED &&
+                            e.metadata?.orgOwnedKey === true
+                        ),
+                ) ||
+                [context.lineComments, context.prLevelCommentResults].some(
+                    (comments) =>
+                        comments?.some(
+                            (comment) =>
+                                comment?.deliveryStatus === DeliveryStatus.SENT,
+                        ),
+                );
             await this.pipelineChecksService.finalizeCheck(
                 observerContext,
                 context,
-                otherPartialError
+                partialReview
                     ? CheckConclusion.NEUTRAL
                     : CheckConclusion.SKIPPED,
-                otherPartialError
+                partialReview
                     ? CheckStageNames._pipelineEndPartial
                     : CheckStageNames._pipelineEndSkipped,
                 this.buildPipelineFailureReason(context),
