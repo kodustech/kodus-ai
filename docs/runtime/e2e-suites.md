@@ -620,7 +620,7 @@ as one step group; CI mode and baseline start it from their own command (`Runtim
 | exec polling | each poll under 600 s | protocol cap |
 
 The PR side build keeps the Run's existing 45 min boot budget; the suite timers start after the build. In Run mode the
-suite and the probes share the PR claim's lease; the lease keeper already renews it (`lease-keeper.ts`).
+suite shards hold their own claims, never the Run's: each shard's claim is renewed while the engine holds it (`suite-environment.ts`, `ClaimLeaseKeeper`), and the Run's PR claim keeps its own lease for the probes (`lease-keeper.ts`).
 
 ### 12.2 Cost per PR (formula)
 

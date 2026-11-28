@@ -1,5 +1,5 @@
 import { type ClaimState, isClaimStateIn, isFinalClaimState, LIVE_CLAIM_STATES, MACHINE_HOLDING_CLAIM_STATES, OPEN_CLAIM_STATES } from '@libs/runtime/contracts/enums';
-import { type AcquireRequest, type Blocked, type Claim, claimCeilingSeconds, isolationUnavailable, machineMinutesExhausted, readyTimeoutMinutes } from '@libs/runtime/environment';
+import { type AcquireRequest, type Blocked, type Claim, claimCeilingSeconds, isolationUnavailable, machineMinutesExhausted, prImageUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
 import { isolationSatisfies } from '@libs/runtime/contracts/isolation';
 import { type ClaimRepo, type ClaimRunIdentity, type ClaimSecret, type Envelope, type LayerBuild, MAX_SHARED_IMAGES, type MessageBody, type RepoRef, SANDBOX_ENVIRONMENT_ID, type SharedImage, type ToolLayerPlan } from '@libs/runtime/protocol';
 import { redactPatterns } from '@libs/runtime/redaction';
@@ -437,7 +437,10 @@ export class ClaimService {
         if (refused) return refused;
         // The image store's credential, and for a suite shard the PR image its builder is pushing (waited for here, before any
         // minute or memory is held). Any failure is its own: undefined, and the claim builds as it always did.
-        const store = await this.opts.imageStore?.prepare(session, req, { claimId, cellId });
+        const prepared = await this.opts.imageStore?.prepare(session, req, { claimId, cellId });
+        // A Run's shard whose PR image is not there is refused with the cause: it never rebuilds the PR in parallel.
+        if (prepared && 'unavailable' in prepared) return prImageUnavailable(prepared.unavailable);
+        const store = prepared;
         if (store) at = this.now().getTime();
         const overBudget = await this.reserveMachineMinutes(ids, req);
         if (overBudget) return overBudget;
@@ -772,7 +775,16 @@ export class ClaimService {
             this.memory.forget(cellId, claimId);
         }
         if (reply.type === 'blocked' || reply.type === 'nack') return this.refusedAcquire(ids, req, reply);
-        const outcome = await ready;
+        // The store credential outlives a boot only if renewed meanwhile: the owner's claim.renew reaches a bound claim alone.
+        const stopRefresh = store && this.opts.imageStore && !req.consumer.startsWith('sandbox')
+            ? this.opts.imageStore.keepFresh(claimId, session, (grant) => this.connections.request(cellId, 'claim.renew', { leaseExpiresAt, imageStoreGrant: grant }, claimId).catch(() => undefined))
+            : undefined;
+        let outcome: ReadyOutcome;
+        try {
+            outcome = await ready;
+        } finally {
+            stopRefresh?.();
+        }
         const result = await this.readyOutcome(session, ids, req, at, deadlines, hold, approvals, outcome);
         if (!layers || 'status' in result) return result;
         const toolLayers = await this.layers.settle({ ids: { cellId, claimId, orgId: req.organizationId }, layers, asked: req.sandboxEgress ?? [], states: outcome.type === 'ready' ? outcome.body.toolLayers : undefined, build: true });

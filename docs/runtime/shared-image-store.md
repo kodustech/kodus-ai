@@ -353,3 +353,27 @@ export the cache a PR imports; the only writer was a separate default-branch `se
 The hub counts the cached and built steps and times the build by side (`runtime.claim.build_layers`, `runtime.claim.build_time`).
 To verify live: after a template build, the registry has a `cache` tag per service; a PR Run's `build.timing` shows
 `cacheInput=remote`-style import (`cacheRemoteImport=true`) with a hit rate well above 0, and `runtime_claim_build_layers{side="pr"}` cached over total.
+
+
+## 15. Why a Run's shards never got the PR image, and what changed (28/11)
+
+Measured on the dev stack (read-only), Run e2ac9ffd (suite run ecdd0ff5): the Run's PR claim booted in 18 minutes (build 730 s) and
+told the hub `image.pushed status=failed reason=push_failed` 12 minutes after its acquire; `runtime_pr_images` kept the row `failed
+push_failed`, and `runtime_image_store_grants` shows the claim's grant with `renewals 0`, issued 19:25:04 and expiring 19:35:04 (the
+pool's 600 s token). The push started at 19:37:33, so the cell found its credential expired (`pushPRImages` skips an image when
+`creds.Live` is false and reports `push_failed`). The credential is renewed with the lease (`claim.renew`), and the hub only renews a
+`bound` claim (`RENEWABLE_CLAIM_STATES`), so nothing renewed it during the build: any build longer than the token's life loses its push.
+The other row, `failed builder_ended`, was the earlier cancelled Run's builder. The shards' suite claims never reached the hub's claim
+table: they were not admitted before the Run ended (the hub's `prepare` holds a shard before admission while the image is pending, and
+the engine's claim wait was the 10 minute host wait). Not provable from the stack: the worker logs nothing about the engine's own waits.
+
+Changed (hub and worker, no Go, no new cell base):
+
+- The hub renews the credential of a claim that is still booting (`ImageStoreService.keepFresh`, every 2 minutes, sent as `claim.renew`
+  with the new grant; the cell takes it in `renewStore` before it looks at the lease).
+- A Run's PR-side shard asks `awaitPrImage`: the hub waits for the builder (also for one that has not started, and for a row an earlier
+  attempt left `failed builder_ended`, for 90 s) up to `RUNTIME_PR_IMAGE_WAIT_SECONDS`, then boots the shard from the pull. With no image
+  (failed, builder ended, cap, no builder) it refuses with the blocker `pr_image_unavailable`, `PR image unavailable: <cause>`, minting
+  no credential and starting nothing. A PR side that `nothing_built` still lets the shard build. CI mode and baselines are unchanged.
+- The engine bounds that shard's claim by the suite's deadline, not by the host wait, and reports the specs `not_run` with the cause
+  (never `infra`, never a fresh cold host).

@@ -97,3 +97,105 @@ describe('a suite shard waiting for its PR image', () => {
         expect(prepared?.prImages).toBeUndefined();
     });
 });
+
+// A Run's suite shard asks to wait for the PR image (`awaitPrImage`): the PR side is building it on its own machine, so a shard never
+// rebuilds the PR in parallel. A failed image is a refusal with its cause, not a second build (docs/runtime/e2e-suites.md 10.2).
+describe('a Run-mode shard that must wait for the PR image', () => {
+    const run = { ...ask, awaitPrImage: true };
+
+    it('waits for a builder that has not started yet, then for its image, and boots from the pull', async () => {
+        const ctx = setup();
+        ctx.onPoll((n) => {
+            if (n === 1) void ctx.pending();
+            if (n === 3) void ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder', state: 'ready', images: [image] });
+        });
+        const prepared = await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' });
+        expect(prepared).toMatchObject({ prImages: [{ fingerprint: image.fingerprint, digest: image.digest }] });
+    });
+
+    it('takes an image published late, inside the cap', async () => {
+        const ctx = setup({ waitMs: 20 * 60_000 });
+        await ctx.pending();
+        ctx.onPoll((n) => {
+            if (n === 15) void ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder', state: 'ready', images: [image] });
+        });
+        const prepared = await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' });
+        expect(prepared).toMatchObject({ prImages: [{ digest: image.digest }] });
+        expect(ctx.polls()).toBe(15);
+    });
+
+    it('refuses with the cause when the push failed, mints no credential and does not build', async () => {
+        const ctx = setup();
+        await ctx.pending();
+        await ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder', state: 'failed', images: [], reason: 'push_failed' });
+        const prepared = await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' });
+        expect(prepared).toEqual({ unavailable: 'push_failed' });
+        expect(await ctx.book.grantOf('shard-0')).toBeNull();
+    });
+
+    it('refuses when the builder ended without an image', async () => {
+        const ctx = setup();
+        await ctx.pending();
+        ctx.claims.set('builder', 'terminated');
+        const prepared = await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' });
+        expect(prepared).toEqual({ unavailable: 'builder_ended' });
+    });
+
+    it('refuses at the cap when the image never comes', async () => {
+        const ctx = setup({ waitMs: 3 * 60_000 });
+        await ctx.pending();
+        expect(await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' })).toEqual({ unavailable: 'wait_timeout' });
+    });
+
+    it('refuses when no PR side ever asked to push, after the cap', async () => {
+        const ctx = setup({ waitMs: 2 * 60_000 });
+        expect(await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' })).toEqual({ unavailable: 'no_pr_image' });
+    });
+
+    it('takes a builder that restarts a row an earlier attempt left failed (builder_ended) instead of refusing on the stale row', async () => {
+        const ctx = setup();
+        await ctx.pending();
+        await ctx.book.failPendingOf('builder', 'builder_ended');
+        ctx.onPoll((n) => {
+            if (n === 1) {
+                void ctx.book.startPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder2', expiresAt: '2099-01-01T00:00:00.000Z' });
+                ctx.claims.set('builder2', 'bound');
+            }
+            if (n === 2) void ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder2', state: 'ready', images: [image] });
+        });
+        const prepared = await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' });
+        expect(prepared).toMatchObject({ prImages: [{ digest: image.digest }] });
+    });
+
+    it('still builds when the PR side built nothing (its images were already in the host)', async () => {
+        const ctx = setup();
+        await ctx.pending();
+        await ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder', state: 'failed', images: [], reason: 'nothing_built' });
+        const prepared = await ctx.service.prepare(session, run, { claimId: 'shard-0', cellId: 'cell-s' });
+        expect(prepared).toMatchObject({ grant: expect.anything() });
+    });
+});
+
+// The PR side's push credential lives 10 minutes by default and its build takes longer: the hub renews it while the claim boots,
+// because the owner's claim.renew only reaches a bound claim (e2ac9ffd: renewals 0, the push found the token expired, push_failed).
+describe('the credential of a claim that is still booting', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('is renewed on a timer until the claim is ready, and not after', async () => {
+        jest.useFakeTimers();
+        const ctx = setup();
+        const writer = { ...ask, consumer: 'runtime', ref: { side: 'pr' as const, sha: SHA } };
+        const bk = { ...session, boundKey: 'run:org/run-1' };
+        const prepared = await ctx.service.prepare(bk, writer, { claimId: 'pr-claim', cellId: 'cell-s' });
+        expect(prepared?.grant).toBeDefined();
+        const sent: unknown[] = [];
+        const stop = ctx.service.keepFresh('pr-claim', bk, async (g) => void sent.push(g));
+        await jest.advanceTimersByTimeAsync(5 * 60_000 + 1);
+        const whileBooting = sent.length;
+        expect(whileBooting).toBeGreaterThanOrEqual(2);
+        stop();
+        await jest.advanceTimersByTimeAsync(10 * 60_000);
+        expect(sent.length).toBe(whileBooting);
+        expect((await ctx.book.grantOf('pr-claim'))?.renewals).toBe(whileBooting);
+    });
+});

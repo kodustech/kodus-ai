@@ -81,12 +81,27 @@ export interface PreparedImageStore {
     prImages?: SharedImage[];
 }
 
+/** A shard that must have the PR image and got none: the refusal carries the cause ("PR image unavailable: <cause>"). */
+export interface PrImageUnavailable {
+    unavailable: string;
+}
+
 export type StoreAsk = {
     organizationId: string;
     environmentId: string;
     consumer: string;
     ref: { side: 'base' | 'pr' | 'setup'; sha: string };
+    /**
+     * A Run-mode suite shard (its PR side builds the image on its own machine): it waits for that image, bounded by the cap, and is
+     * refused with the cause when there is none, never building the PR a second time in parallel.
+     */
+    awaitPrImage?: boolean;
 };
+
+/** How long a failed `builder_ended` row is given to be taken up again by a new builder before a waiting shard believes it. */
+export const PR_IMAGE_STALE_GRACE_MS = 90_000;
+/** How often the hub renews the credential of a claim that is still booting. */
+export const BOOTING_GRANT_REFRESH_MS = 120_000;
 
 const toWire = (g: StoreGrant): ImageStoreGrant => ({ endpoint: g.endpoint, prefix: g.prefix, token: g.token, expiresAt: g.expiresAt, repos: g.repos });
 
@@ -104,6 +119,8 @@ export class ImageStoreService {
             /** The longest a shard waits for its builder's image (RUNTIME_PR_IMAGE_WAIT_SECONDS). */
             waitMs: number;
             pollMs?: number;
+            /** How often the credential of a booting claim is renewed (default BOOTING_GRANT_REFRESH_MS). */
+            refreshMs?: number;
             sleep?: (ms: number) => Promise<void>;
         },
     ) {}
@@ -113,7 +130,7 @@ export class ImageStoreService {
      * none, the cell does not name the feature, the claim has no bound key of its org, anything failed): it builds as before.
      * Awaits the builder's push for a suite shard, so it runs before the claim is admitted, holding no memory while it waits.
      */
-    async prepare(session: CellSession, req: StoreAsk, ids: { claimId: string; cellId: string }): Promise<PreparedImageStore | undefined> {
+    async prepare(session: CellSession, req: StoreAsk, ids: { claimId: string; cellId: string }): Promise<PreparedImageStore | PrImageUnavailable | undefined> {
         if (!supports(session, 'imageStore') || !session.poolId || !['runtime', 'setup', 'suite'].includes(req.consumer)) return undefined;
         const kind = boundKeyKind(req.organizationId, session.boundKey);
         if (!kind) return undefined;
@@ -129,6 +146,13 @@ export class ImageStoreService {
             }
             const repos = planGrant({ organizationId: req.organizationId, environmentId: req.environmentId, boundKey: session.boundKey, side: req.ref.side, sha: req.ref.sha }, provider.endpointFor(config).prefix);
             if (!repos) return undefined;
+            // A Run's shard waits for its PR side's image before anything is minted: a refusal leaves no credential behind.
+            let prImages: PrImage[] | undefined;
+            if (kind === 'suite') {
+                const waited = await this.awaitPrImages(req, ids.claimId, log);
+                if (waited && 'unavailable' in waited) return waited;
+                prImages = waited;
+            }
             const writes = repos.some((r) => r.push);
             const now = this.deps.now();
             const grant = await provider.grant(config, { claimId: ids.claimId, organizationId: req.organizationId, repos, ttlSeconds: config.tokenTtlSeconds }, now);
@@ -138,7 +162,6 @@ export class ImageStoreService {
             if (writes && repos.some((r) => r.scope === 'pr' && r.push)) {
                 await this.deps.book.startPrImage({ orgId: req.organizationId, environmentId: req.environmentId, prSha: req.ref.sha, builderClaim: ids.claimId, expiresAt: new Date(now.getTime() + PR_IMAGE_HARD_TTL_MS).toISOString() });
             }
-            const prImages = kind === 'suite' ? await this.awaitPrImages(req, ids.claimId, log) : undefined;
             return { grant, ...(prImages?.length ? { prImages: prImages.map((i) => ({ fingerprint: i.fingerprint, digest: i.digest })) } : {}) };
         } catch (e) {
             this.deps.metrics.imageStoreGrant('failed');
@@ -154,41 +177,87 @@ export class ImageStoreService {
 
     /**
      * The shard's wait for its PR's image: none when no builder asked to push, the digests when ready, nothing (it builds)
-     * when the push failed, the builder's claim ended without a result, or the wait passed its cap.
+     * when the push failed, the builder's claim ended without a result, or the wait passed its cap. A shard that must have the
+     * image (`awaitPrImage`) waits also for a builder that has not started, and ends with the cause instead of building.
      */
-    private async awaitPrImages(req: StoreAsk, claimId: string, log: (l: 'info' | 'warn', m: string, e?: Record<string, unknown>) => void): Promise<PrImage[] | undefined> {
+    private async awaitPrImages(req: StoreAsk, claimId: string, log: (l: 'info' | 'warn', m: string, e?: Record<string, unknown>) => void): Promise<PrImage[] | PrImageUnavailable | undefined> {
+        const strict = req.awaitPrImage === true && req.ref.side === 'pr';
         const sleep = this.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
         const started = this.deps.now().getTime();
+        const refuse = (cause: string): PrImageUnavailable => {
+            log('warn', 'image_store.pr_image_unavailable', { cause, waitedMs: this.deps.now().getTime() - started });
+            return { unavailable: cause };
+        };
         let waited = false;
         for (;;) {
+            const elapsed = this.deps.now().getTime() - started;
             const row = await this.deps.book.prImage(req.organizationId, req.environmentId, req.ref.sha);
-            if (!row) return undefined;
-            if (row.state === 'ready') {
+            let capCause: string | undefined;
+            if (!row) {
+                if (!strict) return undefined;
+                capCause = 'no_pr_image';
+            } else if (row.state === 'ready') {
                 this.deps.metrics.imageStorePrImage(waited ? 'waited_ready' : 'ready');
                 return row.images;
+            } else if (row.state === 'failed') {
+                // A PR side that built nothing has no image to wait for: the shard builds, as it always did.
+                if (!strict || row.reason === 'nothing_built') {
+                    this.deps.metrics.imageStorePrImage(waited ? 'waited_failed' : 'failed');
+                    return undefined;
+                }
+                // A row an earlier attempt of this PR left failed is the new builder's to restart: believed only after a grace.
+                if (row.reason !== 'builder_ended' || elapsed >= PR_IMAGE_STALE_GRACE_MS) {
+                    this.deps.metrics.imageStorePrImage(waited ? 'waited_failed' : 'failed');
+                    return refuse(row.reason ?? 'failed');
+                }
+                capCause = row.reason;
+            } else {
+                // Pending: the builder may have ended through a path that never told this service (a revocation, a lease sweep).
+                const builder = await this.deps.claimState(row.builderClaim);
+                if (builder === null || !LIVE_CLAIM_STATES.includes(builder)) {
+                    await this.deps.book.failPendingOf(row.builderClaim, 'builder_ended');
+                    continue;
+                }
+                capCause = 'wait_timeout';
             }
-            if (row.state === 'failed') {
-                this.deps.metrics.imageStorePrImage(waited ? 'waited_failed' : 'failed');
-                return undefined;
-            }
-            // Pending: the builder may have ended through a path that never told this service (a revocation, a lease sweep).
-            const builder = await this.deps.claimState(row.builderClaim);
-            if (builder === null || !LIVE_CLAIM_STATES.includes(builder)) {
-                await this.deps.book.failPendingOf(row.builderClaim, 'builder_ended');
-                continue;
-            }
-            if (this.deps.now().getTime() - started >= this.deps.waitMs) {
+            if (elapsed >= this.deps.waitMs) {
                 this.deps.metrics.imageStorePrImage('waited_timeout');
-                log('warn', 'image_store.pr_image_wait_timeout', { builderClaim: row.builderClaim, waitedMs: this.deps.now().getTime() - started });
-                return undefined;
+                log('warn', 'image_store.pr_image_wait_timeout', { builderClaim: row?.builderClaim, waitedMs: elapsed });
+                return strict ? refuse(capCause) : undefined;
             }
             waited = true;
             await sleep(this.deps.pollMs ?? 2_000);
         }
     }
 
+    /**
+     * The claim's credential renewed on a timer while the claim boots: the owner's claim.renew only reaches a bound claim, and the
+     * PR side's build outlasts a credential's life, so its push after the build found the token expired. `send` gives the cell the
+     * renewed grant. Returns the stop, called when the claim is ready or failed.
+     */
+    keepFresh(claimId: string, session: CellSession, send: (grant: ImageStoreGrant) => Promise<unknown>): () => void {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let stopped = false;
+        const tick = () => {
+            timer = setTimeout(async () => {
+                try {
+                    const grant = await this.renewal({ claimId }, session);
+                    if (grant && !stopped) await send(grant);
+                } catch (e) {
+                    this.deps.log('warn', 'image_store.booting_renew_failed', { claimId, error: (e as Error).message });
+                }
+                if (!stopped) tick();
+            }, this.deps.refreshMs ?? BOOTING_GRANT_REFRESH_MS);
+        };
+        tick();
+        return () => {
+            stopped = true;
+            if (timer) clearTimeout(timer);
+        };
+    }
+
     /** The claim's credential renewed with its lease (claim.renew imageStoreGrant); undefined when it has none or cannot be renewed. */
-    async renewal(claim: ClaimRow, session: CellSession | null): Promise<ImageStoreGrant | undefined> {
+    async renewal(claim: Pick<ClaimRow, 'claimId'>, session: CellSession | null): Promise<ImageStoreGrant | undefined> {
         if (!session || !supports(session, 'imageStore')) return undefined;
         try {
             const rec = await this.deps.book.grantOf(claim.claimId);

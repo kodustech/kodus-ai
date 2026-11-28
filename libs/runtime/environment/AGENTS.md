@@ -32,7 +32,7 @@ The one port for "this app up at this SHA" (docs §5, ADR-002): `EnvironmentRunt
 
 ## Module map
 
-Files (8, tests apart): `environment-health.ts`, `environment-runtime.ts`, `fake-environment-runtime.ts`, `index.ts`, `isolation-blocker.ts`, `machine-minutes.ts`, `testing.ts`, `typed-blocker.ts`
+Files (9, tests apart): `environment-health.ts`, `environment-runtime.ts`, `fake-environment-runtime.ts`, `index.ts`, `isolation-blocker.ts`, `machine-minutes.ts`, `pr-image-blocker.ts`, `testing.ts`, `typed-blocker.ts`
 
 Imports these Runtime modules:
 
