@@ -121,6 +121,36 @@ export function readDecisions(
     return decisions;
 }
 
+/**
+ * Write tools the run called after its last decision that was not `act`, in
+ * call order; all of them when every decision was `act`. A refused write is
+ * told to fall back to `offer`, so a write called before that retraction was
+ * withdrawn and is not the trailing acts' business.
+ */
+export function writeCallsSinceLastRetraction(
+    steps: readonly RunStep[],
+    isWriteTool: (name: string) => boolean,
+): string[] {
+    let calls: string[] = [];
+
+    for (const step of steps) {
+        for (const call of step.message?.toolCalls ?? []) {
+            if (call.name === CONVERSATION_DECISION_TOOL) {
+                const parsed = parse(call.input);
+                if (parsed && parsed.intent !== 'act') {
+                    calls = [];
+                }
+                continue;
+            }
+            if (isWriteTool(call.name)) {
+                calls.push(call.name);
+            }
+        }
+    }
+
+    return calls;
+}
+
 /** The decision the agent committed to this run, or undefined if it never did. */
 export function readDecision(
     steps: readonly RunStep[],

@@ -39,6 +39,7 @@ import {
     buildDecisionTool,
     grantIfAuthorized,
     readDecisions,
+    writeCallsSinceLastRetraction,
 } from './conversation-decision';
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
@@ -508,10 +509,10 @@ export class ConversationAgentProvider {
     ): void {
         const decisions = readDecisions(steps);
         const decision = decisions.at(-1);
-        const calledWriteTools = steps
-            .flatMap((step) => step.message?.toolCalls ?? [])
-            .map((call) => call.name)
-            .filter((name) => isWriteTool(name));
+        const calledWriteTools = writeCallsSinceLastRetraction(
+            steps,
+            isWriteTool,
+        );
         const divergence = decisionDivergence(
             decisions,
             writes,

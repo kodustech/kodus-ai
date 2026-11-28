@@ -5,6 +5,7 @@ import {
     grantIfAuthorized,
     readDecision,
     readDecisions,
+    writeCallsSinceLastRetraction,
 } from './conversation-decision';
 import { createWriteAuthorization } from './write-authorization';
 
@@ -218,5 +219,61 @@ describe('readDecisions', () => {
             call({ intent: 'answer' }),
         ];
         expect(readDecisions(steps).at(-1)).toEqual(readDecision(steps));
+    });
+});
+
+describe('writeCallsSinceLastRetraction', () => {
+    const isWrite = (name: string) => name === 'KODUS_CREATE_MEMORY';
+    const tools = (...names: string[]) => ({
+        index: 0,
+        message: {
+            role: 'assistant' as const,
+            content: '',
+            toolCalls: names.map((name, i) => ({
+                id: `t${i}`,
+                name,
+                input: {},
+            })),
+        },
+    });
+
+    it('keeps every write call when every decision is act', () => {
+        expect(
+            writeCallsSinceLastRetraction(
+                [
+                    call({ intent: 'act', tool: 'exec' }),
+                    tools('exec', 'KODUS_CREATE_MEMORY'),
+                ],
+                isWrite,
+            ),
+        ).toEqual(['KODUS_CREATE_MEMORY']);
+    });
+
+    // A refused write is told to offer instead; the agent did, then went on
+    // to read. That write was withdrawn.
+    it('drops write calls made before the last offer or answer', () => {
+        expect(
+            writeCallsSinceLastRetraction(
+                [
+                    tools('KODUS_CREATE_MEMORY'),
+                    call({ intent: 'offer', tool: 'KODUS_CREATE_MEMORY' }),
+                    call({ intent: 'act', tool: 'exec' }),
+                    tools('exec'),
+                ],
+                isWrite,
+            ),
+        ).toEqual([]);
+    });
+
+    it('keeps a refused write made with no retraction after it', () => {
+        expect(
+            writeCallsSinceLastRetraction(
+                [
+                    tools('KODUS_CREATE_MEMORY'),
+                    call({ intent: 'act', tool: 'exec' }),
+                ],
+                isWrite,
+            ),
+        ).toEqual(['KODUS_CREATE_MEMORY']);
     });
 });
