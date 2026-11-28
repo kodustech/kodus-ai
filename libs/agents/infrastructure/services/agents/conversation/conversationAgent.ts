@@ -113,13 +113,6 @@ interface ConversationThread {
 export class ConversationAgentProvider {
     private readonly logger = createLogger(ConversationAgentProvider.name);
 
-    /**
-     * Task-level max-output fallback: LLM.run applies it only when the BYOK slot
-     * leaves `maxOutputTokens` unset (`slot ?? this`). Temperature is deliberately
-     * NOT set here — the slot owns it, and LLM.run withholds it for providers that
-     * reject a fixed value (e.g. Anthropic 4.7+, kimi-k2.7-code).
-     */
-
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
@@ -286,8 +279,11 @@ export class ConversationAgentProvider {
                 }),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,
-            // Conversation keeps its own max-output default when the slot
-            // omits one, sized to the slot's window (#2233).
+            // Conversation keeps its own max-output default, sized to the
+            // slot's window (#2233): LLM.run applies it only when the slot
+            // leaves `maxOutputTokens` unset. Temperature is deliberately not
+            // set: the slot owns it, and LLM.run withholds it for providers
+            // that reject a fixed value (e.g. Anthropic 4.7+, kimi-k2.7-code).
             maxOutputTokens: answerTokens,
         };
 

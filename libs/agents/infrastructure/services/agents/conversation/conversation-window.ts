@@ -8,15 +8,6 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { declaredAnswerTokens } from '@libs/llm/model-invocation';
 import { slotContextWindow, slotInputRoom } from '@libs/llm/slot-window';
 
-/**
- * Keeps every step of a conversation within its model's window (#2233). A
- * conversation re-sends each tool result on every step, and one PR diff read
- * through `KODUS_GET_PULL_REQUEST_DIFF` sent requests of 3.8M tokens to
- * 1M-token models. The other agents already ran with this compressor; the
- * conversation had none. The answer the call declares stays out of the
- * budget: the slot's own `maxOutputTokens`, and the thinking budget Anthropic
- * adds on top, else the conversation's own answer limit.
- */
 /** The answer a conversation reserves when the slot sets none. */
 export const CONVERSATION_ANSWER_TOKENS = 20_000;
 
@@ -45,6 +36,15 @@ export function conversationAnswerTokens(
     );
 }
 
+/**
+ * Keeps every step of a conversation within its model's window (#2233). A
+ * conversation re-sends each tool result on every step, and one PR diff read
+ * through `KODUS_GET_PULL_REQUEST_DIFF` sent requests of 3.8M tokens to
+ * 1M-token models. The other agents already ran with this compressor; the
+ * conversation had none. The answer the call declares stays out of the
+ * budget: the slot's own `maxOutputTokens`, and the thinking budget Anthropic
+ * adds on top, else the conversation's own answer limit.
+ */
 export async function conversationCompression(params: {
     slot: NormalizedModel | undefined;
     systemPrompt: string;
