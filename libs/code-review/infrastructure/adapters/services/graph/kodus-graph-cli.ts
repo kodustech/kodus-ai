@@ -1,9 +1,12 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    SandboxInstance,
+    sandboxSetupDetails,
+} from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { shSingleQuote } from '../shell-quote';
 
-export const KODUS_GRAPH_VERSION = '0.3.0';
+export const KODUS_GRAPH_VERSION: string = '0.3.0';
 
 export const KODUS_GRAPH_TIMEOUTS = {
     install: 120_000,
@@ -24,15 +27,20 @@ const BUN_PATH_PREFIX =
 export class KodusGraphCli {
     private readonly logger = createLogger(KodusGraphCli.name);
 
-    async install(sandbox: SandboxInstance): Promise<void> {
+    async install(
+        sandbox: SandboxInstance,
+        signal?: AbortSignal,
+    ): Promise<void> {
+        signal?.throwIfAborted();
         const check = await sandbox.run(
             [
                 BUN_PATH_PREFIX,
                 'which kodus-graph 2>/dev/null && kodus-graph --version 2>/dev/null || true',
             ].join(' && '),
-            { timeoutMs: 5_000 },
+            { timeoutMs: 5_000, signal },
         );
 
+        signal?.throwIfAborted();
         const output = (check.stdout || '').trim();
         const binaryFound = output.includes('/kodus-graph');
         const installedVersion = output.split('\n').pop()?.trim() || '';
@@ -62,13 +70,33 @@ export class KodusGraphCli {
                       `bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION} 2>&1`,
                   ].join(' && ');
 
-        const result = await sandbox.run(installCmd, {
-            timeoutMs: KODUS_GRAPH_TIMEOUTS.install,
-        });
+        const result = await sandbox
+            .run(installCmd, {
+                timeoutMs: KODUS_GRAPH_TIMEOUTS.install,
+                signal,
+            })
+            .catch((error) => {
+                signal?.throwIfAborted();
+                if (
+                    error instanceof Error &&
+                    'exitCode' in error &&
+                    typeof error.exitCode === 'number'
+                ) {
+                    Object.assign(
+                        error,
+                        sandboxSetupDetails('graph-install', error.exitCode),
+                    );
+                }
+                throw error;
+            });
 
+        signal?.throwIfAborted();
         if (result.exitCode !== 0) {
-            throw new Error(
-                `kodus-graph install failed (exit=${result.exitCode}): ${(result.stderr || result.stdout || '').slice(0, 500)}`,
+            throw Object.assign(
+                new Error(
+                    `kodus-graph install failed (exit=${result.exitCode})`,
+                ),
+                sandboxSetupDetails('graph-install', result.exitCode),
             );
         }
     }
@@ -79,8 +107,10 @@ export class KodusGraphCli {
             outPath: string;
             excludePatterns?: string[];
             timeoutMs?: number;
+            signal?: AbortSignal;
         },
     ): Promise<{ stderr: string }> {
+        options.signal?.throwIfAborted();
         const {
             outPath,
             excludePatterns = [],
@@ -101,7 +131,7 @@ export class KodusGraphCli {
                 `mkdir -p ${shSingleQuote(outDir)}`,
                 cmd,
             ].join(' && '),
-            { timeoutMs },
+            { timeoutMs, signal: options.signal },
         );
 
         if (result.exitCode !== 0) {
@@ -120,8 +150,10 @@ export class KodusGraphCli {
             outPath: string;
             repoDir?: string;
             timeoutMs?: number;
+            signal?: AbortSignal;
         },
     ): Promise<void> {
+        options.signal?.throwIfAborted();
         const {
             outPath,
             repoDir = '.',
@@ -137,7 +169,7 @@ export class KodusGraphCli {
                 `mkdir -p ${shSingleQuote(outDir)}`,
                 `kodus-graph parse --files ${filesArg} --repo-dir ${shSingleQuote(repoDir)} --out ${shSingleQuote(outPath)}`,
             ].join(' && '),
-            { timeoutMs },
+            { timeoutMs, signal: options.signal },
         );
 
         if (result.exitCode !== 0) {

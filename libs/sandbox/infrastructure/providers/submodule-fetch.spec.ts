@@ -971,17 +971,16 @@ describe('buildSubmoduleUpdatePlan — an ssh submodule fetched over https', () 
     it('emits the insteadOf next to the scoped header, both as config', () => {
         const plan = planWith('git@github.com:acme/commons.git');
         expect(plan.paths).toEqual(['pkg/sub']);
-        expect(plan.env.GIT_CONFIG_COUNT).toBe('2');
-        const pairs = [0, 1].map((i) => [
+        expect(plan.env.GIT_CONFIG_COUNT).toBe('3');
+        const pairs = [0, 1, 2].map((i) => [
             plan.env[`GIT_CONFIG_KEY_${i}`],
             plan.env[`GIT_CONFIG_VALUE_${i}`],
         ]);
-        expect(pairs).toEqual(
-            expect.arrayContaining([
-                ['http.https://github.com/.extraHeader', AUTH],
-                ['url.https://github.com/.insteadOf', 'git@github.com:'],
-            ]),
-        );
+        expect(pairs).toEqual([
+            ['http.https://github.com/.extraHeader', AUTH],
+            ['core.hooksPath', '/dev/null'],
+            ['url.https://github.com/.insteadOf', 'git@github.com:'],
+        ]);
         // Never on the command line — same rule as the token.
         expect(JSON.stringify(plan.updateArgs)).not.toContain('insteadOf');
     });
@@ -1004,12 +1003,12 @@ describe('buildSubmoduleUpdatePlan — an ssh submodule fetched over https', () 
             authHeader: AUTH,
         });
         expect(plan.paths).toEqual(['pkg/a', 'pkg/b']);
-        expect(plan.env.GIT_CONFIG_COUNT).toBe('2');
+        expect(plan.env.GIT_CONFIG_COUNT).toBe('3');
     });
 
     it('emits no insteadOf when nothing is ssh', () => {
         const plan = planWith('https://github.com/acme/commons.git');
-        expect(plan.env.GIT_CONFIG_COUNT).toBe('1');
+        expect(plan.env.GIT_CONFIG_COUNT).toBe('2');
         expect(JSON.stringify(plan.env)).not.toContain('insteadOf');
     });
 
@@ -1125,7 +1124,9 @@ describe('buildSubmoduleUpdatePlan', () => {
     it('carries the token as a SCOPED config value, never as an argument', () => {
         const plan = planFor([['pkg/sub', 'https://github.com/acme/x.git']]);
         expect(plan.env).toEqual({
-            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_COUNT: '2',
+            GIT_CONFIG_KEY_1: 'core.hooksPath',
+            GIT_CONFIG_VALUE_1: '/dev/null',
             GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
             GIT_CONFIG_VALUE_0: AUTH,
         });

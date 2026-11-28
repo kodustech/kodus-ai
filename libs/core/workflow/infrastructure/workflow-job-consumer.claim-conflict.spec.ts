@@ -1,3 +1,4 @@
+import { RecordedJobFailure } from '../domain/errors/recorded-job-failure.error';
 import { SliceChildExitError } from '@libs/core/workflow/domain/errors/slice-child-exit.error';
 import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
@@ -109,6 +110,23 @@ describe('WorkflowJobConsumer claim conflict and scan slices', () => {
         runChild.mockReset();
         jest.useRealTimers();
         jest.clearAllTimers();
+    });
+
+    it('requeues a recorded graph failure without overwriting its classification or replacement', async () => {
+        const error = new RecordedJobFailure(
+            'Repository graph build failed temporarily',
+        );
+        const { consumer, jobRepository, inboxRepository } = makeConsumer({
+            process: jest.fn().mockRejectedValue(error),
+        });
+        await expect(
+            (consumer as WorkflowJobConsumer).handleAstGraphBuildJob(
+                { jobId: 'job-1' },
+                amqpMsg('msg-1') as never,
+            ),
+        ).rejects.toBe(error);
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(inboxRepository.releaseIfHeldBy).toHaveBeenCalled();
     });
 
     it('throws ClaimConflictError without failing the job when the inbox is held', async () => {

@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { ConfigService } from '@nestjs/config';
 
 import { PlatformType } from '@libs/core/domain/enums';
+import { graphCheckoutFiles } from '@libs/code-review/workflow/graph-checkout';
 import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
 import { buildAgentTools } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import { UNINITIALIZED_SUBMODULE_MARKER } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
@@ -79,6 +80,7 @@ describe('sandbox checkout of a repository with submodules', () => {
     let server: Server;
     let port: number;
     let serverRoot: string;
+    let expectedParent: string;
     let scratch: string;
     let sandboxService: LocalSandboxService;
     /** Every Authorization header the foreign host was offered. */
@@ -304,6 +306,9 @@ describe('sandbox checkout of a repository with submodules', () => {
             );
             await git(['-C', dir, 'add', 'app.ts']);
             await git(['-C', dir, 'commit', '-m', 'base with no submodule']);
+            expectedParent = (
+                await git(['-C', dir, 'rev-parse', 'HEAD'])
+            ).stdout.trim();
             await git(['-C', dir, 'checkout', '-q', '-b', 'main']);
             await writeFile(
                 join(dir, '.gitmodules'),
@@ -480,6 +485,31 @@ describe('sandbox checkout of a repository with submodules', () => {
             baseBranch,
             platform: PlatformType.GITHUB,
         } as any);
+
+    it('compares the checked-out parent and requests a snapshot for an unavailable baseline', async () => {
+        const sandbox = await sandboxService.createSandboxWithRepo({
+            cloneUrl: `http://127.0.0.1:${port}/super-adds.git`,
+            authToken: 'test-token',
+            branch: 'main',
+            platform: PlatformType.GITHUB,
+            includeParentCommit: true,
+        });
+        try {
+            const head = (
+                await sandbox.run('git rev-parse HEAD')
+            ).stdout.trim();
+            const base = (
+                await sandbox.run('git rev-parse HEAD^')
+            ).stdout.trim();
+            expect(base).toBe(expectedParent);
+            expect(await graphCheckoutFiles(sandbox, base, head)).toBeNull();
+            expect(
+                await graphCheckoutFiles(sandbox, '0'.repeat(40), head),
+            ).toBeNull();
+        } finally {
+            await sandbox.cleanup();
+        }
+    });
 
     it('populates a submodule declared with a RELATIVE url, the idiomatic form', async () => {
         const sandbox = await checkout('super-relative');

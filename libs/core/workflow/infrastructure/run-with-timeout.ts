@@ -1,3 +1,7 @@
+export class WorkflowJobTimeoutError extends Error {
+    readonly name = 'WorkflowJobTimeoutError';
+}
+
 /**
  * Runs `work` with a hard deadline.
  *
@@ -17,15 +21,17 @@
 export async function runWithTimeout<T>(
     work: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
-    timeoutMessage: string,
+    timeout: string | Error,
 ): Promise<T> {
     const controller = new AbortController();
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
-            controller.abort();
-            reject(new Error(timeoutMessage));
+            const error =
+                typeof timeout === 'string' ? new Error(timeout) : timeout;
+            controller.abort(typeof timeout === 'string' ? undefined : error);
+            reject(error);
         }, timeoutMs);
     });
 

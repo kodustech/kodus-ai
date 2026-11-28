@@ -107,6 +107,7 @@ export interface ISandboxLeaseManager {
     ): Promise<AcquireResult>;
     release(leaseId: string, opts?: { idleMs?: number }): Promise<void>;
     invalidate(prKey: string): Promise<void>;
+    retireSingleUseCheckout(prKey: string, sandboxId: string): Promise<void>;
 }
 
 /**
@@ -144,6 +145,11 @@ export function buildPrKey(
         );
     }
     return `${organizationId}:${repoStr}:${prStr}`;
+}
+
+export function isGraphJobLeaseKey(prKey: string): boolean {
+    const parts = prKey.split(':');
+    return parts.length === 4 && parts[2] === 'graph' && !!parts[3];
 }
 
 /**

@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository, EntityManager } from 'typeorm';
+import {
+    FindOptionsWhere,
+    Repository,
+    EntityManager,
+    In,
+    JsonContains,
+    Raw,
+} from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -154,7 +161,12 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
-    async update(id: string, data: Partial<IWorkflowJob>): Promise<any> {
+    async update(
+        id: string,
+        data: Partial<IWorkflowJob>,
+        expectedStatus?: JobStatus | JobStatus[],
+        expectedAttemptId?: string | null,
+    ): Promise<any> {
         try {
             const updateData: Partial<WorkflowJobModel> = {};
 
@@ -198,7 +210,30 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 updateData.pipelineState = patch.pipelineState;
             if (data.payload !== undefined) updateData.payload = patch.payload;
 
-            await this.repository.update({ uuid: id }, updateData);
+            // A graph job can time out while its final UPDATE is in flight.
+            const result = await this.repository.update(
+                {
+                    uuid: id,
+                    ...(expectedStatus && {
+                        status: Array.isArray(expectedStatus)
+                            ? In(expectedStatus)
+                            : expectedStatus,
+                    }),
+                    ...(expectedAttemptId !== undefined && {
+                        metadata:
+                            expectedAttemptId === null
+                                ? Raw(
+                                      (alias) =>
+                                          `(${alias} ->> 'attemptId') IS NULL`,
+                                  )
+                                : JsonContains({
+                                      attemptId: expectedAttemptId,
+                                  }),
+                    }),
+                },
+                updateData,
+            );
+            if (expectedStatus && result?.affected === 0) return null;
 
             return await this.findOne(id);
         } catch (error) {

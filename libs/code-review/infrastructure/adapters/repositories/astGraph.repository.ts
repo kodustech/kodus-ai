@@ -1,9 +1,30 @@
+import {
+    GraphBaselineChangedError,
+    GraphJobAttempt,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import {
+    DataSource,
+    EntityManager,
+    In,
+    JsonContains,
+    Repository,
+} from 'typeorm';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { WorkflowJobModel } from '@libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model';
 
 import { AstNodeModel } from './schemas/astNode.model';
 import { AstEdgeModel } from './schemas/astEdge.model';
+import { AstGraphStatus, RepositoryModel } from './schemas/repository.model';
+
+interface GraphRevision {
+    job?: GraphJobAttempt;
+    sha?: string;
+    expectedSha?: string | null;
+    signal?: AbortSignal;
+}
 
 // ---------------------------------------------------------------------------
 // JSON interfaces matching kodus-graph's GraphInputSchema (snake_case)
@@ -145,111 +166,187 @@ export class AstGraphRepository {
         repoId: string,
         nodes: GraphNodeJson[],
         edges: GraphEdgeJson[],
+        revision?: GraphRevision,
     ): Promise<{ nodeCount: number; edgeCount: number }> {
-        return this.dataSource.transaction(async (manager) => {
-            await manager.query(`DELETE FROM ast_edges WHERE repo_id = $1`, [
-                repoId,
-            ]);
-            await manager.query(`DELETE FROM ast_nodes WHERE repo_id = $1`, [
-                repoId,
-            ]);
-
-            for (let i = 0; i < nodes.length; i += NODE_CHUNK_SIZE) {
-                const chunk = nodes.slice(i, i + NODE_CHUNK_SIZE);
-                const { sql, params } = this.buildNodeInsertSQL(
-                    repoId,
-                    chunk,
-                    true,
-                );
-                await manager.query(sql, params);
-            }
-
-            for (let i = 0; i < edges.length; i += EDGE_CHUNK_SIZE) {
-                const chunk = edges.slice(i, i + EDGE_CHUNK_SIZE);
-                const { sql, params } = this.buildEdgeInsertSQL(
-                    repoId,
-                    chunk,
-                    true,
-                );
-                await manager.query(sql, params);
-            }
-
-            // Query actual counts — ON CONFLICT DO NOTHING may skip duplicates
-            const [nodeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_nodes WHERE repo_id = $1`,
-                [repoId],
-            );
-            const [edgeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_edges WHERE repo_id = $1`,
-                [repoId],
-            );
-
-            return {
-                nodeCount: nodeRows.cnt,
-                edgeCount: edgeRows.cnt,
-            };
-        });
+        return this.writeGraph(repoId, nodes, edges, revision);
     }
 
-    /**
-     * Incremental update: delete stale data for changed files, then insert
-     * fresh data — all in a single transaction.
-     * Uses ON CONFLICT DO NOTHING because edges from non-updated files may
-     * share qualified names with the new data.
-     */
     async incrementalUpdate(
         repoId: string,
         filePaths: string[],
         nodes: GraphNodeJson[],
         edges: GraphEdgeJson[],
+        revision?: GraphRevision,
     ): Promise<{ nodeCount: number; edgeCount: number }> {
+        return this.writeGraph(repoId, nodes, edges, revision, filePaths);
+    }
+
+    private async writeGraph(
+        repoId: string,
+        nodes: GraphNodeJson[],
+        edges: GraphEdgeJson[],
+        revision?: GraphRevision,
+        filePaths?: string[],
+    ): Promise<{ nodeCount: number; edgeCount: number }> {
+        const signal = revision?.signal;
         return this.dataSource.transaction(async (manager) => {
-            if (filePaths.length > 0) {
+            signal?.throwIfAborted();
+            // Serialize writers before they replace rows or count a revision.
+            await this.lockRepository(manager, repoId, revision);
+            if (!filePaths || filePaths.length) {
+                const where = filePaths
+                    ? 'repo_id = $1 AND file_path = ANY($2::text[])'
+                    : 'repo_id = $1';
+                const params = filePaths ? [repoId, filePaths] : [repoId];
+                signal?.throwIfAborted();
                 await manager.query(
-                    `DELETE FROM ast_edges WHERE repo_id = $1 AND file_path = ANY($2::text[])`,
-                    [repoId, filePaths],
+                    `DELETE FROM ast_edges WHERE ${where}`,
+                    params,
                 );
+                signal?.throwIfAborted();
                 await manager.query(
-                    `DELETE FROM ast_nodes WHERE repo_id = $1 AND file_path = ANY($2::text[])`,
-                    [repoId, filePaths],
+                    `DELETE FROM ast_nodes WHERE ${where}`,
+                    params,
                 );
             }
 
             for (let i = 0; i < nodes.length; i += NODE_CHUNK_SIZE) {
-                const chunk = nodes.slice(i, i + NODE_CHUNK_SIZE);
+                signal?.throwIfAborted();
                 const { sql, params } = this.buildNodeInsertSQL(
                     repoId,
-                    chunk,
+                    nodes.slice(i, i + NODE_CHUNK_SIZE),
                     true,
                 );
                 await manager.query(sql, params);
             }
-
             for (let i = 0; i < edges.length; i += EDGE_CHUNK_SIZE) {
-                const chunk = edges.slice(i, i + EDGE_CHUNK_SIZE);
+                signal?.throwIfAborted();
                 const { sql, params } = this.buildEdgeInsertSQL(
                     repoId,
-                    chunk,
+                    edges.slice(i, i + EDGE_CHUNK_SIZE),
                     true,
                 );
                 await manager.query(sql, params);
             }
 
-            // Query actual total counts for the repo after the incremental update
-            const [nodeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_nodes WHERE repo_id = $1`,
-                [repoId],
-            );
-            const [edgeRows] = await manager.query(
-                `SELECT count(*)::int AS cnt FROM ast_edges WHERE repo_id = $1`,
-                [repoId],
-            );
-
-            return {
-                nodeCount: nodeRows.cnt,
-                edgeCount: edgeRows.cnt,
-            };
+            signal?.throwIfAborted();
+            return this.finishGraphWrite(manager, repoId, revision);
         });
+    }
+
+    private async lockRepository(
+        manager: EntityManager,
+        repoId: string,
+        revision?: GraphRevision,
+    ): Promise<void> {
+        const locked = await manager.findOneOrFail(RepositoryModel, {
+            select: { uuid: true, astGraphSha: true },
+            where: { uuid: repoId },
+            lock: { mode: 'for_no_key_update' },
+        });
+        if (
+            revision?.expectedSha !== undefined &&
+            locked.astGraphSha !== revision.expectedSha &&
+            locked.astGraphSha !== revision.sha
+        ) {
+            throw new GraphBaselineChangedError();
+        }
+    }
+
+    async updateBuildStatus(
+        repoId: string,
+        status: AstGraphStatus.BUILDING | AstGraphStatus.FAILED,
+        revision?: GraphRevision,
+    ): Promise<void> {
+        const { signal, job } = revision ?? {};
+        await this.dataSource.transaction(async (manager) => {
+            signal?.throwIfAborted();
+            await this.lockRepository(manager, repoId, revision);
+            await this.lockJob(manager, job);
+            signal?.throwIfAborted();
+            await manager.update(
+                RepositoryModel,
+                { uuid: repoId },
+                {
+                    astGraphStatus: status,
+                },
+            );
+            signal?.throwIfAborted();
+        });
+    }
+
+    async failBuildForAttempt(
+        repoId: string,
+        job: GraphJobAttempt,
+    ): Promise<void> {
+        await this.dataSource.transaction(async (manager) => {
+            await this.lockRepository(manager, repoId);
+            await this.lockJob(manager, job, JobStatus.FAILED);
+            await manager.update(
+                RepositoryModel,
+                {
+                    uuid: repoId,
+                    astGraphStatus: In([
+                        AstGraphStatus.PENDING,
+                        AstGraphStatus.BUILDING,
+                    ]),
+                },
+                { astGraphStatus: AstGraphStatus.FAILED },
+            );
+        });
+    }
+
+    private async lockJob(
+        manager: EntityManager,
+        job?: GraphJobAttempt,
+        status = JobStatus.PROCESSING,
+    ): Promise<void> {
+        if (!job) return;
+        // A retry can reuse the job ID. Only the current attempt may publish it.
+        // Hold through COMMIT so a concurrent failure cannot become visible first.
+        const active = await manager.findOne(WorkflowJobModel, {
+            select: { uuid: true },
+            where: {
+                uuid: job.jobId,
+                status,
+                metadata: JsonContains({ attemptId: job.attemptId }),
+            },
+            lock: { mode: 'pessimistic_read' },
+        });
+        if (!active) throw new StaleGraphJobError(job.jobId);
+    }
+
+    private async finishGraphWrite(
+        manager: EntityManager,
+        repoId: string,
+        revision?: GraphRevision,
+    ): Promise<{ nodeCount: number; edgeCount: number }> {
+        // Count the stored rows: ON CONFLICT can skip duplicate parser output.
+        const [counts] = await manager.query(
+            `SELECT (SELECT count(*)::int FROM ast_nodes WHERE repo_id = $1) AS "nodeCount",
+                    (SELECT count(*)::int FROM ast_edges WHERE repo_id = $1) AS "edgeCount"`,
+            [repoId],
+        );
+        if (revision) {
+            revision.signal?.throwIfAborted();
+            await this.lockJob(manager, revision.job);
+            revision.signal?.throwIfAborted();
+            // Publish the SHA, counts and rows in one transaction. An abort during
+            // any of these writes must leave the previous revision intact.
+            await manager.update(
+                RepositoryModel,
+                { uuid: repoId },
+                {
+                    astGraphStatus: AstGraphStatus.READY,
+                    astGraphBuiltAt: new Date(),
+                    astGraphSha: revision.sha,
+                    astGraphNodeCount: counts.nodeCount,
+                    astGraphEdgeCount: counts.edgeCount,
+                },
+            );
+            revision.signal?.throwIfAborted();
+        }
+        return counts;
     }
 
     // -----------------------------------------------------------------------
