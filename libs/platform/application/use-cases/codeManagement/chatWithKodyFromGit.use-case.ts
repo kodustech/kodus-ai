@@ -1,3 +1,4 @@
+import { withoutLeadingQuote } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { createThreadId } from '@libs/common/utils/thread-id';
 import {
     bitbucketWebhookSource,
@@ -179,7 +180,8 @@ class CommandManager {
     }
 
     getCommandType(userQuestion: string): CommandType {
-        const handler = this.handlers.find((h) => h.canHandle(userQuestion));
+        const command = withoutLeadingQuote(userQuestion);
+        const handler = this.handlers.find((h) => h.canHandle(command));
         return handler?.getCommandType() ?? CommandType.UNKNOWN;
     }
 }
@@ -2396,7 +2398,7 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private mentionsKody(comment: Comment): boolean {
-        const commentBody = comment.body.toLowerCase();
+        const commentBody = withoutLeadingQuote(comment.body).toLowerCase();
         return [KODY_COMMANDS.KODY_MENTION, KODY_COMMANDS.KODUS_MENTION].some(
             (keyword) => commentBody.startsWith(keyword),
         );
