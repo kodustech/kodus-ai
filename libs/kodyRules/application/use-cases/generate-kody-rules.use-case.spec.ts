@@ -486,10 +486,23 @@ describe('GenerateKodyRulesUseCase', () => {
             null,
         );
 
+        const errorLog = jest.fn();
+        (useCase as any).logger.error = errorLog;
+
         await expect(
             useCase.execute({ teamId: 'team-1', months: 3 } as any, 'org-1'),
         ).rejects.toThrow(
             /Could not fetch pull requests from the code management integration/,
+        );
+
+        expect(errorLog).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Error generating kody rules',
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                }),
+            }),
         );
 
         // No rule persisted...

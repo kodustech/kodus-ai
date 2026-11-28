@@ -377,3 +377,46 @@ describe('KodyLearningCronProvider — backfill lock concurrency bound (pool exh
         expect(held).toBe(0);
     });
 });
+
+describe('KodyLearningCronProvider — per-team failure isolation', () => {
+    it('logs a failing team with its org and still processes the next one', async () => {
+        const error = new Error('db down');
+        const teamService = {
+            findTeamsWithIntegrations: jest.fn().mockResolvedValue([
+                { uuid: 'team-1', organization: { uuid: 'org-1' } },
+                { uuid: 'team-2', organization: { uuid: 'org-2' } },
+            ]),
+        } as any;
+        const parametersService = {
+            findByKey: jest
+                .fn()
+                .mockRejectedValueOnce(error)
+                .mockResolvedValue({ configValue: {} }),
+        } as any;
+        const release = jest.fn().mockResolvedValue(undefined);
+        const cron = new KodyLearningCronProvider(
+            teamService,
+            parametersService,
+            {} as any,
+            {} as any,
+            { acquire: jest.fn().mockResolvedValue({ release }) } as any,
+        );
+        const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        (cron as any).logger = logger;
+
+        await (cron as any).runCron();
+
+        expect(parametersService.findByKey).toHaveBeenCalledTimes(2);
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Error in Kody Rules generator cron',
+                error,
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                }),
+            }),
+        );
+        expect(release).toHaveBeenCalled();
+    });
+});

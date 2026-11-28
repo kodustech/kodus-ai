@@ -664,7 +664,7 @@ export class GenerateKodyRulesUseCase {
                 message: 'Error generating kody rules',
                 context: GenerateKodyRulesUseCase.name,
                 error,
-                metadata: body,
+                metadata: { ...body, organizationId, organizationAndTeamData },
             });
 
             if (platformConfig) {
