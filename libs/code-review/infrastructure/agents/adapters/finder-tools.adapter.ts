@@ -182,11 +182,15 @@ function holdingSandbox(
     tool: AgentTool,
     hold: NonNullable<RemoteCommands['hold']>,
 ): AgentTool {
-    return {
+    const held: AgentTool = {
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema,
         ...(tool.strict !== undefined && { strict: tool.strict }),
         execute: (input, ctx) => hold(() => tool.execute(input, ctx)),
     };
+    // The tool-schema token estimate serializes the registry's tools, and the
+    // review plan is sized from it: the hold must not change that count.
+    Object.defineProperty(held, 'toJSON', { value: () => tool });
+    return held;
 }
