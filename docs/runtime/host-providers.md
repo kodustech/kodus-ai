@@ -43,7 +43,19 @@ flowchart LR
   registry and warm hosts in the cloud. Run hosts never keep a snapshot (`snapshots: false`) and are deleted after
   the Run.
 - Every cell belongs to exactly one pool, bound by the hub from the registration token, never stated by the cell. A
-  Run's base and PR stay in one pool; on a `perRun` pool they share the Run's one host.
+  Run's base and PR stay in one pool; on a `perRun` pool they share the Run's one host, unless the pair does not fit
+  one (next paragraph).
+- **A pair that does not fit one host gets a host per side.** Placement (`candidatePools`) compares the two sides'
+  machine size (memory and CPUs, both running at once) with what the pool's host class holds less the cell's reserve
+  (1024 MB, `-memory-reserve-mb`); the controller writes the class's memory and CPUs from the provider adapter
+  (`describe`) into the pool status on each pass. When the pair fits, or the class is unknown, the key stays
+  `run:<org>/<run>`. When it does not, each side is bound to `run:<org>/<run>/base` and `run:<org>/<run>/pr`, so each
+  has its own demand row and its own `perRun` host, both started from the environment template as before. The hub's
+  fleet token route and the cell's bound-key pattern accept the two shapes; host retirement is per host (the key is
+  opaque to it), so both hosts are retired when their claims end, and both demand rows lapse by their own expiry. This
+  narrows "base and PR share the Run's one host": the Run still stays in one pool, and the Decided items that a host
+  serves one Run of one org and that a base is never built from the PR hold. Per-side keys need a cell base
+  that carries the new bound-key pattern.
 - One enrollment everywhere: a single-use, short-lived `kcf_` token per host, bound to pool, host and the Run, delivered
   by the provider's own channel (boat `files`). Provider credentials never reach a host.
 - The cell, the microVM fence, the reset in under a second inside the host, and the product are unchanged.
