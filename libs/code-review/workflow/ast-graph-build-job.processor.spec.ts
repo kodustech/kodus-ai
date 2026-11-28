@@ -130,7 +130,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
     });
 
     it('queues the catch-up for a deferred merge before completing the job', async () => {
-        graphIndexer.fullBuild.mockResolvedValueOnce('');
+        graphIndexer.fullBuild.mockResolvedValueOnce('unknown:1');
         const completed = () =>
             jobRepository.update.mock.calls.some(
                 ([, data]) => data?.status === JobStatus.COMPLETED,
@@ -167,7 +167,7 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
         });
         expect(
             repositoryService.clearMergeDeferredDuringBuild,
-        ).toHaveBeenCalledWith('repo-1', '');
+        ).toHaveBeenCalledWith('repo-1', 'unknown:1');
         expect(completed()).toBe(true);
     });
 

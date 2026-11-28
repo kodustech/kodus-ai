@@ -387,13 +387,30 @@ function node(name: string): GraphNodeJson {
             // ancestor of the build head and skip the newer merge.
             await merge(commits[2]);
             await merge(commits[1]);
-            expect((await state()).astGraphMergedDuringBuild).toBe('');
+            expect((await state()).astGraphMergedDuringBuild).toMatch(
+                /^unknown:/,
+            );
 
             await finishBuild(commits[1]);
 
             expect(enqueued).toHaveLength(1);
             expect(enqueued[0].payload.newSha).toBeUndefined();
             expect((await state()).astGraphMergedDuringBuild).toBeNull();
+        });
+
+        it('an earlier build settling an unknown merge does not clear a later one', async () => {
+            await merge(commits[2]);
+            await merge(commits[1]);
+            const settled = (await state()).astGraphMergedDuringBuild;
+            // Another merge lands before the earlier build clears its record.
+            await merge(commits[2]);
+            const later = (await state()).astGraphMergedDuringBuild;
+            expect(later).toMatch(/^unknown:/);
+            expect(later).not.toBe(settled);
+
+            await repositories.clearMergeDeferredDuringBuild(repoId, settled);
+
+            expect((await state()).astGraphMergedDuringBuild).toBe(later);
         });
 
         it('keeps the deferred merge when the catch-up cannot be queued', async () => {
