@@ -1,7 +1,7 @@
 import { decideProbe, GateDecision, GateStep, StabilityPolicy, type StatedIntentCheck } from '@libs/runtime/gate';
 import { EnvironmentRuntime, isEnvError } from '@libs/runtime/environment';
 import type { ProbeOutcome } from '@libs/runtime/environment';
-import type { Probe } from '@libs/runtime/probe';
+import { type Probe, WARMUP_PROBE_SUFFIX } from '@libs/runtime/probe';
 import type { ProbeAssertions } from '@libs/runtime/contracts/probe-assertions';
 import { laneOf, type ReplayLane, type ReplayLanes, replayLanesOf } from '@libs/runtime/run/replay-lanes';
 import { type ResponseDiff, responseDiffOf, type ResponseSample, statusChangeOf, responseTextSample } from '@libs/runtime/run/response-diff';
@@ -53,18 +53,27 @@ export const BROWSER_DEFAULT_CLOCK = '2030-01-01T00:00:00.000Z';
 /**
  * After a reset (and a passing ready check) the app can still be cold for the
  * probe's own route: a cache that just restarted, a function not loaded yet.
- * Round 1 then fails on a side whose rounds 2 and 3 answer, and the gate refuses
- * to call a regression on a base that is not stable. So a read-only HTTP probe is
- * sent first, unrecorded, until the app answers under 500 (at most this many
- * sends). Never recorded and never captured: what the round measures is the next send.
+ * Round 1 then fails on a side whose rounds 2 and 3 answer. So an HTTP probe is
+ * sent first, unrecorded and without evidence capture, until the app answers
+ * under 500 (a 404 or 405 counts: the route's code is loaded). At most
+ * WARMUP_MAX_TRIES sends, WARMUP_INTERVAL_MS apart: tune them here.
  */
 export const WARMUP_MAX_TRIES = 3;
 /** Between two warm-up sends. */
 export const WARMUP_INTERVAL_MS = 1_000;
 
-/** Only a request that changes nothing is sent twice: a write would be applied before the round's own send. */
-function canWarm(probe: Probe): boolean {
-    return probe.spec.kind === 'http' && ['GET', 'HEAD', 'OPTIONS'].includes(probe.spec.method);
+/**
+ * What try i of the warm-up sends, or undefined when the probe is not an HTTP one. A read-only
+ * request is sent as it is. A write is never sent: OPTIONS on the same URL stands in for it (HEAD
+ * on every second try, for a route that only answers one of them), without its body.
+ */
+export function warmupOf(probe: Probe, i: number): Probe | undefined {
+    const spec = probe.spec;
+    if (spec.kind !== 'http') return undefined;
+    const id = `${probe.id.slice(0, 128 - WARMUP_PROBE_SUFFIX.length)}${WARMUP_PROBE_SUFFIX}`;
+    if (['GET', 'HEAD', 'OPTIONS'].includes(spec.method)) return { ...probe, id };
+    const { body: _body, ...rest } = spec;
+    return { ...probe, id, spec: { ...rest, method: i % 2 === 0 ? 'OPTIONS' : 'HEAD' } };
 }
 
 /** The probe as the cell plays it: a browser probe always on a fixed clock. */
@@ -194,9 +203,9 @@ async function playRoundBody(args: RoundArgs, side: 'base' | 'pr', round: number
     }
     // Cold after the reset for this route: send it unrecorded until it answers, then measure. A round that
     // fails after the warm-up still counts as it is: the warm-up only skips the first cold answers.
-    if (canWarm(probe)) {
+    if (warmupOf(probe, 0)) {
         for (let i = 0; i < WARMUP_MAX_TRIES; i++) {
-            const warm = await env.probe(claims[side], toPlay, stableStepId(args.run.runId, args.run.attempt, `${name}:warm:${i}`));
+            const warm = await env.probe(claims[side], warmupOf(probe, i)!, stableStepId(args.run.runId, args.run.attempt, `${name}:warm:${i}`));
             if (isSecurityViolation(warm)) return { gate: toGateStep({ probe, side, round, stepId, result: { code: 'transport_lost', stepId } }), leaked: false, violation: warm.signature };
             if (answered(warm)) break;
             if (i < WARMUP_MAX_TRIES - 1) await sleep(WARMUP_INTERVAL_MS);

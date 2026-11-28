@@ -1,6 +1,6 @@
 import { evidenceKey, verifyUploadGrant } from '@libs/runtime/contracts/evidence';
 import { FakeEnvironmentRuntime, type ProbeOutcome } from '@libs/runtime/environment';
-import { ProbeSchema } from '@libs/runtime/probe';
+import { isWarmupProbe, ProbeSchema } from '@libs/runtime/probe';
 import type { EvidenceRequest } from '@libs/runtime/protocol';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
@@ -35,7 +35,7 @@ function capturingCell(env: FakeEnvironmentRuntime, claims: { base: string; pr: 
     const inner = env.probe.bind(env);
     env.probe = async (claimId, p, stepId, evidence?) => {
         const side = claimId === claims.base ? 'base' : 'pr';
-        asked.push({ side, stepId, ...(evidence ? { evidence } : {}) });
+        if (!isWarmupProbe(p)) asked.push({ side, stepId, ...(evidence ? { evidence } : {}) });
         const r = (await inner(claimId, p, stepId)) as ProbeOutcome;
         if (opts.capture === false || 'code' in r) return r;
         return {

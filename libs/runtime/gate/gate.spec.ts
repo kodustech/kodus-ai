@@ -483,3 +483,40 @@ describe('decideNewEndpoint: a route the diff adds that answers 404 on the PR to
         expect(decideNewEndpoint(decide(missing), missing, { addedByDiff: false })).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
     });
 });
+
+describe('decideProbe: the cold first round after a reset', () => {
+    // Round 1 of a side is the one right after the side's first reset: the app can still be cold for the route.
+    const row = (side: 'base' | 'pr', round: number, status: string) =>
+        step(side, round, { status }, { warmup: round === 1, expectedHolds: status === '200' });
+
+    // Behavior: a base that answers 5xx only in its cold first round and 200 in two warm rounds is stable, so a PR that fails every round is a regression.
+    it('reports a PR that fails every round when only the base cold round differs from its warm rounds', () => {
+        const d = decide([row('base', 1, '502'), row('base', 2, '200'), row('base', 3, '200'), row('pr', 1, '500'), row('pr', 2, '500'), row('pr', 3, '500')]);
+        expect(d).toMatchObject({ kind: 'verdict', verdict: 'finding', findingKind: 'behavior_change', differingFields: ['status'], coldStart: [{ side: 'base', round: 1 }] });
+    });
+
+    // Behavior: the same cold start on both sides is no difference.
+    it('reports nothing when base and PR both start cold and then agree', () => {
+        const d = decide([row('base', 1, '500'), row('base', 2, '200'), row('base', 3, '200'), row('pr', 1, '502'), row('pr', 2, '200'), row('pr', 3, '200')]);
+        expect(d).toMatchObject({ kind: 'verdict', verdict: 'not_reproduced', coldStart: [{ side: 'base', round: 1 }, { side: 'pr', round: 1 }] });
+    });
+
+    // Behavior: variance among the warm rounds is still variance.
+    it('stays inconclusive when the warm rounds of the base disagree', () => {
+        const d = decide([row('base', 1, '200'), row('base', 2, '500'), row('base', 3, '200'), row('pr', 1, '500'), row('pr', 2, '500')]);
+        expect(d).toMatchObject({ kind: 'verdict', verdict: 'inconclusive' });
+    });
+
+    // Behavior: one warm round cannot tell a stable base from a lucky one, so another round is asked, within the cap.
+    it('asks for one more base round when its cold round differs from its only warm round', () => {
+        const steps = [row('base', 1, '502'), row('base', 2, '200'), row('pr', 1, '500')];
+        expect(decide(steps)).toMatchObject({ kind: 'more_rounds', base: 1, pr: 0 });
+        expect(decideProbe(steps, { ...opts, maxRoundsPerSide: 2 })).toMatchObject({ kind: 'verdict', verdict: 'inconclusive' });
+    });
+
+    // Behavior: a PR round that fails after a warm one is not excused as cold.
+    it('does not excuse a PR that passes its cold round and fails the warm ones', () => {
+        const d = decide([row('base', 1, '200'), row('base', 2, '200'), row('pr', 1, '200'), row('pr', 2, '500'), row('pr', 3, '500')]);
+        expect(d).toMatchObject({ kind: 'verdict', verdict: 'finding' });
+    });
+});

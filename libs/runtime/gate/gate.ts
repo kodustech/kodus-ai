@@ -32,6 +32,13 @@ export interface GateStep {
      * round's probe. Absent without a ready check or when it got no answer.
      */
     readyStatus?: number;
+    /**
+     * The round right after the side's first reset: the app can still be cold for the
+     * route (a cache that just restarted, a function not loaded). It stays in the
+     * evidence; the gate leaves it out when the warm rounds of the side agree and it
+     * alone differs (setAsideColdRounds).
+     */
+    warmup?: boolean;
 }
 
 export type Verdict = SharedVerdict;
@@ -45,6 +52,8 @@ export type GateDecision =
           findingKind?: FindingKind;
           differingFields: string[];
           maskedFields: string[];
+          /** The cold first rounds the gate set aside because only they differed from the side's warm rounds. */
+          coldStart?: Array<{ side: ProbeSide; round: number }>;
           /** The differences the PR's diff spells out (decideIntendedChange): the PR's intended change. */
           intendedChange?: IntendedChange[];
       }
@@ -148,7 +157,31 @@ function invalidInput(steps: GateStep[], opts: GateOptions, maxRounds: number, m
     return null;
 }
 
+/** What a round answered, as the gate compares it: its health, its fields and whether the expectation held. */
+const signatureOf = (s: GateStep) => JSON.stringify([healthy(s), s.fields, s.expectedHolds]);
+
+/**
+ * Sets aside a side's cold first round (GateStep.warmup) when the side's other rounds
+ * agree with each other and it alone differs. With one other round the side cannot yet
+ * tell a stable app from a lucky answer: one more round is asked, within the cap.
+ * Warm rounds that disagree are kept as they are: that is variance, not a cold start.
+ */
+function setAsideColdRound(side: GateStep[], maxRounds: number): { steps: GateStep[]; set?: GateStep; more?: boolean } {
+    const cold = side.find((s) => s.warmup === true && s.round === 1);
+    const warm = side.filter((s) => s !== cold);
+    if (!cold || warm.length === 0) return { steps: side };
+    if (new Set(warm.map(signatureOf)).size > 1 || signatureOf(cold) === signatureOf(warm[0])) return { steps: side };
+    if (warm.length === 1) return side.length < maxRounds ? { steps: side, more: true } : { steps: side };
+    return { steps: warm, set: cold };
+}
+
 export function decideProbe(steps: GateStep[], opts: GateOptions): GateDecision {
+    const note: { coldStart: Array<{ side: ProbeSide; round: number }> } = { coldStart: [] };
+    const d = decideRounds(steps, opts, note);
+    return d.kind === 'verdict' && note.coldStart.length > 0 ? { ...d, coldStart: note.coldStart } : d;
+}
+
+function decideRounds(steps: GateStep[], opts: GateOptions, note: { coldStart: Array<{ side: ProbeSide; round: number }> }): GateDecision {
     const maxMasked = opts.maxMaskedFields ?? 5;
     const maxRounds = opts.maxRoundsPerSide ?? 4;
     const isVersion = opts.isVersionSurface ?? isBuildIdentityField;
@@ -164,8 +197,15 @@ export function decideProbe(steps: GateStep[], opts: GateOptions): GateDecision 
         return verdict('inconclusive', 'a step ran on an image other than the one pinned for the run');
     }
 
-    const base = observer.filter((s) => s.side === 'base').sort((a, b) => a.round - b.round);
-    const pr = observer.filter((s) => s.side === 'pr').sort((a, b) => a.round - b.round);
+    const bySide = (side: ProbeSide) => observer.filter((s) => s.side === side).sort((a, b) => a.round - b.round);
+    const coldBase = setAsideColdRound(bySide('base'), maxRounds);
+    const coldPr = setAsideColdRound(bySide('pr'), maxRounds);
+    if (coldBase.more || coldPr.more) {
+        return { kind: 'more_rounds', base: coldBase.more ? 1 : 0, pr: coldPr.more ? 1 : 0, reason: 'the first round after the reset differs from the only warm round; repeat before deciding' };
+    }
+    const base = coldBase.steps;
+    const pr = coldPr.steps;
+    note.coldStart = [coldBase.set, coldPr.set].filter((s): s is GateStep => !!s).map((s) => ({ side: s.side, round: s.round }));
     if (base.length === 0 || pr.length === 0) {
         return verdict('inconclusive', 'no observer step on one side; internal evidence never decides');
     }
