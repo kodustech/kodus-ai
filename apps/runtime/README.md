@@ -337,6 +337,8 @@ Setup capacity waits read the current DBOS cancellation signal inside their exis
    - The worker's dev seal key equals the product's dev default in the same file.
    - The hub's public port is published on 127.0.0.1:3410. The internal port is not published.
 
+To run the whole dev stack on a VM with boat hosts, one command: [docs/runtime/dev-boat.md](../../docs/runtime/dev-boat.md).
+
 For the isolated stack with the TS fake cell (`src/fake-cell`), use `docker-compose.runtime.yml` with `pnpm run runtime:up` and `pnpm run runtime:e2e`. There the worker reaches the hub's internal listener on `:3411` (`RUNTIME_HUB_URL`, `RUNTIME_REPLICA_URL`) and opens tokens with `RUNTIME_SECRET_SEAL_KEY`, which the compose file requires: export one (`openssl rand -hex 32`) before `runtime:up` and keep it for `runtime:e2e`, which seals with the same variable. Its container names match the dev stack's runtime services, so run one stack at a time.
 
 ## Test it

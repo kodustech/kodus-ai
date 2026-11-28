@@ -70,3 +70,12 @@ Each module (a directory with source files) has its own `AGENTS.md`: what it own
 - Never log a token, a certificate, a key, a canary, request bodies, or command output.
 - Metric labels come from closed sets (state, kind, outcome, consumer, org, cell). Never use a host, a URL, a stepId or free text as a label; put those in the event tables or the logs.
 - A background failure (pin reload, stream append, disconnect) is logged and counted in `runtime.hub.background_error{op}`, never swallowed silently.
+
+## Run the Runtime dev stack on boat
+
+One command on the VM: `scripts/runtime/dev-boat-up.sh --public-host <ip-or-dns> [--org <uuid>] [--boat-key-op <op ref>]` ([docs/runtime/dev-boat.md](../../docs/runtime/dev-boat.md)). Try `--dry-run` first.
+
+- Ask the human for: the 1Password ref of the boat key (or have them export `BOAT_API_KEY`), the VM's public host, and the org uuid (the script lists orgs when it is missing).
+- Never print the key (no `cat ~/fleet/boat.env`, no `set -x`), never change a cloud firewall or security group (tell the human to open TCP 3410), and never edit `.runtime-certs/pools/boat-dev.yaml` without running `runtime-fleet apply` (the script does; a restart does not).
+- Verify: `docker logs kodus_runtime_hub 2>&1 | grep 'runtime-hub listening'`, and a boat row in `runtime.runtime_host_pools` whose `spec` holds `BOAT_CELL_BASE` (the variable at the top of the script).
+- Do not run it against a shared dev VM someone else uses.

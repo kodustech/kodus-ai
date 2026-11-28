@@ -10,7 +10,7 @@ AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps and 20 shar
 - `apps/webhooks/` - Webhook ingestion (GitHub, GitLab, Azure Repos, Bitbucket, Forgejo). Fire-and-forget with outbox pattern
 - `libs/` - 20 NestJS domain modules (core, code-review, ai-engine, agents, integrations, platform, identity, organization, etc.)
 - Kody Runtime (boots the customer's app for a PR's base and head, runs probes, a deterministic gate decides, the result goes to the PR). Read the area's `README.md` before changing it, and its `AGENTS.md` for the rules:
-    - `apps/runtime/` - control plane: `runtime-hub` (cell identity, WS + mTLS gateway, claims) and `runtime-worker` (DBOS workflows for Runs and environment setup)
+    - `apps/runtime/` - control plane: `runtime-hub` (cell identity, WS + mTLS gateway, claims) and `runtime-worker` (DBOS workflows for Runs and environment setup). To run its dev stack on boat hosts: `scripts/runtime/dev-boat-up.sh`, see `apps/runtime/AGENTS.md`
     - `apps/runtime-cell/` - the cell, in Go: agent, drivers (local-docker dev only, docker-gvisor, microvm), egress proxy, resolver, credential injector, observer
     - `libs/runtime/` - contracts, cell protocol (zod; the Go types are generated from it), gate, probes, entry points, run state, and the product-side module (`libs/runtime/api`: PR trigger, LLM gateway, settings)
     - `libs/runtime-publish/` - publishes a Run's result to the PR (one comment per PR, check run)
