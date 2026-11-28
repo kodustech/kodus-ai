@@ -42,7 +42,14 @@ const tokenFormSchema = z.object({
         })
         .or(z.literal(""))
         .optional(),
-    selfHostedUrl: z.string().optional(),
+    // The server refuses a URL without a scheme; say so before it does.
+    selfHostedUrl: z
+        .string()
+        .optional()
+        .refine(
+            (value) => !value?.trim() || /^https?:\/\//i.test(value.trim()),
+            "Include https:// in the URL, for example https://bitbucket.your-company.com",
+        ),
     dataCenterPassword: z.string().optional(),
 });
 

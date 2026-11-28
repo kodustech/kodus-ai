@@ -116,3 +116,42 @@ it.each([
         expect(create.mock.calls).toStrictEqual([[submission], [submission]]);
     },
 );
+
+it.each(["git.example.test", "  git.example.test  "])(
+    "asks for https:// before submitting the Data Center URL %p",
+    async (host) => {
+        const create = jest.mocked(createCodeManagementIntegration).mockReset();
+        render(
+            <BitbucketTokenModal
+                teamId="team-1"
+                userId="user-1"
+                userEmail="user@example.test"
+            />,
+        );
+
+        fireEvent.click(
+            screen.getByRole("button", { name: /Bitbucket Data Center/ }),
+        );
+        for (const [placeholder, value] of [
+            ["Enter your Data Center username", "reviewer"],
+            ["https://bitbucket.your-company.com", host],
+            ["Enter your Data Center password", "password"],
+        ]) {
+            fireEvent.change(screen.getByPlaceholderText(placeholder), {
+                target: { value },
+            });
+        }
+
+        expect(
+            await screen.findByText(
+                "Include https:// in the URL, for example https://bitbucket.your-company.com",
+            ),
+        ).toBeTruthy();
+        const save = screen.getByRole<HTMLButtonElement>("button", {
+            name: "Validate and save",
+        });
+        expect(save.disabled).toBe(true);
+        fireEvent.click(save);
+        expect(create).not.toHaveBeenCalled();
+    },
+);
