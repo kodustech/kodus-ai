@@ -1764,6 +1764,13 @@ export class ChatWithKodyFromGitUseCase {
                 return params.payload?.pullrequest?.id;
             case PlatformType.AZURE_REPOS:
                 return params.payload?.resource?.pullRequest?.pullRequestId;
+            case PlatformType.FORGEJO:
+                // An issue_comment carries the PR as `issue`; a review comment as `pull_request`.
+                return (
+                    params.payload?.pull_request?.number ||
+                    params.payload?.issue?.number ||
+                    0
+                );
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType}`,
@@ -1827,6 +1834,8 @@ export class ChatWithKodyFromGitUseCase {
                         '',
                     ) || ''
                 );
+            case PlatformType.FORGEJO:
+                return params.payload?.pull_request?.head?.ref || '';
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType} for head ref`,
@@ -1854,6 +1863,8 @@ export class ChatWithKodyFromGitUseCase {
                         '',
                     ) || ''
                 );
+            case PlatformType.FORGEJO:
+                return params.payload?.pull_request?.base?.ref || '';
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType} for base ref`,
@@ -1890,6 +1901,12 @@ export class ChatWithKodyFromGitUseCase {
                         'refs/heads/',
                         '',
                     ) || ''
+                );
+            case PlatformType.FORGEJO:
+                return (
+                    params.payload?.repository?.default_branch ||
+                    params.payload?.pull_request?.base?.repo?.default_branch ||
+                    ''
                 );
             default:
                 this.logger.warn({
@@ -1957,6 +1974,12 @@ export class ChatWithKodyFromGitUseCase {
                 description = this.normalizeDescription(
                     params.payload?.resource?.pullRequest?.description,
                 );
+                break;
+            case PlatformType.FORGEJO:
+                description =
+                    this.normalizeDescription(
+                        params.payload?.pull_request?.body,
+                    ) || this.normalizeDescription(params.payload?.issue?.body);
                 break;
             default:
                 this.logger.warn({
@@ -2074,6 +2097,8 @@ export class ChatWithKodyFromGitUseCase {
                 return params.payload?.comment?.id;
             case PlatformType.AZURE_REPOS:
                 return params.payload?.resource?.comment?.id;
+            case PlatformType.FORGEJO:
+                return params.payload?.comment?.id;
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType}`,

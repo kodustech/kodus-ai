@@ -1565,4 +1565,72 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
             }),
         );
     });
+
+    describe('Forgejo lookups (#2779)', () => {
+        const issueComment = {
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                repository: { default_branch: 'main' },
+                issue: { number: 21, body: 'Issue body' },
+                comment: { id: 123, body: '@kody explain' },
+            },
+        };
+        const reviewComment = {
+            event: 'pull_request_review_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                repository: { default_branch: 'main' },
+                pull_request: {
+                    number: 22,
+                    body: 'PR body',
+                    head: { ref: 'feature/x' },
+                    base: { ref: 'develop' },
+                },
+                comment: { id: 456, body: '@kody explain' },
+            },
+        };
+        const lookups = Object.assign(
+            Object.create(ChatWithKodyFromGitUseCase.prototype),
+            { logger: { log: jest.fn(), warn: jest.fn() } },
+        );
+        const call = (method: string, params: unknown) =>
+            lookups[method](params);
+
+        afterEach(() => {
+            // No lookup falls to the "Unsupported platform type" default.
+            expect(lookups.logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('reads the PR number from an issue comment and a review comment', () => {
+            expect(call('getPullRequestNumber', issueComment)).toBe(21);
+            expect(call('getPullRequestNumber', reviewComment)).toBe(22);
+        });
+
+        it('reads the comment id', () => {
+            expect(call('getCommentId', issueComment)).toBe(123);
+            expect(call('getCommentId', reviewComment)).toBe(456);
+        });
+
+        it('reads the head ref', () => {
+            expect(call('getHeadRef', reviewComment)).toBe('feature/x');
+        });
+
+        it('reads the base ref', () => {
+            expect(call('getBaseRef', reviewComment)).toBe('develop');
+        });
+
+        it('reads the default branch', () => {
+            expect(call('getDefaultBranch', issueComment)).toBe('main');
+        });
+
+        it('reads the PR description from the PR or the issue', () => {
+            expect(call('getPullRequestDescription', reviewComment)).toBe(
+                'PR body',
+            );
+            expect(call('getPullRequestDescription', issueComment)).toBe(
+                'Issue body',
+            );
+        });
+    });
 });

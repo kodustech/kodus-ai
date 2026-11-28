@@ -367,7 +367,7 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
         expect(keys[1]).toBe(keys[2]);
     });
 
-    it('does not claim on platforms without a comment id to key on', async () => {
+    it('does not claim a comment without an id to key on', async () => {
         const inbox = fakeInbox();
         const { useCase } = setup(inbox);
 
@@ -376,11 +376,28 @@ describe('ChatWithKodyFromGitUseCase — one reply delivered by several webhooks
             platformType: PlatformType.FORGEJO,
             payload: {
                 action: 'created',
-                comment: { id: 1, body: '@kody hi' },
+                comment: { body: '@kody hi' },
             },
         } as any);
 
         expect(inbox.claim).not.toHaveBeenCalled();
+    });
+
+    it('claims a Forgejo comment by its id (#2779)', async () => {
+        const inbox = fakeInbox();
+        const { useCase } = setup(inbox);
+
+        await useCase.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                action: 'created',
+                issue: { number: 21 },
+                comment: { id: 1, body: '@kody hi' },
+            },
+        } as any);
+
+        expect(inbox.claim).toHaveBeenCalled();
     });
 
     it('answers when the claim cannot be made (a duplicate beats silence)', async () => {
