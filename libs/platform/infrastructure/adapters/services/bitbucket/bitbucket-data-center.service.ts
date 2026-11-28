@@ -26,7 +26,10 @@ import {
     AUTH_INTEGRATION_SERVICE_TOKEN,
     IAuthIntegrationService,
 } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
-import { BitbucketAuthDetail } from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
+import {
+    BitbucketAuthDetail,
+    isDataCenterAuth,
+} from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -234,30 +237,38 @@ export class BitbucketDataCenterService implements Omit<
         host?: string;
         authMode?: AuthMode;
     }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
-        try {
-            const {
-                organizationAndTeamData,
-                token,
-                username,
-                email,
-                host,
-                authMode = AuthMode.TOKEN,
-            } = params;
-            await assertGitServerUrlAllowed(host);
+        const {
+            organizationAndTeamData,
+            token,
+            username,
+            email,
+            authMode = AuthMode.TOKEN,
+        } = params;
+        // Typed or pasted from the browser bar: spaces around it, and often
+        // no scheme, which no request can be built from.
+        const host = params.host?.trim();
+        const authDetails: BitbucketAuthDetail = {
+            username: username || '',
+            appPassword: encrypt(token),
+            authMode,
+            email,
+            host,
+        };
 
+        try {
             if (!host) {
                 throw new BadRequestException(
                     'Host is required for Bitbucket Data Center.',
                 );
             }
 
-            const authDetails: BitbucketAuthDetail = {
-                username: username || '',
-                appPassword: encrypt(token),
-                authMode,
-                email: email,
-                host: host,
-            };
+            if (!/^https?:\/\//i.test(host)) {
+                throw new BadRequestException(
+                    'Include https:// in the Bitbucket Data Center URL, for example https://bitbucket.example.com.',
+                );
+            }
+
+            await assertGitServerUrlAllowed(host);
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
@@ -265,42 +276,51 @@ export class BitbucketDataCenterService implements Omit<
             // token that may list repositories is what Kodus needs, and asking
             // /projects first refused tokens that can read repos but not
             // administer projects.
-            const testResponse = await axiosClient.get('/repos?limit=1');
+            const repos = await axiosClient.get('/repos?limit=1');
 
             // A 200 is not proof that Bitbucket answered: an SSO login page
             // also answers 200, with HTML in the body. Only the paginated
             // shape the repository picker reads proves the token works, and an
             // empty page is a valid answer.
-            if (
-                testResponse.status !== 200 ||
-                !Array.isArray(testResponse.data?.values)
-            ) {
+            if (repos.status !== 200 || !Array.isArray(repos.data?.values)) {
                 throw new BadRequestException(
                     'Bitbucket Data Center failed to validate the provided token.',
                 );
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.BITBUCKET,
-            });
-
-            if (!integration) {
-                await this.addAccessToken(organizationAndTeamData, authDetails);
-            } else {
-                await this.updateAuthIntegration({
-                    organizationAndTeamData,
-                    authIntegrationId: integration?.authIntegration?.uuid,
-                    integrationId: integration?.uuid,
-                    authDetails,
-                });
+            // Bitbucket identifies the authenticated principal in X-AUSERID.
+            // Proxies may strip it. The labels endpoint requires authentication
+            // without requiring a personal profile for project or repo tokens.
+            if (!/^[1-9]\d*$/.test(repos.headers?.['x-auserid'] ?? '')) {
+                const identity = await axiosClient
+                    .get('/labels?limit=1')
+                    .catch((error: unknown) => {
+                        const status = axios.isAxiosError(error)
+                            ? error.response?.status
+                            : undefined;
+                        // A restricted or missing labels route can still allow user profiles.
+                        if (
+                            status === 403 ||
+                            status === 404 ||
+                            status === 405
+                        ) {
+                            return axiosClient.get(
+                                '/profile/recent/repos?limit=1',
+                            );
+                        }
+                        throw error;
+                    });
+                if (
+                    ![200, 201].includes(identity.status) ||
+                    !Array.isArray(identity.data?.values)
+                ) {
+                    throw new BadRequestException(
+                        'Bitbucket Data Center failed to validate the provided token.',
+                    );
+                }
             }
 
-            return {
-                success: true,
-                status: CreateAuthIntegrationStatus.SUCCESS,
-            };
+            await this.addAccessToken(organizationAndTeamData, authDetails);
         } catch (err) {
             const linkError = toIntegrationLinkError(
                 err,
@@ -313,12 +333,14 @@ export class BitbucketDataCenterService implements Omit<
                 linkError,
                 // Named fields only: params carries the PAT.
                 metadata: {
-                    organizationAndTeamData: params?.organizationAndTeamData,
-                    host: params?.host,
+                    organizationAndTeamData,
+                    host,
                 },
             });
             throw linkError;
         }
+
+        return { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
     }
 
     async findOneByOrganizationAndTeamDataAndConfigKey(
@@ -375,8 +397,11 @@ export class BitbucketDataCenterService implements Omit<
                 };
             }
 
+            // A pair belongs to one team: another team in the org has not
+            // connected until it sets up its own.
             const bitbucketOrg = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
                 status: true,
                 platform: PlatformType.BITBUCKET,
             });
@@ -388,7 +413,8 @@ export class BitbucketDataCenterService implements Omit<
                 );
 
             const hasRepositories =
-                bitbucketRepositories?.configValue?.length > 0;
+                Array.isArray(bitbucketRepositories) &&
+                bitbucketRepositories.length > 0;
             const hasAuthDetails =
                 !!bitbucketOrg?.authIntegration?.authDetails?.appPassword;
 
@@ -522,19 +548,13 @@ export class BitbucketDataCenterService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData,
         authDetails: BitbucketAuthDetail,
     ): Promise<IntegrationEntity> {
-        const authUuid = v4();
-
-        const authIntegration = await this.authIntegrationService.create({
-            uuid: authUuid,
-            status: true,
-            authDetails,
-            organization: { uuid: organizationAndTeamData.organizationId },
-            team: { uuid: organizationAndTeamData.teamId },
-        });
-
-        return await this.addIntegration(
+        return this.integrationService.saveCodeManagementAuth(
             organizationAndTeamData,
-            authIntegration?.uuid,
+            PlatformType.BITBUCKET,
+            authDetails,
+            // A Cloud credential before this one: its repository ids are
+            // Cloud's, and the team must pick this server's.
+            { resetsSelection: (previous) => !isDataCenterAuth(previous) },
         );
     }
 

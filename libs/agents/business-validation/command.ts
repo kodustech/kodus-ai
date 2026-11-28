@@ -4,6 +4,7 @@ import type {
     Task,
     TaskReference,
 } from './business-validation.types';
+import { countBlockers } from './check-policy';
 
 const COMMAND = /@kody\s+-v\s+business-logic\b/i;
 
@@ -46,7 +47,7 @@ export function replyFor(
     }
     const verdict =
         outcome.kind === 'validated'
-            ? `${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}`
+            ? `${outcome.checks.map((c) => c.task.id).join(', ')} ${verdictWords(outcome)}`
             : undefined;
     if (comment === 'none') {
         return outcome.kind === 'validated'
@@ -66,6 +67,36 @@ export function replyFor(
             ? `: the result changed${verdict ? `, ${verdict}` : ''}`
             : '';
     return `Business logic re-checked${news}. The Kody · Business Logic comment on this pull request is updated.`;
+}
+
+/**
+ * "met" only when nothing is left open. A passing run can still have open
+ * requirements, and calling it met hid them: PARTIAL never fails a task (QA
+ * of #2681), and MISSING doesn't fail one the PR is only part of (UC-18).
+ */
+function verdictWords(
+    outcome: Extract<BusinessValidationOutcome, { kind: 'validated' }>,
+): string {
+    if (!outcome.passed) {
+        return 'has open requirements';
+    }
+    let missing = 0;
+    let partial = 0;
+    for (const check of outcome.checks) {
+        const open = check.verdict ? countBlockers(check.verdict) : undefined;
+        missing += open?.missing ?? 0;
+        partial += open?.partial ?? 0;
+    }
+    const plural = (n: number) => (n === 1 ? '' : 's');
+    if (missing) {
+        const counts = partial
+            ? `${missing} missing and ${partial} partial requirements`
+            : `${missing} missing requirement${plural(missing)}`;
+        return `has ${counts}, not failed because the pull request is part of the task`;
+    }
+    return partial
+        ? `has ${partial} partial requirement${plural(partial)} and none missing`
+        : 'met';
 }
 
 /** Text given to the command that is not a reference is the task itself. */

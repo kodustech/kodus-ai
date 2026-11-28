@@ -42,7 +42,10 @@ import {
     AUTH_INTEGRATION_SERVICE_TOKEN,
     IAuthIntegrationService,
 } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
-import { BitbucketAuthDetail } from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
+import {
+    BitbucketAuthDetail,
+    isDataCenterAuth,
+} from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -1679,10 +1682,13 @@ export class BitbucketCloudService implements Omit<
                     organizationAndTeamData,
                     IntegrationConfigKey.REPOSITORIES,
                 ),
+                // Team-scoped: the router sends a team with no pair here,
+                // and it must not read another team's Data Center pair.
                 this.integrationService.findOne({
                     organization: {
                         uuid: organizationAndTeamData.organizationId,
                     },
+                    team: { uuid: organizationAndTeamData.teamId },
                     status: true,
                     platform: PlatformType.BITBUCKET,
                 }),
@@ -4268,14 +4274,6 @@ export class BitbucketCloudService implements Omit<
                 return checkRepos;
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: organizationAndTeamData.organizationId,
-                },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.BITBUCKET,
-            });
-
             const authDetails: BitbucketAuthDetail = {
                 username: username,
                 appPassword: encrypt(token),
@@ -4284,11 +4282,7 @@ export class BitbucketCloudService implements Omit<
                 host: params.host,
             };
 
-            await this.handleIntegration(
-                integration,
-                authDetails,
-                organizationAndTeamData,
-            );
+            await this.handleIntegration(authDetails, organizationAndTeamData);
 
             return {
                 success: true,
@@ -4355,20 +4349,17 @@ export class BitbucketCloudService implements Omit<
     }
 
     async handleIntegration(
-        integration: IntegrationEntity | null,
         authDetails: BitbucketAuthDetail,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
-        if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
-                organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
-                authDetails,
-            });
-        }
+        await this.integrationService.saveCodeManagementAuth(
+            organizationAndTeamData,
+            PlatformType.BITBUCKET,
+            authDetails,
+            // A Data Center credential before this one: its repository ids
+            // are that server's, and the team must pick Cloud's.
+            { resetsSelection: (previous) => isDataCenterAuth(previous) },
+        );
     }
 
     async addAccessToken(

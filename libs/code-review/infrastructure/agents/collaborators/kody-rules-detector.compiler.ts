@@ -37,6 +37,7 @@ import { isCosmeticRule } from '@libs/common/utils/kody-rules/is-cosmetic-rule';
 import { wasDeclinedByLegacyCosmeticGate } from '@libs/common/utils/kody-rules/compile-hash';
 import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
 import { createLogger } from '@libs/core/log/logger';
+export { DETECTOR_COMPILER_VERSION } from './kody-rules-detector.compiler-version';
 
 export { isCosmeticRule };
 
@@ -51,6 +52,10 @@ const detectorLogger = createLogger('KodyRulesDetector');
  * once the contract was made explicit). Making it explicit removes the
  * model-dependence, which matters because on self-hosted the compiler runs on
  * the customer's BYOK model.
+ *
+ * Changing what this prompt or the output schema produces? Bump
+ * DETECTOR_COMPILER_VERSION (./kody-rules-detector.compiler-version.ts), or
+ * rules already attempted never see the change.
  */
 export const COMPILER_SYSTEM_PROMPT = `You compile a team code-review rule into a deterministic detector, or decline.
 
@@ -243,7 +248,11 @@ export function normalizeDetectorExtensions(
         // template's punctuation and can never be part of an extension, so
         // stripping them recovers a correct answer without loosening what
         // counts as one: the pattern below still rejects globs and paths.
-        const e = raw.trim().toLowerCase().replace(/^<+|>+$/g, '').trim();
+        const e = raw
+            .trim()
+            .toLowerCase()
+            .replace(/^<+|>+$/g, '')
+            .trim();
         if (!e) continue;
         const dotted = e.startsWith('.') ? e : `.${e}`;
         // A real extension: one or more dot-prefixed alphanumeric segments.
@@ -608,7 +617,10 @@ export function buildDetectorCandidates(
     // and the prompt should list each candidate once, in file order.
     for (const perFile of index.values()) {
         for (const [filename, lines] of perFile) {
-            perFile.set(filename, [...new Set(lines)].sort((a, b) => a - b));
+            perFile.set(
+                filename,
+                [...new Set(lines)].sort((a, b) => a - b),
+            );
         }
     }
     return index;

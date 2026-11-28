@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import type { IKodyRuleCompileAttempt } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { DETECTOR_COMPILER_VERSION } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler-version';
 import { isCosmeticRule } from './is-cosmetic-rule';
 
 type CompileInput = { rule?: string; examples?: unknown[] };
@@ -22,10 +23,13 @@ function needsCosmeticRecheck(rule: AttemptedRule): boolean {
 function hashCompileInput(
     rule: CompileInput,
     exampleFields?: string[],
+    version: number = DETECTOR_COMPILER_VERSION,
 ): string {
     const examples = JSON.stringify(rule?.examples ?? [], exampleFields);
+    // Version 1 has no salt: hashes stored before the version existed match.
+    const salt = version === 1 ? '' : `v${version} `;
     return createHash('sha256')
-        .update(`${rule?.rule ?? ''} ${examples}`)
+        .update(`${salt}${rule?.rule ?? ''} ${examples}`)
         .digest('hex');
 }
 
@@ -49,25 +53,35 @@ function hashCompileInput(
  * gate: the same text with a different `incorrect` snippet can flip a rule from
  * compiled to declined. Use the web DTO's field order for every example so an
  * equivalent CLI payload also matches attempts already stored by web saves.
+ *
+ * It also covers DETECTOR_COMPILER_VERSION, so a compiler change can reach
+ * rules nobody edits. The org's BYOK model is deliberately left out: changing
+ * models would recompile every rule on the customer's key.
  */
 export function ruleCompileHash(rule: CompileInput): string {
     return hashCompileInput(rule, ['snippet', 'isCorrect']);
 }
 
-function attemptMatchesInput(rule: AttemptedRule): boolean {
+function attemptMatchesInput(
+    rule: AttemptedRule,
+    version: number = DETECTOR_COMPILER_VERSION,
+): boolean {
     const stored = rule?.compileAttempt?.sourceHash;
     // Older CLI attempts used the field order persisted on that rule.
     return (
         !!stored &&
-        (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
+        (stored === hashCompileInput(rule, ['snippet', 'isCorrect'], version) ||
+            stored === hashCompileInput(rule, undefined, version))
     );
 }
 
 export function wasDeclinedByLegacyCosmeticGate(rule: AttemptedRule): boolean {
+    // The legacy gate predates the compiler version, so its declines carry a
+    // version-1 hash. A bump makes them stale, not any less legacy.
     return (
         rule.compileAttempt?.declineReason === 'cosmetic' &&
         !rule.compileAttempt.cosmeticSource &&
-        attemptMatchesInput(rule)
+        (attemptMatchesInput(rule, 1) || attemptMatchesInput(rule))
     );
 }
 
