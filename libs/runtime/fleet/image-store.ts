@@ -122,7 +122,9 @@ export function planGrant(ask: GrantScopeAsk, prefix: string): GrantRepo[] | nul
             // Only the default branch's setup writes the layers, images and build cache others read; a PR's setup reads both and writes neither.
             return ask.side === 'pr' ? [repo('main', true, false), repo('cache', true, false)] : [repo('main', true, true), repo('cache', true, true)];
         case 'template':
-            return [repo('main', true, false)];
+            // The template is the default branch's build every Run starts from. It writes the build cache a PR build
+            // imports (the cell exports only a claim the hub asked to seed, the default branch's), and never a PR repository.
+            return [repo('main', true, false), repo('cache', true, ask.side !== 'pr')];
         case 'run':
             return ask.side === 'pr' ? [repo('main', true, false), repo('cache', true, false), repo('pr', true, true)] : [repo('main', true, false)];
         case 'suite':

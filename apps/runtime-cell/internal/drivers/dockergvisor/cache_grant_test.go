@@ -241,7 +241,28 @@ func TestBuildTimingSaysTheRemoteCacheImportExportAndHitRate(t *testing.T) {
 	}
 	logs.Reset()
 	bootWithGrant(t, d, docker, "claim-nofacts", nil, false)
-	if e := buildEvents(t, &logs, "build.timing")[0]; e["cacheRemoteImport"] != nil || e["layerHitRate"] != nil {
+	if e := buildEvents(t, &logs, "build.timing")[0]; e["cacheRemoteImport"] != nil || e["cacheImportMs"] != nil || e["cacheExportMs"] != nil {
 		t.Fatalf("a build with no remote cache reported remote facts: %+v", e)
+	}
+}
+
+// The goal: every build, remote cache or not, says which cache input it started from and what share of its steps a
+// cache answered, so a PR build that ran cold shows as input "cold" with a hit rate of 0 and not as silence.
+func TestBuildTimingAlwaysSaysTheCacheInputAndTheLayerHitRate(t *testing.T) {
+	d, docker := bakeDriver(t)
+	var logs bytes.Buffer
+	d.cfg.Log = slog.New(slog.NewJSONHandler(&logs, nil))
+	docker.buildOutput = []string{
+		"#1 [1/3] FROM docker.io/library/node:22", "#1 DONE 1.0s",
+		"#2 [2/3] RUN npm ci", "#2 DONE 60.0s",
+		"#3 [3/3] RUN npm run build", "#3 DONE 10.0s",
+	}
+	bootWithGrant(t, d, docker, "claim-cold", nil, false)
+	e := buildEvents(t, &logs, "build.timing")[0]
+	if e["cacheInput"] != "cold" || e["layersCached"] != float64(0) || e["layersTotal"] != float64(3) || e["layerHitRate"] != "0.00" {
+		t.Fatalf("a cold build: %+v", e)
+	}
+	if e["cacheRemoteImport"] != nil {
+		t.Fatalf("a build with no remote cache reported one: %+v", e)
 	}
 }

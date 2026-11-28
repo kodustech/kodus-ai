@@ -811,7 +811,10 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 	timing := []any{"machine", ref.MachineID, "service", b.Service, "buildMs", built.Milliseconds(), "loadMs", loaded.Milliseconds(),
 		"outcome", outcome, "loadAttempted", loadAttempted, "imageTarBytes", imageBytes, "stateFallback", stateFallback,
 		"transfer", transfer, "registryAddedBytes", pushedBytes, "segfaultRetried", segfaultRetried, "phases", ran.Phases}
-	d.log().Info("build.timing", append(timing, remoteCacheFactsOf(a.run, ran).attrs()...)...)
+	facts := remoteCacheFactsOf(a.run, ran)
+	timing = append(timing, "cacheInput", a.cacheInput)
+	timing = append(timing, facts.layerAttrs()...)
+	d.log().Info("build.timing", append(timing, facts.attrs()...)...)
 	if a.oom {
 		return "", ran, fmt.Errorf("%w: build %s passed %s (%w)", driver.ErrOutOfMemory, b.Service, a.mem, err)
 	}
