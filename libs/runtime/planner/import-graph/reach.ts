@@ -2,7 +2,8 @@ import { posix } from 'path';
 import ts from 'typescript';
 
 import { READ_MANY_MAX, type RepoReader } from '../repo-reader';
-import { aliasesOf, isWorkspaceDir, packageOf, workspaceGlobsOf, type PathAliases, type ResolveContext, resolveSpecifier, type WorkspacePackage } from './resolve';
+import { type EntryCandidate, ENTRY_FINDER_LIMITS, findEntries } from './entry-finder';
+import { aliasesOf, isWorkspaceDir, packageOf, parseJsonc, workspaceGlobsOf, type PathAliases, type ResolveContext, resolveSpecifier, type WorkspacePackage } from './resolve';
 import { routesOf } from './routes';
 
 // Reverse reachability over a static JS/TS import graph (docs §9.8): a
@@ -26,6 +27,11 @@ export const IMPORT_GRAPH_LIMITS = {
      * wall-clock cap below bounds the call whatever the budget.
      */
     reads: 1_000,
+    /**
+     * Reads, past `reads`, the entry finder spends looking above the routes it found (the app that mounts
+     * them, the Firebase export and the index that names it): the files nearest those routes.
+     */
+    entryReads: 160,
     /** The most reads a caller's budget may ask for. */
     maxReads: 5_000,
     /** tsconfig/jsconfig/package.json files read to resolve aliases and workspace packages. */
@@ -84,7 +90,11 @@ export interface ReachedRoute {
 interface GraphNode {
     imports: string[];
     routes: string[];
+    /** The file declares a Firebase `onRequest` function. */
+    http?: true;
 }
+
+const HTTP_FUNCTION = /\bonRequest\s*\(|\.https\.onRequest\b/;
 
 interface CommitGraph {
     paths: string[];
@@ -203,13 +213,15 @@ const dirOf = (p: string) => {
     return d === '.' ? '' : d;
 };
 
+const NAMESPACE_REEXPORT = /\bexport\s{1,4}\*\s{1,4}as\s{1,4}[\w$]{1,100}\s{1,4}from\s{1,4}(['"])([^'"\n]{1,300})\1/g;
+
 /** The import specifiers of a JS/TS file: ES imports and re-exports, require, dynamic import. */
 function importsOf(text: string): string[] {
     try {
-        return ts
-            .preProcessFile(text, true, true)
-            .importedFiles.map((f) => f.fileName)
-            .slice(0, IMPORT_GRAPH_LIMITS.importsPerFile);
+        const found = ts.preProcessFile(text, true, true).importedFiles.map((f) => f.fileName);
+        // The pre-processor does not list `export * as ns from '...'`.
+        if (text.includes('export *')) for (const m of text.matchAll(NAMESPACE_REEXPORT)) found.push(m[2]);
+        return found.slice(0, IMPORT_GRAPH_LIMITS.importsPerFile);
     } catch {
         // A file the scanner cannot read has no imports: the graph only loses an edge.
         return [];
@@ -331,7 +343,7 @@ function nodeOf(path: string, text: string | null, g: CommitGraph): GraphNode | 
     const imports = importsOf(text)
         .map((s) => resolveSpecifier(s, path, g.ctx))
         .filter((f): f is string => f !== undefined && f !== path);
-    return { imports: [...new Set(imports)], routes: routesOf(path, text, g.files) };
+    return { imports: [...new Set(imports)], routes: routesOf(path, text, g.files), ...(HTTP_FUNCTION.test(text) ? { http: true as const } : {}) };
 }
 
 /** Directory distance: steps up from one directory to their common ancestor, then down to the other. */
@@ -388,12 +400,19 @@ function walk(start: string, nodes: Map<string, GraphNode | null>, rev: Map<stri
  * `base`. Never throws: a tree it cannot list answers {}.
  */
 export async function routesReaching(
-    source: { base: RepoReader; head?: RepoReader; cacheKey?: string; cache?: ImportGraphCache; signal?: AbortSignal; budget?: ImportGraphBudget },
+    source: ReachSource,
     changedPaths: readonly string[],
     targets: readonly string[] = changedPaths,
 ): Promise<Record<string, ReachedRoute[]>> {
+    return (await reachGraph(source, changedPaths, targets))?.routes ?? {};
+}
+
+type ReachSource = { base: RepoReader; head?: RepoReader; cacheKey?: string; cache?: ImportGraphCache; signal?: AbortSignal; budget?: ImportGraphBudget };
+
+/** The routes reaching each target, and the graph they were found in (for the entry finder). */
+async function reachGraph(source: ReachSource, changedPaths: readonly string[], targets: readonly string[]): Promise<Reached | undefined> {
     const wanted = targets.filter(isGraphFile);
-    if (!wanted.length) return {};
+    if (!wanted.length) return undefined;
     try {
         const cache = source.cache ?? sharedCache;
         const spend = new Spend(importGraphCallsOf(source.budget));
@@ -406,13 +425,126 @@ export async function routesReaching(
         const g = await pending.catch(() => undefined);
         if (!g) {
             if (source.cacheKey) cache.delete(source.cacheKey);
-            return {};
+            return undefined;
         }
         return await reach(source, g, changedPaths, wanted, spend);
     } catch {
-        // Same fail-safe as an unlistable tree: {} leaves the prompt and the unmapped files as they were.
-        return {};
+        // Same fail-safe as an unlistable tree: nothing found leaves the prompt and the unmapped files as they were.
+        return undefined;
     }
+}
+
+interface Reached {
+    routes: Record<string, ReachedRoute[]>;
+    nodes: Map<string, GraphNode | null>;
+    view: CommitGraph;
+    /** Changed files as the head has them. */
+    changedTexts: Map<string, string | null>;
+    spend: Spend;
+}
+
+/**
+ * The HTTP entry points that reach each changed target: the routes of the
+ * import graph (`routes`, as `routesReaching` answers them) and, per target,
+ * the candidates of the entry finder (entry-finder.ts): the route whose handler
+ * calls the changed function first, with the mount prefixes and the Firebase
+ * function URL when one serves it. `changedLines` are the new-side lines the
+ * diff touches in each changed file. Never throws.
+ */
+export async function entriesReaching(
+    source: ReachSource,
+    changedPaths: readonly string[],
+    targets: readonly string[],
+    changedLines: (path: string) => readonly number[] = () => [],
+): Promise<{ routes: Record<string, ReachedRoute[]>; entries: Record<string, EntryCandidate[]> }> {
+    const reached = await reachGraph(source, changedPaths, targets);
+    if (!reached) return { routes: {}, entries: {} };
+    const entries: Record<string, EntryCandidate[]> = {};
+    try {
+        const { nodes, view, changedTexts, spend } = reached;
+        const started = Date.now();
+        await readAbove(source, reached, Object.values(reached.routes).flat().map((r) => r.file), IMPORT_GRAPH_LIMITS.entryReads, started);
+        const rev = reverseEdges(nodes);
+        const read = async (paths: string[]) => {
+            const out = new Map<string, string | null>();
+            const base = paths.filter((p) => !changedTexts.has(p));
+            for (const p of paths) if (changedTexts.has(p)) out.set(p, changedTexts.get(p)!);
+            if (base.length) for (const [p, t] of await readAll(source.base, base, spend)) out.set(p, t);
+            return out;
+        };
+        const firebaserc = spend.callsLeft > 0 ? (spend.calls++, await source.base.read('.firebaserc', IMPORT_GRAPH_LIMITS.fileBytes).catch(() => null)) : null;
+        const project = projectOf(firebaserc);
+        for (const t of targets.filter(isGraphFile)) {
+            const text = changedTexts.get(t);
+            const found = await findEntries({
+                target: t,
+                ...(text ? { head: { text, lines: changedLines(t) } } : {}),
+                nodes,
+                rev,
+                hubImports: IMPORT_GRAPH_LIMITS.hubImports,
+                depth: IMPORT_GRAPH_LIMITS.depth,
+                nodesLimit: IMPORT_GRAPH_LIMITS.nodes,
+                read,
+                resolve: (spec, from) => resolveSpecifier(spec, from, view.ctx),
+                ...(project ? { project } : {}),
+                outOfTime: () => source.signal?.aborted === true || Date.now() - started > 3 * ENTRY_FINDER_LIMITS.millis,
+            });
+            if (found.length) entries[t] = found;
+        }
+    } catch {
+        // The entry finder only adds to the graph's routes: nothing found changes nothing.
+    }
+    return { routes: reached.routes, entries };
+}
+
+/**
+ * Reads the unread files nearest the route files found (and what imports them), a batch at a time, up to
+ * `reads` files: the app that mounts a router and the index that exports a function live near it and are
+ * never read when the routes alone settle the plan.
+ */
+async function readAbove(source: ReachSource, r: Reached, routeFiles: string[], reads: number, started: number): Promise<void> {
+    const { nodes, view: g, spend } = r;
+    const near = [...new Set(routeFiles)];
+    if (!near.length) return;
+    const unread = () => g.paths.filter((p) => isGraphFile(p) && !nodes.has(p));
+    const dirSegs = new Map<string, string[]>();
+    const segsOf = (d: string) => dirSegs.get(d) ?? (dirSegs.set(d, d ? d.split('/') : []), dirSegs.get(d)!);
+    let done = 0;
+    while (done < reads && Date.now() - started < IMPORT_GRAPH_LIMITS.millis && source.signal?.aborted !== true && spend.callsLeft > 0 && spend.scanLeft > 0) {
+        const rest = unread();
+        if (!rest.length) return;
+        // Files above a route: the importers known so far of every file the routes sit in, up to a few hops.
+        const rev = reverseEdges(nodes);
+        const above = new Set(near);
+        let frontier = near;
+        for (let hop = 0; hop < IMPORT_GRAPH_LIMITS.depth && frontier.length && above.size < IMPORT_GRAPH_LIMITS.nodes; hop++) {
+            frontier = frontier.flatMap((f) => rev.get(f) ?? []).filter((f) => !above.has(f));
+            frontier.forEach((f) => above.add(f));
+        }
+        const targetDirs = [...new Set([...above].map(dirOf))].slice(0, 200).map(segsOf);
+        const score = new Map<string, number>();
+        for (const d of new Set(rest.map(dirOf))) score.set(d, Math.min(...targetDirs.map((t) => distance(segsOf(d), t))));
+        const batch = rest
+            .map((p) => [p, score.get(dirOf(p))! - (ROUTE_LIKE.test(p) ? 3 : 0) - (/(^|\/)(index|main|app|server)\.[cm]?[jt]sx?$/.test(p) ? 1 : 0)] as const)
+            .sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : 1))
+            .slice(0, Math.min(IMPORT_GRAPH_LIMITS.batch, reads - done))
+            .map(([p]) => p);
+        const texts = await readAll(source.base, batch, spend);
+        done += texts.size;
+        if (!texts.size) return;
+        for (const [p, text] of texts) {
+            const node = await scannedNodeOf(p, text, g, spend);
+            nodes.set(p, node);
+            g.nodes.set(p, node);
+        }
+    }
+}
+
+/** The default project id of a `.firebaserc`; undefined when absent or not a plain id. */
+function projectOf(text: string | null): string | undefined {
+    const json = text === null ? undefined : parseJsonc(text);
+    const id = (json as { projects?: { default?: unknown } } | undefined)?.projects?.default;
+    return typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,62}$/.test(id) ? id : undefined;
 }
 
 async function reach(
@@ -421,7 +553,7 @@ async function reach(
     changedPaths: readonly string[],
     wanted: string[],
     spend: Spend,
-): Promise<Record<string, ReachedRoute[]>> {
+): Promise<Reached> {
     const started = Date.now();
     const maxReads = importGraphReadsOf(source.budget);
     const outOfTime = () => Date.now() - started > IMPORT_GRAPH_LIMITS.millis || source.signal?.aborted === true;
@@ -488,5 +620,5 @@ async function reach(
         const routes = walk(t, nodes, rev).routes.slice(0, IMPORT_GRAPH_LIMITS.routesPerFile);
         if (routes.length) out[t] = routes;
     }
-    return out;
+    return { routes: out, nodes, view, changedTexts, spend };
 }

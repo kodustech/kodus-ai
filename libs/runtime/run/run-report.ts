@@ -188,10 +188,21 @@ export type ReportPath = z.infer<typeof ReportPathSchema>;
 export const BOOT_BLOCKER_CAUSES = ['boot_timeout', 'build_state_evicted'] as const;
 export type BootBlockerCause = (typeof BOOT_BLOCKER_CAUSES)[number];
 
+/**
+ * Why the planner left an entry point with no probe (reason no_probe): a closed set, never the planner's text.
+ * plan_failed: it produced no valid plan; planner_declined: it listed the entry point as one no request reaches;
+ * explored_no_probe: it explored the base machine and still submitted no probe for it; no_probe_submitted: it
+ * submitted a plan with no probe for it and explored nothing.
+ */
+export const NO_PROBE_CAUSES = ['plan_failed', 'planner_declined', 'explored_no_probe', 'no_probe_submitted'] as const;
+export type NoProbeCause = (typeof NO_PROBE_CAUSES)[number];
+
 /** An entry point without sufficient evidence for success, and why. */
 export const UncoveredSchema = z.strictObject({
     entryPoint: label,
     reason: z.enum(['no_probe', 'inconclusive', 'blocker', 'unverified', 'not_reached', 'pre_existing']),
+    /** For no_probe: why the planner left it without one (NO_PROBE_CAUSES). */
+    noProbeCause: z.enum(NO_PROBE_CAUSES).optional(),
     /** For a blocker: its kind and, for missing_env, the variable name (never a value). */
     blocker: z
         .strictObject({

@@ -7,7 +7,7 @@ import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
 import type { Observed, ProbeVerdict, ReportBrowserStep, ReportPath, RunState, RuntimeRunReport, RuntimeRunRequested, Uncovered, VerdictState } from '@libs/runtime/run';
 import type { RunBootFailure } from '@libs/runtime/run/boot-failure';
 import { isKeptCheckNotRun, KEPT_CHECK_SOURCE, type KeptCheckOutcome, MAX_KEPT_CHECKS_PER_REPOSITORY } from '@libs/runtime/contracts/kept-check';
-import { BOOT_BLOCKER_CAUSES, type BootBlockerCause, INTENT_PROBE_SOURCE, type ReportIntent } from '@libs/runtime/run/run-report';
+import { BOOT_BLOCKER_CAUSES, type BootBlockerCause, INTENT_PROBE_SOURCE, type NoProbeCause, type ReportIntent } from '@libs/runtime/run/run-report';
 import type { RuntimeRunProjection } from '@libs/runtime/run/run-projection';
 
 // The structured result the product renders into the comment, the replies and
@@ -279,14 +279,28 @@ export function entryPointsWithRoutes(entryPoints: string[], planned: { entryPoi
  * The report and the Run projection both carry it, so the PR comment and the
  * Run page say the same thing.
  */
-export function uncoveredOf(probes: ProbeVerdict[], entryPoints: string[], stoppedEarly?: boolean): Uncovered[] {
+export function uncoveredOf(probes: ProbeVerdict[], entryPoints: string[], stoppedEarly?: boolean, noProbeCause?: (entryPoint: string) => NoProbeCause | undefined): Uncovered[] {
     return entryPoints.slice(0, 100).map((entryPoint) => {
         const probe = probes.find((p) => p.entryPoint === entryPoint && UNCOVERED_FROM_VERDICT[p.verdict]);
         const preExisting = probes.some((p) => p.entryPoint === entryPoint && p.verdict === 'pre_existing');
         const reason: Uncovered['reason'] = probe ? UNCOVERED_FROM_VERDICT[probe.verdict]! : preExisting ? 'pre_existing' : stoppedEarly ? 'not_reached' : 'no_probe';
         const blocker = reason === 'blocker' ? validBlocker(probe?.blocker) : undefined;
-        return { entryPoint: clip(entryPoint, 512), reason, ...(blocker ? { blocker } : {}) };
+        const cause = reason === 'no_probe' ? noProbeCause?.(entryPoint) : undefined;
+        return { entryPoint: clip(entryPoint, 512), reason, ...(cause ? { noProbeCause: cause } : {}), ...(blocker ? { blocker } : {}) };
     });
+}
+
+/**
+ * Why the plan left `entryPoint` (an entry point id or `unmapped:<file>`) with no probe: the planner's own
+ * "<file>: <why>" line in cannotProve (it declined), else no valid plan, else exploring that ended with no probe,
+ * else a plan with none. Never the planner's text: the report carries only the closed cause.
+ */
+export function noProbeCauseOf(plan: { probes: unknown[]; rejected: { reason: string }[]; cannotProve: string[]; explored: number }, entryPoint: string): NoProbeCause | undefined {
+    if (plan.probes.length) return undefined;
+    const name = entryPoint.replace(/^unmapped:/, '');
+    if (plan.cannotProve.some((line) => line.startsWith(`${name}:`) || line.startsWith(`${entryPoint}:`))) return 'planner_declined';
+    if (plan.rejected.some((r) => r.reason.startsWith('plan: the agent submitted no valid plan'))) return 'plan_failed';
+    return plan.explored > 0 ? 'explored_no_probe' : 'no_probe_submitted';
 }
 
 /** What the comment and the page may name: a variable name only, never a value (run-report.ts UncoveredSchema). */

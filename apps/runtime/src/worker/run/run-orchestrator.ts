@@ -83,7 +83,7 @@ import { stableStepId } from './step-id';
 import { claimIdFor } from '../../shared/claim-id';
 import { externalVerificationPlan } from './external-verification';
 import { keptOutcomesOf, type PlayedKeptCheck, playKeptChecks } from './kept-checks';
-import { bootBlockerOf, entryPointsWithRoutes, infraBootBlocker, uncoveredByBoot, uncoveredByMemberNotBooted, uncoveredOf, buildReport, observedOf } from './report';
+import { bootBlockerOf, entryPointsWithRoutes, infraBootBlocker, uncoveredByBoot, noProbeCauseOf, uncoveredByMemberNotBooted, uncoveredOf, buildReport, observedOf } from './report';
 import { buildStepsOf, phasesOf } from './build-steps';
 import { type PhaseEstimates, phaseEstimates } from './run-estimates';
 import type { RunEvidence } from './run-evidence';
@@ -2037,7 +2037,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
             findings: verdict.findings,
             ...(reproduction ? { reproduction: redactDeep(reproduction, canaries) } : {}),
             uncoveredEntryPoints: verdict.uncoveredEntryPoints,
-            uncovered: uncoveredOf(probes, verdict.uncoveredEntryPoints, ctx.stoppedEarly),
+            uncovered: uncoveredOf(probes, verdict.uncoveredEntryPoints, ctx.stoppedEarly, (entryPoint) => noProbeCauseOf(plan, entryPoint)),
             verdictState: verdict.verdictState,
             ...(exercised ? { exercised } : {}),
             ...(kept ? { keptChecks: kept } : {}),

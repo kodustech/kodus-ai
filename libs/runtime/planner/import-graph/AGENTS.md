@@ -8,6 +8,8 @@ Reverse reachability over a static JS/TS import graph (docs §9.8): a changed fi
 - Specifier resolution: `resolve.ts` `resolveSpecifier` (relative paths, tsconfig/jsconfig `paths` and `baseUrl` via `aliasesOf` and `parseJsonc`, workspace packages via `packageOf`).
 - Routes a file declares by convention: `routes.ts` `routesOf` (Next.js app and pages routers, Remix, Nest controllers and GraphQL resolvers, Express/Koa/Hono, Fastify, a router-named receiver as fallback), within `ROUTE_LIMITS`.
 
+- The entry finder: `entry-finder.ts` `findEntries` (called by `reach.ts` `entriesReaching`), which ranks the routes reaching a changed file by whether the route's handler calls the changed function (`changedNamesOf` names the top-level function the changed lines sit in; `followNames` follows those names through the imports, re-exports and calls of each file on the chain; `yes`, `no`, `unknown`), then by hops. It adds the mount prefixes between a router and its app and, for a Firebase `onRequest` export, the emulator path `/<project>/<region>/<export names joined by "-">/<route>` (the project from `.firebaserc`, the group from `export * as <group> from`). Bounded by `ENTRY_FINDER_LIMITS` and by `IMPORT_GRAPH_LIMITS.entryReads` extra reads above the routes found. A parse that fails, a CommonJS export or a name it cannot follow answers `unknown`, never a made-up route.
+
 ## Does not own
 - Routes a changed file declares itself: `libs/runtime/entry-points/extract.ts` (`routes.ts` uses its `extractEntryPoints`).
 - Reading files: the planner's `RepoReader`.
@@ -29,7 +31,7 @@ Reverse reachability over a static JS/TS import graph (docs §9.8): a changed fi
 
 ## Module map
 
-Files (3, tests apart): `reach.ts`, `resolve.ts`, `routes.ts`
+Files (4, tests apart): `entry-finder.ts`, `reach.ts`, `resolve.ts`, `routes.ts`
 
 Imports these Runtime modules:
 

@@ -8,7 +8,7 @@ The shared core of a Run's test planner (ADR-069): an agent that reads the repos
 - Plans without a model: `plan-without-model.ts` `planWithoutModel` (only dependency versions or only comments move; each file goes in `cannotProve`).
 - Bounded repository reads: `repo-reader.ts` `RepoReader` (with an optional `readMany`, at most `READ_MANY_MAX` paths a call), `repoPath`, `READ_LIMITS`, secret files and assignments masked (`isSecretFile`, `redactForModel`, `modelView`); `file-window.ts` windows of numbered lines (`windowedView`, `WINDOW_LIMITS`); `code-search.ts` `searchCode`, a literal grep (`SEARCH_LIMITS`).
 - The repository's notes for the planner: `environment-notes.ts` `readEnvironmentNotes` (`.kodus/runtime-notes.md` at the base commit, redacted through `modelView`, at most `ENVIRONMENT_NOTES_LIMITS.promptChars`), carried in every round's prompt as data. A read failure plans without them.
-- Routes reaching a changed file through imports: `import-graph/` ([its AGENTS.md](import-graph/AGENTS.md)).
+- Routes reaching a changed file through imports: `import-graph/` ([its AGENTS.md](import-graph/AGENTS.md)); `planTests` hands the prompt both the graph's routes and the entry finder's candidates (`entriesForPrompt`: the route that calls the changed function first, with its emulator path), and the nudge to explore quotes the best one (`firstCandidateOf`).
 
 ## Does not own
 - Git credentials, model slots and BYOK: the caller hands an `AgentRunner` and the readers (the API's `GitRepoReader`, the worker's planner-source client).

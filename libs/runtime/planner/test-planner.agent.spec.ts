@@ -686,6 +686,50 @@ describe('a changed helper in a large monorepo (exploring, not giving up)', () =
     });
 });
 
+describe('the entry point that reaches a changed function (kr: a helper under a Firebase app)', () => {
+    const BAG = "export function toBagItem(product) {\n    return { description: product.description };\n}\nexport function bagLabel(name) {\n    return name;\n}";
+    const SHOP: Record<string, string> = {
+        '.firebaserc': '{"projects":{"default":"shop-dev"}}',
+        'functions/order/src/api/utils/bag.ts': BAG,
+        'functions/order/src/api/controllers/orders.ts': "import { toBagItem } from '../utils/bag';\nexport const createOrder = (req, res) => res.json(req.body.products.map(toBagItem));\nexport const listOrders = (req, res) => res.json([]);",
+        'functions/order/src/api/routes.ts': "import { Router } from 'express';\nimport { createOrder, listOrders } from './controllers/orders';\nconst router = Router();\nrouter.get('/orders', listOrders);\nrouter.post('/orders', createOrder);\nexport default router;",
+        'functions/order/src/api/app.ts': "import express from 'express';\nimport router from './routes';\nconst app = express();\napp.use('/v1', router);\nexport default app;",
+        'functions/order/src/index.ts': "import { onRequest } from 'firebase-functions/v2/https';\nimport app from './api/app';\nexport const checkout = onRequest(app);",
+    };
+    const bagRequest = () =>
+        request({
+            entryPoints: [{ id: 'unmapped:functions/order/src/api/utils/bag.ts', kind: 'unmapped' }],
+            changedPaths: ['functions/order/src/api/utils/bag.ts'],
+            diff: '--- functions/order/src/api/utils/bag.ts\n@@ -1,3 +1,3 @@\n export function toBagItem(product) {\n-    return { description: product.description ?? \'\' };\n+    return { description: product.description };\n }',
+            targets: [{ service: 'functions', port: 5001, kind: 'http' }],
+        });
+    const runBag = (req: RunPlanRequest) =>
+        planTests({ runner: new AiSdkAgentRunner(undefined), base: readerOf(SHOP), head: readerOf(SHOP) }, { runId: req.runId, repositoryName: 'acme/shop', baseSha: 'e'.repeat(40), request: req });
+
+    // Behavior: the first prompt names the route whose handler calls the changed function, at the path the emulator serves it.
+    it('puts the route that calls the changed function first in the prompt, with its emulator path', async () => {
+        const prompts = scripted([{ tool: SUBMIT_PLAN_TOOL, input: { cannotProve: ['functions/order/src/api/utils/bag.ts: none'] } }]);
+        await runBag(bagRequest());
+        const at = (needle: string) => prompts[0].indexOf(needle);
+        expect(prompts[0]).toContain('/shop-dev/us-central1/checkout/v1/orders');
+        expect(at('POST /v1/orders')).toBeGreaterThan(-1);
+        expect(at('POST /v1/orders')).toBeLessThan(at('GET /v1/orders'));
+        expect(prompts[0]).toMatch(/handlerCallsChangedFunction\\+":\\+"yes/);
+    });
+
+    // Behavior: an empty plan is sent back to explore with the request to call first.
+    it('quotes the best candidate when it sends a plan with no probe back to explore', async () => {
+        const prompts = scripted([{ tool: SUBMIT_PLAN_TOOL, input: { probes: [], cannotProve: ['functions/order/src/api/utils/bag.ts: no route'] } }, { tool: EXEC_ON_BASE_TOOL, input: { commands: ['wget -S -O /tmp/r http://127.0.0.1:5001/shop-dev/us-central1/checkout/v1/orders'] } }]);
+        await runBag(bagRequest());
+        expect(prompts[1]).toContain('call POST /shop-dev/us-central1/checkout/v1/orders');
+    });
+
+    it('sends the same prompt as before when no entry candidate is found', () => {
+        const input = { repositoryName: 'shop', baseSha: 'b'.repeat(40), request: bagRequest() };
+        expect(testPlannerPrompt({ ...input, entries: {} })).toBe(testPlannerPrompt(input));
+    });
+});
+
 describe('the planner budget fits a large monorepo inside a Run', () => {
     // Behavior: the three rounds of one plan stay inside what a Run may spend by default, and the round that reads gets the most.
     it('keeps the three rounds under a Run\'s default tokens, the first round with the largest share', () => {

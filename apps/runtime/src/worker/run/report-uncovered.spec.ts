@@ -1,7 +1,7 @@
 import { decideRunVerdict, RuntimeRunReportSchema } from '@libs/runtime/run';
 import { renderCheckOutput, renderReportComment } from '@libs/runtime-publish/domain/render-runtime-comment';
 
-import { bootBlockerOf, buildReport, uncoveredByBoot, uncoveredOf } from './report';
+import { bootBlockerOf, buildReport, noProbeCauseOf, uncoveredByBoot, uncoveredOf } from './report';
 
 const probe = (entryPoint: string, verdict: any) => ({ probeId: entryPoint, entryPoint, verdict, reason: 'r' }) as any;
 
@@ -125,6 +125,35 @@ describe('entryPointsWithRoutes', () => {
             uncovered: [],
         });
         expect(report.paths[0].via).toBe('pkg/api/health.go');
+        expect(RuntimeRunReportSchema.safeParse(report).success).toBe(true);
+    });
+});
+
+describe('why the planner left an entry point with no probe', () => {
+    const plan = (over: Partial<Parameters<typeof noProbeCauseOf>[0]> = {}) => ({ probes: [], rejected: [], cannotProve: [], explored: 0, ...over });
+    const file = 'unmapped:functions/order/src/api/utils/bag.ts';
+
+    // Behavior: a Run partly tested for "no_probe" says whether the planner explored, declined or never planned.
+    it('says the planner explored the base machine and submitted no probe for it', () => {
+        expect(noProbeCauseOf(plan({ explored: 4 }), file)).toBe('explored_no_probe');
+    });
+
+    it('says the planner submitted a plan with no probe and did not explore', () => {
+        expect(noProbeCauseOf(plan(), file)).toBe('no_probe_submitted');
+    });
+
+    it('says the planner listed it as something no request reaches, even after exploring', () => {
+        expect(noProbeCauseOf(plan({ explored: 2, cannotProve: ['functions/order/src/api/utils/bag.ts: only a job calls it'] }), file)).toBe('planner_declined');
+    });
+
+    it('says the planner never produced a valid plan', () => {
+        expect(noProbeCauseOf(plan({ rejected: [{ reason: 'plan: the agent submitted no valid plan (the token budget ran out)' }] }), file)).toBe('plan_failed');
+    });
+
+    it('is carried on the no_probe entry only, in the report the schema accepts', () => {
+        const rows = uncoveredOf([probe('GET /a', 'inconclusive')], ['GET /a', file], false, (ep) => (ep === file ? 'explored_no_probe' : undefined));
+        expect(rows).toEqual([{ entryPoint: 'GET /a', reason: 'inconclusive' }, { entryPoint: file, reason: 'no_probe', noProbeCause: 'explored_no_probe' }]);
+        const report = buildReport({ req: { requestedAt: '2026-11-06T18:00:00.000Z', headSha: 'a'.repeat(40), trigger: 'pull_request' }, state: 'partly_tested' as any, probes: [], steps: [], uncovered: [file], uncoveredDetail: rows });
         expect(RuntimeRunReportSchema.safeParse(report).success).toBe(true);
     });
 });
