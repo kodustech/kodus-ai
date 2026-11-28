@@ -1633,6 +1633,7 @@ export class ForgejoService implements Omit<
             const result = await repoGet({
                 client,
                 path: { owner: repoInfo.owner, repo: repoInfo.repo },
+                throwOnError: params.strict,
             });
             return result.data?.default_branch || fallback('none returned');
         } catch (error) {
