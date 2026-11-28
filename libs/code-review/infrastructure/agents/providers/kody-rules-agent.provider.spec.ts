@@ -1141,9 +1141,9 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             'Kody Rules could not be evaluated: all 12 rule check(s) failed to run. Your Kody Rules were not applied to this PR.',
         );
 
-        // The four shards already in flight (concurrency 4) fail; the other
-        // eight are skipped instead of called.
-        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(4);
+        // The leader fails, then the sibling it handed the lead to: two refusals
+        // in a row, and the other ten are skipped instead of called.
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(2);
         const refusals = warnSpy.mock.calls.filter(
             (c) =>
                 (c[0] as any)?.message ===
@@ -1593,20 +1593,66 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         expect(call.byokConfig).toBeUndefined();
     });
 
-    it('declares the shard head as a shared prompt-cache prefix', async () => {
+    it("declares the shard's prefixes for the prompt cache", async () => {
         const runJudge = await captureRunJudge('anthropic');
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
-        await invoke(runJudge, { user: 'HEAD\nTAIL', cachePrefix: 'HEAD\n' });
+        await invoke(runJudge, {
+            user: 'RULES\nHEAD\nTAIL',
+            cachePrefixes: ['RULES\n', 'RULES\nHEAD\n'],
+        });
         const call = mockRunStructuredReviewCall.mock.calls[0][0];
-        expect(call.promptCache).toEqual({ userPrefix: 'HEAD\n' });
+        expect(call.promptCache).toEqual({
+            userPrefixes: ['RULES\n', 'RULES\nHEAD\n'],
+        });
     });
 
-    it('declares nothing for a shard that shares no head', async () => {
+    it('declares nothing for a shard with nothing to mark', async () => {
         const runJudge = await captureRunJudge('anthropic');
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
-        await invoke(runJudge);
+        await invoke(runJudge, { cachePrefixes: [] });
         const call = mockRunStructuredReviewCall.mock.calls[0][0];
         expect(call.promptCache).toBeUndefined();
+    });
+
+    it("tells the judge the model answered before it checks the findings' evidence", async () => {
+        const provider = makeBoundaryProvider('anthropic');
+        let runJudge: CapturedRunJudge | undefined;
+        mockJudge.mockImplementationOnce(async (args: any) => {
+            runJudge = args.runJudge;
+            return { violations: [], shardsRun: 1, shardsErrored: 0 };
+        });
+        await provider.execute(boundaryInput() as any);
+        const order: string[] = [];
+        jest.spyOn((provider as any).shardLogger, 'log').mockImplementation(
+            (entry: any) => {
+                if (/withheld without verified evidence/.test(entry.message))
+                    order.push('evidence');
+            },
+        );
+        mockRunStructuredReviewCall.mockResolvedValueOnce({
+            violations: [
+                {
+                    ruleId: 1,
+                    needsRepositoryEvidence: true,
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'defined nowhere',
+                },
+            ],
+        });
+        await invoke(runJudge!, {
+            ruleUnits: [{ uuid: RULE_UUID, rule: 'r' }],
+            onAnswered: () => order.push('answered'),
+        });
+        expect(order).toEqual(['answered', 'evidence']);
+    });
+
+    it('does not tell the judge the model answered when the call failed: nothing was cached', async () => {
+        const runJudge = await captureRunJudge('anthropic');
+        mockRunStructuredReviewCall.mockRejectedValueOnce(new Error('boom'));
+        const onAnswered = jest.fn();
+        await expect(invoke(runJudge, { onAnswered })).rejects.toThrow('boom');
+        expect(onAnswered).not.toHaveBeenCalled();
     });
 
     it('logs how the shards were grouped for the prompt cache, with the org and PR', async () => {
@@ -1619,6 +1665,10 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
             siblings: 3,
             siblingsAfterLeader: 2,
             siblingsEarly: 1,
+            idleWaits: 1,
+            idleWaitMs: 800,
+            leadersReleasedAtAnswer: 1,
+            leaderHandovers: 0,
         };
         mockJudge.mockImplementationOnce(async () => ({
             violations: [],
@@ -1631,6 +1681,9 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
             .map((c: any[]) => c[0])
             .find((e: any) => /prompt cache/.test(e.message));
         expect(entry).toBeDefined();
+        expect(entry.message).toContain('2 of 3 sibling(s) read their leader');
+        expect(entry.message).toContain('1 sent early');
+        expect(entry.message).toContain('1 wait(s), 800 ms');
         expect(entry.metadata).toMatchObject({
             organizationAndTeamData: {
                 organizationId: 'org-xyz',

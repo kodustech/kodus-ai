@@ -602,6 +602,9 @@ async function runReviewCall<T>(
             ...(cached.marked.length
                 ? { promptCacheMarked: cached.marked.join(',') }
                 : {}),
+            ...(cached.userBreakpoints
+                ? { promptCacheUserBreakpoints: cached.userBreakpoints }
+                : {}),
             ...(cached.skipped ? { promptCacheSkipped: cached.skipped } : {}),
             ...(cached.droppedAutoCache
                 ? { promptCacheAutoDropped: true }

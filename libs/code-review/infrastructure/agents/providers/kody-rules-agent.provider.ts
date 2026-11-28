@@ -315,7 +315,8 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             let evidenceFailures = 0;
             let evidenceSkipped = 0;
             const runJudge: RunJudge = async (shard) => {
-                const { system, user, filename, cachePrefix } = shard;
+                const { system, user, filename, cachePrefixes, onAnswered } =
+                    shard;
                 // The validate step recovers or rejects an off-shape reply but
                 // has no org or PR; this call logs what it did, with them.
                 const reshapes: ShardReplyReshape[] = [];
@@ -342,10 +343,10 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         system,
                         user,
                         runName: 'kodus-rules-review-agent.shard',
-                        // Shards with the same rules open with the same head;
+                        // Shards with the same rules open with the same text;
                         // marking it lets the provider serve it from cache.
-                        ...(cachePrefix
-                            ? { promptCache: { userPrefix: cachePrefix } }
+                        ...(cachePrefixes?.length
+                            ? { promptCache: { userPrefixes: cachePrefixes } }
                             : {}),
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
@@ -354,6 +355,12 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                             agentName: this.getIdentity().name,
                             ...(filename ? { file: filename } : {}),
                         },
+                    }).then((answer) => {
+                        // Siblings can read this shard's cache from here on,
+                        // while its findings' evidence is still being checked.
+                        // A call that failed cached nothing to read.
+                        onAnswered?.();
+                        return answer;
                     });
                     const candidates = parsed?.violations ?? [];
                     const evidenceDeadline = Date.now() + 180_000;
@@ -799,7 +806,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             const { referenceStats, promptCacheStats } = result;
             if (promptCacheStats?.fileShards > 0) {
                 this.shardLogger.log?.({
-                    message: `[kody-rules-shard] prompt cache: ${promptCacheStats.fileShards} file shard(s) in ${promptCacheStats.groups} head group(s), ${promptCacheStats.sharedGroups} shared; ${promptCacheStats.siblingsAfterLeader} of ${promptCacheStats.siblings} sibling(s) ran after their group's first shard`,
+                    message: `[kody-rules-shard] prompt cache: ${promptCacheStats.fileShards} file shard(s) in ${promptCacheStats.groups} head group(s), ${promptCacheStats.sharedGroups} shared; ${promptCacheStats.siblingsAfterLeader} of ${promptCacheStats.siblings} sibling(s) read their leader, ${promptCacheStats.siblingsEarly} sent early; ${promptCacheStats.idleWaits} wait(s), ${promptCacheStats.idleWaitMs} ms; ${promptCacheStats.leadersReleasedAtAnswer} leader(s) released at the model's answer`,
                     context: this.getIdentity().name,
                     metadata: { ...logMetadata, ...promptCacheStats },
                 });

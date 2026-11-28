@@ -1672,7 +1672,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             user,
             byokConfig: claude,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(sent().prompt).toBeUndefined();
         expect(sent().messages).toEqual([
@@ -1699,7 +1699,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             user,
             byokConfig: claudeOnBedrock,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(sent().messages[0].content[0].providerOptions).toEqual({
             bedrock: { cachePoint: { type: 'default' } },
@@ -1712,7 +1712,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             user,
             byokConfig: gpt,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(sent().messages[0].content[0].providerOptions).toEqual({
             openai: { promptCacheBreakpoint: { mode: 'explicit' } },
@@ -1729,7 +1729,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             user,
             byokConfig: gemini,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(sent().prompt).toBe(user);
         expect(sent().messages).toBeUndefined();
@@ -1770,7 +1770,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             schema: z.object({ ok: z.boolean() }),
             user,
             byokConfig: gpt,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(mockGenerate).toHaveBeenCalledTimes(2);
         const [headPart, tailPart] = sent(1).messages[0].content;
@@ -1795,7 +1795,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             schema: z.object({ ok: z.boolean() }),
             user,
             byokConfig: glm,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(sent().prompt.startsWith(user)).toBe(true);
         expect(sent().prompt.toLowerCase()).toContain('json');
@@ -1812,7 +1812,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             user,
             byokConfig: claude,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(mockGenerate).toHaveBeenCalledTimes(2);
         expect(sent(1).messages[0].content[0].text).toBe(head);
@@ -1824,7 +1824,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             ...base,
             user,
             byokConfig: claude,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
             providerOptions: {
                 anthropic: {
                     cacheControl: { type: 'ephemeral' },
@@ -1851,7 +1851,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             },
             user,
             byokConfig: claude,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
             providerOptions: {
                 anthropic: { cacheControl: { type: 'ephemeral' } },
             },
@@ -1870,13 +1870,44 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
         expect(logged?.metadata).not.toHaveProperty('note');
     });
 
+    it('records how many breakpoints the user turn carries', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefixes: ['<Rules>\n', head] },
+        });
+        expect(sent().messages[0].content).toHaveLength(3);
+        expect(spanAttrs().promptCacheMarked).toBe('userPrefix');
+        expect(spanAttrs().promptCacheUserBreakpoints).toBe(2);
+    });
+
+    it('leaves the automatic cacheControl of a call that marks nothing alone', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefixes: [] },
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(sent().providerOptions).toEqual({
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+        });
+        expect(spanAttrs().promptCacheAutoDropped).toBeUndefined();
+    });
+
     it('records a declared head the turn does not start with', async () => {
         mockGenerate.mockResolvedValueOnce(answer);
         await runStructuredReviewCall({
             ...base,
             user,
             byokConfig: claude,
-            promptCache: { userPrefix: 'something else' },
+            promptCache: { userPrefixes: ['something else'] },
         });
         expect(sent().prompt).toBe(user);
         expect(spanAttrs().promptCacheSkipped).toBe('prefix-mismatch');
@@ -1889,7 +1920,7 @@ describe('promptCache — a one-shot call that shares a prefix with sibling call
             user,
             runName: 'text.run',
             byokConfig: claude,
-            promptCache: { userPrefix: head },
+            promptCache: { userPrefixes: [head] },
         });
         expect(sent().messages[0].content[0].text).toBe(head);
     });

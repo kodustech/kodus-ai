@@ -134,7 +134,7 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt,
-            cache: { userPrefix: head, system: true },
+            cache: { userPrefixes: [head], system: true },
             hint: undefined,
         });
         expect(out.args).toEqual({ system, prompt });
@@ -145,7 +145,7 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt,
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
             hint: { part: BEDROCK },
         });
         expect(out.args).toEqual({
@@ -163,11 +163,80 @@ describe('applyOneShotCache', () => {
         expect(out.marked).toEqual(['userPrefix']);
     });
 
+    it('marks each nested prefix of the user turn, shortest first', () => {
+        const rules = '<Rules>\n[1] no console\n</Rules>\n';
+        const headWithIntent = `${rules}<PR title="x">\n</PR>\n`;
+        const turn = `${headWithIntent}${tail}`;
+        const out = applyOneShotCache({
+            system,
+            prompt: turn,
+            cache: { userPrefixes: [headWithIntent, rules] },
+            hint: { part: ANTHROPIC },
+        });
+        expect(out.args.messages?.[0].content).toEqual([
+            { type: 'text', text: rules, providerOptions: ANTHROPIC },
+            {
+                type: 'text',
+                text: '<PR title="x">\n</PR>\n',
+                providerOptions: ANTHROPIC,
+            },
+            { type: 'text', text: tail },
+        ]);
+        expect(out.marked).toEqual(['userPrefix']);
+        expect(out.userBreakpoints).toBe(2);
+    });
+
+    it('marks the prefixes the turn starts with and skips the others', () => {
+        const rules = '<Rules>\n[1] no console\n</Rules>\n';
+        const out = applyOneShotCache({
+            system,
+            prompt: `${rules}${tail}`,
+            cache: { userPrefixes: [rules, `${rules}<PR title="y">`, ''] },
+            hint: { part: BEDROCK },
+        });
+        expect(out.args.messages?.[0].content).toEqual([
+            { type: 'text', text: rules, providerOptions: BEDROCK },
+            { type: 'text', text: tail },
+        ]);
+        expect(out.userBreakpoints).toBe(1);
+        expect(out.skipped).toBe('prefix-mismatch');
+    });
+
+    it('marks a repeated prefix once', () => {
+        const out = applyOneShotCache({
+            system,
+            prompt,
+            cache: { userPrefixes: [head, head] },
+            hint: { part: ANTHROPIC },
+        });
+        expect(out.args.messages?.[0].content).toHaveLength(2);
+        expect(out.userBreakpoints).toBe(1);
+    });
+
+    it('never sends more than four breakpoints, the system prompt included', () => {
+        const parts = ['a', 'ab', 'abc', 'abcd', 'abcde'];
+        const out = applyOneShotCache({
+            system,
+            prompt: 'abcdef',
+            cache: { system: true, userPrefixes: parts },
+            hint: { part: ANTHROPIC },
+        });
+        const content = out.args.messages?.[0].content as Array<{
+            text: string;
+            providerOptions?: unknown;
+        }>;
+        expect(content.filter((p) => p.providerOptions)).toHaveLength(3);
+        expect(content.map((p) => p.text).join('')).toBe('abcdef');
+        // The longest prefixes are the ones kept: they cover the most.
+        expect(content[content.length - 1].text).toBe('f');
+        expect(out.userBreakpoints).toBe(3);
+    });
+
     it('sends the same text, only split', () => {
         const out = applyOneShotCache({
             system,
             prompt,
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
             hint: { part: ANTHROPIC },
         });
         const parts = (out.args.messages?.[0].content ?? []) as Array<{
@@ -180,7 +249,7 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt: head,
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
             hint: { part: ANTHROPIC },
         });
         expect(out.args.messages?.[0].content).toEqual([
@@ -192,7 +261,7 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt: `prefix-moved\n${prompt}`,
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
             hint: { part: ANTHROPIC },
         });
         expect(out.args).toEqual({ system, prompt: `prefix-moved\n${prompt}` });
@@ -233,7 +302,7 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt,
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
             hint: { part: OPENAI_PART, request: OPENAI_REQUEST },
             providerOptions: {
                 openai: { store: false, reasoningEffort: 'low' },
@@ -253,7 +322,20 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt: 'no head here',
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
+            hint: { part: OPENAI_PART, request: OPENAI_REQUEST },
+            providerOptions,
+        });
+        expect(out.args).toEqual({ system, prompt: 'no head here' });
+        expect(out.marked).toEqual([]);
+        expect(out.providerOptions).toBe(providerOptions);
+    });
+
+    it('leaves request options alone on a call that declares no cache', () => {
+        const providerOptions = { openai: { store: false } };
+        const out = applyOneShotCache({
+            system,
+            prompt,
             hint: { part: OPENAI_PART, request: OPENAI_REQUEST },
             providerOptions,
         });
@@ -264,7 +346,7 @@ describe('applyOneShotCache', () => {
         const out = applyOneShotCache({
             system,
             prompt,
-            cache: { userPrefix: head },
+            cache: { userPrefixes: [head] },
             hint: { part: ANTHROPIC },
             providerOptions: {
                 anthropic: {
@@ -293,7 +375,24 @@ describe('applyOneShotCache', () => {
         expect(out.droppedAutoCache).toBe(true);
     });
 
-    it('keeps an automatic cacheControl on an unmarked call', () => {
+    it('sends a call with nothing to mark as if it declared nothing, automatic cache included', () => {
+        const providerOptions = {
+            anthropic: { cacheControl: { type: 'ephemeral' } },
+        };
+        const out = applyOneShotCache({
+            system,
+            prompt,
+            cache: { userPrefixes: [] },
+            hint: { part: ANTHROPIC },
+            providerOptions,
+        });
+        expect(out.args).toEqual({ system, prompt });
+        expect(out.marked).toEqual([]);
+        expect(out.providerOptions).toBe(providerOptions);
+        expect(out.droppedAutoCache).toBe(false);
+    });
+
+    it('keeps an automatic cacheControl on a call that declares no cache', () => {
         const providerOptions = {
             anthropic: { cacheControl: { type: 'ephemeral' } },
         };

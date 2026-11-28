@@ -261,6 +261,8 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
             rules,
             runJudge,
             concurrency: 4,
+            // Requests in flight together, as the order below assumes.
+            leaderWaitMs: 0,
         });
 
         expect(runJudge).toHaveBeenCalledTimes(files.length);
@@ -283,10 +285,32 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
             rules,
             runJudge,
             concurrency: 4,
+            // Requests in flight together, as the order below assumes.
+            leaderWaitMs: 0,
         });
 
         expect(runJudge).toHaveBeenCalledTimes(4);
         expect(res.shardsRun).toBe(files.length);
+        expect(res.shardsErrored).toBe(files.length);
+        expect(res.providerRefusal).toBe('AUTH_INVALID');
+    });
+
+    it('stops a refused review whose siblings wait for their leader', async () => {
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                throw refusal(401, 'Incorrect API key provided');
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 4,
+        });
+
+        // The leader, then the sibling it handed the lead to: two refusals in a row.
+        expect(runJudge).toHaveBeenCalledTimes(2);
         expect(res.shardsErrored).toBe(files.length);
         expect(res.providerRefusal).toBe('AUTH_INVALID');
     });
@@ -355,6 +379,8 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
             rules,
             runJudge,
             concurrency: 3,
+            // Requests in flight together, as the order below assumes.
+            leaderWaitMs: 0,
         });
         await flush();
         // Two auth refusals: the next shards wait for the first request.

@@ -924,6 +924,10 @@ describe('judgeKodyRulesSharded — input edge cases', () => {
                 siblings: 0,
                 siblingsAfterLeader: 0,
                 siblingsEarly: 0,
+                idleWaits: 0,
+                idleWaitMs: 0,
+                leadersReleasedAtAnswer: 0,
+                leaderHandovers: 0,
             },
         };
         const noFiles = fakeJudge({});
