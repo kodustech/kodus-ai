@@ -30,6 +30,15 @@ import { resolveDeclaredEnvProvider } from '@libs/llm/env-declared-provider';
 
 const SELFHOSTED = __dirname;
 
+/**
+ * The bash in PATH, and macOS's own bash 3.2 when present: setup.sh and the
+ * provision render run on a developer's Mac, where 3.2 reads some quoting
+ * differently (an escaped quote in a replacement kept its backslashes).
+ */
+const SHELLS = [
+    ...new Set(['bash', ...(existsSync('/bin/bash') ? ['/bin/bash'] : [])]),
+];
+
 interface Sandbox {
     home: string;
     scripts: string;
@@ -71,9 +80,13 @@ function scriptEnv(box: Sandbox, extra: Record<string, string> = {}) {
 }
 
 /** Runs setup.sh answering each prompt with a line of `answers` ('' = Enter). */
-function runSetup(box: Sandbox, answers: string[]): Record<string, string> {
+function runSetup(
+    box: Sandbox,
+    answers: string[],
+    shell = 'bash',
+): Record<string, string> {
     // The trailing "n" declines the direnv offer when direnv is installed.
-    execFileSync('bash', [join(box.scripts, 'setup.sh')], {
+    execFileSync(shell, [join(box.scripts, 'setup.sh')], {
         input: `${[...answers, 'n'].join('\n')}\n`,
         cwd: box.home,
         env: scriptEnv(box),
@@ -523,13 +536,18 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
  * env_set (shipped with `declare -f`) and env_set lines, run by a bash that
  * parses them again, as the VM's does, against a `.env` in a temp dir.
  */
-function vmDotEnv(box: Sandbox, existing: string): Record<string, string> {
+function vmDotEnv(
+    box: Sandbox,
+    existing: string,
+    /** The developer's shell, which renders the block; the VM runs bash. */
+    renderShell = 'bash',
+): Record<string, string> {
     const vm = join(box.home, 'vm');
     mkdirSync(vm, { recursive: true });
     writeFileSync(join(vm, '.env'), existing);
     const common = join(box.scripts, '_common.sh');
     const remote = execFileSync(
-        'bash',
+        renderShell,
         [
             '-c',
             `. "${common}" && declare -f selfhosted_env_set && echo 'env_set() { selfhosted_env_set "$@"; }' && selfhosted_llm_env_sets`,
@@ -549,24 +567,27 @@ function vmDotEnv(box: Sandbox, existing: string): Record<string, string> {
 describe('selfhosted provision.sh writes the VM .env as the config holds it', () => {
     // QA of #2700: `ab$cd` arrived as `ab`, a backtick ran on the VM, a `"`
     // ended the script, and sed mangled an `&` in a URL already in the file.
-    it('writes every LLM value exactly, whatever shell or sed syntax it holds', () => {
-        const box = sandbox();
-        const key = 'ab$cd`touch RAN`"q\'x\\y';
-        const url = 'https://x.example/v1?a=1&b=2|c';
-        writeConfig(box, [
-            'API_LLM_PROVIDER=openai_compatible',
-            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
-            `API_LLM_API_KEY='${key.replace(/'/g, `'\\''`)}'`,
-            `API_LLM_BASE_URL='${url}'`,
-        ]);
+    it.each(SHELLS)(
+        'writes every LLM value exactly, whatever shell or sed syntax it holds (rendered by %s)',
+        (shell) => {
+            const box = sandbox();
+            const key = 'ab$cd`touch RAN`"q\'x\\y';
+            const url = 'https://x.example/v1?a=1&b=2|c';
+            writeConfig(box, [
+                'API_LLM_PROVIDER=openai_compatible',
+                'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+                `API_LLM_API_KEY='${key.replace(/'/g, `'\\''`)}'`,
+                `API_LLM_BASE_URL='${url}'`,
+            ]);
 
-        const env = vmDotEnv(box, 'API_LLM_BASE_URL=old\nOTHER=1\n');
+            const env = vmDotEnv(box, 'API_LLM_BASE_URL=old\nOTHER=1\n', shell);
 
-        expect(env.API_LLM_API_KEY).toBe(key);
-        expect(env.API_LLM_BASE_URL).toBe(url);
-        expect(env.API_LLM_PROVIDER).toBe('openai_compatible');
-        expect(env.OTHER).toBe('1');
-    });
+            expect(env.API_LLM_API_KEY).toBe(key);
+            expect(env.API_LLM_BASE_URL).toBe(url);
+            expect(env.API_LLM_PROVIDER).toBe('openai_compatible');
+            expect(env.OTHER).toBe('1');
+        },
+    );
 
     // Before provision.sh, the config itself: setup.sh wrote values unquoted
     // and the scripts source it, so a base URL lost everything after its `&`
@@ -599,6 +620,81 @@ describe('selfhosted provision.sh writes the VM .env as the config holds it', ()
         expect(env.API_LLM_BASE_URL).toBe(url);
     });
 
+    // A path typed at the prompt arrives as typed: `~/…` was expanded when
+    // the scripts sourced the unquoted value, and a quoted one never is.
+    it('keeps an installer path typed with ~ pointing at the home directory', () => {
+        const box = sandbox();
+        writeConfig(box, [`DIGITALOCEAN_TOKEN=${DO_TOKEN}`]);
+        runSetup(box, [
+            '',
+            '',
+            '',
+            'openai_compatible',
+            'kimi-k2.6',
+            'sk-x',
+            'https://x.example/v1',
+            '',
+            '~/kodus-installer',
+        ]);
+        const sourced = execFileSync(
+            'bash',
+            [
+                '-c',
+                'set -a; . "$HOME/.kodus-dev/config"; printf %s "$KODUS_INSTALLER_PATH"',
+            ],
+            { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+        ).toString();
+        expect(sourced).toBe(join(box.home, 'kodus-installer'));
+    });
+
+    // scripts/e2e reads the same file line by line (`load_config_file`),
+    // not by sourcing it: a value setup.sh had to quote reads back exactly.
+    it.each(SHELLS)(
+        'lets the e2e scripts read back a quoted value, apostrophe included (%s)',
+        (shell) => {
+            const box = sandbox();
+            const installer = "/tmp/o'brien/kodus-installer";
+            const url = 'https://gw.example/v1?api-version=2&tier=b';
+            writeConfig(box, [`DIGITALOCEAN_TOKEN=${DO_TOKEN}`]);
+            runSetup(
+                box,
+                [
+                    '',
+                    '',
+                    '',
+                    'openai_compatible',
+                    'kimi-k2.6',
+                    'sk-x',
+                    url,
+                    '',
+                    installer,
+                ],
+                shell,
+            );
+            const sourced = execFileSync(
+                shell,
+                [
+                    '-c',
+                    'set -a; . "$HOME/.kodus-dev/config"; printf %s "$KODUS_INSTALLER_PATH"',
+                ],
+                { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+            ).toString();
+            expect(sourced).toBe(installer);
+            for (const script of ['run.sh', 'cloud-setup-tenants.sh']) {
+                const loader = join(SELFHOSTED, '..', 'e2e', script);
+                const read = execFileSync(
+                    shell,
+                    [
+                        '-c',
+                        `eval "$(sed -n '/^load_config_file() {/,/^}/p' "${loader}")"; load_config_file "$HOME/.kodus-dev/config"; printf '%s\\n%s' "$KODUS_INSTALLER_PATH" "$API_LLM_BASE_URL"`,
+                    ],
+                    { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+                ).toString();
+                expect(read).toBe(`${installer}\n${url}`);
+            }
+        },
+    );
+
     // The sed it replaces ended provision's `set -e` block on failure; a
     // write that fails must not leave the VM running without its LLM key.
     it('ends the remote block when .env cannot be written', () => {
@@ -613,7 +709,11 @@ describe('selfhosted provision.sh writes the VM .env as the config holds it', ()
                     '-c',
                     `set -e; . "${common}"; selfhosted_env_set API_LLM_API_KEY k; echo after`,
                 ],
-                { cwd: vm, env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+                {
+                    cwd: vm,
+                    env: scriptEnv(box),
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                },
             ),
         ).toThrow();
         expect(existsSync(join(vm, '.env'))).toBe(false);

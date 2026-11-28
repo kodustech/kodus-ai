@@ -406,6 +406,11 @@ fi
 default_installer_path="${existing_installer_path:-$REPO_ROOT/../kodus-installer}"
 new_installer_path=$(prompt_plain "Path to kodus-installer checkout" "$default_installer_path" \
     "Where the local installer checkout lives (the script rsyncs it onto the droplet).")
+# Typed as `~/…`, the path reaches here unexpanded, and the config quotes a
+# value with `~` in it: store the home directory itself.
+case "$new_installer_path" in
+    "~" | "~/"*) new_installer_path="$HOME${new_installer_path#\~}" ;;
+esac
 if [ ! -d "$new_installer_path" ]; then
     warn "Directory $new_installer_path does not exist yet. That's fine — provision.sh will complain if you try to provision before cloning."
 fi
@@ -424,7 +429,10 @@ config_value() {
     case "$1" in
         *\'*) warn "A config value holds a single quote: the scripts read it back, direnv's dotenv may not." >&2 ;;
     esac
-    printf "'%s'" "${1//\'/\'\\\'\'}"
+    # In variables: bash 3.2 (macOS) keeps the backslashes of an escaped
+    # quote written inline in the replacement, and writes broken shell.
+    local quote="'" escaped="'\\''"
+    printf "'%s'" "${1//$quote/$escaped}"
 }
 
 # ---------- write config atomically ----------
