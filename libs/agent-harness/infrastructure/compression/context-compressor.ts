@@ -261,6 +261,24 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 /**
+ * Truncates a text to `maxChars` from its middle, keeping both ends. For the
+ * developer's own message: a prompt states its context first and its question
+ * last, and the head-only cut answered "I didn't get an actual question"
+ * (#2233 QA). Never splits a surrogate pair at either cut.
+ */
+export function truncateMiddle(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    let headEnd = Math.ceil(maxChars / 2);
+    let tailStart = text.length - Math.floor(maxChars / 2);
+    if (isHighSurrogate(text.charCodeAt(headEnd - 1))) headEnd--;
+    if (isLowSurrogate(text.charCodeAt(tailStart))) tailStart++;
+    return `${text.slice(0, headEnd)}…[truncated]…${text.slice(tailStart)}`;
+}
+
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
+const isLowSurrogate = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+
+/**
  * Truncates a structured tool-result payload while keeping it serializable.
  *
  * A tool-result's `output` is a discriminated object the provider switches on:
@@ -368,6 +386,7 @@ function truncateStructuredValue(
 function truncateToolMessage(
     msg: ModelMessage,
     maxChars: number,
+    cut: (text: string, maxChars: number) => string = truncateText,
 ): { msg: ModelMessage; truncated: boolean } {
     const content = msg.content;
     let truncated = false;
@@ -376,7 +395,7 @@ function truncateToolMessage(
         if (content.length > maxChars) {
             truncated = true;
             return {
-                msg: { ...msg, content: truncateText(content, maxChars) },
+                msg: { ...msg, content: cut(content, maxChars) },
                 truncated,
             };
         }
@@ -391,7 +410,7 @@ function truncateToolMessage(
             for (const field of ['text', 'output', 'result', 'content']) {
                 const v = next[field];
                 if (typeof v === 'string' && v.length > maxChars) {
-                    next[field] = truncateText(v, maxChars);
+                    next[field] = cut(v, maxChars);
                     truncated = true;
                 } else if (v && typeof v === 'object') {
                     // Structured output ({ type, value }) — shrink the inner text
@@ -578,8 +597,10 @@ function evictOldestRounds(
  * Last-resort clamp: shrink every message's text content with a geometrically
  * decreasing cap until the window estimates under `budgetTokens`. Truncates
  * only text/output/result/content fields (never tool-call `input`/`args`), so
- * assistant tool-call parts stay structurally intact. Bounded iteration count —
- * returns the best effort if a pathological window can't be reduced further.
+ * assistant tool-call parts stay structurally intact. A user message keeps
+ * both ends, where a prompt puts its question; the rest keep their start.
+ * Bounded iteration count — returns the best effort if a pathological window
+ * can't be reduced further.
  */
 function hardTruncateToFit(
     messages: ModelMessage[],
@@ -589,7 +610,14 @@ function hardTruncateToFit(
     let cap = HARD_CLAMP_MAX_CHARS_PER_RESULT;
     let work = messages;
     for (let i = 0; i < 12; i++) {
-        work = messages.map((m) => truncateToolMessage(m, cap).msg);
+        work = messages.map(
+            (m) =>
+                truncateToolMessage(
+                    m,
+                    cap,
+                    m.role === 'user' ? truncateMiddle : truncateText,
+                ).msg,
+        );
         if (estimateMessagesTokens(work, counts) <= budgetTokens) {
             return work;
         }
