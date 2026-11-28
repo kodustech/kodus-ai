@@ -50,6 +50,10 @@ export interface CellLocation {
     replicaUrl: string;
     owner: 'kodus' | 'customer';
     orgId?: string | null;
+    /** The key the cell's host is bound to (a perRun host), if any. */
+    boundKey?: string | null;
+    /** The most the cell grants one claim, if it names it. */
+    maxClaimSize?: MachineSize | null;
 }
 
 /** Why no slot was reserved although a cell is connected for the org. */
@@ -325,14 +329,15 @@ export async function reserveCellFor(
     for (let attempt = 0; attempt < RESERVE_ATTEMPTS; attempt++) {
         const reserved = await pool.query(RESERVE_CELL_SQL, [...mine, opts.prefer ?? null, cap, ...size, isolations, ...backend, ...scope]);
         if (reserved.rows[0]) return { row: reserved.rows[0] };
-        if (sibling && !(await pool.query(BACKEND_CELLS_SQL, [orgId, sibling.driver, sibling.isolation, ...scope])).rows[0]?.n) {
-            return { refused: 'backend_unavailable', driver: sibling.driver, isolation: sibling.isolation ?? null, ...(placement && sibling.pool_id ? { pool: sibling.pool_id } : {}) };
-        }
         const c = (await pool.query(CELL_CAPACITY_SQL, [...mine, ...size, isolations, ...scope])).rows[0] ?? { eligible: 0, isolating: 0, granting: 0, free: 0, free_own: 0, shared_open: 0 };
-        // No host bound to the Run yet: it is on its way (the demand above), a wait like a full cell.
+        // No host bound to the Run yet: it is on its way (the demand above), a wait like a full cell. Read before the
+        // backend: a side on a host of its own (a pair split across hosts) has no cell in scope until its host registers.
         if (perRun && !c.eligible) return { refused: 'no_capacity', pool: first!, hostStarting: true };
         // The template's host is not registered yet: the setup waits for it, as the admission path does.
         if (templateKey && !c.eligible) return { refused: 'no_capacity', hostStarting: true };
+        if (sibling && !(await pool.query(BACKEND_CELLS_SQL, [orgId, sibling.driver, sibling.isolation, ...scope])).rows[0]?.n) {
+            return { refused: 'backend_unavailable', driver: sibling.driver, isolation: sibling.isolation ?? null, ...(placement && sibling.pool_id ? { pool: sibling.pool_id } : {}) };
+        }
         if (!c.eligible) return { refused: 'no_cell' };
         if (isolations && !c.isolating) return { refused: 'isolation_unavailable', isolation: opts.isolation! };
         if (opts.size && !c.granting) return { refused: 'size_unavailable', size: opts.size, largest: await largestGrant(pool, orgId, isolations, scope) };
@@ -409,7 +414,11 @@ export class PgCellDirectory implements CellDirectory {
                 ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, ...(want.side && want.size ? { side: want.side, sideSize: { memoryMb: want.size.memoryMb, cpus: want.size.cpus } } : {}), suiteRunId: want.suiteRunId, shard: want.shard, setupKey: want.setupKey, isolation: want.isolation }) ?? undefined)
                 : undefined);
         const r = await reserveCellCapped(this.opts.inTransaction, orgId, { ...want, placement, sharedClaimCap: this.opts.sharedClaimCap ?? DEFAULT_ORG_SHARED_CLAIM_CAP });
-        if ('row' in r) return { cellId: r.row.cell_id, replicaUrl: r.row.replica_url, owner: r.row.owner, orgId: r.row.org_id };
+        if ('row' in r) {
+            const row = r.row;
+            const maxClaimSize = row.max_claim_memory_mb != null && row.max_claim_cpus != null ? { memoryMb: Number(row.max_claim_memory_mb), cpus: Number(row.max_claim_cpus) } : null;
+            return { cellId: row.cell_id, replicaUrl: row.replica_url, owner: row.owner, orgId: row.org_id, boundKey: row.bound_key ?? null, maxClaimSize };
+        }
         return r.refused === 'no_cell' ? null : r;
     }
 

@@ -69,7 +69,7 @@ const BOAT = 'boat-eu-perrun';
         );
 
     /** A connected cell; a row first when it has a pool, host or binding of its own (what registration writes). */
-    const connect = async (db: PoolClient, s: PgHubStore, row: { owner?: 'kodus' | 'customer'; orgId?: string; poolId?: string; boundKey?: string; slots?: number; epoch?: boolean } = {}) => {
+    const connect = async (db: PoolClient, s: PgHubStore, row: { owner?: 'kodus' | 'customer'; orgId?: string; poolId?: string; boundKey?: string; slots?: number; epoch?: boolean; maxClaimSize?: { memoryMb: number; cpus: number } } = {}) => {
         const cellId = `it-cell-${randomUUID()}`;
         const owner = row.owner ?? 'kodus';
         if (row.poolId || row.boundKey) {
@@ -78,7 +78,7 @@ const BOAT = 'boat-eu-perrun';
                 [cellId, row.orgId ?? null, owner, row.poolId ?? null, row.boundKey ?? null, row.boundKey ? `host-${randomUUID()}` : null],
             );
         }
-        await s.upsertSession({ cellId, replicaId: 'r', replicaUrl: `u-${cellId}`, owner, ...(row.orgId ? { orgId: row.orgId } : {}), driver: 'fake', ...(row.epoch ? { sessionEpoch: randomUUID() } : {}) });
+        await s.upsertSession({ cellId, replicaId: 'r', replicaUrl: `u-${cellId}`, owner, ...(row.orgId ? { orgId: row.orgId } : {}), driver: 'fake', ...(row.epoch ? { sessionEpoch: randomUUID() } : {}), ...(row.maxClaimSize ? { maxClaimSize: row.maxClaimSize } : {}) });
         await s.heartbeat(cellId, 'r', row.slots ?? 4);
         return cellId;
     };
@@ -126,6 +126,22 @@ const BOAT = 'boat-eu-perrun';
             const [base, pr] = [claimIdFor(org, 'r-1:base:1'), claimIdFor(org, 'r-1:pr:1')];
             expect(cellOf(await cells.reserveCell(org, { claimId: base, consumer: 'runtime', runId: 'r-1', sameBackendAs: [pr] }))).toBe(host);
             expect(cellOf(await cells.reserveCell(org, { claimId: pr, consumer: 'runtime', runId: 'r-1', sameBackendAs: [base] }))).toBe(host);
+        }));
+
+    it("a side whose own host is still starting waits for it, even once the other side runs on its host: the pair split across hosts never reads as a missing backend", () =>
+        isolated(async (db, s) => {
+            const org = `org-${randomUUID()}`;
+            await boatPool(db, [org]);
+            // A host class the pair (8 GB a side) does not fit: one host per side.
+            await db.query(`UPDATE runtime.runtime_host_pools SET status = status || '{"hostClass": {"memoryMb": 15360, "cpus": 8}}' WHERE pool_id = $1`, [BOAT]);
+            const baseHost = await connect(db, s, { poolId: BOAT, boundKey: `run:${org}/r-3/base`, maxClaimSize: { memoryMb: 12288, cpus: 6 } });
+            const cells = directory(db);
+            const [base, pr] = [claimIdFor(org, 'r-3:base:1'), claimIdFor(org, 'r-3:pr:1')];
+            const size = { memoryMb: 8192, cpus: 4 };
+            expect(cellOf(await cells.reserveCell(org, { claimId: base, consumer: 'runtime', runId: 'r-3', side: 'base', size, sameBackendAs: [pr] }))).toBe(baseHost);
+            expect(await cells.reserveCell(org, { claimId: pr, consumer: 'runtime', runId: 'r-3', side: 'pr', size, sameBackendAs: [base] })).toEqual({ refused: 'no_capacity', pool: BOAT, hostStarting: true });
+            const prHost = await connect(db, s, { poolId: BOAT, boundKey: `run:${org}/r-3/pr`, maxClaimSize: { memoryMb: 12288, cpus: 6 } });
+            expect(cellOf(await cells.reserveCell(org, { claimId: pr, consumer: 'runtime', runId: 'r-3', side: 'pr', size, sameBackendAs: [base] }))).toBe(prHost);
         }));
 
     it("the other side follows the first side's pool, even when placement would now start elsewhere", () =>
