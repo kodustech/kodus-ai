@@ -56,7 +56,9 @@ describe('BitbucketDataCenterService host input', () => {
             const error = await connect(service, host).catch((e) => e);
 
             expect(error).toBeInstanceOf(BadRequestException);
-            expect(error.message).toContain('https://');
+            expect(error.message).toBe(
+                'Include https:// in the Bitbucket Data Center URL, for example https://bitbucket.example.com.',
+            );
             expect(create).not.toHaveBeenCalled();
             expect(service.addAccessToken).not.toHaveBeenCalled();
         },
@@ -75,17 +77,17 @@ describe('BitbucketDataCenterService host input', () => {
     ])('connects %p and stores it trimmed', async (host, stored) => {
         const service = make();
 
-        await expect(connect(service, host)).resolves.toMatchObject({
+        await expect(connect(service, host)).resolves.toEqual({
             success: true,
+            status: 'SUCCESS',
         });
-        expect(create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                baseURL: `${stored.replace(/\/+$/, '')}/rest/api/1.0`,
-            }),
-        );
-        expect(service.addAccessToken).toHaveBeenCalledWith(
-            organizationAndTeamData,
-            expect.objectContaining({ host: stored }),
-        );
+        // The rest of the client config (auth header, address guard) is
+        // covered elsewhere; this test owns the address the client targets.
+        expect(create.mock.calls.map(([config]) => config.baseURL)).toEqual([
+            `${stored.replace(/\/+$/, '')}/rest/api/1.0`,
+        ]);
+        expect(
+            service.addAccessToken.mock.calls.map(([, auth]) => auth.host),
+        ).toEqual([stored]);
     });
 });

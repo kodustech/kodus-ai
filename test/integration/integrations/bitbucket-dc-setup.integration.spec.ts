@@ -463,6 +463,25 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
         expect(await selection()).toEqual([['7']]);
     });
 
+    it('stores the host trimmed, keeping its context path', async () => {
+        await dc.createAuthIntegration({
+            organizationAndTeamData: tenant,
+            token: 'first-token',
+            authMode: AuthMode.TOKEN,
+            host: '  https://bitbucket.example.test/bitbucket/  ',
+        });
+
+        const pair = await readPair();
+        expect(pair.authIntegration.authDetails.host).toBe(
+            'https://bitbucket.example.test/bitbucket/',
+        );
+        await expect(
+            bitbucket.verifyConnection({ organizationAndTeamData: tenant }),
+        ).resolves.toMatchObject({
+            config: { host: 'https://bitbucket.example.test/bitbucket/' },
+        });
+    });
+
     it('makes the team ready for reviews after it saves its first repository', async () => {
         await connect();
         await expect(
