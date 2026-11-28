@@ -250,4 +250,33 @@ describe('runChunkedReview — #2767', () => {
             ]);
         }
     });
+
+    it('keeps the outer file list when a batch splits again', async () => {
+        const runBatch = jest.fn(async (_: ReviewAgentInput) => batchResult());
+        const allBatchFiles = [
+            ...makeInput().changedFiles,
+            { filename: 'src/c.ts', patch: bigPatch('c') },
+        ];
+        await runChunkedReview(
+            { ...makeInput(), allBatchFiles },
+            {
+                identity: {
+                    name: 'agent',
+                    description: 'd',
+                    goal: 'g',
+                    expertise: [],
+                },
+                agentCategory: 'bug',
+                startTime: Date.now(),
+                diffBudget: 3_000,
+                runBatch,
+                logger: { log: jest.fn(), error: jest.fn() },
+            },
+        );
+
+        expect(runBatch).toHaveBeenCalledTimes(2);
+        for (const [batchInput] of runBatch.mock.calls) {
+            expect(batchInput.allBatchFiles).toEqual(allBatchFiles);
+        }
+    });
 });
