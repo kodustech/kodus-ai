@@ -1,5 +1,5 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { knownSlotContextWindow } from '@libs/llm/slot-window';
+import { slotContextWindow } from '@libs/llm/slot-window';
 import { structuredCallAnswerTokens } from '@libs/llm/structured-review-call';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { LLM } from '@libs/llm/llm';
@@ -648,10 +648,9 @@ export class CommentManagerService implements ICommentManagerService {
                 };
 
                 // --- Chunk changedFiles to the model's window (#2233) ---
-                // The slot's own limit, else the model's known window, less
-                // the answer the slot declares. With neither known, no limit,
-                // as before: a guess would split or skip what a larger model
-                // takes.
+                // The window of the slot and its fallback (the default one
+                // for a model the table doesn't know, as the review uses),
+                // less the answer the slot declares.
                 const maxInputTokens =
                     overflowBudget ??
                     (await this.summaryInputBudget(byokConfigValue));
@@ -685,7 +684,7 @@ export class CommentManagerService implements ICommentManagerService {
                 // More than 4 chunks → skip summary generation
                 if (!fileChunks) {
                     this.logger.warn({
-                        message: `Skipping PR summary generation: changedFiles exceed max 4 chunks for PR#${pullRequest?.number}`,
+                        message: `Skipping PR summary generation for PR#${pullRequest?.number}: the changed files need more than 4 calls of ${maxInputTokens} tokens, or the prompt alone fills one`,
                         context: CommentManagerService.name,
                         metadata: {
                             organizationAndTeamData,
@@ -2154,7 +2153,9 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             return body;
         }
         const several = agentNames.length > 1;
-        const key = several ? 'primaryAgentsDidNotRun' : 'primaryAgentDidNotRun';
+        const key = several
+            ? 'primaryAgentsDidNotRun'
+            : 'primaryAgentDidNotRun';
         const template =
             getTranslationsForLanguageByCategory(
                 language as LanguageValue,
@@ -3502,19 +3503,18 @@ ${reviewOptions}
     }
 
     /**
-     * The input tokens a summary call has: the slot's window (or the model's
-     * known one) less the answer the call declares on the slot or its
-     * fallback. Anthropic's adapter declares the model's whole output limit
-     * when the slot sets none, so that is kept too. Undefined when neither
-     * the slot nor the model table knows the window.
+     * The input tokens a summary call has: the window of the slot and its
+     * fallback less the answer the call declares on either. Anthropic's
+     * adapter declares the model's whole output limit when the slot sets
+     * none, so that is kept too. A model the table doesn't know gets the
+     * default window the review plans with: the summary of a PR the review
+     * sized to 128k went out as one 274k request (#2233 QA). A larger model
+     * says so with `maxInputTokens`.
      */
     private async summaryInputBudget(
         slot: NormalizedModel | undefined,
-    ): Promise<number | undefined> {
-        const window = knownSlotContextWindow(slot);
-        if (window === undefined) {
-            return undefined;
-        }
+    ): Promise<number> {
+        const window = slotContextWindow(slot);
         const answer = (await structuredCallAnswerTokens(slot)) ?? 0;
         return Math.max(1, window - answer);
     }
