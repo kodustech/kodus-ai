@@ -7,6 +7,8 @@ import {
     sealInvitation,
 } from '@libs/identity/domain/user/invitation-token';
 
+import { UserEntity } from '@libs/identity/domain/user/entities/user.entity';
+
 import { AcceptUserInvitationUseCase } from './accept-user-invitation.use-case';
 
 describe('AcceptUserInvitationUseCase', () => {
@@ -17,6 +19,9 @@ describe('AcceptUserInvitationUseCase', () => {
     afterAll(() => {
         process.env.API_CRYPTO_KEY = cryptoKey;
     });
+
+    const PASSWORD_HASH =
+        '$2b$10$abcdefghijklmnopqrstuuJ9zN0q1r2s3t4u5v6w7x8y9z0A1B2C3D';
 
     const users: Record<
         string,
@@ -48,10 +53,13 @@ describe('AcceptUserInvitationUseCase', () => {
                 ? user
                 : null;
         }),
-        update: jest.fn(async (filter: { uuid: string }) => ({
-            uuid: filter.uuid,
-            email: `${filter.uuid}@acme.dev`,
-        })),
+        update: jest.fn(async (filter: { uuid: string }) =>
+            UserEntity.create({
+                uuid: filter.uuid,
+                email: `${filter.uuid}@acme.dev`,
+                password: PASSWORD_HASH,
+            }),
+        ),
     };
     const profileService = {
         findOne: jest.fn(async (filter: { user: { uuid: string } }) =>
@@ -158,6 +166,20 @@ describe('AcceptUserInvitationUseCase', () => {
         expect(createProfile.execute).not.toHaveBeenCalled();
     });
 
+    // #2717: the route is public and answered with the updated user entity,
+    // whose `_password` held the bcrypt hash of the password just set.
+    it('answers without the password hash', async () => {
+        const answer = await accept('invited');
+
+        expect(JSON.stringify(answer)).not.toContain(PASSWORD_HASH);
+        expect(answer).toEqual(
+            expect.objectContaining({
+                uuid: 'invited',
+                email: 'invited@acme.dev',
+            }),
+        );
+    });
+
     it('creates the profile with the submitted name and phone', async () => {
         await useCase.execute({
             token: tokenFor('invited'),
@@ -174,11 +196,13 @@ describe('AcceptUserInvitationUseCase', () => {
     });
 
     it('reports the accepted invitation with the user and organization', async () => {
-        usersService.update.mockResolvedValueOnce({
-            uuid: 'invited',
-            email: 'invited@acme.dev',
-            organization: { uuid: 'org-1' },
-        } as any);
+        usersService.update.mockResolvedValueOnce(
+            UserEntity.create({
+                uuid: 'invited',
+                email: 'invited@acme.dev',
+                organization: { uuid: 'org-1' },
+            }),
+        );
 
         await accept('invited');
 
@@ -191,7 +215,9 @@ describe('AcceptUserInvitationUseCase', () => {
     });
 
     it('does not report an accepted invitation without an email', async () => {
-        usersService.update.mockResolvedValueOnce({ uuid: 'invited' } as any);
+        usersService.update.mockResolvedValueOnce(
+            UserEntity.create({ uuid: 'invited' }),
+        );
 
         await accept('invited');
 
