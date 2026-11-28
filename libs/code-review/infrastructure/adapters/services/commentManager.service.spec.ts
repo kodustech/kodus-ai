@@ -73,6 +73,23 @@ import {
     repeatedClusteringSchema,
 } from './commentManager.service';
 
+
+// Lets one test load the dictionaries without the primaryAgentDidNotRun key.
+let mockStripPrimaryAgentSentence = false;
+jest.mock('@libs/common/utils/transforms/file', () => {
+    const actual = jest.requireActual('@libs/common/utils/transforms/file');
+    return {
+        ...actual,
+        loadJsonFile: (path: string) => {
+            const data = actual.loadJsonFile(path);
+            const summary = data?.pullRequestFinishSummaryMarkdown;
+            if (!mockStripPrimaryAgentSentence || !summary) return data;
+            const { primaryAgentDidNotRun: _omit, ...rest } = summary;
+            return { ...data, pullRequestFinishSummaryMarkdown: rest };
+        },
+    };
+});
+
 describe('CommentManagerService.generateSummaryPR', () => {
     let service: CommentManagerService;
     let codeManagementService: Record<string, never>;
@@ -1620,6 +1637,19 @@ describe('partial primary-agent failures name the reviewer that did not run', ()
             `A revisão de security não foi executada: ${securityOutOfCredits}`,
         );
         expect(body).not.toContain('review did not run');
+    });
+
+    it('still names the reviewer when no dictionary carries the sentence', async () => {
+        mockStripPrimaryAgentSentence = true;
+        try {
+            const body = await summary(true, securityOutOfCredits, 'security');
+
+            expect(body).toContain(
+                `The security review did not run: ${securityOutOfCredits}`,
+            );
+        } finally {
+            mockStripPrimaryAgentSentence = false;
+        }
     });
 
     it('stays silent for a summary-only failure', async () => {

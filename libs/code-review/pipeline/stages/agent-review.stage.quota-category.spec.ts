@@ -463,7 +463,12 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
 
             const context = await run(stage, reviewContext(true));
 
-            expect(context.errors).toMatchObject([
+            expect(
+                context.errors.map(({ substage, severity }) => ({
+                    substage,
+                    severity,
+                })),
+            ).toEqual([
                 { substage: 'agent:kodyRules', severity: 'partial' },
                 { substage: 'agent:security', severity: 'partial' },
             ]);

@@ -2151,10 +2151,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             getTranslationsForLanguageByCategory(
                 LanguageValue.ENGLISH,
                 TranslationsCategory.PullRequestFinishSummaryMarkdown,
-            )?.primaryAgentDidNotRun;
-        if (!template) {
-            return body;
-        }
+            )?.primaryAgentDidNotRun ??
+            'The {{agentName}} review did not run: {{reason}}';
         const sentence = template
             .replace(/\{\{agentName\}\}/g, () => agentName)
             .replace(/\{\{reason\}\}/g, () => reason);
