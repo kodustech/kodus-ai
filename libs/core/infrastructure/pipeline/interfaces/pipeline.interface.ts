@@ -13,6 +13,12 @@ export interface PipelineStage<TContext extends PipelineContext> {
      * (onPipelineStart / onPipelineFinish) still fire.
      */
     silent?: boolean;
+    /**
+     * When true, the pipeline is no longer ended early by an aborted
+     * `parentSignal` once this stage has started: the output is being
+     * delivered, and stopping now would leave it half-delivered.
+     */
+    pointOfNoReturn?: boolean;
     execute(context: TContext): Promise<TContext>;
 }
 
