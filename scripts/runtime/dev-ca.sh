@@ -17,10 +17,12 @@
 #                             docker-compose.dev.yml (certificates under /certs)
 # Usage: scripts/runtime/dev-ca.sh [out-dir] [cell-id]
 # RUNTIME_HUB_SANS adds names to the hub certificate (default: runtime-hub,
-# the service name the dev compose worker dials).
+# the service name the dev compose worker dials). An IPv4 entry becomes an IP SAN.
 set -euo pipefail
 HUB_SANS="DNS:localhost,IP:127.0.0.1"
-for n in ${RUNTIME_HUB_SANS:-runtime-hub}; do HUB_SANS="$HUB_SANS,DNS:$n"; done
+for n in ${RUNTIME_HUB_SANS:-runtime-hub}; do
+  if [[ "$n" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then HUB_SANS="$HUB_SANS,IP:$n"; else HUB_SANS="$HUB_SANS,DNS:$n"; fi
+done
 OUT="${1:-.runtime-certs}"
 PREVIEW_DOMAIN="${RUNTIME_PREVIEW_DOMAIN:-kodus-preview.localhost}"
 CELL_ID="${2:-cell-dev-1}"
