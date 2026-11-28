@@ -363,13 +363,30 @@ export const hasReviewMarker = (text: string | undefined | null): boolean => {
 };
 
 /**
+ * The comment without the quote block it opens with. GitHub's "Quote reply"
+ * puts the quoted text first and the `@kody` mention after it.
+ */
+export const withoutLeadingQuote = (text: string): string => {
+    const lines = text.split(/\r?\n/);
+    let start = 0;
+    while (
+        start < lines.length &&
+        (!lines[start].trim() || lines[start].trimStart().startsWith('>'))
+    ) {
+        start++;
+    }
+    return start ? lines.slice(start).join('\n') : text;
+};
+
+/**
  * Check if comment mentions @kody but is NOT a review command
  */
 export const isKodyMentionNonReview = (
-    text: string | undefined | null,
+    rawText: string | undefined | null,
     botUsername?: string | null,
 ): boolean => {
-    if (!text) return false;
+    if (!rawText) return false;
+    const text = withoutLeadingQuote(rawText);
     if (KODY_MENTION_NON_REVIEW_PATTERN.test(text)) return true;
     if (botUsername && buildMentionNonReviewPattern(botUsername).test(text))
         return true;

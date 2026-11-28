@@ -173,6 +173,36 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    it('hands a quote reply to the Business Logic replies, the mention after the quote', async () => {
+        const handle = jest.fn().mockResolvedValue({ handled: true });
+        (useCase as any).businessLogicReplies = { handle };
+        const body =
+            '> Only teachers can download the export\n\n@kody this is done in the guard';
+
+        await useCase.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(handle).toHaveBeenCalledWith(
+            expect.objectContaining({ message: body }),
+        );
+        expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+    });
+
     it('reads the branch from the PR when the GitHub comment webhook leaves it out', async () => {
         (codeManagementService as any).getPullRequest = jest
             .fn()
