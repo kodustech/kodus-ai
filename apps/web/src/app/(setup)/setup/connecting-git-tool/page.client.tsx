@@ -59,7 +59,7 @@ export function SetupConnectingGitToolPage(props: {
     };
 
     return (
-        <Page.Root className="mx-auto flex min-h-[calc(100vh-4rem)] w-full flex-col gap-6 p-6 lg:h-full lg:flex-row lg:gap-0 lg:overflow-hidden">
+        <Page.Root className="mx-auto flex min-h-[calc(100vh-4rem)] w-full flex-col gap-6 p-6 lg:h-full lg:flex-row lg:overflow-hidden">
             <div className="bg-card-lv1 hidden flex-10 flex-col justify-center gap-10 rounded-3xl p-12 lg:flex">
                 <div className="flex flex-1 flex-col justify-center gap-10">
                     <Heading variant="h1" className="max-w-60 text-[4vh]">
@@ -114,7 +114,7 @@ export function SetupConnectingGitToolPage(props: {
                     <Tabs
                         defaultValue={GIT_INTEGRATIONS_KEY.GITHUB}
                         className="w-full">
-                        <TabsList className="mb-4 h-auto flex-wrap justify-center lg:justify-start">
+                        <TabsList className="mb-4 h-auto flex-wrap justify-center lg:flex-nowrap lg:justify-start">
                             <TabsTrigger value={GIT_INTEGRATIONS_KEY.GITHUB}>
                                 <div className="flex flex-row items-center gap-2">
                                     <SvgGithub className="size-5" />
