@@ -1,3 +1,4 @@
+import { isTransientProviderError } from './transient-provider-error';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { assertGitServerUrlAllowed } from './git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
@@ -1632,6 +1633,7 @@ export class ForgejoService implements Omit<
             const result = await repoGet({
                 client,
                 path: { owner: repoInfo.owner, repo: repoInfo.repo },
+                throwOnError: params.strict,
             });
             return result.data?.default_branch || fallback('none returned');
         } catch (error) {
@@ -3953,6 +3955,7 @@ export class ForgejoService implements Omit<
         ref?: string;
         file?: { filename?: string };
         pullRequest?: { head?: { ref?: string }; base?: { ref?: string } };
+        throwOnReadError?: boolean;
     }): Promise<any | null> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -3982,6 +3985,7 @@ export class ForgejoService implements Omit<
                     filepath: filePath,
                 },
                 query: { ref },
+                throwOnError: params.throwOnReadError,
             });
             const content = result.data;
 
@@ -4008,7 +4012,9 @@ export class ForgejoService implements Omit<
 
             return { data: file };
         } catch (error) {
-            if ((error as any)?.status === 404) {
+            const status =
+                (error as any)?.status ?? (error as any)?.response?.status;
+            if (status === 404) {
                 return null;
             }
             this.logger.error({
@@ -4016,6 +4022,9 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
+            if (params.throwOnReadError && isTransientProviderError(error)) {
+                throw error;
+            }
             return null;
         }
     }

@@ -136,3 +136,60 @@ describe('BitbucketCloudService.getRepositoryContentFile — missing file', () =
         expect((service as any).logger.error).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('BitbucketCloudService.getRepositoryContentFile — throwOnReadError', () => {
+    const httpError = (status: number) =>
+        Object.assign(new Error(`HTTP ${status}`), {
+            name: 'HTTPError',
+            status,
+        });
+
+    const readConfig = (
+        service: BitbucketCloudService,
+        throwOnReadError?: boolean,
+    ) =>
+        service.getRepositoryContentFile({
+            organizationAndTeamData: org as any,
+            repository: { id: 'repo-1', name: 'api' },
+            file: { filename: 'kodus-config.yml' },
+            pullRequest: { head: { ref: 'main' }, base: { ref: 'main' } },
+            throwOnReadError,
+        });
+
+    it('rejects on a provider failure', async () => {
+        const error = httpError(429);
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(error),
+        );
+
+        await expect(readConfig(service, true)).rejects.toBe(error);
+    });
+
+    it('still answers a missing file as null', async () => {
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(httpError(404)),
+        );
+
+        await expect(readConfig(service, true)).resolves.toBeNull();
+    });
+
+    it('answers a lasting failure as null even with the flag', async () => {
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(httpError(401)),
+        );
+
+        await expect(readConfig(service, true)).resolves.toBeNull();
+    });
+
+    it('swallows the failure without the flag', async () => {
+        const service = makeService(
+            commitOk(),
+            jest.fn().mockRejectedValue(httpError(502)),
+        );
+
+        await expect(readConfig(service)).resolves.toBeNull();
+    });
+});
