@@ -5919,43 +5919,57 @@ This is an experimental feature that generates committable changes. Review the d
                 params.reactions.includes(r.content as GitHubReaction),
             );
 
-            if (isReviewComment) {
-                await Promise.all(
-                    reactionsToRemove.map((reaction) =>
-                        octokit.request(
-                            'DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions/{reaction_id}',
-                            {
-                                owner: this.ownerOf(
-                                    params.repository,
-                                    githubAuthDetail,
-                                ),
-                                repo: params.repository.name,
-                                comment_id: params.commentId,
-                                reaction_id: reaction.id,
-                            },
-                        ),
+            // GitHub only lets the authenticated account delete its own
+            // reactions: one left by another user answers 403, and a single
+            // rejection used to fail the whole cleanup. Each deletion is
+            // settled on its own, so the ones that are ours still go.
+            const deletions = reactionsToRemove.map((reaction) =>
+                isReviewComment
+                    ? octokit.request(
+                          'DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions/{reaction_id}',
+                          {
+                              owner: this.ownerOf(
+                                  params.repository,
+                                  githubAuthDetail,
+                              ),
+                              repo: params.repository.name,
+                              comment_id: params.commentId,
+                              reaction_id: reaction.id,
+                          },
+                      )
+                    : octokit.rest.reactions.deleteForIssueComment({
+                          owner: this.ownerOf(
+                              params.repository,
+                              githubAuthDetail,
+                          ),
+                          repo: params.repository.name,
+                          comment_id: params.commentId,
+                          reaction_id: reaction.id,
+                      }),
+            );
+            const settled = await Promise.allSettled(deletions);
+            const removed = settled.filter(
+                (result) => result.status === 'fulfilled',
+            ).length;
+            // 403 is someone else's reaction (GitHub only lets an account
+            // delete its own) and 404 one already gone: both are expected.
+            // Anything else (rate limit, 5xx) is transient and must surface
+            // instead of reading as a completed cleanup.
+            const unexpected = settled.filter(
+                (result): result is PromiseRejectedResult =>
+                    result.status === 'rejected' &&
+                    ![403, 404].includes(
+                        (result.reason as { status?: number })?.status ?? 0,
                     ),
-                );
-            } else {
-                await Promise.all(
-                    reactionsToRemove.map((reaction) =>
-                        octokit.rest.reactions.deleteForIssueComment({
-                            owner: this.ownerOf(
-                                params.repository,
-                                githubAuthDetail,
-                            ),
-                            repo: params.repository.name,
-                            comment_id: params.commentId,
-                            reaction_id: reaction.id,
-                        }),
-                    ),
-                );
+            );
+            if (unexpected.length > 0) {
+                throw unexpected[0].reason;
             }
 
             this.logger.log({
                 message: `Removed reactions from ${isReviewComment ? 'review' : 'issue'} comment ${params.commentId}`,
                 context: GithubService.name,
-                metadata: { reactionsRemoved: reactionsToRemove.length },
+                metadata: { reactionsRemoved: removed },
             });
         } catch (error) {
             this.logger.error({

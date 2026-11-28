@@ -17,7 +17,10 @@ jest.mock('@libs/core/log/langfuse', () => ({
 import { withLangfuseObservation } from '@libs/core/log/langfuse';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
+import {
+    ChatWithKodyFromGitUseCase,
+    KODY_CONVERSATION_MARKER,
+} from './chatWithKodyFromGit.use-case';
 
 const skippedWith = (reason: string, message: string) => ({
     outcome: { kind: 'skipped', reason, message },
@@ -948,7 +951,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
 
             expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
             expect(
-                codeManagementService.createResponseToComment,
+                codeManagementService.createIssueComment,
             ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     body: expect.stringContaining('trial has ended'),
@@ -971,10 +974,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
 
             expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
             expect(
-                codeManagementService.createResponseToComment,
+                codeManagementService.createIssueComment,
             ).toHaveBeenCalledTimes(1);
             const { body } =
-                codeManagementService.createResponseToComment.mock.calls[0][0];
+                codeManagementService.createIssueComment.mock.calls[0][0];
             expect(body).toContain(
                 'the license service is temporarily unreachable',
             );
@@ -998,7 +1001,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
 
             expect(conversationAgentUseCase.execute).toHaveBeenCalled();
             expect(
-                codeManagementService.createResponseToComment,
+                codeManagementService.createIssueComment,
             ).not.toHaveBeenCalledWith(
                 expect.objectContaining({
                     body: expect.stringContaining('trial has ended'),
@@ -1084,7 +1087,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 );
                 expect(leaseManager.release).not.toHaveBeenCalled();
                 expect(
-                    codeManagementService.createResponseToComment,
+                    codeManagementService.createIssueComment,
                 ).toHaveBeenCalledWith(
                     expect.objectContaining({
                         body: expect.stringContaining('an answer'),
@@ -1108,7 +1111,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 await useCase.execute(conversationPayload());
                 expect(leaseManager.release).toHaveBeenCalledWith('lease-test');
                 expect(
-                    codeManagementService.createResponseToComment,
+                    codeManagementService.createIssueComment,
                 ).toHaveBeenCalledWith(
                     expect.objectContaining({
                         body: expect.stringContaining('an answer'),
@@ -1144,8 +1147,87 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 expect(leaseManager.release).toHaveBeenCalledWith('late-lease');
             });
         });
-    });
 
+        it('reports a failed top-level answer instead of completing the delivery', async () => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [],
+            );
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            codeManagementService.createIssueComment.mockResolvedValue(null);
+            const reported = jest
+                .spyOn((useCase as any).logger, 'error')
+                .mockImplementation(() => undefined);
+            const logged = jest
+                .spyOn((useCase as any).logger, 'log')
+                .mockImplementation(() => undefined);
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalled();
+            expect(reported).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message:
+                        'Failed to create/update response in conversation flow',
+                }),
+            );
+            expect(logged).not.toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'Successfully executed conversation flow',
+                }),
+            );
+        });
+
+        it('leaves an @kody mention on a plain issue alone', async () => {
+            // GitHub sends a comment on an issue through the same
+            // `issue_comment` event, but there is no pull request to read and
+            // no prNumber to answer with.
+            const payload = conversationPayload();
+            delete payload.payload.issue.pull_request;
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [],
+            );
+
+            await useCase.execute(payload);
+
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('answers a top-level GitHub PR comment that is not among the review comments (#2683)', async () => {
+            // GitHub keeps PR conversation comments in the issues API, so
+            // their id never appears in pulls.listReviewComments: the flow
+            // must take the comment from the webhook payload and answer with
+            // issues.createComment instead of a review-thread reply.
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [],
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 132,
+                    body: `an answer\n\n${KODY_CONVERSATION_MARKER}`,
+                }),
+            );
+        });
+    });
     it('handles Bitbucket description as a structured content object', async () => {
         const ORG_UUID = '11111111-1111-4111-8111-111111111111';
         const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
