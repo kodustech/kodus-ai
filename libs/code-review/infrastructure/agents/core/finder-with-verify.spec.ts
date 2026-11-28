@@ -783,3 +783,272 @@ describe('buildFinderAgentSpec — label enum', () => {
         expect(labelEnum(['custom_agent'])).toEqual(all);
     });
 });
+
+describe('runFinderWithVerify (generalist failed at the provider)', () => {
+    it('stops the lenses and skips verify when the runner returns an error state', async () => {
+        // The AI SDK runner reports a provider throw as `status: 'error'`
+        // instead of throwing, so the kind of failure #2453 describes never
+        // reached the catch that stops the lenses. They kept running, verify
+        // spent tokens on their findings, and the caller discarded both with
+        // the generalist's error.
+        let lensAborted = false;
+        let lensStarted = false;
+        const run = jest.fn().mockResolvedValue({
+            status: 'error',
+            steps: [],
+            toolCalls: [],
+            artifacts: [],
+            usage: {
+                inputTokens: 10,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+            error: {
+                message: 'The provider refused the request for this model',
+            },
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: { run } as any,
+                finderSpec: {} as any,
+                modelId: 'mock',
+                tools: new InMemoryToolRegistry([]),
+                heavyLenses: (_params, lensCtx) => {
+                    lensStarted = true;
+                    return new Promise<any>((resolve) => {
+                        lensCtx.signal.addEventListener('abort', () => {
+                            lensAborted = true;
+                            resolve({
+                                suggestions: [],
+                                usage: {
+                                    inputTokens: 99,
+                                    outputTokens: 0,
+                                    reasoningTokens: 0,
+                                    cacheReadTokens: 0,
+                                },
+                                passStats: [],
+                                investigatedFiles: new Set<string>(),
+                                outcomes: [],
+                            });
+                        });
+                    });
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(lensStarted).toBe(true);
+        expect(lensAborted).toBe(true);
+        expect(r.finderState.status).toBe('error');
+        expect(r.kept).toEqual([]);
+        // Only the generalist ran: no recall pass, no verify.
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not verify a settled lens when the generalist failed', async () => {
+        // The abort cannot unsend a lens that already answered: without the
+        // status gate its findings would reach verify and spend tokens on a
+        // review the caller throws away.
+        const lensFinding = {
+            relevantFile: 'src/lens.ts',
+            suggestionContent: 'the lens found this',
+            label: 'bug',
+        } as any;
+        const run = jest.fn().mockResolvedValue({
+            status: 'error',
+            steps: [],
+            toolCalls: [],
+            artifacts: [],
+            usage: {
+                inputTokens: 10,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+            error: { message: 'the provider refused the request' },
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: { run } as any,
+                finderSpec: {} as any,
+                modelId: 'mock',
+                tools: new InMemoryToolRegistry([]),
+                heavyLenses: async () =>
+                    ({
+                        suggestions: [lensFinding],
+                        usage: {
+                            inputTokens: 5,
+                            outputTokens: 0,
+                            reasoningTokens: 0,
+                            cacheReadTokens: 0,
+                        },
+                        passStats: [],
+                        investigatedFiles: new Set<string>(),
+                        outcomes: [],
+                    }) as any,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept).toEqual([]);
+        expect(r.kept).not.toContain(lensFinding);
+        // The generalist is the only runner call: no verify was started.
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps what the failed generalist salvaged', async () => {
+        // Only the base provider throws on this status; the security scan
+        // keeps the partial result, so the prose recovery still has to run.
+        const recovered = {
+            relevantFile: 'src/recovered.ts',
+            suggestionContent: 'recovered from the reasoning prose',
+            label: 'bug',
+        } as any;
+        const run = jest.fn().mockResolvedValue({
+            status: 'error',
+            steps: [],
+            toolCalls: [],
+            artifacts: [],
+            usage: {
+                inputTokens: 10,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+            error: { message: 'the provider refused the request' },
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: { run } as any,
+                finderSpec: { policies: [] } as any,
+                modelId: 'mock',
+                tools: new InMemoryToolRegistry([]),
+                recoverProse: async () => [recovered],
+                // The security scan is the caller that publishes the partial
+                // result of a failed generalist.
+                consumePartialResults: true,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept).toEqual([recovered]);
+        expect(r.keptParseMode).toEqual(['default-keep']);
+        // The salvaged finding passes the verify gate like any other: a scan
+        // never publishes a finding nobody judged. The verify tokens, not the
+        // call count (a recall pass would add calls too), prove it ran.
+        expect(run.mock.calls.length).toBeGreaterThan(1);
+        expect(r.verifyUsage.inputTokens).toBeGreaterThan(0);
+    });
+
+    it('does not recover prose for a caller that discards the failure', async () => {
+        // A review throws the failed run away with the error: the extra
+        // model request would buy nothing.
+        const recoverProse = jest.fn(async () => []);
+        const run = jest.fn().mockResolvedValue({
+            status: 'error',
+            steps: [],
+            toolCalls: [],
+            artifacts: [],
+            usage: {
+                inputTokens: 10,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+            error: { message: 'the provider refused the request' },
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: { run } as any,
+                finderSpec: {} as any,
+                modelId: 'mock',
+                tools: new InMemoryToolRegistry([]),
+                recoverProse,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept).toEqual([]);
+        expect(recoverProse).not.toHaveBeenCalled();
+    });
+
+    it('rethrows a lens failure that is not the abort', async () => {
+        const run = jest.fn().mockResolvedValue({
+            status: 'success',
+            steps: [],
+            toolCalls: [],
+            artifacts: [],
+            usage: {
+                inputTokens: 1,
+                outputTokens: 1,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+        });
+
+        await expect(
+            runFinderWithVerify(
+                {
+                    runner: { run } as any,
+                    finderSpec: {} as any,
+                    modelId: 'mock',
+                    tools: new InMemoryToolRegistry([]),
+                    heavyLenses: () => {
+                        // Reject while the generalist is still running: the
+                        // pipeline must observe the promise when it is created,
+                        // and still surface the failure when the generalist
+                        // left nothing to publish.
+                        const rejection = Promise.reject(
+                            new Error('sandbox lease superseded'),
+                        );
+                        rejection.catch(() => {});
+                        return rejection;
+                    },
+                },
+                { prompt: 'review' },
+                ctx,
+            ),
+        ).rejects.toThrow(new Error('sandbox lease superseded'));
+    });
+
+    it('keeps the generalist findings when a lens fails', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+
+        const r = await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                heavyLenses: () => {
+                    // The lens dies while the generalist is still working.
+                    const rejection = Promise.reject(new Error('lens down'));
+                    rejection.catch(() => {});
+                    return rejection;
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        // The lens failure is logged, not thrown over a review that has
+        // findings of its own.
+        expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
+    });
+});

@@ -72,6 +72,7 @@ import { LLM } from '@libs/llm/llm';
 import { AGENT_TIMEOUT_MS, timeoutSignal } from '@libs/llm/llm-call';
 import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
+import { isRetryableForReissue } from '@libs/llm/retry-policy';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import {
@@ -780,6 +781,11 @@ export interface RunFinderWithVerifyParams {
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Agent name (finder/security/...) — prefixes every observation name. */
     agentName?: string;
+
+    /** Whether this caller publishes what a failed generalist salvaged. The
+     *  security scan does; a review throws the result away with the error, so
+     *  its prose recovery and verify would be spent on nothing. */
+    consumePartialResults?: boolean;
     /** Cost-span run name base (e.g. `code-review-bug`) forwarded to the verifier
      *  runs so their leaf usage spans bucket to `review` in `deriveArea`. */
     usageRunName?: string;
@@ -992,6 +998,10 @@ export async function runFinderWithVerify(
               ]),
           })
         : null;
+    // A lens can reject while the generalist is still running. Without an
+    // observer Node reports that as an unhandled rejection; the verdict is
+    // applied below, once the pipeline has a result to judge it against.
+    lenses?.catch(() => {});
     // A generalist that fails fails the review: stop the lenses rather than
     // let them spend tokens on it. Everything up to the lenses' await sits in
     // one block, so a throw anywhere in it stops them.
@@ -1013,6 +1023,42 @@ export async function runFinderWithVerify(
             },
             ctx,
         );
+        // A provider failure comes back as an error-status RunState, not a
+        // throw (#2453), so the catch below never sees it: the lenses kept
+        // running and verify spent tokens on findings the caller then threw
+        // away with the generalist's error. Stop them here and skip the
+        // passes whose output that error discards.
+        if (finderState.status === 'error') {
+            lensStop.abort();
+            // The review throws the error away, but not every caller does: the
+            // security scan keeps what a failed run still salvaged. Extraction
+            // stays for it; the recall passes (extra model calls) do not.
+            // A caller that throws the result away does not pay for a prose
+            // recovery request; one that keeps it gets everything salvaged.
+            const base = params.consumePartialResults
+                ? await extractFindingsWithRecovery(
+                      finderState,
+                      params.recoverProse,
+                      { ...params.telemetryMetadata, modelId: params.modelId },
+                  )
+                : { reasoning: '', suggestions: [] as FinderSuggestion[] };
+            return {
+                finderState,
+                baseStat: passStatOf(finderState, {
+                    label: 'generalist-base',
+                    added: base.suggestions?.length ?? 0,
+                    ms: Date.now() - baseT0,
+                    startMs: 0,
+                    startEpochMs: baseT0,
+                }),
+                recall: {
+                    findings: base,
+                    usage: ZERO_VERIFY_USAGE,
+                    passStats: [],
+                    states: [],
+                },
+            };
+        }
         // Main finder findings — with prose-recovery applied (the same wrapper the
         // recall passes use, so an omission in any pass is caught consistently).
         const baseMs = Date.now() - baseT0;
@@ -1057,14 +1103,41 @@ export async function runFinderWithVerify(
         );
         return { finderState, baseStat, recall };
     })().catch(stopLenses);
-    const lensResult = lenses ? await lenses : null;
+    // An aborted lens may reject; the abort is the expected path here. Any
+    // other rejection is a lens that failed (provider, lost lease, rate
+    // limit) and must not read as "the lens found nothing". It must not cost
+    // a review its generalist findings either: with something to publish the
+    // failure is logged, and only a result with nothing to show throws.
+    const lensFailed = (error: unknown) =>
+        finderLogger.warn({
+            msg: 'heavy lens failed; keeping the generalist findings',
+            // A provider error can carry the request or the response body:
+            // its name and the retryable verdict are what a reader can act on.
+            errorName: error instanceof Error ? error.name : typeof error,
+            retryable: isRetryableForReissue(error),
+        });
+    const lensResult = lenses
+        ? await lenses.catch((error) => {
+              const aborted = lensStop.signal.aborted;
+              const usable = recall.findings.suggestions.length > 0;
+              // The abort we issued does not prove it caused this rejection: a
+              // retryable provider error must stay visible either way.
+              if (aborted && !isRetryableForReissue(error)) return null;
+              if (usable) {
+                  lensFailed(error);
+                  return null;
+              }
+              throw error;
+          })
+        : null;
     const reasoning = recall.findings.reasoning;
-    const suggestions = lensResult
-        ? mergeSuggestions(recall.findings, {
-              reasoning: '',
-              suggestions: lensResult.suggestions,
-          }).suggestions
-        : recall.findings.suggestions;
+    const suggestions =
+        lensResult && finderState.status !== 'error'
+            ? mergeSuggestions(recall.findings, {
+                  reasoning: '',
+                  suggestions: lensResult.suggestions,
+              }).suggestions
+            : recall.findings.suggestions;
     const recallUsage = lensResult
         ? sumVerifyUsage(recall.usage, lensResult.usage)
         : recall.usage;
@@ -1074,6 +1147,29 @@ export async function runFinderWithVerify(
         ...recall.passStats,
         ...(lensResult?.passStats ?? []),
     ];
+
+    if (finderState.status === 'error' && !params.consumePartialResults) {
+        // The generalist failed: a verdict on any finding is work the caller
+        // throws away with the error, so verify never runs. A caller that
+        // keeps the partial result still gets what the failed run salvaged.
+        return {
+            reasoning,
+            kept: suggestions,
+            keptEvidence: suggestions.map(() => buildToolEvidenceSummary([])),
+            keptParseMode: suggestions.map(
+                () => 'default-keep' as VerdictParseMode,
+            ),
+            droppedByVerify: [],
+            unverified: [],
+            droppedByQuoteCheck: [],
+            finderState,
+            recallStates,
+            verifyUsage: ZERO_VERIFY_USAGE,
+            recallUsage,
+            passStats,
+            ...(lensResult && { lensOutcomes: lensResult.outcomes }),
+        };
+    }
 
     if (suggestions.length === 0) {
         return {
