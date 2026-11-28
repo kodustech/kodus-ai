@@ -119,6 +119,7 @@ export async function runChunkedReview(
                 const batchInput: ReviewAgentInput = {
                     ...input,
                     changedFiles: batchFiles,
+                    allBatchFiles: input.changedFiles,
                     // Each batch tiers its own files, or none when it fits:
                     // the parent's map would tier the prompt and leave the
                     // coverage gate untiered.

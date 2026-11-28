@@ -1097,3 +1097,50 @@ describe('heavy mode lenses on the timeline (#2578)', () => {
         );
     });
 });
+
+describe('findings on a sibling batch’s file (#2767)', () => {
+    const file = (filename: string) => ({ filename, patch: '' }) as any;
+    const mapBatch = (relevantFile: string, all: string[], own: string[]) =>
+        (newAgent() as any).mapFindings(
+            {
+                findings: {
+                    suggestions: [{ relevantFile, suggestionContent: 'a bug' }],
+                },
+            },
+            makeInput({
+                changedFiles: own.map(file),
+                allBatchFiles: all.map(file),
+            }),
+        );
+
+    it('keeps it', () => {
+        const mapped = mapBatch(
+            'src/b.ts',
+            ['src/a.ts', 'src/b.ts'],
+            ['src/a.ts'],
+        );
+
+        expect(mapped.droppedForPath).toBe(0);
+        expect(mapped.suggestions).toEqual([
+            expect.objectContaining({ relevantFile: 'src/b.ts' }),
+        ]);
+    });
+
+    it('still drops a file that is not in the pull request', () => {
+        const mapped = mapBatch('src/c.ts', ['src/a.ts'], ['src/a.ts']);
+
+        expect(mapped.droppedForPath).toBe(1);
+    });
+
+    it('resolves a path tail to the batch’s own file first', () => {
+        const mapped = mapBatch(
+            'index.ts',
+            ['a/index.ts', 'b/index.ts'],
+            ['a/index.ts'],
+        );
+
+        expect(mapped.suggestions).toEqual([
+            expect.objectContaining({ relevantFile: 'a/index.ts' }),
+        ]);
+    });
+});
