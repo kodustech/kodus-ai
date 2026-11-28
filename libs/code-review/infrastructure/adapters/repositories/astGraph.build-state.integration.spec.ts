@@ -81,6 +81,13 @@ async function waitForLockWaiter(other?: Date): Promise<Date> {
     throw new Error('Expected the merge to wait on the build lock');
 }
 
+function expectUnknownMarker(marker: string | null) {
+    const [prefix, id, ...rest] = (marker ?? '').split(':');
+    expect(prefix).toBe('unknown');
+    expect(rest).toEqual([]);
+    expect(id).toHaveLength(36);
+}
+
 function node(name: string): GraphNodeJson {
     return {
         name,
@@ -405,7 +412,7 @@ function node(name: string): GraphNodeJson {
             // Another merge lands before the earlier build clears its record.
             await merge(commits[2]);
             const later = (await state()).astGraphMergedDuringBuild;
-            expect(later).toMatch(/^unknown:/);
+            expectUnknownMarker(later);
             expect(later).not.toBe(settled);
 
             await repositories.clearMergeDeferredDuringBuild(repoId, settled);
