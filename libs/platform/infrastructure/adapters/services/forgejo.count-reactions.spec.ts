@@ -258,3 +258,33 @@ describe('ForgejoService — getPullRequestReviewComment uses the shared filters
         });
     });
 });
+
+describe('ForgejoService — review comments keep their file and line (#2790 review)', () => {
+    it('maps path and positions, which group a Forgejo conversation', () => {
+        const service = Object.create(ForgejoService.prototype);
+        expect(
+            service.mapForgejoReviewComment(
+                { id: 3, stale: false },
+                {
+                    id: 11,
+                    body: 'x',
+                    path: 'a.ts',
+                    position: 10,
+                    original_position: 0,
+                },
+            ),
+        ).toEqual({
+            id: 11,
+            path: 'a.ts',
+            position: 10,
+            originalPosition: 0,
+            threadId: '11',
+            isResolved: false,
+            isOutdated: false,
+            body: 'x',
+            createdAt: undefined,
+            updatedAt: undefined,
+            author: { id: '', username: '', name: '' },
+        });
+    });
+});

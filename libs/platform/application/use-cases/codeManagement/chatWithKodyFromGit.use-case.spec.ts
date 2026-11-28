@@ -237,6 +237,77 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    describe('Forgejo inline replies (#2790 review)', () => {
+        // Real Forgejo shape: a reply in Kody's submitted review is an
+        // issue_comment whose URL carries no /files# and no path.
+        const reply = (id: number) => ({
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                action: 'created',
+                is_pull: true,
+                repository: {
+                    id: 26,
+                    name: 'r',
+                    full_name: 'o/r',
+                    html_url: 'https://codeberg.org/o/r',
+                },
+                issue: { number: 21, pull_request: { merged: false } },
+                comment: {
+                    id,
+                    body: '@kody is this still needed for CU-86a1b2c3d?',
+                    html_url: `https://codeberg.org/o/r/pulls/21#issuecomment-${id}`,
+                    user: { id: 7, login: 'bob' },
+                },
+                sender: { id: 7, login: 'bob' },
+            },
+        });
+        const run = async (reviewComments: object[]) => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                reviewComments,
+            );
+            const businessLogic = jest
+                .spyOn(useCase as any, 'handleBusinessLogicReply')
+                .mockResolvedValue(true);
+            const conversation = jest
+                .spyOn(useCase as any, 'handleConversationFlow')
+                .mockResolvedValue(undefined);
+            await useCase.execute(reply(50) as any);
+            return { businessLogic, conversation };
+        };
+
+        it('routes an @kody reply under a Kody code finding to the conversation flow, not Business Logic', async () => {
+            const { businessLogic, conversation } = await run([
+                {
+                    id: 40,
+                    body: 'Possible null.\n<!-- kody-codereview -->',
+                    path: 'a.ts',
+                    position: 3,
+                },
+                { id: 50, body: 'reply', path: 'a.ts', position: 3 },
+            ]);
+
+            expect(businessLogic).not.toHaveBeenCalled();
+            expect(conversation).toHaveBeenCalledTimes(1);
+        });
+
+        it('offers the comment to Business Logic when the review comments cannot be read', async () => {
+            // The conversation flow reads the same list and cannot answer;
+            // a top-level waiver or dispute still gets recorded.
+            const { businessLogic } = await run(null as any);
+
+            expect(businessLogic).toHaveBeenCalledTimes(1);
+        });
+
+        it('still offers a top-level comment to Business Logic first', async () => {
+            const { businessLogic } = await run([
+                { id: 40, body: 'finding', path: 'a.ts', position: 3 },
+            ]);
+
+            expect(businessLogic).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('resolves a Forgejo comment on the instance that sent it', async () => {
         const webhookContextService = {
             getContext: jest.fn().mockResolvedValue(null),
@@ -1564,5 +1635,99 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
                 }),
             }),
         );
+    });
+
+    describe('Forgejo lookups (#2779)', () => {
+        // Forgejo sends every PR comment, general or code, as issue_comment
+        // with the same shape: issue + pull_request, no path or review id.
+        const forgejoComment = (id: number, pullRequest: object = {}) => ({
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                action: 'created',
+                is_pull: true,
+                repository: {
+                    id: 26,
+                    full_name: 'o/r',
+                    default_branch: 'main',
+                },
+                issue: {
+                    number: 21,
+                    body: 'Issue body',
+                    pull_request: { merged: false },
+                },
+                pull_request: { number: 21, ...pullRequest },
+                comment: {
+                    id,
+                    body: '@kody explain',
+                    html_url: `https://codeberg.org/o/r/pulls/21#issuecomment-${id}`,
+                    pull_request_url: 'https://codeberg.org/o/r/pulls/21',
+                    user: { id: 7, login: 'bob' },
+                },
+                sender: { id: 7, login: 'bob' },
+            },
+        });
+        const issueComment = {
+            ...forgejoComment(123),
+            payload: {
+                ...forgejoComment(123).payload,
+                pull_request: undefined,
+            },
+        };
+        const reviewComment = forgejoComment(456, {
+            number: 22,
+            body: 'PR body',
+            head: { ref: 'feature/x' },
+            base: { ref: 'develop' },
+        });
+        const lookups = Object.assign(
+            Object.create(ChatWithKodyFromGitUseCase.prototype),
+            { logger: { log: jest.fn(), warn: jest.fn() } },
+        );
+        const call = (method: string, params: unknown) =>
+            lookups[method](params);
+
+        afterEach(() => {
+            // No lookup falls to the "Unsupported platform type" default.
+            expect(lookups.logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('reads the PR number from an issue comment and a review comment', () => {
+            expect(call('getPullRequestNumber', issueComment)).toBe(21);
+            expect(call('getPullRequestNumber', reviewComment)).toBe(22);
+        });
+
+        it('reads the comment id', () => {
+            expect(call('getCommentId', issueComment)).toBe(123);
+            expect(call('getCommentId', reviewComment)).toBe(456);
+        });
+
+        it('reads the head ref', () => {
+            expect(call('getHeadRef', reviewComment)).toBe('feature/x');
+        });
+
+        it('reads the base ref', () => {
+            expect(call('getBaseRef', reviewComment)).toBe('develop');
+        });
+
+        it('reads the default branch', () => {
+            expect(call('getDefaultBranch', issueComment)).toBe('main');
+        });
+
+        it('reads the git user from the comment', () => {
+            expect(call('getGitUser', issueComment)).toEqual({
+                id: 7,
+                username: 'bob',
+            });
+        });
+
+        it('reads the PR description from the PR or the issue', () => {
+            expect(call('getPullRequestDescription', reviewComment)).toBe(
+                'PR body',
+            );
+            expect(call('getPullRequestDescription', issueComment)).toBe(
+                'Issue body',
+            );
+        });
     });
 });

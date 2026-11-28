@@ -446,7 +446,12 @@ export class ChatWithKodyFromGitUseCase {
             // decision on that comment, not a question for the chat.
             const businessLogicReply =
                 commandType === CommandType.CONVERSATION &&
-                this.isGeneralComment(params)
+                (await this.isGeneralComment(
+                    params,
+                    repository,
+                    pullRequestNumber,
+                    organizationAndTeamData,
+                ))
                     ? await this.handleBusinessLogicReply(
                           params,
                           repository,
@@ -694,7 +699,12 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     /** A comment on the PR itself, not on a line of code. */
-    private isGeneralComment(params: WebhookParams): boolean {
+    private async isGeneralComment(
+        params: WebhookParams,
+        repository?: Repository,
+        pullRequestNumber?: number,
+        organizationAndTeamData?: OrganizationAndTeamData,
+    ): Promise<boolean> {
         switch (params.platformType) {
             case PlatformType.GITHUB:
                 return params.event !== 'pull_request_review_comment';
@@ -705,6 +715,26 @@ export class ChatWithKodyFromGitUseCase {
             case PlatformType.AZURE_REPOS:
                 return !params.payload?.resource?.comment?.threadContext
                     ?.filePath;
+            case PlatformType.FORGEJO: {
+                // Forgejo sends every PR comment as issue_comment, with no
+                // path or review id and the same URL shape: a comment is
+                // inline only when it is one of the PR's review comments.
+                const commentId = this.getCommentId(params);
+                const reviewComments =
+                    await this.codeManagementService.getPullRequestReviewComment(
+                        {
+                            organizationAndTeamData,
+                            filters: { pullRequestNumber, repository },
+                        },
+                    );
+                // Unreadable list: the conversation flow reads the same list
+                // and cannot answer either, so keep Business Logic decisions
+                // on top-level comments working.
+                if (!Array.isArray(reviewComments)) {
+                    return true;
+                }
+                return !reviewComments.some((c) => c?.id === commentId);
+            }
             default:
                 return !params.payload?.comment?.path;
         }
@@ -1764,6 +1794,13 @@ export class ChatWithKodyFromGitUseCase {
                 return params.payload?.pullrequest?.id;
             case PlatformType.AZURE_REPOS:
                 return params.payload?.resource?.pullRequest?.pullRequestId;
+            case PlatformType.FORGEJO:
+                // An issue_comment carries the PR as `issue`; a review comment as `pull_request`.
+                return (
+                    params.payload?.pull_request?.number ||
+                    params.payload?.issue?.number ||
+                    0
+                );
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType}`,
@@ -1827,6 +1864,8 @@ export class ChatWithKodyFromGitUseCase {
                         '',
                     ) || ''
                 );
+            case PlatformType.FORGEJO:
+                return params.payload?.pull_request?.head?.ref || '';
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType} for head ref`,
@@ -1854,6 +1893,8 @@ export class ChatWithKodyFromGitUseCase {
                         '',
                     ) || ''
                 );
+            case PlatformType.FORGEJO:
+                return params.payload?.pull_request?.base?.ref || '';
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType} for base ref`,
@@ -1890,6 +1931,12 @@ export class ChatWithKodyFromGitUseCase {
                         'refs/heads/',
                         '',
                     ) || ''
+                );
+            case PlatformType.FORGEJO:
+                return (
+                    params.payload?.repository?.default_branch ||
+                    params.payload?.pull_request?.base?.repo?.default_branch ||
+                    ''
                 );
             default:
                 this.logger.warn({
@@ -1957,6 +2004,12 @@ export class ChatWithKodyFromGitUseCase {
                 description = this.normalizeDescription(
                     params.payload?.resource?.pullRequest?.description,
                 );
+                break;
+            case PlatformType.FORGEJO:
+                description =
+                    this.normalizeDescription(
+                        params.payload?.pull_request?.body,
+                    ) || this.normalizeDescription(params.payload?.issue?.body);
                 break;
             default:
                 this.logger.warn({
@@ -2074,6 +2127,8 @@ export class ChatWithKodyFromGitUseCase {
                 return params.payload?.comment?.id;
             case PlatformType.AZURE_REPOS:
                 return params.payload?.resource?.comment?.id;
+            case PlatformType.FORGEJO:
+                return params.payload?.comment?.id;
             default:
                 this.logger.warn({
                     message: `Unsupported platform type: ${params.platformType}`,
@@ -2832,6 +2887,10 @@ export class ChatWithKodyFromGitUseCase {
                 gitUser.id = params.payload?.resource?.comment?.author?.id;
                 gitUser.username =
                     params.payload?.resource?.comment?.author?.uniqueName;
+                break;
+            case PlatformType.FORGEJO:
+                gitUser.id = params.payload?.comment?.user?.id;
+                gitUser.username = params.payload?.comment?.user?.login;
                 break;
             default:
                 break;
