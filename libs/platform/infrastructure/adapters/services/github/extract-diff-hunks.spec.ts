@@ -106,6 +106,136 @@ describe('extractDiffHunks', () => {
         ]);
     });
 
+    it('reads a path that itself contains " b/"', () => {
+        // git does not quote a space, so a header whose path holds " b/"
+        // offers two separators and the first one cuts the path short.
+        const spaced = [
+            'diff --git a/fixtures b/package-lock.json b/fixtures b/package-lock.json',
+            'index 1..2 100644',
+            '--- a/fixtures b/package-lock.json',
+            '+++ b/fixtures b/package-lock.json',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+            'diff --git a/cafe.txt b/cafe.txt',
+            'index 3..4 100644',
+            '--- a/cafe.txt',
+            '+++ b/cafe.txt',
+            '@@ -1,1 +1,1 @@',
+            '-before',
+            '+after',
+        ].join('\n');
+
+        expect(
+            extractDiffHunks(spaced, [
+                'fixtures b/package-lock.json',
+                'cafe.txt',
+            ]),
+        ).toEqual([
+            {
+                path: 'fixtures b/package-lock.json',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+            {
+                path: 'cafe.txt',
+                patch: '@@ -1,1 +1,1 @@\n-before\n+after',
+            },
+        ]);
+    });
+
+    it('trusts the --- and +++ lines over the header cuts', () => {
+        // The header names one file and the header lines name another: the
+        // section belongs to the file the ---/+++ pair writes, so a cut from
+        // the header must not serve these hunks under an unrelated path.
+        const deceptive = [
+            'diff --git a/fixtures b/package-lock.json b/fixtures b/package-lock.json',
+            'index 1..2 100644',
+            '--- a/src/real.ts',
+            '+++ b/src/real.ts',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(
+            extractDiffHunks(deceptive, [
+                'fixtures b/package-lock.json',
+                'src/real.ts',
+            ]),
+        ).toEqual([
+            {
+                path: 'src/real.ts',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+        expect(
+            extractDiffHunks(deceptive, ['fixtures b/package-lock.json']),
+        ).toEqual([]);
+    });
+
+    it('answers a quoted rename only under its new path', () => {
+        // The hunks of a renamed file belong to that file; the old name is
+        // not a file the caller can have hunks for.
+        const rename = [
+            'diff --git "a/caf\\303\\251.ts" "b/moved.ts"',
+            'similarity index 90%',
+            'rename from caf\\303\\251.ts',
+            'rename to moved.ts',
+            '--- "a/caf\\303\\251.ts"',
+            '+++ "b/moved.ts"',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(extractDiffHunks(rename, ['moved.ts'])).toEqual([
+            {
+                path: 'moved.ts',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+        expect(extractDiffHunks(rename, ['caf\u00e9.ts'])).toEqual([]);
+    });
+
+    it('keeps a file name that ends with a space', () => {
+        // Git writes an unquoted header for such a name; trimming the line
+        // would land the hunks on a different file.
+        const spaced = [
+            'diff --git a/notes  b/notes ',
+            '--- a/notes ',
+            '+++ b/notes ',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(extractDiffHunks(spaced, ['notes '])).toEqual([
+            {
+                path: 'notes ',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+        expect(extractDiffHunks(spaced, ['notes'])).toEqual([]);
+    });
+
+    it('drops the timestamp after the tab, not the name', () => {
+        const stamped = [
+            'diff --git a/notes.txt b/notes.txt',
+            '--- a/notes.txt\t2026-11-27 10:00:00',
+            '+++ b/notes.txt\t2026-11-27 10:00:00',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+        ].join('\n');
+
+        expect(extractDiffHunks(stamped, ['notes.txt'])).toEqual([
+            {
+                path: 'notes.txt',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+        ]);
+    });
+
     it('returns nothing rather than throwing on empty input', () => {
         expect(extractDiffHunks('', ['a.ts'])).toEqual([]);
         expect(extractDiffHunks(diff, [])).toEqual([]);

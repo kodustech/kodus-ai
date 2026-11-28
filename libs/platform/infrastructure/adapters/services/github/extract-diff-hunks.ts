@@ -23,22 +23,15 @@ export function extractDiffHunks(
 
     for (const section of sections) {
         const header = section.slice(0, section.indexOf('\n'));
-        // `a/<path> b/<path>`. A path containing a space still parses, because
-        // the b-side always starts at " b/" followed by the same path. git
-        // switches to a quoted, octal-escaped header as soon as the path holds
-        // a non-ASCII byte, a quote or a backslash — a lockfile under an
-        // accented directory would otherwise be skipped without a word.
-        const match =
-            header.match(/^"a\/(.+?)" "b\/(.+)"$/) ??
-            header.match(/^a\/(.+?) b\/(.+)$/);
-        const raw = match?.[2] ?? match?.[1];
-        const path =
-            raw === undefined
-                ? undefined
-                : header.startsWith('"')
-                  ? unescapeGitPath(raw)
-                  : raw;
-        if (!path || !wanted.has(path)) {
+        // `a/<path> b/<path>`. git quotes a header only when the path holds a
+        // non-ASCII byte, a quote or a backslash, so an accented lockfile would
+        // otherwise be skipped without a word. A plain path can itself contain
+        // " b/", which leaves more than one place to cut the header: the
+        // candidates are offered to the caller, which knows the paths it wants.
+        const path = headerPaths(header, section).find((candidate) =>
+            wanted.has(candidate),
+        );
+        if (!path) {
             continue;
         }
 
@@ -59,6 +52,91 @@ export function extractDiffHunks(
     }
 
     return out;
+}
+
+/**
+ * How many separator candidates a header without `---`/`+++` lines may offer.
+ * A crafted path full of " b/" would otherwise copy the tail once per opener.
+ */
+const MAX_HEADER_CANDIDATES = 64;
+
+/**
+ * The paths a `diff --git` header can name, best reading first.
+ *
+ * git writes `a/<old> b/<new>` and only quotes the header when a path holds a
+ * non-ASCII byte, a quote or a backslash. A plain path that itself contains
+ * " b/" therefore leaves more than one place to cut the header, and the
+ * earliest cut shortens the path: `a/fixtures b/package-lock.json b/fixtures
+ * b/package-lock.json`.
+ *
+ * The section's own `---` and `+++` lines name the two sides exactly, so they
+ * are read first and a cut is only guessed when they are absent. For a rename
+ * only the new path is offered: the hunks of a renamed file belong to that
+ * file, not to a different file the caller asked for under the old name.
+ */
+function headerPaths(header: string, section: string): string[] {
+    const firstHunk = section.indexOf('\n@@');
+    const head = firstHunk === -1 ? section : section.slice(0, firstHunk);
+    const minus = /^--- (.+)$/m.exec(head);
+    const plus = /^\+\+\+ (.+)$/m.exec(head);
+    const oldPath = minus ? sidePathOf(minus[1], 'a/') : undefined;
+    const newPath = plus ? sidePathOf(plus[1], 'b/') : undefined;
+
+    if (newPath) {
+        return [newPath];
+    }
+    if (oldPath) {
+        // A deletion has no new side, and its hunks still belong to this path.
+        return [oldPath];
+    }
+
+    const quoted = header.match(/^"a\/(.+?)" "b\/(.+)"$/);
+    if (quoted) {
+        const quotedNew = unescapeGitPath(quoted[2]);
+        return [quotedNew];
+    }
+
+    if (!header.startsWith('a/')) {
+        return [];
+    }
+
+    const body = header.slice(2);
+    const renamed: string[] = [];
+    for (
+        let at = body.indexOf(' b/');
+        at !== -1 && renamed.length < MAX_HEADER_CANDIDATES;
+        at = body.indexOf(' b/', at + 1)
+    ) {
+        const cutOld = body.slice(0, at);
+        const cutNew = body.slice(at + 3);
+        // Two sides that agree are the path, and no later cut can improve it.
+        if (cutOld === cutNew) {
+            return [cutNew];
+        }
+        renamed.push(cutNew);
+    }
+
+    // Only a rename header with no ---/+++ lines reaches this point.
+    return renamed.length ? [renamed[0]] : [];
+}
+
+/**
+ * One side of a `---`/`+++` line: `a/foo`, `"a/foo"` or `/dev/null`.
+ */
+function sidePathOf(raw: string, prefix: string): string | undefined {
+    // A `---`/`+++` line can carry a timestamp after a tab, and a file name
+    // can end with a space: only the tab and what follows it are removed.
+    let value = raw.replace(/\t.*$/, '').replace(/\r$/, '');
+    if (value === '/dev/null') {
+        return undefined;
+    }
+    if (value.startsWith('"') && value.endsWith('"')) {
+        value = unescapeGitPath(value.slice(1, -1));
+    }
+    if (value.startsWith(prefix)) {
+        value = value.slice(prefix.length);
+    }
+    return value || undefined;
 }
 
 /**
