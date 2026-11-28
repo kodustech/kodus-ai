@@ -5,7 +5,7 @@ import type {
 } from '../business-validation.types';
 import { deriveStatus } from '../judge/validation-verdict';
 import type { CheckedCommit } from '../render';
-import { matchPrevious, requirementKey, taskTextHash } from '../carry-over';
+import { matchOutOfScope, matchPrevious, taskTextHash } from '../carry-over';
 import type { Acceptance } from '../judge/validation.types';
 import type { RunAuthor, RunTask } from './validation-run.model';
 import type {
@@ -186,15 +186,23 @@ function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
             acceptanceKey(prior.accepted) === acceptanceKey(r.accepted)
         );
     });
-    const changes = (run: RunTask) =>
-        (run.outOfScope ?? [])
-            .map(
-                (o) =>
-                    `${requirementKey(o.change)}:${acceptanceKey(o.accepted)}`,
-            )
-            .sort()
-            .join('\n');
-    return sameRequirements && changes(before) === changes(now);
+    // An out-of-scope change is the same one by the match a re-check uses to
+    // carry its acceptance (`matchOutOfScope`): the judge rewords it on
+    // every run, the files it cites stay.
+    const wasChanges = before.outOfScope ?? [];
+    const isChanges = now.outOfScope ?? [];
+    const matchedChanges = matchOutOfScope(isChanges, wasChanges);
+    const sameChanges =
+        wasChanges.length === isChanges.length &&
+        isChanges.every((c, i) => {
+            const at = matchedChanges[i];
+            return (
+                at !== undefined &&
+                acceptanceKey(wasChanges[at].accepted) ===
+                    acceptanceKey(c.accepted)
+            );
+        });
+    return sameRequirements && sameChanges;
 }
 
 export function buildRun(

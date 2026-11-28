@@ -169,6 +169,104 @@ describe('sameResult (#2423)', () => {
         ).toBe(false);
     });
 
+    // QA of #2681: two runs on the same commit, the same 4 out-of-scope
+    // changes on the same files, only the model's wording differed, and the
+    // reply said "the result changed".
+    it('reads the same out-of-scope changes in other words, on the same files, as the same result', () => {
+        const at = (...files: string[]) => files.map((file) => ({ file }));
+        const before = run(
+            {},
+            {
+                outOfScope: [
+                    {
+                        change: 'Adds a Redis cache in front of refunds',
+                        evidence: at('src/refunds/cache.ts'),
+                    },
+                    {
+                        change: 'Renames the audit helper',
+                        evidence: at('src/audit/log.ts', 'src/audit/index.ts'),
+                    },
+                ],
+            },
+        );
+        const reworded = run(
+            {},
+            {
+                outOfScope: [
+                    {
+                        change: 'Caches refund lookups in Redis',
+                        evidence: at('src/refunds/cache.ts'),
+                    },
+                    {
+                        change: 'The audit helper was renamed',
+                        evidence: at('src/audit/index.ts', 'src/audit/log.ts'),
+                    },
+                ],
+            },
+        );
+        expect(sameResult(before, reworded)).toBe(true);
+    });
+
+    it('reads a run stored without an out-of-scope list as having none', () => {
+        expect(sameResult(run({}, { outOfScope: undefined }), run())).toBe(
+            true,
+        );
+        expect(sameResult(run(), run({}, { outOfScope: undefined }))).toBe(
+            true,
+        );
+    });
+
+    it('reads an out-of-scope change dropped, or accepted since, as a change', () => {
+        const cache = {
+            change: 'Adds a Redis cache',
+            evidence: [{ file: 'src/refunds/cache.ts' }],
+        };
+        const log = {
+            change: 'Adds a debug log',
+            evidence: [{ file: 'src/refunds/log.ts' }],
+        };
+        expect(
+            sameResult(
+                run({}, { outOfScope: [cache, log] }),
+                run({}, { outOfScope: [cache] }),
+            ),
+        ).toBe(false);
+        expect(
+            sameResult(
+                run({}, { outOfScope: [cache] }),
+                run(
+                    {},
+                    {
+                        outOfScope: [
+                            {
+                                ...cache,
+                                change: 'Caches refunds in Redis',
+                                accepted: { by: 'nina', at: '2026-10-05' },
+                            },
+                        ],
+                    },
+                ),
+            ),
+        ).toBe(false);
+    });
+
+    it('reads an out-of-scope change on another file as a change, in any words', () => {
+        const on = (change: string, file: string) =>
+            run({}, { outOfScope: [{ change, evidence: [{ file }] }] });
+        expect(
+            sameResult(
+                on('Adds a Redis cache', 'src/refunds/cache.ts'),
+                on('Adds a Redis cache', 'src/orders/cache.ts'),
+            ),
+        ).toBe(true);
+        expect(
+            sameResult(
+                on('Adds a Redis cache', 'src/refunds/cache.ts'),
+                on('Caches refunds in Redis', 'src/orders/cache.ts'),
+            ),
+        ).toBe(false);
+    });
+
     it('reads a skip about another task as a change', () => {
         const missing = (id: string) =>
             ({

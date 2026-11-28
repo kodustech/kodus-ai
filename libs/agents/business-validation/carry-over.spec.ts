@@ -1,5 +1,10 @@
 import type { BusinessValidationOutcome } from './business-validation.types';
-import { carryOver, matchPrevious, taskTextHash } from './carry-over';
+import {
+    carryOver,
+    matchOutOfScope,
+    matchPrevious,
+    taskTextHash,
+} from './carry-over';
 import type { RunTask } from './runs/validation-run.model';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
@@ -181,6 +186,208 @@ describe('carryOver', () => {
             result.checks[0].verdict.requirements![0].accepted,
         ).toMatchObject({ by: 'nina' });
         expect(result.passed).toBe(true);
+    });
+});
+
+describe('carryOver of an accepted out-of-scope change', () => {
+    const accepted = {
+        by: 'nina',
+        reason: 'fair refactor',
+        at: '2026-10-05T11:00:00.000Z',
+    };
+    const beforeWith = (outOfScope: RunTask['outOfScope']): RunTask[] => [
+        { ...before[0], requirements: [], outOfScope },
+    ];
+    const nowWith = (
+        outOfScope: Validated['checks'][number]['verdict']['outOfScope'],
+    ): Validated => {
+        const outcome = now([]);
+        outcome.checks[0].verdict.outOfScope = outOfScope;
+        return outcome;
+    };
+    const changes = (result: BusinessValidationOutcome) => {
+        if (result.kind !== 'validated') throw new Error('expected validated');
+        return result.checks[0].verdict.outOfScope ?? [];
+    };
+
+    // The judge words the same change differently on every run.
+    it('keeps the acceptance when the change is reworded on the same files', () => {
+        const result = carryOver(
+            nowWith([
+                {
+                    change: 'Caches refund lookups in Redis',
+                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                },
+            ]),
+            beforeWith([
+                {
+                    change: 'Adds a Redis cache in front of refunds',
+                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                    accepted,
+                },
+            ]),
+        );
+        expect(changes(result)[0].accepted).toMatchObject({ by: 'nina' });
+    });
+
+    // Two changes on one file, both reworded: which one was accepted cannot
+    // be told, so neither inherits it.
+    it('never guesses between two reworded changes on the same files', () => {
+        const file = [{ file: 'src/refunds/cache.ts' }];
+        const result = carryOver(
+            nowWith([
+                { change: 'Caches refund lookups in Redis', evidence: file },
+                { change: 'Logs every cache miss', evidence: file },
+            ]),
+            beforeWith([
+                {
+                    change: 'Adds a Redis cache in front of refunds',
+                    evidence: file,
+                    accepted,
+                },
+                { change: 'Adds a debug log', evidence: file },
+            ]),
+        );
+        expect(changes(result).map((c) => c.accepted)).toEqual([
+            undefined,
+            undefined,
+        ]);
+    });
+
+    // As before this matcher: the judge listing the accepted change twice
+    // shows both as accepted.
+    it('keeps the acceptance on every change with the accepted text', () => {
+        const file = [{ file: 'src/refunds/cache.ts' }];
+        const result = carryOver(
+            nowWith([
+                { change: 'Adds a Redis cache', evidence: file },
+                { change: 'Adds a Redis cache', evidence: [] },
+            ]),
+            beforeWith([
+                { change: 'Adds a Redis cache', evidence: file, accepted },
+            ]),
+        );
+        expect(changes(result).map((c) => c.accepted?.by)).toEqual([
+            'nina',
+            'nina',
+        ]);
+    });
+
+    it('leaves a verdict with no out-of-scope list without one', () => {
+        const outcome = now([]);
+        delete (outcome.checks[0].verdict as { outOfScope?: unknown })
+            .outOfScope;
+        expect(
+            changes(
+                carryOver(
+                    outcome,
+                    beforeWith([
+                        { change: 'Adds a cache', evidence: [], accepted },
+                    ]),
+                ),
+            ),
+        ).toEqual([]);
+    });
+
+    it('never moves an acceptance to a change on another file', () => {
+        const result = carryOver(
+            nowWith([
+                {
+                    change: 'Caches order lookups in Redis',
+                    evidence: [{ file: 'src/orders/cache.ts' }],
+                },
+            ]),
+            beforeWith([
+                {
+                    change: 'Adds a Redis cache in front of refunds',
+                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                    accepted,
+                },
+            ]),
+        );
+        expect(changes(result)[0].accepted).toBeUndefined();
+    });
+});
+
+describe('matchOutOfScope', () => {
+    const change = (text: string, ...files: string[]) => ({
+        change: text,
+        evidence: files.map((file) => ({ file })),
+    });
+
+    it('takes the exact text first, each earlier change once', () => {
+        expect(
+            matchOutOfScope(
+                [change('A', 'x.ts'), change('A', 'x.ts'), change('B')],
+                [change('A', 'x.ts'), change('B'), change('A', 'x.ts')],
+            ),
+        ).toEqual([0, 2, 1]);
+    });
+
+    it('then a reworded change on the same set of files, in any order', () => {
+        expect(
+            matchOutOfScope(
+                [change('Caches refunds', 'b.ts', 'a.ts', 'a.ts')],
+                [change('Adds a cache', 'a.ts', 'b.ts')],
+            ),
+        ).toEqual([0]);
+    });
+
+    it('only when that set of files is cited once on each side', () => {
+        expect(
+            matchOutOfScope(
+                [change('One', 'a.ts'), change('Two', 'a.ts')],
+                [change('Uno', 'a.ts')],
+            ),
+        ).toEqual([undefined, undefined]);
+        expect(
+            matchOutOfScope(
+                [change('One', 'a.ts')],
+                [change('Uno', 'a.ts'), change('Dos', 'a.ts')],
+            ),
+        ).toEqual([undefined]);
+    });
+
+    it('takes the earlier change on those files, not the first one left', () => {
+        expect(
+            matchOutOfScope(
+                [change('One', 'a.ts')],
+                [change('Other', 'b.ts'), change('Uno', 'a.ts')],
+            ),
+        ).toEqual([1]);
+    });
+
+    it('counts only what the exact text left unmatched', () => {
+        expect(
+            matchOutOfScope(
+                [change('Kept', 'a.ts'), change('Reworded', 'a.ts')],
+                [change('Kept', 'a.ts'), change('Original', 'a.ts')],
+            ),
+        ).toEqual([0, 1]);
+    });
+
+    it('never matches by files a change that cites none, or another set', () => {
+        expect(matchOutOfScope([change('New')], [change('Old')])).toEqual([
+            undefined,
+        ]);
+        expect(
+            matchOutOfScope(
+                [change('New', 'a.ts', 'b.ts')],
+                [change('Old', 'a.tsb.ts')],
+            ),
+        ).toEqual([undefined]);
+        expect(
+            matchOutOfScope([change('New', 'a.ts')], [change('Old', 'b.ts')]),
+        ).toEqual([undefined]);
+    });
+
+    it('never gives one earlier change to two', () => {
+        expect(
+            matchOutOfScope(
+                [change('Same'), change('Reworded', 'a.ts')],
+                [change('Same', 'a.ts')],
+            ),
+        ).toEqual([0, undefined]);
     });
 });
 
