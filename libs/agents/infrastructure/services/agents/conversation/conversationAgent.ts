@@ -361,6 +361,7 @@ export class ConversationAgentProvider {
                 (name) =>
                     Object.prototype.hasOwnProperty.call(tools, name) &&
                     !isWriteTool(name),
+                isWriteTool,
                 organizationAndTeamData,
                 thread,
             );
@@ -501,15 +502,21 @@ export class ConversationAgentProvider {
         steps: RunState['steps'],
         writes: readonly WriteToolEvent[],
         isReadOnlyTool: (name: string) => boolean,
+        isWriteTool: (name: string) => boolean,
         organizationAndTeamData: OrganizationAndTeamData,
         thread: ConversationThread,
     ): void {
         const decisions = readDecisions(steps);
         const decision = decisions.at(-1);
+        const calledWriteTools = steps
+            .flatMap((step) => step.message?.toolCalls ?? [])
+            .map((call) => call.name)
+            .filter((name) => isWriteTool(name));
         const divergence = decisionDivergence(
             decisions,
             writes,
             isReadOnlyTool,
+            calledWriteTools,
         );
         if (!divergence) return;
 

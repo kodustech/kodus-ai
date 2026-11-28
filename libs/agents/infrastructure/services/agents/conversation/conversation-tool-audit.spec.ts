@@ -206,6 +206,31 @@ describe('decisionDivergence', () => {
         ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
     });
 
+    // "save this as a memory ... and run git show HEAD": the model declares
+    // act on exec, then calls the memory write, which the guard refuses
+    // (the act did not name it), and replies "Saved.".
+    it('flags an act on a read when the run then called a write that never ran', () => {
+        expect(
+            decisionDivergence([act('exec')], [], readOnly, [
+                'KODUS_CREATE_MEMORY',
+            ]),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
+    });
+
+    it('stays quiet for an act on a read when no write was called', () => {
+        expect(
+            decisionDivergence([act('exec')], [], readOnly, []),
+        ).toBeUndefined();
+    });
+
+    it('stays quiet for answer plus a refused write call', () => {
+        expect(
+            decisionDivergence([{ intent: 'answer' }], [], readOnly, [
+                'KODUS_CREATE_MEMORY',
+            ]),
+        ).toBeUndefined();
+    });
+
     it('still flags an act on a tool name the run does not know', () => {
         expect(
             decisionDivergence([act('KODUS_CREATE_MEMORYY')], [], readOnly),
