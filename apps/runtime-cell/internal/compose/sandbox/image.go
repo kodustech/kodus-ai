@@ -161,7 +161,7 @@ func PullImages(canonical []byte, o Options) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	for _, name := range sortedKeys(services) {
-		if o.Built[name] != "" {
+		if o.Built[name] != "" || sharedBuilt(services, o.Built)[name] != "" {
 			continue
 		}
 		if ref, _ := services[name]["image"].(string); ref != "" && !seen[ref] {
@@ -170,4 +170,55 @@ func PullImages(canonical []byte, o Options) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// refKey reads an image reference the way compose compares them: a name
+// with no tag or digest is its :latest.
+func refKey(ref string) string {
+	last := ref[strings.LastIndex(ref, "/")+1:]
+	if strings.ContainsAny(last, ":@") {
+		return ref
+	}
+	return ref + ":latest"
+}
+
+// sharedBuilt finds the image-only services that run an image another
+// service of the same project builds: their image is that service's image:
+// (the raw file) or the tag the cell built it as (the canonical config).
+// It returns each by service with the cell's tag. They are satisfied by
+// that build, compose starting them after it, so the cell never pulls them
+// and the checks treat their image as the cell's own, not an external one.
+func sharedBuilt(services map[string]map[string]any, built map[string]string) map[string]string {
+	byRef := map[string]string{}
+	for name, tag := range built {
+		if tag == "" {
+			continue
+		}
+		byRef[refKey(tag)] = tag
+		if ref, _ := services[name]["image"].(string); ref != "" {
+			byRef[refKey(ref)] = tag
+		}
+	}
+	out := map[string]string{}
+	for name, svc := range services {
+		if built[name] != "" || svc["build"] != nil {
+			continue
+		}
+		if ref, _ := svc["image"].(string); ref != "" && byRef[refKey(ref)] != "" {
+			out[name] = byRef[refKey(ref)]
+		}
+	}
+	return out
+}
+
+// anyServices reads a decoded services mapping as service maps.
+func anyServices(v any) map[string]map[string]any {
+	out := map[string]map[string]any{}
+	m, _ := v.(map[string]any)
+	for name, s := range m {
+		if sm, ok := s.(map[string]any); ok {
+			out[name] = sm
+		}
+	}
+	return out
 }

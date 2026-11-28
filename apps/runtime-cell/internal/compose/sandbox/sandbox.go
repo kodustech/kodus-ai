@@ -344,6 +344,9 @@ type checker struct {
 	memSum int64
 	o      Options
 	v      []Violation
+	// shared are the image-only services that run an image another service
+	// builds (sharedBuilt), by service, with the cell's tag.
+	shared map[string]string
 }
 
 func (c *checker) add(path, reason string) { c.v = append(c.v, Violation{path, reason}) }
@@ -387,6 +390,7 @@ func Apply(raw []byte, o Options) ([]byte, error) {
 		c.add("services", "no services")
 	}
 	c.topSecrets(doc["secrets"])
+	c.shared = sharedBuilt(anyServices(doc["services"]), o.Built)
 	declared := c.checkVolumes(doc["volumes"])
 	c.checkNetworks(doc["networks"])
 	for _, name := range sortedKeys(services) {
@@ -645,7 +649,7 @@ func (c *checker) checkService(name string, v any, declared map[string]bool) {
 			c.noInterpolation(svc[k], path+"."+k)
 		}
 	}
-	if !built {
+	if !built && c.shared[name] == "" {
 		c.checkImage(name, svc)
 	}
 	c.checkStopGrace(svc["stop_grace_period"], path+".stop_grace_period")
@@ -912,6 +916,8 @@ func (c *checker) rewriteService(name string, svc map[string]any) {
 	if img := o.Built[name]; img != "" {
 		delete(svc, "build")
 		svc["image"] = img
+	} else if img := c.shared[name]; img != "" {
+		svc["image"] = img // the build's image, which compose starts it after
 	}
 	// compose never pulls: a built image is the cell's own, on this Docker
 	// only, and the driver pulls every other one itself (image.go).

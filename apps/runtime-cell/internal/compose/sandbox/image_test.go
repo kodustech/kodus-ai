@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -128,4 +129,100 @@ func TestPullImagesAreTheImagesTheCellDidNotBuild(t *testing.T) {
 func yamlQuote(s string) string {
 	b, _ := yaml.Marshal(s)
 	return strings.TrimSuffix(string(b), "\n")
+}
+
+const sharedImageCompose = `
+x-build: &build
+  context: .
+services:
+  app:
+    build: *build
+    image: shop-e2e
+  cypress:
+    image: shop-e2e
+    pull_policy: never
+    depends_on:
+      app:
+        condition: service_healthy
+  other:
+    image: redis:7
+`
+
+// An image-only service whose image is the image: of a service this project
+// builds is never pulled: the build satisfies it, compose starts it after the
+// build, and the cell gives it the image it built. An unrelated image-only
+// service is still pulled. pull_policy: never on it is honored (compose never
+// pulls anything: Apply sets it on every service).
+func TestAnImageAnotherServiceBuildsIsNeverPulled(t *testing.T) {
+	const tag = "kodus-build/claim-1-app:claim"
+	for _, tc := range []struct {
+		name    string
+		compose string
+		pulls   []string
+		cypress string
+	}{
+		{"the shared ref is not pulled, an unrelated one is", sharedImageCompose, []string{"redis:7"}, tag},
+		{"an implicit :latest names the same image",
+			strings.Replace(sharedImageCompose, "    image: shop-e2e\n    pull_policy", "    image: shop-e2e:latest\n    pull_policy", 1), []string{"redis:7"}, tag},
+		{"a different tag is another image and is pulled",
+			strings.Replace(sharedImageCompose, "    image: shop-e2e\n    pull_policy", "    image: shop-e2e:v2\n    pull_policy", 1), []string{"shop-e2e:v2", "redis:7"}, "shop-e2e:v2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := checkout(t)
+			o := opts(dir)
+			o.Built = map[string]string{"app": tag}
+			out, err := Apply([]byte(tc.compose), o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc struct {
+				Services map[string]map[string]any `yaml:"services"`
+			}
+			if err := yaml.Unmarshal(out, &doc); err != nil {
+				t.Fatal(err)
+			}
+			if got := doc.Services["cypress"]["image"]; got != tc.cypress {
+				t.Errorf("cypress image %v, want %s", got, tc.cypress)
+			}
+			for name, s := range doc.Services {
+				if s["pull_policy"] != "never" {
+					t.Errorf("%s: pull_policy %v", name, s["pull_policy"])
+				}
+			}
+			canonical, err := json.Marshal(map[string]any{"services": doc.Services})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := PullImages(canonical, o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tc.pulls) {
+				t.Errorf("pulls %v, want %v", got, tc.pulls)
+			}
+		})
+	}
+}
+
+// The admission check on the canonical config treats the shared ref as the
+// cell's built image: it passes with the built tag, and an image that is not
+// the cell's build is still judged as an external one.
+func TestVerifyCanonicalReadsASharedImageAsBuilt(t *testing.T) {
+	dir := checkout(t)
+	o := opts(dir)
+	o.Built = map[string]string{"api": "kodus-build/claim-1-api:claim"}
+	ok := canonical(``)
+	for name, tc := range map[string]struct {
+		cfg  string
+		fail bool
+	}{
+		"the built tag on a second service": {strings.Replace(ok, `"image":"x"`, `"image":"kodus-build/claim-1-api:claim"`, 1), false},
+		"a local image that is not built":   {strings.Replace(ok, `"image":"x"`, `"image":"kodus-build/other:claim"`, 1), true},
+	} {
+		err := VerifyCanonical([]byte(tc.cfg), o)
+		var re *RefusedError
+		if got := errors.As(err, &re); got != tc.fail {
+			t.Errorf("%s: refused=%v err=%v", name, got, err)
+		}
+	}
 }

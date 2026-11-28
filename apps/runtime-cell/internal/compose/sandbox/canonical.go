@@ -30,6 +30,7 @@ func VerifyCanonical(configJSON []byte, o Options) error {
 	}
 	c := &checker{o: o}
 	services, _ := doc["services"].(map[string]any)
+	c.shared = sharedBuilt(anyServices(doc["services"]), o.Built)
 	if len(services) == 0 {
 		c.add("services", "no services")
 	}
@@ -91,6 +92,10 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 	}
 	if img := c.o.Built[name]; img != "" && svc["image"] != img {
 		c.add(path+".image", fmt.Sprintf("%v, not the image the cell built", svc["image"]))
+	} else if shared := c.shared[name]; shared != "" {
+		if svc["image"] != shared {
+			c.add(path+".image", fmt.Sprintf("%v, not the image the cell built", svc["image"]))
+		}
 	} else if img == "" {
 		c.checkImage(name, svc)
 	}

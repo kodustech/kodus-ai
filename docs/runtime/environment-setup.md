@@ -196,6 +196,7 @@ product with the org's BYOK key, which never reaches the worker.
   (`apps/runtime-cell/internal/agent/prepare.go:26-46`). The code step fetches the tarball, extracts it with no
   network, revokes the token, and lays Kody's files and the recipe over it (`prepare.go:194-270`).
 - Compose `Up` runs sandbox, build, render, data, up, record (`internal/drivers/dockergvisor/up.go:25-46`).
+- Image pulls: compose never pulls (every service runs with `pull_policy: never`); the cell pulls each image-only service itself, except one whose `image:` is the `image:` of a service the same project builds. That one runs the build's image, so a recipe can build an image once and share it (`app: {build, image: x}`, `cypress: {image: x}`) without a registry round trip (`internal/compose/sandbox/image.go`, `sharedBuilt`).
 - **gVisor:** containers run under the `runsc` runtime, the default and a requirement
   (`internal/drivers/dockergvisor/driver.go:251-262`).
 - **BuildKit, one builder per build:** each build section runs `docker run --rm --runtime runsc` of a rootless
