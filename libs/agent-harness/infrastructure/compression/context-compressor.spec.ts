@@ -138,6 +138,25 @@ describe('clampMessagesToBudget', () => {
         expect(String(clamped[0].content)).toContain('PR context');
     });
 
+    // Review of #2793: the cut started at 500 characters whatever the room,
+    // so a 16k slot kept ~120 tokens of the message beside 3,000 free, and a
+    // question longer than the tail lost its start.
+    it('uses the room the budget leaves, so a long question survives whole', () => {
+        const question = `Question: ${'why does the discount apply twice when a sibling enrolls? '.repeat(12)}`;
+        const msgs: ModelMessage[] = [
+            {
+                role: 'user',
+                content: `PR description:\n${'lorem ipsum dolor sit amet '.repeat(3_000)}\n${question}`,
+            },
+        ];
+        const budget = 3_000;
+        const clamped = clampMessagesToBudget(msgs, budget);
+        const tokens = estimateMessagesTokens(clamped);
+        expect(tokens).toBeLessThanOrEqual(budget);
+        expect(tokens).toBeGreaterThan(budget * 0.5);
+        expect(String(clamped[0].content)).toContain(question);
+    });
+
     it('keeps the end of a user message given as text parts too', () => {
         const msgs: ModelMessage[] = [
             {

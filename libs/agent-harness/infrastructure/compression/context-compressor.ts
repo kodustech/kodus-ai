@@ -594,22 +594,28 @@ function evictOldestRounds(
 }
 
 /**
- * Last-resort clamp: shrink every message's text content with a geometrically
- * decreasing cap until the window estimates under `budgetTokens`. Truncates
- * only text/output/result/content fields (never tool-call `input`/`args`), so
- * assistant tool-call parts stay structurally intact. A user message keeps
- * both ends, where a prompt puts its question; the rest keep their start.
- * Bounded iteration count — returns the best effort if a pathological window
- * can't be reduced further.
+ * Last-resort clamp: shrink every message's text content to a cap until the
+ * window estimates under `budgetTokens`. The cap starts at the longest
+ * message and shrinks in proportion to the overflow, so the room the budget
+ * leaves is used: from a fixed 500 characters, a 16k slot kept ~120 tokens of
+ * the developer's message beside 3,000 free and cut the question (#2233
+ * review). Truncates only text/output/result/content fields (never tool-call
+ * `input`/`args`), so assistant tool-call parts stay structurally intact. A
+ * user message keeps both ends, where a prompt puts its question; the rest
+ * keep their start. Bounded iteration count — returns the best effort if a
+ * pathological window can't be reduced further.
  */
 function hardTruncateToFit(
     messages: ModelMessage[],
     budgetTokens: number,
     counts?: MessageTokenCounts,
 ): ModelMessage[] {
-    let cap = HARD_CLAMP_MAX_CHARS_PER_RESULT;
+    let cap = Math.max(
+        HARD_CLAMP_MAX_CHARS_PER_RESULT,
+        ...messages.map((m) => contentChars(m.content)),
+    );
     let work = messages;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < HARD_CLAMP_STEPS; i++) {
         work = messages.map(
             (m) =>
                 truncateToolMessage(
@@ -618,15 +624,39 @@ function hardTruncateToFit(
                     m.role === 'user' ? truncateMiddle : truncateText,
                 ).msg,
         );
-        if (estimateMessagesTokens(work, counts) <= budgetTokens) {
+        const tokens = estimateMessagesTokens(work, counts);
+        if (tokens <= budgetTokens) {
             return work;
         }
-        if (cap <= 80) {
+        if (cap <= HARD_CLAMP_MIN_CHARS) {
             break;
         }
-        cap = Math.max(80, Math.floor(cap / 2));
+        // In proportion to the overflow, and at least a tenth each step.
+        cap = Math.max(
+            HARD_CLAMP_MIN_CHARS,
+            Math.min(
+                Math.floor(cap * 0.9),
+                Math.floor((cap * budgetTokens * 0.9) / tokens),
+            ),
+        );
     }
     return work;
+}
+
+/** The smallest cap the last-resort clamp cuts a text to. */
+const HARD_CLAMP_MIN_CHARS = 80;
+
+/** Steps before the clamp settles for its best effort. */
+const HARD_CLAMP_STEPS = 24;
+
+/** The characters of a message's content: an upper bound on any field. */
+function contentChars(content: ModelMessage['content']): number {
+    if (typeof content === 'string') return content.length;
+    try {
+        return JSON.stringify(content)?.length ?? 0;
+    } catch {
+        return 0;
+    }
 }
 
 /**
