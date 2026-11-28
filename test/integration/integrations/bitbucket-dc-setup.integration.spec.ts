@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import axios from 'axios';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 
 import { decrypt } from '@libs/common/utils/crypto';
 import { IntegrationConfigKey } from '@libs/core/domain/enums';
@@ -214,9 +214,11 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
                     event.entity.status = null;
             },
         });
-        await expect(connect('replacement')).rejects.toMatchObject({
-            status: 500,
-        });
+        // A database fault is not a refusal: it reaches the exception filter
+        // as it is (a 500), like on every other provider.
+        await expect(connect('replacement')).rejects.toBeInstanceOf(
+            QueryFailedError,
+        );
         const stored = await readPair();
         expect(stored.status).toBe(false);
         expect(decrypt(stored.authIntegration.authDetails.appPassword)).toBe(
