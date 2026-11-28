@@ -532,8 +532,50 @@ const ANTHROPIC_FAILURES: HttpFailure[] = [
         expect: { category: C.RATE_LIMIT, failover: true },
     },
     {
-        // Anthropic has no daily window; its long window is the spend cap,
-        // and it answers it with a 400, not a 429.
+        // A ramp limit (usage grew too fast) clears in seconds and says when.
+        // It shares the spend cap's `rate_limit_error` type, so it pins the
+        // spend-cap rule below to the code, not the type.
+        mode: 'ramp limit (429, retry-after)',
+        status: 429,
+        source: 'docs',
+        headers: { 'retry-after': '6' },
+        body: {
+            type: 'error',
+            error: {
+                type: 'rate_limit_error',
+                message:
+                    'Your organization’s usage of this model is increasing too quickly. Your current ramp limit is 40,000 input tokens per minute, it can rise by 40,000 each minute, up to your rate limit of 2,000,000.',
+                details: { error_code: 'ramp_limit_exceeded' },
+            },
+        },
+        expect: { category: C.RATE_LIMIT, failover: true },
+    },
+    {
+        // Anthropic has no daily window; its long window is the spend cap.
+        // The cap of the org's tier is a 429 with no `retry-after`; retrying
+        // it fails until the next month, so it is a quota, not a rate limit
+        // (#2653).
+        mode: 'tier spend cap until next month (429)',
+        status: 429,
+        source: 'docs',
+        body: {
+            type: 'error',
+            error: {
+                type: 'rate_limit_error',
+                message:
+                    "You have reached your API usage limits: your organization has crossed its monthly API usage threshold, set based on your organization's API tier. You will regain access on 2026-12-01 at 00:00 UTC.",
+                details: { error_code: 'enforced_spend_limit_reached' },
+            },
+            request_id: 'req_018EeWyXxfu5pfWkrYcMdjWG',
+        },
+        expect: { category: C.QUOTA_EXCEEDED, failover: true },
+        published: {
+            has: ['out of credits or has hit its billing limit'],
+            hasNot: ['Rate limit reached'],
+        },
+    },
+    {
+        // A limit the org set itself below its tier's cap is a 400.
         mode: 'spend cap until next month (400)',
         status: 400,
         source: 'repo',
