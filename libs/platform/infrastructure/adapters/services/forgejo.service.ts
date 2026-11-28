@@ -326,10 +326,17 @@ export class ForgejoService implements Omit<
             updated_at?: string;
             user?: ForgejoUser;
             resolver?: ForgejoUser | null;
+            path?: string;
+            position?: number;
+            original_position?: number;
         },
     ): PullRequestReviewComment {
         return {
             id: comment.id,
+            // File and line group a conversation: Forgejo has no reply link.
+            path: comment.path,
+            position: comment.position,
+            originalPosition: comment.original_position,
             // The comment id, not the review's: Forgejo reviews are not
             // comment threads, and the only behavioural reader of this field -
             // the reactions lookup - needs the per-comment identity, which the

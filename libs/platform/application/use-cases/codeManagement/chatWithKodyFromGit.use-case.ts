@@ -705,6 +705,15 @@ export class ChatWithKodyFromGitUseCase {
             case PlatformType.AZURE_REPOS:
                 return !params.payload?.resource?.comment?.threadContext
                     ?.filePath;
+            case PlatformType.FORGEJO:
+                // The comment carries no path; a code comment links to the
+                // PR's files tab.
+                return (
+                    params.event !== 'pull_request_review_comment' &&
+                    !String(params.payload?.comment?.html_url ?? '').includes(
+                        '/files#',
+                    )
+                );
             default:
                 return !params.payload?.comment?.path;
         }
@@ -2857,6 +2866,10 @@ export class ChatWithKodyFromGitUseCase {
                 gitUser.id = params.payload?.resource?.comment?.author?.id;
                 gitUser.username =
                     params.payload?.resource?.comment?.author?.uniqueName;
+                break;
+            case PlatformType.FORGEJO:
+                gitUser.id = params.payload?.comment?.user?.id;
+                gitUser.username = params.payload?.comment?.user?.login;
                 break;
             default:
                 break;

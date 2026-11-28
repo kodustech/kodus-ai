@@ -99,6 +99,10 @@ export type PullRequestReviewComment = {
     };
     createdAt?: string;
     updatedAt?: string;
+    /** Forgejo: the file and line a review comment sits on. */
+    path?: string;
+    position?: number;
+    originalPosition?: number;
 };
 
 export type ReactionsInComments = {

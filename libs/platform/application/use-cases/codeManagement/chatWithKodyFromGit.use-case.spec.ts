@@ -1624,6 +1624,45 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
             expect(call('getDefaultBranch', issueComment)).toBe('main');
         });
 
+        it('tells an inline reply from a general comment', () => {
+            const inline = {
+                ...issueComment,
+                payload: {
+                    ...issueComment.payload,
+                    comment: {
+                        id: 7,
+                        html_url:
+                            'https://codeberg.org/o/r/pulls/21/files#issuecomment-7',
+                    },
+                },
+            };
+            const general = {
+                ...issueComment,
+                payload: {
+                    ...issueComment.payload,
+                    comment: {
+                        id: 8,
+                        html_url:
+                            'https://codeberg.org/o/r/pulls/21#issuecomment-8',
+                    },
+                },
+            };
+            expect(call('isGeneralComment', inline)).toBe(false);
+            expect(call('isGeneralComment', reviewComment)).toBe(false);
+            expect(call('isGeneralComment', general)).toBe(true);
+        });
+
+        it('reads the git user from the comment', () => {
+            expect(
+                call('getGitUser', {
+                    ...issueComment,
+                    payload: {
+                        comment: { id: 1, user: { id: 7, login: 'bob' } },
+                    },
+                }),
+            ).toEqual({ id: 7, username: 'bob' });
+        });
+
         it('reads the PR description from the PR or the issue', () => {
             expect(call('getPullRequestDescription', reviewComment)).toBe(
                 'PR body',

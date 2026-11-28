@@ -59,6 +59,11 @@ export function eventSenderOf(params: CommentWebhook): {
                 login: params.payload?.resource?.comment?.author?.displayName,
                 id: params.payload?.resource?.comment?.author?.id,
             };
+        case PlatformType.FORGEJO:
+            return {
+                login: params.payload?.sender?.login,
+                id: params.payload?.sender?.id,
+            };
         default:
             return { login: '', id: '' };
     }

@@ -1,6 +1,10 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { commenterOf, reviewCommandAccess } from './commenter-access';
+import {
+    commenterOf,
+    eventSenderOf,
+    reviewCommandAccess,
+} from './commenter-access';
 
 const org = { organizationId: 'org-1', teamId: 'team-1' };
 
@@ -305,5 +309,16 @@ describe('commenterOf', () => {
                 },
             }),
         ).toEqual({ login: 'dev', id: 3 });
+    });
+});
+
+describe('eventSenderOf', () => {
+    it('reads the Forgejo sender (#2790 review)', () => {
+        expect(
+            eventSenderOf({
+                platformType: PlatformType.FORGEJO,
+                payload: { sender: { login: 'bob', id: 7 } },
+            } as any),
+        ).toEqual({ login: 'bob', id: 7 });
     });
 });

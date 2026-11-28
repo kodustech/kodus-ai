@@ -62,6 +62,31 @@ export interface ThreadComment {
     system?: boolean;
     createdAt?: string;
     created_at?: string;
+    /** Forgejo: the file and line a review comment sits on. */
+    path?: string;
+    position?: number;
+    originalPosition?: number;
+}
+
+/**
+ * Forgejo returns review comments flat, with no reply link: a conversation is
+ * every comment on the same file and line. Oldest first.
+ */
+function forgejoThreadOf<T extends ThreadComment>(
+    comment: T,
+    allComments: T[],
+): T[] {
+    const self = allComments.find((c) => c.id === comment.id) ?? comment;
+    if (!self.path) return [];
+    const at = (c: ThreadComment) =>
+        `${c.path}:${c.position ?? 0}:${c.originalPosition ?? 0}`;
+    return allComments
+        .filter((c) => at(c) === at(self))
+        .sort(
+            (a, b) =>
+                new Date(a.createdAt ?? 0).getTime() -
+                    new Date(b.createdAt ?? 0).getTime() || a.id - b.id,
+        );
 }
 
 /**
@@ -159,6 +184,10 @@ export function buildReplyThread(
             members = [thread, ...(thread.replies ?? [])];
             break;
         }
+        case PlatformType.FORGEJO:
+            members = forgejoThreadOf(comment, comments);
+            if (members.length < 2) return undefined;
+            break;
         default:
             return undefined;
     }
@@ -287,6 +316,15 @@ export function getOriginalKodyComment(
                     return originalComment;
                 }
                 return undefined;
+            case PlatformType.FORGEJO: {
+                // The finding is the latest Kody comment above the reply.
+                const thread = forgejoThreadOf(comment, allComments);
+                const index = thread.findIndex((c) => c.id === comment.id);
+                return thread
+                    .slice(0, Math.max(index, 0))
+                    .reverse()
+                    .find((c) => isKodyComment(c, platformType));
+            }
             default:
                 logger.warn({ message: `Unsupported platform type: ${platformType}`, context: 'ChatWithKodyFromGitUseCase', metadata: { platformType, commentId: comment?.id } });
                 return undefined;
@@ -393,6 +431,12 @@ export function getOthersReplies(
                         ((reply.in_reply_to_id !== undefined &&
                             reply.in_reply_to_id === comment.in_reply_to_id) ||
                             reply.discussionId === comment.discussionId) &&
+                        !isKodyComment(reply, platformType),
+                );
+            case PlatformType.FORGEJO:
+                return forgejoThreadOf(comment, allComments).filter(
+                    (reply) =>
+                        reply.id !== comment.id &&
                         !isKodyComment(reply, platformType),
                 );
             default:
