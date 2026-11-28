@@ -243,21 +243,99 @@ export function stripReasoningBlocks(text: string): string | null {
     return (kept + s.slice(pos)).trim();
 }
 
+/** A markdown code fence: where it starts and ends, its body, its info word,
+ *  and whether an untagged body opens on a JSON delimiter. */
+interface Fence {
+    start: number;
+    end: number;
+    inner: string;
+    tag: string;
+    opensJson: boolean;
+}
+
+/** The info word, bounded: an unterminated info line must not scan the rest
+ *  of the response for every fence. */
+const MAX_INFO = 24;
+
+/** Whether a fence carries a JSON payload. An untagged fence counts when its
+ *  body opens on a bracket, which is how models quote JSON. */
+function isJsonFence(fence: Fence): boolean {
+    return (
+        /^json[c5]?$/.test(fence.tag) || (fence.tag === '' && fence.opensJson)
+    );
+}
+
 /**
- * The first markdown code fence: the first ``` that a later ``` closes, with
- * what lies between them (`inner`, tag included). A linear scan: the regex
- * forms (`/```(?:json)?\s*([\s\S]*?)```/`) backtrack over a run of
- * whitespace after an unclosed fence once per character, quadratic in
- * model-generated text.
+ * Every markdown code fence, in order. A linear scan: the regex forms
+ * (`/```(?:json)?\s*([\s\S]*?)```/`) backtrack over a run of whitespace after
+ * an unclosed fence once per character, quadratic in model-generated text.
+ *
+ * The closing marker of a JSON payload is found by tracking string literals:
+ * when a fenced payload is JSON whose description quotes a code fence (a
+ * finding about a README, or a summary of a patch), the inner ``` cannot close
+ * it, or the caller validates a truncated object (#2687). Any other fence is
+ * scanned plainly: an unmatched quote in a ```ts block is code, not a string.
  */
-function firstFence(
-    text: string,
-): { start: number; end: number; inner: string } | null {
-    const start = text.indexOf('```');
-    if (start < 0) return null;
-    const close = text.indexOf('```', start + 3);
-    if (close < 0) return null;
-    return { start, end: close + 3, inner: text.slice(start + 3, close) };
+function scanFences(text: string): Fence[] {
+    const fences: Fence[] = [];
+    let pos = 0;
+    while (pos < text.length) {
+        const start = text.indexOf('```', pos);
+        if (start < 0) break;
+        const body = start + 3;
+        // Read the info word in place: a response of one line with many
+        // fences must not search the rest of it per fence.
+        let i = body;
+        while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i++;
+        const tagStart = i;
+        const tagCap = Math.min(text.length, tagStart + MAX_INFO);
+        while (i < tagCap && /[\w+-]/.test(text[i])) i++;
+        const tag = text.slice(tagStart, i).toLowerCase();
+        let j = i;
+        const bodyCap = Math.min(text.length, i + MAX_INFO);
+        while (j < bodyCap && /\s/.test(text[j])) j++;
+        const opensJson = text[j] === '{' || text[j] === '[';
+
+        const trackStrings =
+            /^json[c5]?$/.test(tag) || (tag === '' && opensJson);
+        let inString = false;
+        let escaped = false;
+        let close = -1;
+        for (let k = body; k < text.length; k++) {
+            const ch = text[k];
+            if (trackStrings) {
+                if (inString) {
+                    if (escaped) escaped = false;
+                    else if (ch === '\\') escaped = true;
+                    else if (ch === '"') inString = false;
+                    continue;
+                }
+                if (ch === '"') {
+                    inString = true;
+                    continue;
+                }
+            }
+            if (text.startsWith('```', k)) {
+                close = k;
+                break;
+            }
+        }
+        if (close < 0) break;
+        fences.push({
+            start,
+            end: close + 3,
+            inner: text.slice(body, close),
+            tag,
+            opensJson,
+        });
+        pos = close + 3;
+    }
+    return fences;
+}
+
+/** The first markdown code fence, or null when none closes. */
+function firstFence(text: string): Fence | null {
+    return scanFences(text)[0] ?? null;
 }
 
 /** A fence's body as the `(?:json)?\s*` prefix leaves it. */
@@ -282,21 +360,40 @@ export function extractJsonFromText(text: string): string | null {
     if (stripped === null) return null;
     let s = stripped;
 
-    // 1. Unwrap a markdown code fence.
-    const fence = firstFence(s);
-    const fenced = fence ? fenceBody(fence.inner) : '';
-    if (fenced) s = fenced.trim();
+    // 1 and 2: a fenced payload, or the outermost balanced value in the prose.
+    // Only a JSON fence (or an untagged one, which models use for JSON) is a
+    // candidate; a ```ts block is code the model quoted, and an object inside
+    // it is an example, never the answer.
+    const clean = (raw: string): string | null => {
+        let value = sliceBalancedJson(raw) ?? raw;
+        // 3. Remove trailing commas before a closing } or ].
+        value = value.replace(/,(\s*[}\]])/g, '$1');
+        return /^[{[]/.test(value) ? value : null;
+    };
 
-    // 2. Drop any prose before/after the outermost balanced JSON value.
-    const sliced = sliceBalancedJson(s);
-    if (sliced) s = sliced;
+    const fences = scanFences(s);
+    const first = fences[0];
+    if (first) {
+        const body = fenceBody(first.inner).trim();
+        if (body) {
+            // A fence of code is a quote, not the answer: an object inside it
+            // is an example, and an answer before it does not become one (the
+            // caller re-asks, or takes it with `lastChance`).
+            return isJsonFence(first) ? clean(body) : null;
+        }
+    }
 
-    // 3. Remove trailing commas before a closing } or ].
-    s = s.replace(/,(\s*[}\]])/g, '$1');
-
-    // Only report success when an actual JSON delimiter survived — otherwise the
-    // text held no JSON to extract.
-    return /^[{[]/.test(s) ? s : null;
+    // The answer is in the prose: drop the code blocks the model quoted first,
+    // so an example inside one cannot be read as the answer.
+    let prose = '';
+    let last = 0;
+    for (const fence of fences) {
+        if (isJsonFence(fence)) continue;
+        prose += s.slice(last, fence.start);
+        last = fence.end;
+    }
+    prose += s.slice(last);
+    return clean(prose);
 }
 
 /**
