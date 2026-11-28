@@ -29,13 +29,13 @@ import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/
 import { AuthIntegrationModel } from './schemas/authIntegration.model';
 import { IntegrationModel } from './schemas/integration.model';
 
-// Setups that raced before the team lock left duplicate pairs behind. Reads
-// and setup pick the same one, the most recent active, instead of whichever
-// row Postgres returns first.
-const MOST_RECENT_ACTIVE: FindOptionsOrder<IntegrationModel> = {
+// Setups that raced before the team lock left duplicate pairs behind. Before
+// reads had an order, Postgres returned the lowest id, and the team's
+// repository selection was saved against that pair. Reads and setup keep
+// picking it (active first), so those teams stay ready for reviews.
+const FIRST_ACTIVE: FindOptionsOrder<IntegrationModel> = {
     status: 'DESC',
-    updatedAt: 'DESC',
-    uuid: 'DESC',
+    uuid: 'ASC',
 };
 
 @Injectable()
@@ -130,7 +130,7 @@ export class IntegrationRepository implements IIntegrationRepository {
                     ...authIntegrationCondition,
                 },
                 relations: ['authIntegration'],
-                order: MOST_RECENT_ACTIVE,
+                order: FIRST_ACTIVE,
             };
 
             const integration =
@@ -220,7 +220,7 @@ export class IntegrationRepository implements IIntegrationRepository {
                 const existing = await manager.findOne(IntegrationModel, {
                     where: { organization, team, platform },
                     relations: { authIntegration: true },
-                    order: MOST_RECENT_ACTIVE,
+                    order: FIRST_ACTIVE,
                 });
                 const previous = existing?.authIntegration?.authDetails;
                 if (previous && options.resetsSelection?.(previous)) {

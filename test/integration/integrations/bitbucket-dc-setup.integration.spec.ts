@@ -314,32 +314,50 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
         expect(await counts()).toEqual({ integrations: 1, credentials: 1 });
     });
 
-    it('reads and rotates the most recent active pair when the earlier race left duplicates', async () => {
-        const older = await seedPair({
-            host: 'https://old.example.test',
-            token: 'old-token',
-            status: true,
-            minutesAgo: 60,
-            rank: '0',
-        });
-        const recent = await seedPair({
-            host: 'https://bitbucket.example.test',
-            token: 'recent-token',
-            status: true,
-            minutesAgo: 30,
-            rank: 'f',
-        });
+    it('keeps the pair its repository selection was saved against when the earlier race left duplicates', async () => {
+        // Before reads had an order, Postgres returned the lowest id, and the
+        // team's selection was saved against that pair.
         const disabled = await seedPair({
             host: 'https://disabled.example.test',
             token: 'disabled-token',
             status: false,
             minutesAgo: 1,
-            rank: '7',
+            rank: '0',
         });
+        const kept = await seedPair({
+            host: 'https://bitbucket.example.test',
+            token: 'kept-token',
+            status: true,
+            minutesAgo: 60,
+            rank: '3',
+        });
+        const newer = await seedPair({
+            host: 'https://newer.example.test',
+            token: 'newer-token',
+            status: true,
+            minutesAgo: 30,
+            rank: 'f',
+        });
+        await db.query(
+            `INSERT INTO integration_configs ("configKey", "configValue", integration_id, team_id)
+             VALUES ($1, $2, $3, $4)`,
+            [
+                IntegrationConfigKey.REPOSITORIES,
+                JSON.stringify([{ id: '7', name: 'api' }]),
+                kept.integration,
+                teamId,
+            ],
+        );
 
         await expect(dc.getAuthDetails(tenant)).resolves.toMatchObject({
-            integrationId: recent.integration,
+            integrationId: kept.integration,
             host: 'https://bitbucket.example.test',
+        });
+        await expect(
+            bitbucket.verifyConnection({ organizationAndTeamData: tenant }),
+        ).resolves.toMatchObject({
+            hasConnection: true,
+            isSetupComplete: true,
         });
 
         await expect(connect('rotated-token')).resolves.toEqual({
@@ -347,14 +365,17 @@ describePostgres('Bitbucket Data Center setup on Postgres', () => {
             status: 'SUCCESS',
         });
         expect({
-            older: await tokenOf(older.auth),
-            recent: await tokenOf(recent.auth),
             disabled: await tokenOf(disabled.auth),
+            kept: await tokenOf(kept.auth),
+            newer: await tokenOf(newer.auth),
         }).toEqual({
-            older: 'old-token',
-            recent: 'rotated-token',
             disabled: 'disabled-token',
+            kept: 'rotated-token',
+            newer: 'newer-token',
         });
+        await expect(
+            bitbucket.verifyConnection({ organizationAndTeamData: tenant }),
+        ).resolves.toMatchObject({ isSetupComplete: true });
         expect(await counts()).toEqual({ integrations: 3, credentials: 3 });
     });
 
