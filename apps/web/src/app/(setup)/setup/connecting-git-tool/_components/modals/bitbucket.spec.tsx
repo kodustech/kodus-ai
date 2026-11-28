@@ -155,3 +155,61 @@ it.each(["git.example.test", "  git.example.test  "])(
         expect(create).not.toHaveBeenCalled();
     },
 );
+
+it("ignores a Data Center URL without https:// once Cloud is selected again", async () => {
+    const create = jest.mocked(createCodeManagementIntegration).mockReset();
+    create.mockResolvedValueOnce({
+        data: { success: true, status: "SUCCESS" },
+        statusCode: 201,
+    });
+    render(
+        <BitbucketTokenModal
+            teamId="team-1"
+            userId="user-1"
+            userEmail="user@example.test"
+        />,
+    );
+    const dataCenter = screen.getByRole("button", {
+        name: /Bitbucket Data Center/,
+    });
+
+    fireEvent.click(dataCenter);
+    fireEvent.change(
+        screen.getByPlaceholderText("https://bitbucket.your-company.com"),
+        { target: { value: "git.example.test" } },
+    );
+    await screen.findByText(
+        "Include https:// in the URL, for example https://bitbucket.your-company.com",
+    );
+    fireEvent.click(dataCenter);
+    for (const [placeholder, value] of [
+        ["Paste your Bitbucket username here", "reviewer"],
+        ["Enter your email address", "reviewer@example.test"],
+        ["Paste your API token here", "token"],
+    ]) {
+        fireEvent.change(screen.getByPlaceholderText(placeholder), {
+            target: { value },
+        });
+    }
+
+    const save = screen.getByRole<HTMLButtonElement>("button", {
+        name: "Validate and save",
+    });
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
+    await waitFor(() =>
+        expect(create.mock.calls).toStrictEqual([
+            [
+                {
+                    integrationType: "BITBUCKET",
+                    authMode: "token",
+                    token: "token",
+                    organizationAndTeamData: { teamId: "team-1" },
+                    username: "reviewer",
+                    email: "reviewer@example.test",
+                    host: undefined,
+                },
+            ],
+        ]),
+    );
+});

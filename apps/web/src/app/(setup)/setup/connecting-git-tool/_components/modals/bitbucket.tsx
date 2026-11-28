@@ -275,6 +275,14 @@ export const BitbucketTokenModal = (props: {
                             onOpenChange={(open) => {
                                 setDataCenterError("");
                                 setSelfhosted(open);
+                                // The URL is checked whatever section is open:
+                                // back on Cloud, a mistyped one would keep save
+                                // disabled with no visible error.
+                                if (!open) {
+                                    form.setValue("selfHostedUrl", "", {
+                                        shouldValidate: true,
+                                    });
+                                }
                             }}
                             className="flex flex-col gap-1">
                             <div className="relative">
