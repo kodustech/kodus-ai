@@ -45,6 +45,7 @@ import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { ASTEventHandler } from '@libs/core/workflow/infrastructure/ast-event-handler.service';
+import { GraphJobSandbox } from '@libs/code-review/workflow/graph-job-sandbox';
 import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-build-job.processor';
 import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
 import { EcsModule } from '@libs/ee/infrastructure/ecs/ecs.module';
@@ -101,6 +102,7 @@ const workerProviders = [
 
     // Processors
     WebhookProcessingJobProcessorService,
+    GraphJobSandbox,
     AstGraphBuildJobProcessor,
     AstGraphIncrementalJobProcessor,
 

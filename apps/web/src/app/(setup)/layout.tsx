@@ -86,13 +86,17 @@ export default async function Layout(props: React.PropsWithChildren) {
                         initialTeamId={selectedTeamIdFromCookie}>
                         <SetupProgressSaver />
                         <div className="bg-background relative min-h-screen">
-                            <div className="border-primary-dark bg-card-lv1 fixed inset-x-0 top-0 z-50 flex h-16 items-center gap-4 border-b-2 px-6">
-                                <Link href="/">
+                            <div className="border-primary-dark bg-card-lv1 fixed inset-x-0 top-0 z-50 flex h-16 items-center gap-2 border-b-2 px-4 sm:gap-4 sm:px-6">
+                                <Link href="/" className="shrink-0">
                                     <SvgKodus className="text-text-primary h-8 max-w-max" />
                                 </Link>
 
-                                <div className="ml-auto flex items-center gap-4">
-                                    <SetupGithubStars />
+                                <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-4">
+                                    {/* Stars are promotional; below sm they push
+                                        the user menu off a phone screen. */}
+                                    <div className="hidden sm:block">
+                                        <SetupGithubStars />
+                                    </div>
                                     <SupportDropdown />
                                     <SetupUserNav />
                                 </div>

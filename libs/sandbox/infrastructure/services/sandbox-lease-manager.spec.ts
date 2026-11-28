@@ -25,7 +25,6 @@ import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
-    assertValidPrKey,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
@@ -285,6 +284,20 @@ describe('SandboxLeaseManager', () => {
 
     // ─── Test 3: invalidate via PR-close (soft-drain + delete) ───────────
 
+    it('protects shared leases from immediate graph checkout retirement', async () => {
+        await expect(
+            manager.retireSingleUseCheckout(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77',
+                'shared',
+            ),
+        ).rejects.toEqual(
+            new Error(
+                'Only a single-use graph checkout can be retired immediately',
+            ),
+        );
+        expect(leaseRepo.retire).not.toHaveBeenCalled();
+    });
+
     it('invalidate: soft-drains 60s and retires the lease so the idle-kill cron kills the sandbox', async () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
 
@@ -347,6 +360,7 @@ describe('SandboxLeaseManager', () => {
         await expect(
             manager.acquire(prKey, 'review', undefined, {
                 cloneUrl: 'https://github.com/org/repo.git',
+                authToken: '',
                 branch: 'feature',
                 prNumber: 78,
                 platform: 'GITHUB' as any,
@@ -1574,16 +1588,21 @@ describe('SandboxLeaseManager', () => {
         expect(result.wasCreated).toBe(false);
         // The sync ran BEFORE the sandbox was handed back — exact command
         // built by syncE2BSandboxRepo for a PR-mode, authenticated GitHub sync.
-        expect(run).toHaveBeenCalledWith(
-            expect.stringContaining(
-                "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
-            ),
-            expect.objectContaining({
-                envs: expect.objectContaining({
-                    GIT_AUTH_HEADER: expect.any(String),
-                }),
-            }),
-        );
+        expect(run.mock.calls[0]).toEqual([
+            "cd /home/user/repo && git fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD && git clean -fd",
+            {
+                timeoutMs: 300000,
+                envs: {
+                    GIT_CONFIG_COUNT: '2',
+                    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraHeader',
+                    GIT_CONFIG_VALUE_0:
+                        'Authorization: Basic ' +
+                        Buffer.from('x-access-token:token').toString('base64'),
+                    GIT_CONFIG_KEY_1: 'core.hooksPath',
+                    GIT_CONFIG_VALUE_1: '/dev/null',
+                },
+            },
+        ]);
     });
 
     it('joiner WITH cloneParams skips the destructive sync when another consumer is still active', async () => {

@@ -50,7 +50,10 @@ export default function RegisterPage() {
 
             <div className="flex flex-14 flex-col justify-center overflow-auto">
                 <ScrollArea type="auto">
-                    <div className="flex flex-col items-center gap-10 py-10">
+                    {/* px-3 keeps full-width controls clear of the 10px overlay
+                        scrollbar on phones; symmetric, so the centred form
+                        does not move on desktop. */}
+                    <div className="flex flex-col items-center gap-10 px-3 py-10">
                         <SvgKodus className="h-8 min-h-8 md:hidden" />
 
                         <Suspense>

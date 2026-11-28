@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
     auditWriteTools,
+    decisionDivergence,
     isConversationWriteTool,
     performedWrites,
     writeToolPredicate,
@@ -129,5 +130,147 @@ describe('performedWrites', () => {
                 { tool: 'kodus_create_issue', args: {}, result: '' },
             ]),
         ).toEqual(['kodus_save_memory', 'kodus_create_issue']);
+    });
+});
+
+describe('decisionDivergence', () => {
+    // exec and grep read the checked-out repo; the MCP memory tool writes.
+    const readOnly = (name: string) => name === 'exec' || name === 'grep';
+    const act = (tool?: string) => ({ intent: 'act', tool });
+    const write = (tool: string, error?: string): WriteToolEvent => ({
+        tool,
+        args: {},
+        ...(error ? { error } : {}),
+    });
+
+    it('flags an act whose write was never attempted', () => {
+        expect(
+            decisionDivergence([act('KODUS_CREATE_MEMORY')], [], readOnly),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
+    });
+
+    it('flags an act that names no tool and writes nothing', () => {
+        expect(decisionDivergence([act()], [], readOnly)).toEqual({
+            kind: 'unperformed',
+            tool: undefined,
+        });
+    });
+
+    // A self-hosted sandbox refused `git show`: the agent had declared `act`
+    // on exec, answered that git is not allowed, and the run logged an error.
+    it('does not compare an act on a tool that only reads', () => {
+        expect(decisionDivergence([act('exec')], [], readOnly)).toBeUndefined();
+    });
+
+    // A later act replaces the write the first one authorized, so this is
+    // the run most likely to leave the write undone.
+    it('flags a write act followed by an act on a read tool', () => {
+        expect(
+            decisionDivergence(
+                [act('KODUS_CREATE_MEMORY'), act('exec')],
+                [],
+                readOnly,
+            ),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
+    });
+
+    // A refused write tells the agent to switch to `offer`; that retraction
+    // is the flow working, not a declared action left undone.
+    it('does not flag an act the agent retracted with offer or answer', () => {
+        expect(
+            decisionDivergence(
+                [
+                    act('KODUS_CREATE_MEMORY'),
+                    { intent: 'offer', tool: 'KODUS_CREATE_MEMORY' },
+                ],
+                [],
+                readOnly,
+            ),
+        ).toBeUndefined();
+        expect(
+            decisionDivergence(
+                [act('KODUS_CREATE_MEMORY'), { intent: 'answer' }],
+                [],
+                readOnly,
+            ),
+        ).toBeUndefined();
+    });
+
+    it('flags a write act made again after a retraction', () => {
+        expect(
+            decisionDivergence(
+                [act('exec'), { intent: 'answer' }, act('KODUS_CREATE_MEMORY')],
+                [],
+                readOnly,
+            ),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
+    });
+
+    // "save this as a memory ... and run git show HEAD": the model declares
+    // act on exec, then calls the memory write, which the guard refuses
+    // (the act did not name it), and replies "Saved.".
+    it('flags an act on a read when the run then called a write that never ran', () => {
+        expect(
+            decisionDivergence([act('exec')], [], readOnly, [
+                'KODUS_CREATE_MEMORY',
+            ]),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORY' });
+    });
+
+    it('stays quiet for an act on a read when no write was called', () => {
+        expect(
+            decisionDivergence([act('exec')], [], readOnly, []),
+        ).toBeUndefined();
+    });
+
+    it('stays quiet for answer plus a refused write call', () => {
+        expect(
+            decisionDivergence([{ intent: 'answer' }], [], readOnly, [
+                'KODUS_CREATE_MEMORY',
+            ]),
+        ).toBeUndefined();
+    });
+
+    it('still flags an act on a tool name the run does not know', () => {
+        expect(
+            decisionDivergence([act('KODUS_CREATE_MEMORYY')], [], readOnly),
+        ).toEqual({ kind: 'unperformed', tool: 'KODUS_CREATE_MEMORYY' });
+    });
+
+    it('reports an attempted write that failed as failed, not unperformed', () => {
+        expect(
+            decisionDivergence(
+                [act('KODUS_CREATE_MEMORY')],
+                [write('KODUS_CREATE_MEMORY', 'forbidden')],
+                readOnly,
+            ),
+        ).toEqual({ kind: 'failed', tools: ['KODUS_CREATE_MEMORY'] });
+    });
+
+    it('flags a write made while the final decision is not act', () => {
+        expect(
+            decisionDivergence(
+                [{ intent: 'answer' }],
+                [write('KODUS_CREATE_MEMORY')],
+                readOnly,
+            ),
+        ).toEqual({ kind: 'undeclared', tools: ['KODUS_CREATE_MEMORY'] });
+        expect(
+            decisionDivergence([], [write('KODUS_CREATE_MEMORY')], readOnly),
+        ).toEqual({ kind: 'undeclared', tools: ['KODUS_CREATE_MEMORY'] });
+    });
+
+    it('finds nothing when the act wrote, or nothing was declared or written', () => {
+        expect(
+            decisionDivergence(
+                [act('KODUS_CREATE_MEMORY')],
+                [write('KODUS_CREATE_MEMORY')],
+                readOnly,
+            ),
+        ).toBeUndefined();
+        expect(
+            decisionDivergence([{ intent: 'answer' }], [], readOnly),
+        ).toBeUndefined();
+        expect(decisionDivergence([], [], readOnly)).toBeUndefined();
     });
 });

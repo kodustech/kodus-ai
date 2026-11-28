@@ -1,3 +1,4 @@
+import { MAX_GRAPH_INCREMENTAL_FILES } from '@libs/code-review/domain/graph-job-attempt';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -61,8 +62,6 @@ export class EnqueueAstGraphUpdateOnMergedUseCase implements IUseCase {
     private readonly logger = createLogger(
         EnqueueAstGraphUpdateOnMergedUseCase.name,
     );
-
-    private static readonly MAX_INCREMENTAL_FILES = 500;
 
     constructor(
         @Inject(REPOSITORY_SERVICE_TOKEN)
@@ -149,8 +148,7 @@ export class EnqueueAstGraphUpdateOnMergedUseCase implements IUseCase {
         }
 
         const useFullRebuild =
-            changedFiles.length >
-            EnqueueAstGraphUpdateOnMergedUseCase.MAX_INCREMENTAL_FILES;
+            changedFiles.length > MAX_GRAPH_INCREMENTAL_FILES;
 
         try {
             const jobId = useFullRebuild

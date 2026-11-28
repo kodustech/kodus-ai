@@ -1,10 +1,11 @@
-import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
-import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
-    IRepositoryService,
-    REPOSITORY_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/RepositoryService.contract';
+    GraphJobAttempt,
+    StaleGraphJobError,
+} from '@libs/code-review/domain/graph-job-attempt';
+import { createLogger } from '@libs/core/log/logger';
+import { Injectable } from '@nestjs/common';
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { posix } from 'node:path';
 import { AstGraphRepository } from '../../repositories/astGraph.repository';
 import { AstGraphStatus } from '../../repositories/schemas/repository.model';
 import { KodusGraphCli } from './kodus-graph-cli';
@@ -49,10 +50,15 @@ export class GraphIndexerService {
 
     constructor(
         private readonly astGraphRepo: AstGraphRepository,
-        @Inject(REPOSITORY_SERVICE_TOKEN)
-        private readonly repositoryService: IRepositoryService,
         private readonly cli: KodusGraphCli,
     ) {}
+
+    failBuildForAttempt(
+        repositoryId: string,
+        job: GraphJobAttempt,
+    ): Promise<void> {
+        return this.astGraphRepo.failBuildForAttempt(repositoryId, job);
+    }
 
     /**
      * Full build: parse entire repo and persist to DB.
@@ -61,8 +67,18 @@ export class GraphIndexerService {
         repositoryId: string;
         sandbox: SandboxInstance;
         headSha: string;
+        signal?: AbortSignal;
+        job?: GraphJobAttempt;
+        expectedSha?: string | null;
     }): Promise<void> {
-        const { repositoryId, sandbox, headSha } = params;
+        const { repositoryId, sandbox, headSha, signal, job } = params;
+        signal?.throwIfAborted();
+        const revision = {
+            sha: headSha,
+            expectedSha: params.expectedSha,
+            job,
+            signal,
+        };
         const buildStart = Date.now();
 
         this.logger.log({
@@ -71,24 +87,27 @@ export class GraphIndexerService {
             metadata: { repositoryId, headSha },
         });
 
-        await this.repositoryService.updateGraphStatus(
+        await this.astGraphRepo.updateBuildStatus(
             repositoryId,
             AstGraphStatus.BUILDING,
+            revision,
         );
 
         try {
             const installStart = Date.now();
-            await this.cli.install(sandbox);
+            await this.cli.install(sandbox, signal);
             this.logger.log({
                 message: `[AST-GRAPH] kodus-graph installed (${Date.now() - installStart}ms)`,
                 context: GraphIndexerService.name,
                 metadata: { repositoryId },
             });
 
+            signal?.throwIfAborted();
             const parseStart = Date.now();
             const { stderr: parseStderr } = await this.cli.parseAll(sandbox, {
                 outPath: GRAPH_PATH,
                 excludePatterns: DEFAULT_EXCLUDES,
+                signal,
             });
 
             this.logger.log({
@@ -100,21 +119,26 @@ export class GraphIndexerService {
                 },
             });
 
+            signal?.throwIfAborted();
             const { nodes, edges } = await this.readGraphFromSandbox(
                 sandbox,
                 repositoryId,
             );
 
+            signal?.throwIfAborted();
             if (nodes.length === 0) {
                 this.logger.warn({
                     message: `[AST-GRAPH] Parse produced 0 nodes for repo ${repositoryId} — marking as FAILED`,
                     context: GraphIndexerService.name,
                     metadata: { repositoryId, headSha },
                 });
-                await this.repositoryService.updateGraphStatus(
+                await this.astGraphRepo.updateBuildStatus(
                     repositoryId,
                     AstGraphStatus.FAILED,
+                    revision,
                 );
+                if (job)
+                    throw new Error('Graph build produced no indexed nodes');
                 return;
             }
 
@@ -123,6 +147,7 @@ export class GraphIndexerService {
                 repositoryId,
                 nodes,
                 edges,
+                revision,
             );
 
             this.logger.log({
@@ -134,16 +159,6 @@ export class GraphIndexerService {
                     edgeCount: counts.edgeCount,
                 },
             });
-
-            await this.repositoryService.updateGraphStatus(
-                repositoryId,
-                AstGraphStatus.READY,
-                {
-                    sha: headSha,
-                    nodeCount: counts.nodeCount,
-                    edgeCount: counts.edgeCount,
-                },
-            );
 
             const totalMs = Date.now() - buildStart;
             this.logger.log({
@@ -158,11 +173,17 @@ export class GraphIndexerService {
                 },
             });
         } catch (error) {
+            if (error instanceof StaleGraphJobError) throw error;
+            // The processor owns the failure transition once the job is aborted.
+            signal?.throwIfAborted();
             const totalMs = Date.now() - buildStart;
-            await this.repositoryService.updateGraphStatus(
-                repositoryId,
-                AstGraphStatus.FAILED,
-            );
+            if (!job) {
+                await this.astGraphRepo.updateBuildStatus(
+                    repositoryId,
+                    AstGraphStatus.FAILED,
+                    revision,
+                );
+            }
             const errorMessage =
                 error instanceof Error ? error.message : String(error);
             this.logger.error({
@@ -180,58 +201,103 @@ export class GraphIndexerService {
     async incrementalUpdate(params: {
         repositoryId: string;
         sandbox: SandboxInstance;
-        changedFiles: string[];
+        changedFiles: string[] | null;
         newSha: string;
+        signal?: AbortSignal;
+        job?: GraphJobAttempt;
+        expectedSha?: string | null;
     }): Promise<void> {
-        const { repositoryId, sandbox, changedFiles, newSha } = params;
+        const { repositoryId, sandbox, newSha, signal, job } = params;
+        signal?.throwIfAborted();
+        // Azure reports paths from the repository root with a leading slash.
+        // The parser and the stored graph both use repository-relative paths.
+        const changedFiles = params.changedFiles?.map((file) =>
+            posix.normalize(file).replace(/^\/+/, ''),
+        );
+        const revision = {
+            sha: newSha,
+            expectedSha: params.expectedSha,
+            signal,
+            job,
+        };
+        if (changedFiles?.length === 0) {
+            await this.astGraphRepo.incrementalUpdate(
+                repositoryId,
+                [],
+                [],
+                [],
+                revision,
+            );
+            return;
+        }
         const updateStart = Date.now();
 
         this.logger.log({
-            message: `[AST-GRAPH] Starting incremental update: ${changedFiles.length} files for repo ${repositoryId}`,
+            message: `[AST-GRAPH] Starting incremental update: ${changedFiles?.length ?? 'all'} files for repo ${repositoryId}`,
             context: GraphIndexerService.name,
             metadata: {
                 repositoryId,
                 newSha,
-                changedFilesCount: changedFiles.length,
-                changedFiles: changedFiles.slice(0, 20),
+                changedFilesCount: changedFiles?.length,
+                changedFiles: changedFiles?.slice(0, 20),
             },
         });
 
         try {
             const installStart = Date.now();
-            await this.cli.install(sandbox);
+            await this.cli.install(sandbox, signal);
             this.logger.log({
                 message: `[AST-GRAPH] kodus-graph installed (${Date.now() - installStart}ms)`,
                 context: GraphIndexerService.name,
                 metadata: { repositoryId },
             });
 
+            signal?.throwIfAborted();
             const parseStart = Date.now();
-            await this.cli.parseFiles(sandbox, changedFiles, {
-                outPath: GRAPH_PATH,
-            });
+            if (changedFiles) {
+                await this.cli.parseFiles(sandbox, changedFiles, {
+                    signal,
+                    outPath: GRAPH_PATH,
+                });
+            } else {
+                await this.cli.parseAll(sandbox, {
+                    signal,
+                    outPath: GRAPH_PATH,
+                    excludePatterns: DEFAULT_EXCLUDES,
+                });
+            }
 
             this.logger.log({
                 message: `[AST-GRAPH] Incremental parse completed (${Date.now() - parseStart}ms)`,
                 context: GraphIndexerService.name,
                 metadata: {
                     repositoryId,
-                    changedFilesCount: changedFiles.length,
+                    changedFilesCount: changedFiles?.length,
                 },
             });
 
+            signal?.throwIfAborted();
             const { nodes, edges } = await this.readGraphFromSandbox(
                 sandbox,
                 repositoryId,
             );
 
+            signal?.throwIfAborted();
             const persistStart = Date.now();
-            const counts = await this.astGraphRepo.incrementalUpdate(
-                repositoryId,
-                changedFiles,
-                nodes,
-                edges,
-            );
+            const counts = changedFiles
+                ? await this.astGraphRepo.incrementalUpdate(
+                      repositoryId,
+                      changedFiles,
+                      nodes,
+                      edges,
+                      revision,
+                  )
+                : await this.astGraphRepo.fullRebuild(
+                      repositoryId,
+                      nodes,
+                      edges,
+                      revision,
+                  );
 
             this.logger.log({
                 message: `[AST-GRAPH] Incremental DB persist completed (${Date.now() - persistStart}ms)`,
@@ -243,26 +309,16 @@ export class GraphIndexerService {
                 },
             });
 
-            await this.repositoryService.updateGraphStatus(
-                repositoryId,
-                AstGraphStatus.READY,
-                {
-                    sha: newSha,
-                    nodeCount: counts.nodeCount,
-                    edgeCount: counts.edgeCount,
-                },
-            );
-
             const totalMs = Date.now() - updateStart;
             this.logger.log({
-                message: `[AST-GRAPH] Incremental update COMPLETE for repo ${repositoryId} in ${totalMs}ms — ${counts.nodeCount} nodes, ${counts.edgeCount} edges from ${changedFiles.length} files`,
+                message: `[AST-GRAPH] Incremental update COMPLETE for repo ${repositoryId} in ${totalMs}ms — ${counts.nodeCount} nodes, ${counts.edgeCount} edges from ${changedFiles?.length ?? 'all'} files`,
                 context: GraphIndexerService.name,
                 metadata: {
                     repositoryId,
                     newSha,
                     nodeCount: counts.nodeCount,
                     edgeCount: counts.edgeCount,
-                    changedFilesCount: changedFiles.length,
+                    changedFilesCount: changedFiles?.length,
                     durationMs: totalMs,
                 },
             });
@@ -276,7 +332,7 @@ export class GraphIndexerService {
                 metadata: {
                     repositoryId,
                     newSha,
-                    changedFilesCount: changedFiles.length,
+                    changedFilesCount: changedFiles?.length,
                     durationMs: totalMs,
                 },
             });

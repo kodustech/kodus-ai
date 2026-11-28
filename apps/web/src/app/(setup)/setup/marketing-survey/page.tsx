@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
-import { ScrollArea } from "@components/ui/scroll-area";
 import { saveMarketingSurvey } from "@services/users/fetch";
 import {
     ArrowRight,
@@ -141,7 +140,7 @@ const SelectionCard = ({
                     )}
                 />
             </div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-sm font-semibold">{label}</span>
                 <span className="text-text-secondary text-xs">
                     {description}
@@ -214,7 +213,7 @@ export default function MarketingSurveyPage() {
                 </div>
             </div>
 
-            <ScrollArea className="flex w-full flex-col gap-10 lg:flex-14 lg:p-10">
+            <div className="flex w-full min-w-0 flex-col gap-10 lg:flex-14 lg:p-10">
                 <div className="flex flex-col gap-8 pb-10">
                     <StepIndicators.Auto />
 
@@ -293,7 +292,7 @@ export default function MarketingSurveyPage() {
                         </button>
                     </div>
                 </div>
-            </ScrollArea>
+            </div>
         </Page.Root>
     );
 }
