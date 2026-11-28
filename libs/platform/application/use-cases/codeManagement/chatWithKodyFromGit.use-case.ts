@@ -2398,7 +2398,9 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private mentionsKody(comment: Comment): boolean {
-        const commentBody = withoutLeadingQuote(comment.body).toLowerCase();
+        const commentBody = withoutLeadingQuote(comment.body)
+            .trimStart()
+            .toLowerCase();
         return [KODY_COMMANDS.KODY_MENTION, KODY_COMMANDS.KODUS_MENTION].some(
             (keyword) => commentBody.startsWith(keyword),
         );

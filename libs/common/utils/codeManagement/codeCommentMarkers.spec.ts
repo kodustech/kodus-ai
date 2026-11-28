@@ -217,6 +217,21 @@ describe('a mention after a quote (GitHub "Quote reply")', () => {
         expect(isKodyMentionNonReview('    > code\n\n@kody done')).toBe(false);
     });
 
+    it('ends the quote after a table, a `===` heading or indented code it holds', () => {
+        expect(
+            isKodyMentionNonReview(
+                '> | a | b |\n> |---|---|\n> | 1 | 2 |\n@kody hi',
+            ),
+        ).toBe(true);
+        expect(isKodyMentionNonReview('> title\n> ===\n@kody hi')).toBe(true);
+        expect(isKodyMentionNonReview('>     code\n@kody hi')).toBe(true);
+        expect(
+            isKodyMentionNonReview('> one cell\n> |---|---|\n@kody hi'),
+        ).toBe(false);
+        expect(isKodyMentionNonReview('> - item\n> ===\n@kody hi')).toBe(false);
+        expect(isKodyMentionNonReview('> a\n\u00a0\n@kody hi')).toBe(false);
+    });
+
     it('reads a GitLab `>>>` quote as one block, mention inside or after it', () => {
         expect(
             isKodyMentionNonReview(
@@ -232,6 +247,11 @@ describe('a mention after a quote (GitHub "Quote reply")', () => {
             true,
         );
         expect(isKodyMentionNonReview('>>>\n@kody unclosed')).toBe(false);
+        expect(
+            isKodyMentionNonReview('>>>>\nq\n>>>\n@kody inner\n>>>>\n\nthanks'),
+        ).toBe(false);
+        expect(isKodyMentionNonReview('>>>>\nq\n>>>\n\n@kody hi')).toBe(false);
+        expect(isKodyMentionNonReview('>>>\nq\n>>>>\n\n@kody hi')).toBe(true);
         expect(isKodyMentionNonReview('> a\n\n>>>\nb\n>>>\n\n@kody done')).toBe(
             true,
         );
