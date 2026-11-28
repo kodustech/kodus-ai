@@ -31,6 +31,55 @@ describe('ruleCompileHash', () => {
     });
 });
 
+describe('DETECTOR_COMPILER_VERSION in ruleCompileHash', () => {
+    const VERSION_MODULE =
+        '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler-version';
+    const input = {
+        rule: 'Use the logger',
+        examples: [{ snippet: 'console.log(x)', isCorrect: false }],
+    };
+    // Exactly what PR #2754 stored, before the version existed.
+    const storedBeforeVersion = createHash('sha256')
+        .update(`${input.rule} ${JSON.stringify(input.examples)}`)
+        .digest('hex');
+    const attempt = (sourceHash: string) => ({
+        ...input,
+        compileAttempt: { sourceHash, outcome: 'declined' as const },
+    });
+
+    function withVersion(version: number): typeof import('./compile-hash') {
+        let mod: typeof import('./compile-hash');
+        jest.isolateModules(() => {
+            jest.doMock(VERSION_MODULE, () => ({
+                DETECTOR_COMPILER_VERSION: version,
+            }));
+            mod = require('./compile-hash');
+        });
+        jest.dontMock(VERSION_MODULE);
+        return mod!;
+    }
+
+    it('deploying version 1 keeps every stored attempt current (no mass recompile)', () => {
+        const { ruleCompileHash, compileAttemptIsCurrent } = withVersion(1);
+        expect(ruleCompileHash(input)).toBe(storedBeforeVersion);
+        expect(compileAttemptIsCurrent(attempt(storedBeforeVersion))).toBe(
+            true,
+        );
+    });
+
+    it('a bump changes the hash and makes stored attempts stale once', () => {
+        const { ruleCompileHash, compileAttemptIsCurrent } = withVersion(2);
+        expect(ruleCompileHash(input)).not.toBe(storedBeforeVersion);
+        expect(compileAttemptIsCurrent(attempt(storedBeforeVersion))).toBe(
+            false,
+        );
+        // The recompile records the new hash, which then settles the rule.
+        expect(compileAttemptIsCurrent(attempt(ruleCompileHash(input)))).toBe(
+            true,
+        );
+    });
+});
+
 /**
  * The gate that decides whether an EXISTING rule is ever re-classified.
  *
@@ -81,10 +130,8 @@ describe('ruleContextNeedHash', () => {
  * "already decided", and the fleet keeps the old verdict forever.
  */
 describe('contextNeedIsCurrent', () => {
-    const {
-        contextNeedIsCurrent,
-        ruleContextNeedHash,
-    } = require('./compile-hash') as typeof import('./compile-hash');
+    const { contextNeedIsCurrent, ruleContextNeedHash } =
+        require('./compile-hash') as typeof import('./compile-hash');
 
     const text = 'functions must not exceed 40 lines';
 
@@ -138,7 +185,10 @@ describe('contextNeedIsCurrent', () => {
         expect(
             contextNeedIsCurrent({
                 rule: text,
-                contextNeed: { sourceHash: 'anything-at-all', source: 'author' },
+                contextNeed: {
+                    sourceHash: 'anything-at-all',
+                    source: 'author',
+                },
             }),
         ).toBe(true);
     });
