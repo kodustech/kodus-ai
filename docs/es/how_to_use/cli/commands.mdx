@@ -20,7 +20,7 @@ Estos flags están disponibles en todos los comandos:
 
 Con `--fail-on`, un `kodus review --agent` que activa el control imprime un segundo sobre después del primero, con `ok: false` y `error.code` `INTERNAL_ERROR`. Lee el código de salida, o lee solo el primer sobre.
 
-Los resultados y los mensajes informativos van a stdout. Los indicadores de progreso, las advertencias y los errores van a stderr. Para guardar una revisión en JSON en una automatización, usa `kodus review --format json --output review.json`. Con `--fail-on`, lee el código de salida por separado. Una revisión que activa el control imprime una línea adicional en stdout.
+Los resultados y los mensajes informativos van a stdout. Los indicadores de progreso, las advertencias y los errores van a stderr. Para guardar una revisión en JSON en una automatización, usa `kodus review --format json --output review.json`. Con `--fail-on`, lee el código de salida por separado. Una revisión que activa el control imprime una línea adicional en stderr, que `--quiet` oculta, así que `--format json` en stdout sigue siendo JSON válido.
 
 ---
 
