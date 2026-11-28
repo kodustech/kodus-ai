@@ -46,7 +46,7 @@ configureLongFetchTimeouts();
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-api' });
 
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -71,6 +71,7 @@ import {
     createDocsBasicAuthMiddleware,
 } from './docs/docs-guard';
 import { ApiErrorDto } from './dtos/api-error.dto';
+import { createApiValidationPipe } from './utils/api-validation-pipe';
 import { startDoctorListener } from './doctor/doctor-listener';
 import { SelfHostedDoctorService } from './doctor/self-hosted-doctor.service';
 
@@ -106,16 +107,7 @@ async function bootstrap() {
         const config = configService.get<HttpServerConfiguration>('server');
         const { host, port, rateLimit } = config;
 
-        app.useGlobalPipes(
-            new ValidationPipe({
-                transform: true,
-                whitelist: true,
-                forbidNonWhitelisted: true,
-                transformOptions: {
-                    enableImplicitConversion: true,
-                },
-            }),
-        );
+        app.useGlobalPipes(createApiValidationPipe());
 
         app.enableVersioning();
         app.enableCors({
