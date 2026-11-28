@@ -16,18 +16,23 @@
  * `maxEntryBytes` is not stored at all: it would evict many useful entries to
  * cache one value that is unlikely to repeat.
  *
- * The character budget evicts only large values. The same cache holds small
+ * The byte budget evicts only large values. The same cache holds small
  * flags that must last their TTL, such as the once-a-day "review skipped (no
  * license)" notice dedupe: evicted with the file contents, the author got the
- * notice again every few hours. Small entries leave by the entry cap, and by
- * size only once no large value is left; with the global bounds that never
- * happens on a production worker (200k × 1 KB is 205 MB of 2 GB),
- * but `maxBytes` holds either way. Large keys keep their own order, so the size budget never walks
- * past the small ones.
+ * notice again every few hours. So, past either bound, the store first drops
+ * the entries whose TTL has passed (Keyv passes the TTL to `set`; it would
+ * only drop them on a read that never comes), then large values, oldest
+ * first, and small ones only once no large value is left. With the global
+ * bounds the entry cap (200k) comes long before small values alone could
+ * fill the byte budget, but `maxBytes` holds either way. Large keys keep
+ * their own order, so neither bound walks past the small ones.
  */
 
 /** Values below this size are evicted only by the entry cap, not by size. */
 export const SMALL_ENTRY_BYTES = 1_024;
+/** Expired entries are swept at most this often (a sweep reads every entry
+ *  set with a TTL: about 3 ms for 200k on a worker). */
+export const SWEEP_INTERVAL_MS = 1_000;
 export interface BoundedMemoryStoreOptions {
     maxEntries: number;
     /** Total bytes V8 holds for all values (see `sizeOf`). */
@@ -41,6 +46,13 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
     private readonly sizes = new Map<string, number>();
     /** Keys of values of at least SMALL_ENTRY_BYTES, least recently used first. */
     private readonly large = new Set<string>();
+    /** When each entry set with a TTL expires (ms since epoch). */
+    private readonly expiresAt = new Map<string, number>();
+    /** No entry expires before this, so no sweep is needed until then. */
+    private nextExpiry = Infinity;
+    /** When the last sweep ran: a full cache with keys expiring every few
+     *  ms would otherwise rescan every entry on every write. */
+    private lastSweep = -Infinity;
 
     constructor(private readonly opts: BoundedMemoryStoreOptions) {
         super();
@@ -56,7 +68,13 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         return this.bytes;
     }
 
-    override set(key: string, value: V): this {
+    /**
+     * `ttl` is what Keyv passes as the third argument (ms). Keyv drops an
+     * expired entry only when its key is read again, so the store keeps the
+     * expiry itself: an entry nobody reads again must not hold a place a
+     * live one needs.
+     */
+    override set(key: string, value: V, ttl?: number): this {
         const size = sizeOf(value);
         this.delete(key);
         if (size > this.opts.maxEntryBytes) return this;
@@ -64,23 +82,56 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         this.sizes.set(key, size);
         this.bytes += size;
         if (size >= SMALL_ENTRY_BYTES) this.large.add(key);
+        if (typeof ttl === 'number' && ttl > 0) {
+            const at = Date.now() + ttl;
+            this.expiresAt.set(key, at);
+            if (at < this.nextExpiry) this.nextExpiry = at;
+        }
+        if (this.overBounds()) this.dropExpired();
         // The size budget takes large values first.
         for (const oldest of this.large) {
             if (this.bytes <= this.opts.maxBytes) break;
             if (oldest === key) continue;
             this.delete(oldest);
         }
-        // The entry cap, and the size budget if small values alone pass it.
+        // The entry cap takes large values first too: they are file contents
+        // a reader can fetch again, the small ones are flags and counters.
+        for (const oldest of this.large) {
+            if (this.size <= this.opts.maxEntries) break;
+            if (oldest === key) continue;
+            this.delete(oldest);
+        }
+        // Then any entry, when small values alone pass a bound.
         for (const oldest of this.keys()) {
-            if (
-                this.size <= this.opts.maxEntries &&
-                this.bytes <= this.opts.maxBytes
-            )
-                break;
+            if (!this.overBounds()) break;
             if (oldest === key) continue;
             this.delete(oldest);
         }
         return this;
+    }
+
+    private overBounds(): boolean {
+        return (
+            this.size > this.opts.maxEntries || this.bytes > this.opts.maxBytes
+        );
+    }
+
+    /**
+     * Drops every entry whose TTL has passed, if any can have. Expired means
+     * what Keyv means: `now > expires`, so an entry is still served at its
+     * expiry millisecond.
+     */
+    private dropExpired(): void {
+        const now = Date.now();
+        if (now <= this.nextExpiry) return;
+        if (now - this.lastSweep < SWEEP_INTERVAL_MS) return;
+        this.lastSweep = now;
+        let next = Infinity;
+        for (const [key, at] of this.expiresAt) {
+            if (at < now) this.delete(key);
+            else if (at < next) next = at;
+        }
+        this.nextExpiry = next;
     }
 
     /**
@@ -104,6 +155,7 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         this.bytes -= this.sizes.get(key) ?? 0;
         this.sizes.delete(key);
         this.large.delete(key);
+        this.expiresAt.delete(key);
         return super.delete(key);
     }
 
@@ -111,6 +163,9 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
         super.clear();
         this.large.clear();
         this.sizes.clear();
+        this.expiresAt.clear();
+        this.nextExpiry = Infinity;
+        this.lastSweep = -Infinity;
         this.bytes = 0;
     }
 }
