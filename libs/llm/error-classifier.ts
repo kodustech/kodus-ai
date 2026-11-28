@@ -656,12 +656,78 @@ function looksLikePerMinuteLimit(text: string): boolean {
     ) {
         return false;
     }
-    const delay = /retry in (\d+(?:\.\d+)?)\s*s\b/.exec(lower);
-    return !!delay && Number(delay[1]) <= PER_MINUTE_RETRY_MAX_SECONDS;
+    const delay = retryDelaySecondsIn(lower);
+    return delay !== undefined && delay <= PER_MINUTE_RETRY_MAX_SECONDS;
 }
 
 /** The longest retry delay a per-minute quota asks for. */
 const PER_MINUTE_RETRY_MAX_SECONDS = 60;
+
+/** "retry in 17.32s", "retry in 0m30s", "retry in 1m30s", "retry in 2
+ *  minutes": the delay, in seconds (#2130 read only the "Ns" form). */
+function retryDelaySecondsIn(text: string): number | undefined {
+    const m =
+        /retry in (?:(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?(?![a-z])\s*)?(?:(\d+(?:\.\d+)?)\s*s(?:ec(?:ond)?s?)?\b)?/i.exec(
+            text,
+        );
+    if (!m || (m[1] === undefined && m[2] === undefined)) return undefined;
+    return Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
+}
+
+/** Google's structured delay: `error.details[]` RetryInfo `retryDelay: "17s"`. */
+function googleRetryInfoSeconds(body: string): number | undefined {
+    try {
+        const details = (JSON.parse(body) as { error?: { details?: unknown } })
+            ?.error?.details;
+        if (!Array.isArray(details)) return undefined;
+        const info = details.find((d) =>
+            String((d as Record<string, unknown>)?.['@type'] ?? '').endsWith(
+                'google.rpc.RetryInfo',
+            ),
+        ) as { retryDelay?: unknown } | undefined;
+        const m = /^(\d+(?:\.\d+)?)s$/.exec(String(info?.retryDelay ?? ''));
+        return m ? Number(m[1]) : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * The wait a rate-limited provider asked for, in ms, when it is a per-minute
+ * window (at most 60 s): Google's RetryInfo, else "retry in N s" in the body
+ * or the message. Undefined for anything that is not a RATE_LIMIT, or a delay
+ * past a minute (a daily cap). The retries wait this instead of a fixed
+ * backoff that gave up inside the window (#2130).
+ * Pure — safe in any catch block.
+ */
+export function providerRetryDelayMs(
+    err: unknown,
+    category: LlmErrorCategory = classifyLLMError(err).category,
+): number | undefined {
+    if (category !== LlmErrorCategory.RATE_LIMIT) return undefined;
+    let seconds: number | undefined;
+    for (const e of errorTree(err, 0, [], { attempts: false })) {
+        const { responseBody, message } = e as {
+            responseBody?: unknown;
+            message?: unknown;
+        };
+        // A zero is no delay named: the text may still name one.
+        const positive = (n: number | undefined) =>
+            n && n > 0 ? n : undefined;
+        if (typeof responseBody === 'string') {
+            seconds ??=
+                positive(googleRetryInfoSeconds(responseBody)) ??
+                positive(retryDelaySecondsIn(responseBody));
+        }
+        if (typeof message === 'string') {
+            seconds ??= positive(retryDelaySecondsIn(message));
+        }
+    }
+    if (seconds === undefined || seconds > PER_MINUTE_RETRY_MAX_SECONDS) {
+        return undefined;
+    }
+    return Math.ceil(seconds * 1000);
+}
 
 /**
  * Detects the "model exists but you're not entitled to it" shape. Vertex is

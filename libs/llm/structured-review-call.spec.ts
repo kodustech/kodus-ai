@@ -1186,6 +1186,24 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
         assertNoSecondModelBuilt();
     });
 
+    // QA of #2700: the re-issue came 2-4 s after a 429 that asked for 4.86 s,
+    // landed inside the window and gave up (#2130).
+    it("RATE_LIMIT (429) naming its window → one re-issue after the provider's wait", async () => {
+        mockGetLimiter.mockReturnValue(null);
+        const rateErr: any = new Error(
+            'You exceeded your current quota, please check your plan and billing details. Please retry in 4.86s.',
+        );
+        rateErr.status = 429;
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        expect((sleep as jest.Mock).mock.calls.at(-1)[0]).toBe(4_860);
+    });
+
     it('RATE_LIMIT (429) twice → throws the second 429 marked exhausted', async () => {
         // A spent plan window (e.g. a 5-hour usage cap) answers 429 again.
         mockGetLimiter.mockReturnValue(null);
