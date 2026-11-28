@@ -917,6 +917,7 @@ export class ClaimService {
             seedSha: manifest.seedSha,
         });
         this.hubMetrics.claimBootPhases(timing, { consumer: req.consumer, driver: session.driver });
+        this.hubMetrics.claimBuild(buildSteps, timing?.buildMs, { side: req.ref.side, consumer: req.consumer });
         // A suite shard the store was offered to: did it pull the PR image or build it, and for how long (docs/runtime/shared-image-store.md section 9).
         const offered = this.storeOffered.get(claimId);
         this.storeOffered.delete(claimId);

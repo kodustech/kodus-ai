@@ -125,6 +125,8 @@ export class HubMetrics {
     private readonly transitions;
     private readonly renewals;
     private readonly storeGrants;
+    private readonly buildLayers;
+    private readonly buildTime;
     private readonly storePrImages;
     private readonly storeShards;
     private readonly storeShardTime;
@@ -146,6 +148,8 @@ export class HubMetrics {
         this.transitions = m.counter('runtime.claim.transition');
         this.renewals = m.counter('runtime.claim.renew');
         this.storeGrants = m.counter('runtime.image_store.grant');
+        this.buildLayers = m.counter('runtime.claim.build_layers');
+        this.buildTime = m.histogram('runtime.claim.build_time');
         this.storePrImages = m.counter('runtime.image_store.pr_image');
         this.storeShards = m.counter('runtime.image_store.shard');
         this.storeShardTime = m.histogram('runtime.image_store.shard_time');
@@ -174,6 +178,19 @@ export class HubMetrics {
         for (const [step, ms] of Object.entries(exportStepsOf(phases))) {
             this.exportDuration.record(ms, { [ATTR.exportStep]: step, [ATTR.claimConsumer]: attrs.consumer, [ATTR.driver]: attrs.driver });
         }
+    }
+    /**
+     * What a ready claim's image builds cost and how much of them a cache answered (claim.ready timing.buildSteps and
+     * buildMs), by side: the PR side's cold build shows as a low cached share and a long time. A claim that built nothing
+     * records nothing (a pool claim, an image taken as it was).
+     */
+    claimBuild(steps: { steps: number; cached: number } | undefined, buildMs: number | undefined, attrs: { side: string; consumer: string }) {
+        if (!steps || steps.steps <= 0) return;
+        const cached = Math.min(Math.max(steps.cached, 0), steps.steps);
+        const labels = { [ATTR.claimSide]: attrs.side, [ATTR.claimConsumer]: attrs.consumer };
+        if (cached > 0) this.buildLayers.add(cached, { result: 'cached', ...labels });
+        if (steps.steps - cached > 0) this.buildLayers.add(steps.steps - cached, { result: 'built', ...labels });
+        if (typeof buildMs === 'number' && Number.isFinite(buildMs) && buildMs > 0) this.buildTime.record(buildMs, labels);
     }
     /** A claim that became ready, by how its workload came to be (absent: the cell did not say). */
     claimStarted(start: string | undefined, attrs: { consumer: string }) {

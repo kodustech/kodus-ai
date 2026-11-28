@@ -83,7 +83,7 @@ kind comes from the bound key, `candidate-pools.ts:50-66`):
 | Claim | Read | Write |
 |---|---|---|
 | setup (default branch only, S-52) | main, cache | main, cache |
-| template setup host (`template:<org>/<env>`) | main | none |
+| template setup host (`template:<org>/<env>`) | main | cache (the cell exports only a claim the hub asked to seed, the default branch's) |
 | Run PR side / suite build claim | main, cache | `pr-<sha>` only |
 | suite shard (`suite:<org>/<run>/<n>`) | `pr-<sha>`, main | none |
 | main re-run host | main | none |
@@ -331,3 +331,25 @@ failure at grant, push or pull leaves today's cold build; the token is in memory
 - Not usable yet: the remote build cache. The cell's `-gvisor-build-cache-remote` sends basic auth from an auth file, which a token-auth
   registry refuses (section 12 step 3 is the fix). The flag also lives in the cell's own config, which a boat host takes from its cell base
   snapshot, not from the pool file, so turning it on means a new base.
+
+
+## 14. Why the PR side builds cold, and what the cache grant now covers (28/11)
+
+Path of a PR build today: the cell runs one rootless BuildKit per service (`build.go` `runBuild`), never `docker build` or compose
+build, so `cache_from` in a compose file is not a lever. Its cache input, in order: the environment's BuildKit state as a
+copy-on-write view (`buildCacheInput`, needs `-gvisor-build-state`, off by default), else the exported local cache, else, with a
+grant that names `cache` with a pull right, `--import-cache type=registry` (`attachRemoteCache`, only when the input is `cold`).
+The default branch's seeding setup exports `mode=max,ignore-error=true` to the same reference. The images the template carries
+are in the host's Docker, which the builder cannot read, so they are not a cache source.
+
+Measured on the dev stack (read-only): the last Run that built on a PR side recorded `buildSteps 18, buildCached 0`, 943 s of
+apply and its three slowest `app` steps at 160 to 250 s. `runtime_shared_images` holds no row, and of two `runtime_pr_images` rows one is
+`failed builder_ended` and one still `pending`. The cell's `build.cache.input` and `build.timing` lines live on the ephemeral host and
+reach nowhere the hub reads, so the input mode of those builds is not provable from the stack: unverified.
+
+Found in the code: the template's setup claim, the build the Runs start from, was granted `main` read only, so its build could not
+export the cache a PR imports; the only writer was a separate default-branch `setup:` claim. Changed: the template claim now holds
+`cache` with the push right (a PR side never does), and every build logs `cacheInput`, `layersCached`, `layersTotal`, `layerHitRate`.
+The hub counts the cached and built steps and times the build by side (`runtime.claim.build_layers`, `runtime.claim.build_time`).
+To verify live: after a template build, the registry has a `cache` tag per service; a PR Run's `build.timing` shows
+`cacheInput=remote`-style import (`cacheRemoteImport=true`) with a hit rate well above 0, and `runtime_claim_build_layers{side="pr"}` cached over total.

@@ -68,11 +68,12 @@ describe('the build cache token', () => {
     };
 
     // Behavior: only a default-branch setup gets a token that can push the cache; a PR side reads it, and others never see it.
-    it('lets only a default-branch setup push the cache, a PR side pull it, and a shard or template not touch it', async () => {
+    it('lets only a default-branch setup push the cache, a PR side pull it, and a shard not touch it, and a template push it like the default branch', async () => {
         expect(await cacheActions(`setup:${ORG}/h`, 'base')).toEqual(['pull', 'push']);
         expect(await cacheActions(`setup:${ORG}/h`, 'pr')).toEqual(['pull']);
         expect(await cacheActions(`run:${ORG}/r`, 'pr')).toEqual(['pull']);
         expect(await cacheActions(`suite:${ORG}/s/0`, 'pr')).toEqual([]);
-        expect(await cacheActions(`template:${ORG}/e`, 'base')).toEqual([]);
+        expect(await cacheActions(`template:${ORG}/e`, 'setup')).toEqual(['pull', 'push']);
+        expect(await cacheActions(`template:${ORG}/e`, 'pr')).toEqual(['pull']);
     });
 });

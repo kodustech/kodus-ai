@@ -188,15 +188,19 @@ func remoteCacheFactsOf(run dockercli.BuildRun, s buildprogress.Summary) remoteC
 	return f
 }
 
-// attrs are the facts as log attributes of build.timing; a build with no remote cache adds none.
+// attrs are the facts as log attributes of build.timing: the remote cache's own only when it was used.
 func (f remoteCacheFacts) attrs() []any {
 	if !f.Imported && !f.Exported {
 		return nil
 	}
-	out := []any{"cacheRemoteImport", f.Imported, "cacheRemoteExport", f.Exported, "cacheImportMs", f.ImportMs, "cacheExportMs", f.ExportMs,
-		"layersCached", f.Cached, "layersTotal", f.Steps}
-	if f.Steps > 0 {
-		out = append(out, "layerHitRate", fmt.Sprintf("%.2f", float64(f.Cached)/float64(f.Steps)))
+	return []any{"cacheRemoteImport", f.Imported, "cacheRemoteExport", f.Exported, "cacheImportMs", f.ImportMs, "cacheExportMs", f.ExportMs}
+}
+
+// layerAttrs are what share of a build's steps a cache answered, whatever cache it was: the measure of a cold build.
+// A build BuildKit printed no step for says none.
+func (f remoteCacheFacts) layerAttrs() []any {
+	if f.Steps <= 0 {
+		return nil
 	}
-	return out
+	return []any{"layersCached", f.Cached, "layersTotal", f.Steps, "layerHitRate", fmt.Sprintf("%.2f", float64(f.Cached)/float64(f.Steps))}
 }

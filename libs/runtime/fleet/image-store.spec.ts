@@ -47,8 +47,16 @@ describe('who may read and write what', () => {
         expect(summary(planGrant(ask(`setup:${ORG}/abc`, 'pr'), 'p'))).toEqual(['cache:r', 'main:r']);
     });
 
-    it('a template setup host only reads main', () => {
-        expect(summary(planGrant(ask(`template:${ORG}/env-1`, 'base'), 'p'))).toEqual(['main:r']);
+    // The template is the default branch's build every later Run starts from: its layers are what a PR build reuses,
+    // so it writes the build cache like the default branch's own setup (the cell exports only when the hub also
+    // asked it to seed, which is the default branch's alone).
+    it('a template setup host reads main and writes the build cache of the environment', () => {
+        expect(summary(planGrant(ask(`template:${ORG}/env-1`, 'setup'), 'p'))).toEqual(['cache:rw', 'main:r']);
+    });
+
+    it('a template host never gets a PR repository nor a write on main', () => {
+        const grant = planGrant(ask(`template:${ORG}/env-1`, 'setup'), 'p') ?? [];
+        expect(grant.filter((r) => r.push).map((r) => r.scope)).toEqual(['cache']);
     });
 
     it('a host with no bound key, or a key of another org, gets no grant at all', () => {

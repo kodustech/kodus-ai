@@ -114,4 +114,27 @@ describe('HubMetrics', () => {
         const byOutcome = Object.fromEntries(shards.dataPoints.map((p) => [p.attributes.outcome as string, p.value]));
         expect(byOutcome).toEqual({ pulled: 1, built_after_ask: 1, built_no_image: 1 });
     });
+
+    // The PR side's cold build is told by its layers and its time, side by side with the default branch's.
+    it('counts the layers a claim built and the ones a cache answered, and its build time, by side', async () => {
+        const { m, collect } = await harness();
+        m.claimBuild({ steps: 18, cached: 15 }, 90_000, { side: 'pr', consumer: 'runtime' });
+        m.claimBuild({ steps: 18, cached: 0 }, 900_000, { side: 'pr', consumer: 'runtime' });
+        m.claimBuild({ steps: 4, cached: 4 }, 2_000, { side: 'base', consumer: 'runtime' });
+        const layers = (await collect('runtime.claim.build_layers'))!;
+        const by = Object.fromEntries(layers.dataPoints.map((p) => [`${p.attributes['kodus.runtime.claim.side']}:${p.attributes.result}`, p.value]));
+        expect(by).toEqual({ 'pr:cached': 15, 'pr:built': 21, 'base:cached': 4 });
+        const time = (await collect('runtime.claim.build_time'))!;
+        const pr = time.dataPoints.find((p) => p.attributes['kodus.runtime.claim.side'] === 'pr')!;
+        expect((pr.value as { sum: number; count: number }).sum).toBe(990_000);
+        expect((pr.value as { count: number }).count).toBe(2);
+    });
+
+    it('records nothing for a claim that built nothing', async () => {
+        const { m, collect } = await harness();
+        m.claimBuild(undefined, undefined, { side: 'pr', consumer: 'runtime' });
+        m.claimBuild({ steps: 0, cached: 0 }, 0, { side: 'pr', consumer: 'runtime' });
+        expect((await collect('runtime.claim.build_layers'))?.dataPoints ?? []).toHaveLength(0);
+        expect((await collect('runtime.claim.build_time'))?.dataPoints ?? []).toHaveLength(0);
+    });
 });
