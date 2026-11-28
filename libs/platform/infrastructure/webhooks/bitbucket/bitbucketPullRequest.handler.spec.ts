@@ -13,7 +13,10 @@ jest.mock(
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IWebhookEventParams } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
-import { BitbucketPullRequestHandler } from './bitbucketPullRequest.handler';
+import {
+    BitbucketPullRequestHandler,
+    bitbucketMergeCommitSha,
+} from './bitbucketPullRequest.handler';
 
 describe('BitbucketPullRequestHandler deterministic logic', () => {
     let handler: BitbucketPullRequestHandler;
@@ -282,5 +285,100 @@ describe('BitbucketPullRequestHandler deterministic logic', () => {
                 false,
             );
         });
+    });
+});
+
+describe('bitbucketMergeCommitSha', () => {
+    it('reads the merge commit, not the pre-merge target tip, on Data Center', () => {
+        expect(
+            bitbucketMergeCommitSha({
+                isDataCenterEvent: true,
+                pullrequest: {
+                    toRef: { latestCommit: 'target-tip' },
+                    properties: { mergeCommit: { id: 'merge-commit' } },
+                },
+            }),
+        ).toBe('merge-commit');
+    });
+
+    it('reads merge_commit.hash on Cloud', () => {
+        expect(
+            bitbucketMergeCommitSha({
+                pullrequest: { merge_commit: { hash: 'cloud-merge' } },
+            }),
+        ).toBe('cloud-merge');
+    });
+});
+
+describe('BitbucketPullRequestHandler on a Data Center merge', () => {
+    it('forwards the merge commit, not the pre-merge target tip, to the graph update', async () => {
+        const execute = jest.fn().mockResolvedValue(undefined);
+        const handler = new BitbucketPullRequestHandler(
+            {
+                getContext: async () => ({
+                    organizationAndTeamData: {
+                        organizationId: 'org',
+                        teamId: 'team',
+                    },
+                }),
+            } as any,
+            {} as any,
+            { execute: async () => ({ status: 'closed' }) } as any,
+            {} as any,
+            {
+                getDefaultBranch: async () => 'main',
+                getFilesByPullRequestId: async () => [],
+            } as any,
+            { execute: jest.fn() } as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            { create: async () => undefined } as any,
+            { execute } as any,
+        );
+        jest.spyOn(handler as any, 'shouldTriggerCodeReview').mockResolvedValue(
+            false,
+        );
+
+        await handler.execute({
+            event: 'pr:merged',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                isDataCenterEvent: true,
+                eventKey: 'pr:merged',
+                actor: { name: 'dev' },
+                pullrequest: {
+                    id: 7,
+                    state: 'MERGED',
+                    properties: { mergeCommit: { id: 'merge-commit' } },
+                    toRef: {
+                        id: 'refs/heads/main',
+                        displayId: 'main',
+                        latestCommit: 'target-tip',
+                        repository: {
+                            id: 42,
+                            name: 'repo',
+                            slug: 'repo',
+                            project: { key: 'P' },
+                        },
+                    },
+                    fromRef: {
+                        id: 'refs/heads/feature',
+                        displayId: 'feature',
+                        latestCommit: 'feature-tip',
+                        repository: {
+                            id: 42,
+                            name: 'repo',
+                            slug: 'repo',
+                            project: { key: 'P' },
+                        },
+                    },
+                },
+            },
+        } as any);
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(execute).toHaveBeenCalledTimes(1);
+        expect(execute.mock.calls[0][0].newSha).toBe('merge-commit');
     });
 });

@@ -450,8 +450,12 @@ describe('GraphIndexerService', () => {
                 ),
             ).toBeGreaterThanOrEqual(0);
             const { nodes, edges } = JSON.parse(graphJson);
-            expect(mockAstGraphRepo.fullRebuild).toHaveBeenCalledWith(
+            // Replaces every row, but as an incremental: it must not finish
+            // a full build that is running.
+            expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
+            expect(mockAstGraphRepo.incrementalUpdate).toHaveBeenCalledWith(
                 REPO_ID,
+                undefined,
                 nodes,
                 edges,
                 {

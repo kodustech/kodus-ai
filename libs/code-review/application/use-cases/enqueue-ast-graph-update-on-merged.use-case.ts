@@ -52,6 +52,7 @@ export type EnqueueAstGraphUpdateResult =
  * in sync.
  *
  * Strategy:
+ *   - While a full build runs, defer to the build's catch-up
  *   - Skip if repo has no graph yet (astGraphStatus !== READY)
  *   - Skip if baseBranch !== repo.defaultBranch
  *   - > 500 files → full rebuild
@@ -111,10 +112,38 @@ export class EnqueueAstGraphUpdateOnMergedUseCase implements IUseCase {
             };
         }
 
-        if (repo.astGraphStatus !== AstGraphStatus.READY) {
+        if (repo.astGraphStatus === AstGraphStatus.BUILDING) {
+            // The full build owns the graph until it publishes, then enqueues
+            // one catch-up incremental for every merge deferred here.
+            try {
+                const deferred =
+                    await this.repositoryService.deferMergeDuringBuild(
+                        repo.uuid,
+                        newSha,
+                    );
+                if (deferred) {
+                    return {
+                        enqueued: false,
+                        reason: 'deferred until graph build finishes',
+                    };
+                }
+                // The build finished in between: read the state it left.
+                repo = await this.repositoryService.findById(repo.uuid);
+            } catch (error) {
+                this.logger.warn({
+                    message: `[AST-GRAPH] Failed to defer merged PR#${prNumber} during graph build`,
+                    context: EnqueueAstGraphUpdateOnMergedUseCase.name,
+                    error,
+                    metadata: { repoExternalId, platform, prNumber },
+                });
+                return { enqueued: false, reason: 'defer failed' };
+            }
+        }
+
+        if (repo?.astGraphStatus !== AstGraphStatus.READY) {
             return {
                 enqueued: false,
-                reason: `graph not ready (${repo.astGraphStatus})`,
+                reason: `graph not ready (${repo?.astGraphStatus})`,
             };
         }
 

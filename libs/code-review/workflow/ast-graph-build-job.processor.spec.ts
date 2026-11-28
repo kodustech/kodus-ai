@@ -70,7 +70,9 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
             fullName: 'org/repo',
         }),
         updateGraphStatus: jest.fn().mockResolvedValue(undefined),
+        clearMergeDeferredDuringBuild: jest.fn().mockResolvedValue(undefined),
     };
+    const jobQueue = { enqueue: jest.fn() };
 
     const job = {
         id: 'job-1',
@@ -123,7 +125,50 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
             graphIndexer as any,
             repositoryService as any,
             new GraphJobSandbox(),
+            jobQueue as any,
         );
+    });
+
+    it('queues the catch-up for a deferred merge before completing the job', async () => {
+        graphIndexer.fullBuild.mockResolvedValueOnce('');
+        const completed = () =>
+            jobRepository.update.mock.calls.some(
+                ([, data]) => data?.status === JobStatus.COMPLETED,
+            );
+        jobQueue.enqueue.mockImplementationOnce(async () => {
+            expect(completed()).toBe(false);
+            return 'catch-up';
+        });
+
+        await processor.process('job-1');
+
+        expect(jobQueue.enqueue).toHaveBeenCalledTimes(1);
+        expect(jobQueue.enqueue.mock.calls[0][0]).toEqual({
+            workflowType: 'AST_GRAPH_INCREMENTAL',
+            handlerType: 'SIMPLE_FUNCTION',
+            correlationId: 'repo-1',
+            payload: {
+                repositoryId: 'repo-1',
+                changedFiles: [],
+                newSha: undefined,
+                cloneUrl: '',
+                defaultBranch: 'main',
+                fullName: 'org/repo',
+                platform: 'GITHUB',
+                organizationAndTeamData: {
+                    organizationId: 'org-uuid',
+                    teamId: 'team-1',
+                },
+            },
+            status: JobStatus.PENDING,
+            priority: 0,
+            retryCount: 0,
+            maxRetries: 3,
+        });
+        expect(
+            repositoryService.clearMergeDeferredDuringBuild,
+        ).toHaveBeenCalledWith('repo-1', '');
+        expect(completed()).toBe(true);
     });
 
     it('acquires the sandbox through the lease manager with a job-unique prKey', async () => {

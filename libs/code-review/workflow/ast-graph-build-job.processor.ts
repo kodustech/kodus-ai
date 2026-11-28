@@ -9,6 +9,14 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject } from '@nestjs/common';
 
+import {
+    IJobQueueService,
+    JOB_QUEUE_SERVICE_TOKEN,
+} from '@libs/core/workflow/domain/contracts/job-queue.service.contract';
+import { HandlerType } from '@libs/core/workflow/domain/enums/handler-type.enum';
+import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
 import {
     IWorkflowJobRepository,
@@ -67,6 +75,8 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         @Inject(REPOSITORY_SERVICE_TOKEN)
         private readonly repositoryService: IRepositoryService,
         private readonly graphSandbox: GraphJobSandbox,
+        @Inject(JOB_QUEUE_SERVICE_TOKEN)
+        private readonly jobQueueService: IJobQueueService,
     ) {}
 
     async process(
@@ -298,7 +308,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             );
 
             signal?.throwIfAborted();
-            await raceWithAbortSignal(
+            const mergedDuringBuild = await raceWithAbortSignal(
                 this.graphIndexer.fullBuild({
                     repositoryId: payload.repositoryId,
                     sandbox,
@@ -311,8 +321,19 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
             );
             signal?.throwIfAborted();
 
+            // Before completing: a failed catch-up retries the job, and the
+            // deferred merge stays recorded until the catch-up is queued.
+            await raceWithAbortSignal(
+                this.enqueueCatchUp(
+                    payload,
+                    sandbox,
+                    headSha,
+                    mergedDuringBuild,
+                    signal,
+                ),
+                signal,
+            );
             const totalMs = Date.now() - jobStart;
-
             await raceWithAbortSignal(
                 this.markCompleted(
                     jobId,
@@ -386,6 +407,87 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
         } finally {
             if (lease) await releaseSandbox(lease);
         }
+    }
+
+    /**
+     * Merges that arrived while the build ran were deferred, not enqueued.
+     * One incremental from the published SHA covers all of them, unless the
+     * build's own checkout already contains the latest one.
+     */
+    async enqueueCatchUp(
+        payload: AstGraphBuildJobPayload,
+        sandbox: SandboxInstance,
+        headSha: string,
+        mergedDuringBuild: string | null | undefined,
+        signal?: AbortSignal,
+    ): Promise<void> {
+        if (mergedDuringBuild == null) return;
+        if (
+            await this.containsMerge(
+                sandbox,
+                headSha,
+                mergedDuringBuild,
+                signal,
+            )
+        ) {
+            await this.repositoryService.clearMergeDeferredDuringBuild(
+                payload.repositoryId,
+                mergedDuringBuild,
+            );
+            return;
+        }
+        signal?.throwIfAborted();
+        await this.jobQueueService.enqueue({
+            correlationId: payload.repositoryId,
+            workflowType: WorkflowType.AST_GRAPH_INCREMENTAL,
+            handlerType: HandlerType.SIMPLE_FUNCTION,
+            payload: {
+                repositoryId: payload.repositoryId,
+                changedFiles: [],
+                newSha: mergedDuringBuild || undefined,
+                cloneUrl: '',
+                defaultBranch: payload.defaultBranch,
+                fullName: payload.fullName,
+                platform: payload.platform,
+                organizationAndTeamData: payload.organizationAndTeamData,
+            },
+            status: JobStatus.PENDING,
+            priority: 0,
+            retryCount: 0,
+            maxRetries: 3,
+        });
+        // Compare-and-clear: a merge deferred after this read keeps its record.
+        await this.repositoryService.clearMergeDeferredDuringBuild(
+            payload.repositoryId,
+            mergedDuringBuild,
+        );
+        this.logger.log({
+            message: `[AST-GRAPH-JOB] Enqueued catch-up for merges during build of ${payload.fullName}`,
+            context: AstGraphBuildJobProcessor.name,
+            metadata: {
+                repositoryId: payload.repositoryId,
+                headSha,
+                mergedDuringBuild,
+            },
+        });
+    }
+
+    private async containsMerge(
+        sandbox: SandboxInstance,
+        headSha: string,
+        merge: string,
+        signal?: AbortSignal,
+    ): Promise<boolean> {
+        if (merge === headSha) return true;
+        // '' means the merge SHA is unknown: only a catch-up is safe.
+        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(merge)) return false;
+        // Exit 0 only when the merge is in the built history. A merge newer
+        // than the clone is absent, so it gets the catch-up.
+        const result = await sandbox.run(
+            `git -C ${shSingleQuote(sandbox.repoDir)} merge-base --is-ancestor ${merge} ${shSingleQuote(headSha)}`,
+            { timeoutMs: 10_000, signal },
+        );
+        return result.exitCode === 0;
     }
 
     private failureMessage(classification: ErrorClassification): string {

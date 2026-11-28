@@ -31,4 +31,17 @@ export interface IRepositoryService {
             edgeCount?: number;
         },
     ): Promise<void>;
+    /**
+     * Remember a merge that arrived while a full build runs, so the build can
+     * catch up once it publishes. Returns false when no build is running.
+     */
+    deferMergeDuringBuild(
+        uuid: string,
+        mergeSha: string | undefined,
+    ): Promise<boolean>;
+    /** Clear the deferred merge once its catch-up is settled, unless a newer one replaced it. */
+    clearMergeDeferredDuringBuild(
+        uuid: string,
+        mergeSha: string,
+    ): Promise<void>;
 }
