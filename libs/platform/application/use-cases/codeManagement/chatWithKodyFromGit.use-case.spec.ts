@@ -1548,6 +1548,86 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
         );
     });
 
+    it('resolves the suggestion by thread id on Azure DevOps', async () => {
+        // Azure numbers comments per thread: the root note is id 1, while the
+        // stored suggestion carries the thread id.
+        const THREAD_ID = KODY_COMMENT_ID;
+        const { useCase, conversationAgentUseCase } = build({
+            files: [
+                {
+                    suggestions: [
+                        {
+                            id: 'sug-azure',
+                            label: 'kody_rules',
+                            brokenKodyRulesIds: ['rule-azure'],
+                            comment: { id: THREAD_ID },
+                        },
+                    ],
+                },
+            ],
+        });
+        (
+            (useCase as any).codeManagementService
+                .getPullRequestReviewComment as jest.Mock
+        ).mockResolvedValue([
+            {
+                id: 1,
+                threadId: THREAD_ID,
+                body: 'Wrap the call in a try/catch. <!-- kody-codereview -->',
+                author: { id: 'kody', name: 'Kody' },
+                replies: [
+                    {
+                        id: 2,
+                        threadId: THREAD_ID,
+                        body: '@kody this is a false positive',
+                        author: { id: 'user-1', name: 'dev-one' },
+                    },
+                ],
+            },
+        ]);
+
+        await useCase.execute({
+            event: 'ms.vss-code.git-pullrequest-comment-event',
+            platformType: PlatformType.AZURE_REPOS,
+            payload: {
+                resource: {
+                    comment: {
+                        id: 2,
+                        content: '@kody this is a false positive',
+                        parentCommentId: 1,
+                        author: { id: 'user-1', displayName: 'dev-one' },
+                        _links: {
+                            threads: {
+                                href: `https://dev.azure.com/org/proj/_apis/git/repositories/repo-1/pullRequests/812/threads/${THREAD_ID}`,
+                            },
+                        },
+                    },
+                    pullRequest: {
+                        pullRequestId: 812,
+                        repository: { id: 'repo-1', name: 'billing-api' },
+                        sourceRefName: 'refs/heads/feat/invoice-retry',
+                        targetRefName: 'refs/heads/main',
+                    },
+                    repository: { project: { name: 'billing' } },
+                },
+                resourceContainers: { project: { id: 'project-1' } },
+            },
+        } as any);
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: 'sug-azure',
+                            brokenKodyRulesIds: ['rule-azure'],
+                        }),
+                    }),
+                }),
+            }),
+        );
+    });
+
     it('still answers when the suggestion cannot be resolved', async () => {
         const { useCase, conversationAgentUseCase } = build(null);
 
