@@ -35,16 +35,30 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
     });
 
     describe('Anthropic (temperature policy owned by the module, not capabilities)', () => {
-        // #2036: MiniMax M3.1 always reasons and refuses a disable, while no
-        // level can be sent on this endpoint. The form said "doesn't support
-        // reasoning — it always runs without a thinking budget", which is false.
-        it('says a model that always reasons, with no level to send, reasons (#2036)', () => {
-            const c = useCase.execute(
-                'anthropic_compatible',
+        // #2036: MiniMax M3.1 always reasons and refuses a disable. Its QA
+        // found no level could be picked; MiniMax documents adaptive thinking
+        // with `output_config.effort` (low..max), so the levels are offered
+        // and Off is not.
+        it('offers the levels of a model that always reasons and takes adaptive effort (#2036)', () => {
+            for (const model of [
                 'MiniMax-M3.1-Flash-Preview',
+                'MiniMax-M3.1-Flash',
+            ]) {
+                const c = useCase.execute('anthropic_compatible', model);
+                expect(c.supportsReasoning).toBe(true);
+                expect(c.reasoningAlwaysOn).toBe(true);
+                expect(c.reasoningOptions).toEqual(['low', 'medium', 'high']);
+            }
+        });
+
+        it('still offers no level for M3.1 on the OpenAI wire, where none is sent', () => {
+            const c = useCase.execute(
+                'openai_compatible',
+                'MiniMax-M3.1-Flash',
             );
             expect(c.supportsReasoning).toBe(false);
             expect(c.reasoningAlwaysOn).toBe(true);
+            expect(c.reasoningOptions).toEqual([]);
         });
 
         // #2036's measurements (api.minimax.io/anthropic): plain MiniMax-M3

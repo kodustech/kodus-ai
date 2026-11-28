@@ -53,6 +53,13 @@ function isClaudeId(model?: string): boolean {
  *  `anthropic.` / `@date` id spellings all resolve the same way here as they
  *  do in reasoning-options — the previous inline regex only knew 4.6–4.x and
  *  silently mis-classified every Claude 5. */
+/** The levels a compatible model with `adaptiveEffort` is offered: ours, which
+ *  its `output_config.effort` accepts as they are. */
+const ADAPTIVE_EFFORT_LEVELS = {
+    type: 'adaptive',
+    options: ['low', 'medium', 'high'],
+} as const satisfies ModelCapabilities['reasoningConfig'];
+
 export const anthropicModule: ProviderModule = {
     id: 'anthropic',
     aliases: ['anthropic_compatible'],
@@ -62,13 +69,22 @@ export const anthropicModule: ProviderModule = {
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 
     capabilities(model: string): ModelCapabilities {
-        const reasoningConfig = anthropicReasoningConfig(model);
-        // Reasons on every call and no level is sent (MiniMax M3.1, M2): the
-        // picker has nothing to offer. Kimi k2.7-code/k3 and GLM-5.3 also always
-        // think, but their default sends a thinking budget, so they are not this.
+        const compatible = resolveCompatibleReasoningTraits(model);
+        // MiniMax M3.1 takes adaptive thinking + effort, as adaptive Claude
+        // does: its levels are offered (#2036 QA), Off is not.
+        const adaptiveEffort =
+            !isClaudeId(model) && !!compatible.adaptiveEffort;
+        const reasoningConfig =
+            anthropicReasoningConfig(model) ??
+            (adaptiveEffort ? ADAPTIVE_EFFORT_LEVELS : undefined);
+        // Reasons on every call and cannot be turned off. With no level to
+        // send (MiniMax M2) the picker has nothing to offer; with levels
+        // (M3.1) it offers them without Off. Kimi k2.7-code/k3 and GLM-5.3
+        // also always think, but their default sends a thinking budget, so
+        // they are not this.
         const alwaysOn =
-            !reasoningConfig &&
-            reasonsWithNoLevelSent(resolveCompatibleReasoningTraits(model));
+            (!reasoningConfig || adaptiveEffort) &&
+            reasonsWithNoLevelSent(compatible);
         return {
             supportsReasoning: !!reasoningConfig,
             ...(alwaysOn ? { reasoningAlwaysOn: true } : {}),
@@ -196,6 +212,18 @@ export const anthropicModule: ProviderModule = {
         // production slots run a bare `k3` id, so this caveat is live, not
         // hypothetical.
         if ((cfg.provider as string) === 'anthropic_compatible') {
+            // MiniMax M3.1: the level goes as adaptive thinking + effort, the
+            // shape it documents ("if `type` is sent it must be `adaptive`",
+            // effort low..max). It was dropped before, so every call ran at
+            // the model's default, `max` (#2036 QA).
+            if (
+                !isClaudeId(cfg.model) &&
+                resolveCompatibleReasoningTraits(cfg.model).adaptiveEffort
+            ) {
+                return {
+                    anthropic: { thinking: { type: 'adaptive' }, effort },
+                };
+            }
             // An 'effort-only' brand (MiniMax) has no `thinking` object, and its
             // `reasoning_effort` is a TOP-LEVEL field this transport's
             // providerOptions namespace cannot express — the same limit as the

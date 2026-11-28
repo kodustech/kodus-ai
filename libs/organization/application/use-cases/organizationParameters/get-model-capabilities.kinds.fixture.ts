@@ -23,13 +23,25 @@ export const CAPABILITY_KINDS = {
     /** Always reasons, and no level is sent on this wire (#2036: M3.1 reasons
      *  with the field omitted and refuses a disable; plain M3 does not). */
     alwaysOn: {
-        provider: 'anthropic_compatible',
+        provider: 'openai_compatible',
         model: 'MiniMax-M3.1-Flash',
         caps: {
             temperature: { kind: 'adjustable' },
             supportsReasoning: false,
             reasoningAlwaysOn: true,
             reasoningOptions: [],
+        },
+    },
+    /** Always reasons and cannot be turned off, but takes a level: adaptive
+     *  thinking + `output_config.effort` on the Anthropic wire (#2036 QA). */
+    alwaysOnWithLevels: {
+        provider: 'anthropic_compatible',
+        model: 'MiniMax-M3.1-Flash',
+        caps: {
+            temperature: { kind: 'adjustable' },
+            supportsReasoning: true,
+            reasoningAlwaysOn: true,
+            reasoningOptions: ['low', 'medium', 'high'],
         },
     },
     /** No reasoning at all. */

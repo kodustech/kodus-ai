@@ -61,12 +61,19 @@ function sendsNoLevel({ provider, model }: ProdShape): boolean {
     return !/thinking|reasoning|budget|effort/i.test(JSON.stringify(options));
 }
 
-/** What the facts say: reasons on every call, no level offered, none sent. */
+/** What the facts say: reasons on every call and none is sent without a
+ *  level; no level offered, or the adaptive-effort levels of the Anthropic
+ *  protocol (MiniMax M3.1, #2036 QA). */
 function expectedAlwaysOn(row: ProdShape): boolean {
     if (BRANDS.has(row.provider)) return false;
+    const traits = resolveCompatibleReasoningTraits(row.model);
+    const offersAdaptiveEffort =
+        row.provider === 'anthropic_compatible' && !!traits.adaptiveEffort;
     return (
-        !REGISTRY.get(row.provider).capabilities(row.model).supportsReasoning &&
-        alwaysReasons(resolveCompatibleReasoningTraits(row.model)) &&
+        (!REGISTRY.get(row.provider).capabilities(row.model)
+            .supportsReasoning ||
+            offersAdaptiveEffort) &&
+        alwaysReasons(traits) &&
         sendsNoLevel(row)
     );
 }
@@ -96,11 +103,13 @@ describe('GetModelCapabilitiesUseCase over the production BYOK shapes', () => {
             }
             const alwaysOn = caps.reasoningAlwaysOn === true;
 
-            // Always-on means no level can be sent: the toggle stays locked
-            // and the form explains why instead of offering levels.
+            // Always-on with no reasoning support means no level can be
+            // sent: the form explains why instead of offering levels. With
+            // support, it offers levels and no Off (MiniMax M3.1).
             if (alwaysOn) {
-                expect(caps.supportsReasoning).toBe(false);
-                expect(caps.reasoningOptions).toEqual([]);
+                expect(caps.reasoningOptions.length > 0).toBe(
+                    caps.supportsReasoning,
+                );
             }
 
             // The use case forwards what the provider module says, nothing
@@ -161,8 +170,10 @@ const PINNED_ALWAYS_ON: string[] = [
     'amazon_bedrock minimax.minimax-m2.5',
     'amazon_bedrock moonshotai.kimi-k3',
     // MiniMax M3.1 reasons with the field omitted and 400s on a disable
-    // (#2036); nothing is sent on either wire. Plain M3 does not reason
-    // unasked, and GLM-5.3 / Kimi k3 on this endpoint are sent a budget.
+    // (#2036): never Off. On the Anthropic wire its level can be picked
+    // (adaptive + effort); on the OpenAI wire none is sent. Plain M3 does not
+    // reason unasked, and GLM-5.3 / Kimi k3 on this endpoint are sent a
+    // budget.
     'anthropic_compatible MiniMax-M3.1-Flash',
     'openai_compatible MiniMax-M3.1-Flash',
     'openai_compatible minimax-m3.1-flash',

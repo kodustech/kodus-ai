@@ -133,6 +133,14 @@ export interface ModelReasoningTraits {
      * thinks by default and exposes no disable.
      */
     alwaysReasons?: boolean;
+    /**
+     * On the Anthropic protocol the level is `output_config.effort` beside
+     * `thinking: { type: 'adaptive' }`, the shape adaptive Claude takes, and
+     * thinking cannot be turned off (`disabled` and effort `none` are 400s).
+     * MiniMax M3.1: "Accepts `low`, `medium`, `high`, `xhigh`, and `max`;
+     * defaults to `max` when omitted" (platform.minimax.io, Anthropic SDK).
+     */
+    adaptiveEffort?: boolean;
 }
 
 /** The model reasons on every call, whatever is sent. */
@@ -340,8 +348,12 @@ export function resolveCompatibleReasoningTraits(
             canDisableThinking: false,
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: true,
+            // M3.1 takes its level as adaptive thinking + effort on the
+            // Anthropic protocol (platform.minimax.io, Anthropic SDK: "if
+            // `type` is sent it must be `adaptive`"; effort low..max). M3 has
+            // no level: thinking is off unless `adaptive` is sent.
             ...(/minimax[-_.]?m3\.[1-9]/.test(m)
-                ? { alwaysReasons: true }
+                ? { alwaysReasons: true, adaptiveEffort: true }
                 : {}),
         };
     }

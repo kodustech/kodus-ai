@@ -76,7 +76,7 @@ const toggle = (label: string) =>
     screen.getByText(label, { selector: "button" });
 
 describe("ByokAdvancedSettings — reasoning copy per production capability kind", () => {
-    describe("always reasons, no level to send (anthropic_compatible MiniMax-M3.1-Flash)", () => {
+    describe("always reasons, no level to send (openai_compatible MiniMax-M3.1-Flash)", () => {
         const kind = CAPABILITY_KINDS.alwaysOn;
 
         it("says it always reasons, not that it has no reasoning", () => {
@@ -107,6 +107,44 @@ describe("ByokAdvancedSettings — reasoning copy per production capability kind
                 expect(screen.queryByRole("radio")).not.toBeInTheDocument();
             },
         );
+    });
+
+    // #2036 QA: on the Anthropic endpoint M3.1 takes adaptive thinking with
+    // an effort, but the form offered no level, and Off would mean nothing.
+    describe("always reasons, with levels (anthropic_compatible MiniMax-M3.1-Flash)", () => {
+        const kind = CAPABILITY_KINDS.alwaysOnWithLevels;
+        const LEVELS_COPY = /always reasons, so it can.t be turned off/;
+
+        it("offers its levels and not Off", () => {
+            renderKind(kind);
+            for (const level of ["Low", "Medium", "High"]) {
+                expect(toggle(level)).toBeEnabled();
+            }
+            expect(toggle("Off")).toBeDisabled();
+            expect(screen.getByText(LEVELS_COPY)).toBeInTheDocument();
+            expect(screen.queryByText(ALWAYS_ON_COPY)).not.toBeInTheDocument();
+            expect(
+                screen.queryByText(UNSUPPORTED_COPY),
+            ).not.toBeInTheDocument();
+        });
+
+        it("shows nothing picked when no level is saved, not Off", () => {
+            renderKind(kind);
+            expect(toggle("Off")).toHaveAttribute("data-state", "off");
+            for (const level of ["Low", "Medium", "High"]) {
+                expect(toggle(level)).toHaveAttribute("data-state", "off");
+            }
+        });
+
+        it("keeps a saved level", () => {
+            renderKind(kind, "high");
+            expect(toggle("High")).toHaveAttribute("data-state", "on");
+        });
+
+        it("clears a saved Off, which this model cannot do", () => {
+            renderKind(kind, "none");
+            expect(toggle("Off")).toHaveAttribute("data-state", "off");
+        });
     });
 
     describe("no reasoning (openai gpt-4o-mini)", () => {
