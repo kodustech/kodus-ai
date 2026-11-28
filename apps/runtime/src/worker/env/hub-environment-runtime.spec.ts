@@ -437,6 +437,44 @@ describe("acquire of a template's setup", () => {
     });
 });
 
+// A host bound to one claim alone is paid whole: the claim asks all it grants, not the environment's size.
+describe('acquire on a host of its own', () => {
+    const max = { memoryMb: 14_966, cpus: 8 };
+    const medium = { memoryMb: 8_192, cpus: 4 };
+    const run = async (req: Record<string, unknown>, cell: Record<string, unknown>) => {
+        const bodies: any[] = [];
+        const hub = new HubClient({
+            cellDirectory: { reserveCell: async () => ({ cellId: 'cell-a', replicaUrl: 'https://hub-1', owner: 'kodus' as const, ...cell }), replicaForClaim: async () => null },
+            hubBaseUrl: 'https://hub',
+            postImpl: async (_u, _h, body) => (bodies.push(JSON.parse(body)), { status: 200, text: '{}' }),
+        });
+        await runtime(hub, (req.runId as string) ?? null).acquire({ organizationId: 'org-a', environmentId: 'env-1', size: medium, ...req } as any).catch(() => undefined);
+        return bodies[0];
+    };
+    const shard = { consumer: 'suite', suiteRunId: 'sr-1', shard: 2, idempotencyKey: 'suite:sr-1:2', ref: { side: 'suite', sha: 'a'.repeat(40) } };
+    const prSide = { consumer: 'runtime', runId: 'run-1', idempotencyKey: 'run-1:pr:1', ref: { side: 'pr', sha: 'a'.repeat(40) } };
+
+    it("a suite shard on the host bound to that shard asks everything the host grants", async () => {
+        expect((await run(shard, { boundKey: 'suite:org-a/sr-1/2', maxClaimSize: max })).size).toEqual(max);
+    });
+
+    it("one side of a Run split across hosts, on that side's host, asks everything the host grants", async () => {
+        expect((await run(prSide, { boundKey: 'run:org-a/run-1/pr', maxClaimSize: max })).size).toEqual(max);
+    });
+
+    it("keeps the environment's size on a host it shares: both sides on one Run host, a shared cell, or another claim's host", async () => {
+        expect((await run(prSide, { boundKey: 'run:org-a/run-1', maxClaimSize: max })).size).toEqual(medium);
+        expect((await run(shard, { boundKey: null, maxClaimSize: max })).size).toEqual(medium);
+        expect((await run(shard, { boundKey: 'suite:org-a/sr-1/1', maxClaimSize: max })).size).toEqual(medium);
+    });
+
+    it('never asks less than the environment asked, and keeps it when the host names no grant', async () => {
+        const large = { memoryMb: 16_384, cpus: 8 };
+        expect((await run({ ...shard, size: large }, { boundKey: 'suite:org-a/sr-1/2', maxClaimSize: max })).size).toEqual({ memoryMb: 16_384, cpus: 8 });
+        expect((await run(shard, { boundKey: 'suite:org-a/sr-1/2', maxClaimSize: null })).size).toEqual(medium);
+    });
+});
+
 // Cells connected but none may take the claim now: a blocked acquire with its
 // card's signature, sent to no cell, never a full cell or a thrown error.
 describe('acquire when no cell may take the claim', () => {

@@ -14,10 +14,11 @@ import type { ClaimRepo, EvidenceRequest, ExercisedRequest, ExercisedResult, Rep
 import { type ClaimWorkspace, type RunStreamEvent, workspaceSideOf } from '@libs/runtime/run';
 import { traceHeaders } from '@libs/runtime/telemetry';
 
-import { describeMachineSize } from '@libs/runtime/contracts/machine-size';
+import { describeMachineSize, type MachineSize } from '@libs/runtime/contracts/machine-size';
+import { boundKeyOfRunSide, boundKeyOfSuite } from '@libs/runtime/placement/candidate-pools';
 import { repositoryAliasOf } from '@libs/runtime/contracts/workspace';
 
-import { type CellDirectory, type CellRefusal, type CellWant, isCellRefusal } from '../../shared/persistence/cell-directory';
+import { type CellDirectory, type CellLocation, type CellRefusal, type CellWant, isCellRefusal } from '../../shared/persistence/cell-directory';
 import { claimIdFor, isSetupChildSuffix } from '../../shared/claim-id';
 import { CellUnavailableError, HubRefused, HubUnreachableError, MemberCleanupPendingError, NoCellConnectedError } from '../../shared/errors';
 export { HubRefused } from '../../shared/errors';
@@ -357,6 +358,27 @@ export function sameBackendAs(req: Pick<AcquireRequest, 'organizationId' | 'runI
     return [other, `${other}:renewed`].map((key) => claimIdFor(req.organizationId, key));
 }
 
+/** The key of the host that serves this claim alone: a suite shard's, or one side's of a Run split across hosts. */
+function ownHostKey(req: Pick<AcquireRequest, 'organizationId' | 'consumer' | 'runId' | 'suiteRunId' | 'shard' | 'ref'>): string | undefined {
+    if (req.consumer === 'suite' && req.suiteRunId && req.shard !== undefined) return boundKeyOfSuite(req.organizationId, req.suiteRunId, req.shard);
+    const side = req.ref?.side;
+    if (req.consumer === 'runtime' && req.runId && (side === 'base' || side === 'pr')) return boundKeyOfRunSide(req.organizationId, req.runId, side);
+    return undefined;
+}
+
+/**
+ * The size the claim asks. On a host bound to this claim alone the host is paid whole and nothing else runs there, so the
+ * claim asks everything the cell grants (never less than it asked): a suite shard at the environment's size left the
+ * app 4.6 GB of a 16 GB host, and the functions emulator of a large repository died of OOM halfway through the suite.
+ * Anywhere else (a shared cell, both sides on one Run host) the asked size is kept.
+ */
+export function sizeOnOwnHost(req: AcquireRequest, cell: Pick<CellLocation, 'boundKey' | 'maxClaimSize'>): MachineSize | undefined {
+    const max = cell.maxClaimSize;
+    const own = ownHostKey(req);
+    if (!max || !own || cell.boundKey !== own) return req.size;
+    return { memoryMb: Math.max(req.size?.memoryMb ?? 0, max.memoryMb), cpus: Math.max(req.size?.cpus ?? 0, max.cpus) };
+}
+
 /** A repository of the workspace has no download token for the side: nothing is sent, and the blocker names it. */
 function workspaceTokenMissing(alias: string, side: string): Blocked {
     const blocker: Blocker = {
@@ -493,10 +515,11 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
         if (isCellRefusal(cell)) return capacityBlocked(cell);
         const fetch = this.fetchOf(req);
         if ('status' in fetch) return fetch;
+        const size = sizeOnOwnHost(req, cell);
         return this.hub.post(
             cell.replicaUrl,
             `/internal/cells/${encodeURIComponent(cell.cellId)}/acquire`,
-            { ...wireOf(req), expose: this.run.expose, ...fetch },
+            { ...wireOf(req), ...(size ? { size } : {}), expose: this.run.expose, ...fetch },
             this.run.correlationId,
             timeoutMs,
         );
