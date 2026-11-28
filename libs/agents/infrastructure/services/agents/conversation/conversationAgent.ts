@@ -58,11 +58,13 @@ import { WriteTruthPolicy } from './write-truth.policy';
 import { DecisionLoopPolicy } from './decision-loop.policy';
 import {
     conversationAnswerTokens,
+    conversationMessageBudget,
     conversationCompression,
 } from './conversation-window';
 import {
     buildSystemPrompt,
     buildUserPrompt,
+    fitUserPrompt,
     type ConversationThreadContext,
 } from './conversation-prompt';
 import {
@@ -78,6 +80,10 @@ import {
  * exploration, bounded so a stuck loop can't run away.
  */
 const CONVERSATION_MAX_STEPS = 12;
+
+/** Of the message budget, what the first prompt may take: the rest is for
+ *  the tool results of the steps after it. */
+const PROMPT_SHARE_OF_BUDGET = 0.75;
 
 /**
  * How many prior messages of the thread travel back into the prompt. Enough to
@@ -253,6 +259,13 @@ export class ConversationAgentProvider {
         });
         const systemPrompt = buildSystemPrompt(userLanguage);
         const registry = new AiSdkToolRegistry(tools);
+        const windowParams = {
+            slot,
+            systemPrompt,
+            // With their input schemas: what the provider is sent.
+            tools: registry.definitions(),
+            answerTokens,
+        };
         const spec: AgentSpec = {
             id: 'conversation',
             agentName: 'ConversationalAgent',
@@ -270,13 +283,7 @@ export class ConversationAgentProvider {
                 new DecisionLoopPolicy(),
                 // A PR diff a tool read is re-sent on every step: without
                 // this, one large PR overflowed the model's window (#2233).
-                await conversationCompression({
-                    slot,
-                    systemPrompt,
-                    // With their input schemas: what the provider is sent.
-                    tools: registry.definitions(),
-                    answerTokens,
-                }),
+                await conversationCompression(windowParams),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default, sized to the
@@ -299,16 +306,25 @@ export class ConversationAgentProvider {
             // Replay it — otherwise a bare "yes, do it" resolves to nothing.
             const seedMessages = await this.loadThreadHistory(thread);
 
-            const preparedPrompt = buildUserPrompt({
-                prompt,
-                userLanguage,
-                prepareContext,
-                organizationAndTeamData,
-                availableTools: Object.keys(tools),
-                toolMetadata: mcp.metadata,
-                hasSandbox: Boolean(openSandbox),
-                priorTurns: seedMessages,
-            });
+            // The developer's message goes whole; the context around it
+            // takes the cut. A quarter of the budget stays for what the
+            // tools read in later steps (#2793 review).
+            const preparedPrompt = fitUserPrompt(
+                buildUserPrompt({
+                    prompt,
+                    userLanguage,
+                    prepareContext,
+                    organizationAndTeamData,
+                    availableTools: Object.keys(tools),
+                    toolMetadata: mcp.metadata,
+                    hasSandbox: Boolean(openSandbox),
+                    priorTurns: seedMessages,
+                }),
+                Math.floor(
+                    (await conversationMessageBudget(windowParams)) *
+                        PROMPT_SHARE_OF_BUDGET,
+                ),
+            );
 
             // withLangfuseTrace -> TRACE level (session/user): a thread is a
             // session, so every turn of the same conversation reads as one unit.

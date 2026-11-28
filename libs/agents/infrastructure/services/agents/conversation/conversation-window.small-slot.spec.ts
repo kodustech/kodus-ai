@@ -10,7 +10,20 @@ import { z } from 'zod';
 
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { AiSdkToolRegistry } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-tool-registry';
-import { conversationAnswerTokens } from './conversation-window';
+import {
+    clampMessagesToBudget,
+    estimateMessagesTokens,
+    type ModelMessage,
+} from '@libs/agent-harness/infrastructure/compression/context-compressor';
+import {
+    conversationAnswerTokens,
+    conversationMessageBudget,
+} from './conversation-window';
+import {
+    buildSystemPrompt,
+    buildUserPrompt,
+    fitUserPrompt,
+} from './conversation-prompt';
 
 const slot = (maxInputTokens: number, fallback?: object) =>
     ({
@@ -80,5 +93,154 @@ describe('the tool list a request carries', () => {
         );
         expect(sent).toContain('Repository-relative file path');
         expect(sent).toContain('What to look for');
+    });
+});
+
+// Review of #2793, round 2: on a 16k slot a developer asks "why does this
+// fail?" and pastes a stack trace below it. Cut from the middle by the
+// last-resort clamp, the prompt kept the PR description and the end of the
+// trace and dropped the question between them.
+describe("the developer's message on a small slot", () => {
+    const question =
+        'Why does applySiblingDiscount fail for the second sibling?';
+    const trace = Array.from(
+        { length: 60 },
+        (_, i) =>
+            `    at EnrollmentFeeService.calculate (src/enrollment/fee.service.ts:${i + 10}:17)`,
+    ).join('\n');
+    const message = `${question}\n\n\`\`\`\n${trace}\n\`\`\``;
+    const userPrompt = buildUserPrompt({
+        prompt: message,
+        userLanguage: 'en-US',
+        prepareContext: {
+            pullRequest: {
+                pullRequestNumber: 37,
+                headRef: 'feat',
+                baseRef: 'main',
+            },
+            repository: { id: 'r1', name: 'school' },
+            pullRequestDescription: `## Summary\n${'The enrollment fee now applies a sibling discount and rounds to two decimals. '.repeat(400)}`,
+        } as never,
+        organizationAndTeamData: { organizationId: 'o1', teamId: 't1' },
+        availableTools: [],
+        hasSandbox: true,
+    });
+    /** About the 7.5k tokens of the 29 tool schemas the QA proxy recorded. */
+    const toolSchemas = Array.from({ length: 28 }, (_, i) => ({
+        name: `tool_${i}`,
+        description:
+            'Reads one thing from the repository or the platform. '.repeat(24),
+        inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+        },
+    }));
+    const budgetFor = (maxInputTokens: number) =>
+        conversationMessageBudget({
+            slot: slot(maxInputTokens),
+            systemPrompt: buildSystemPrompt('en-US'),
+            tools: toolSchemas,
+            answerTokens: conversationAnswerTokens(slot(maxInputTokens)),
+        });
+    const sent = async (maxInputTokens: number, later: ModelMessage[] = []) => {
+        const budget = await budgetFor(maxInputTokens);
+        const first = fitUserPrompt(userPrompt, Math.floor(budget * 0.75));
+        const clamped = clampMessagesToBudget(
+            [{ role: 'user', content: first }, ...later],
+            budget,
+        );
+        return { budget, clamped, text: String(clamped[0].content) };
+    };
+
+    it.each([12_000, 14_000, 16_000, 18_000, 24_000])(
+        'keeps the question within the budget on a %i slot',
+        async (window) => {
+            const { budget, clamped, text } = await sent(window);
+            expect(budget).toBeGreaterThan(0);
+            expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
+            expect(text).toContain(question);
+        },
+    );
+
+    it.each([18_000, 24_000])(
+        'keeps the whole trace too where it fits, on a %i slot',
+        async (window) => {
+            expect((await sent(window)).text).toContain(message);
+        },
+    );
+
+    it('keeps the question after a step that read a large diff', async () => {
+        const diffRead: ModelMessage[] = [
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'd1',
+                        toolName: 'KODUS_GET_PULL_REQUEST_DIFF',
+                        input: { prNumber: 37 },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: 'd1',
+                        toolName: 'KODUS_GET_PULL_REQUEST_DIFF',
+                        output: {
+                            type: 'text',
+                            value: `+${'const fee = base;\n+'.repeat(6_000)}`,
+                        },
+                    },
+                ],
+            },
+        ];
+        const { budget, clamped, text } = await sent(16_000, diffRead);
+        expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
+        expect(text).toContain(question);
+    });
+
+    it.each([12_000, 14_000])(
+        'is what the last-resort clamp alone dropped on a %i slot',
+        async (window) => {
+            const budget = await budgetFor(window);
+            const text = String(
+                clampMessagesToBudget(
+                    [{ role: 'user', content: userPrompt }],
+                    budget,
+                )[0].content,
+            );
+            expect(text).not.toContain(question);
+        },
+    );
+
+    it('cuts the context, never the message, and leaves a short prompt alone', () => {
+        const short = buildUserPrompt({
+            prompt: question,
+            userLanguage: 'en-US',
+            organizationAndTeamData: { organizationId: 'o1', teamId: 't1' },
+            availableTools: [],
+            hasSandbox: false,
+        });
+        expect(fitUserPrompt(short, 100_000)).toBe(short);
+        const fitted = fitUserPrompt(userPrompt, 2_500);
+        expect(fitted.endsWith(`USER MESSAGE:\n${message}`)).toBe(true);
+        expect(fitted).toContain('…[truncated]…');
+        expect(fitted.length).toBeLessThan(userPrompt.length);
+    });
+
+    it('cuts a message larger than the room from its middle, beside a quarter of context', () => {
+        const fitted = fitUserPrompt(userPrompt, 600);
+        const [head, kept] = fitted.split('\nUSER MESSAGE:\n');
+        expect(kept.startsWith(question)).toBe(true);
+        expect(kept.endsWith('```')).toBe(true);
+        expect(kept).toContain('…[truncated]…');
+        expect(head.startsWith('## Conversation context')).toBe(true);
+    });
+
+    it('sends the prompt as it is when no cut can fit it', () => {
+        expect(fitUserPrompt(userPrompt, 0)).toBe(userPrompt);
     });
 });
