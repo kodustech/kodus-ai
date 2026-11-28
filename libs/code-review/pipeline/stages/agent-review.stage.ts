@@ -75,6 +75,7 @@ import {
     type ReviewKnowledge,
 } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { resolveAgentReviewSettings } from './agent-review-settings';
+import { PRIMARY_REVIEW_AGENTS as CATEGORY_AGENTS } from './primary-review-agents';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService } from '@libs/feature-gate';
 import {
@@ -488,14 +489,6 @@ export function categoryAgentsCompletion(
     }
     return { completed: true };
 }
-
-/** The review's primary agents; Kody Rules and custom agents are auxiliary. */
-const CATEGORY_AGENTS: ReadonlySet<string> = new Set([
-    'generalist',
-    'bug',
-    'security',
-    'performance',
-]);
 
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -1451,12 +1444,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             });
 
-            // Classify agent failures so the pipeline's final conclusion
-            // reflects them. Core agents (bug / security / performance /
-            // generalist) are the primary output — losing one of them is a
-            // critical error and should red-flag the check. Kody-rules is
-            // auxiliary: the review still has value from the core agents,
-            // so its failure is partial (maps to NEUTRAL on GitHub).
+            // Core agents supply the main review. Failures in Kody Rules
+            // and custom agents are always partial.
             const CRITICAL_AGENTS = CATEGORY_AGENTS;
             const generalistCompletion = categoryAgentsCompletion(
                 result,
@@ -1471,6 +1460,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             );
 
             const failures = result.failures ?? [];
+            const criticalFailures: typeof failures = [];
 
             // Classify against the provider that ANSWERED, not the one
             // resolved before the run. The friendly sentence names the
@@ -1484,12 +1474,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(f.error) ??
                 classifyLLMError(f.error, resolvedProvider(context, f.error));
 
+            // Fulfilled tasks include auxiliary agents and reviewers that
+            // stopped early or lost findings during verification.
+            const completedPrimaryAgents = (result.agentResults ?? []).filter(
+                (agent) =>
+                    CRITICAL_AGENTS.has(agent.agentCategory) &&
+                    agent.finishReason === 'stop' &&
+                    !agent.hitHardLimit &&
+                    !agent.discardedByVerifyError?.length,
+            );
+
             for (const failure of failures) {
-                // A custom agent is auxiliary, like kody-rules: its failure
-                // leaves the review partial, not failed.
-                const severity = CRITICAL_AGENTS.has(failure.agentName)
-                    ? 'critical'
-                    : 'partial';
+                const errorCategory = classifyFailure(failure).category;
+                const orgOwnedKey = usesOrgOwnedKey(context, failure.error);
+                // A sibling's review still counts when the org's credits run out.
+                const partialQuotaFailure =
+                    errorCategory === LlmErrorCategory.QUOTA_EXCEEDED &&
+                    orgOwnedKey &&
+                    completedPrimaryAgents.some(
+                        (agent) => agent.agentCategory !== failure.agentName,
+                    );
+                const severity =
+                    CRITICAL_AGENTS.has(failure.agentName) &&
+                    !partialQuotaFailure
+                        ? 'critical'
+                        : 'partial';
+                if (severity === 'critical') {
+                    criticalFailures.push(failure);
+                }
 
                 context = this.updateContext(context, (draft) => {
                     if (!draft.errors) {
@@ -1504,11 +1516,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
-                            errorCategory: classifyFailure(failure).category,
-                            orgOwnedKey: usesOrgOwnedKey(
-                                context,
-                                failure.error,
-                            ),
+                            errorCategory,
+                            orgOwnedKey,
                             prNumber,
                         },
                     });
@@ -1592,13 +1601,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // UNKNOWN) classification wins; fall back to any critical, then
             // any failure.
             if (failures.length > 0) {
-                const criticalFailures = failures.filter((f) =>
-                    CRITICAL_AGENTS.has(f.agentName),
-                );
                 const ranked = (
                     criticalFailures.length > 0 ? criticalFailures : failures
                 ).slice();
                 ranked.sort((a, b) => {
+                    // A partial run has no critical failure; the primary
+                    // reviewer that did not run is the one the notice names,
+                    // not an auxiliary agent (Kody Rules, a custom agent).
+                    const aPrimary = CRITICAL_AGENTS.has(a.agentName);
+                    const bPrimary = CRITICAL_AGENTS.has(b.agentName);
+                    if (aPrimary !== bPrimary) return aPrimary ? -1 : 1;
                     const aMapped =
                         classifyFailure(a).category !==
                         LlmErrorCategory.UNKNOWN;

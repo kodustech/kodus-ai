@@ -210,6 +210,61 @@ describe('CustomMcpTracker with the tool the org picked', () => {
     });
 });
 
+describe('CustomMcpTracker as the task source: an issue of the PR repository (#1941)', () => {
+    const getIssue = tool(
+        'issue_read',
+        {
+            properties: {
+                owner: { type: 'string' },
+                repo: { type: 'string' },
+                issue_number: { type: 'number' },
+            },
+            required: ['owner', 'repo', 'issue_number'],
+        },
+        { readOnlyHint: true },
+    );
+    const plugin = () =>
+        new CustomMcpTracker(
+            'GitHub plugin',
+            session({
+                tools: [getIssue],
+                call: (_name, args) => ({
+                    number: args.issue_number,
+                    title: 'Export',
+                    body: '- AC1',
+                    html_url: `https://github.com/${args.owner}/${args.repo}/issues/${args.issue_number}`,
+                }),
+            }),
+            'issue_read',
+            undefined,
+            true,
+        );
+    const context = {
+        organizationAndTeamData: {} as any,
+        repository: { owner: 'acme', name: 'web' },
+    };
+
+    it.each(['#31', 'acme/web#31', 'https://github.com/acme/web/issues/31'])(
+        'names it #31 when the PR says %s',
+        async (text) => {
+            await expect(
+                plugin().read(ref(text), context),
+            ).resolves.toMatchObject({ status: 'found', task: { id: '#31' } });
+        },
+    );
+
+    it("keeps another repository's issue, and one read with no PR repository, as owner/repo#N", async () => {
+        await expect(
+            plugin().read(ref('acme/specs#31'), context),
+        ).resolves.toMatchObject({ task: { id: 'acme/specs#31' } });
+        await expect(
+            plugin().read(ref('acme/web#31'), {
+                organizationAndTeamData: {} as any,
+            }),
+        ).resolves.toMatchObject({ task: { id: 'acme/web#31' } });
+    });
+});
+
 describe('isReadOnly: a write verb is a word of the name, not part of one', () => {
     it('blocks tools named with a verb that writes, in any casing', () => {
         for (const name of [
@@ -656,6 +711,46 @@ describe('GitIssuesTracker: the parent and sub-issues GitHub links', () => {
         const task = await found('#20');
         expect(task.parent).toEqual({ id: 'acme/specs#3', title: undefined });
     });
+
+    // A re-check reads the task back by its URL (#1941 QA): a second id for
+    // the same issue made the run "change" and dropped what was accepted.
+    it.each([
+        '#12',
+        'acme/web#12',
+        'Acme/Web#12',
+        'https://github.com/acme/web/issues/12',
+    ])(
+        "gives an issue of the PR's own repository one id, named as %s",
+        async (text) => {
+            const read = await git().read(ref(text), context);
+            expect(read).toMatchObject({
+                status: 'found',
+                task: { id: '#12' },
+            });
+        },
+    );
+
+    it('keeps the repository in the id of an issue from another one', async () => {
+        for (const text of [
+            'acme/specs#12',
+            'https://github.com/acme/specs/issues/12',
+        ]) {
+            const read = await git().read(ref(text), context);
+            expect(read).toMatchObject({
+                status: 'found',
+                task: { id: 'acme/specs#12' },
+            });
+        }
+        // No PR repository to compare with (a CLI run named the issue).
+        const { repository: _none, ...withoutPr } = context;
+        await expect(
+            git().read(ref('acme/web#12'), withoutPr),
+        ).resolves.toMatchObject({
+            status: 'found',
+            task: { id: 'acme/web#12' },
+        });
+    });
+
     it("reads a number the team's pattern captured only when Git Issues is the chosen source (#2018)", () => {
         const [fromPattern] = extractTaskReferences(
             { branch: 'nina/T1234-gift-cards' },

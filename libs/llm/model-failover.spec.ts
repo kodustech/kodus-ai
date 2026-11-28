@@ -43,6 +43,7 @@ jest.mock('@libs/llm/error-classifier', () => {
         classifyLLMError: (e: any) => ({ category: e?.__cat ?? 'UNKNOWN' }),
         isTerminalCategory: (c: string) => TERMINAL.has(c),
         isAbortOrHardTimeout: (e: any) => e?.__abort === true,
+        isConnectTimeout: (e: any) => e?.__connectTimeout === true,
         retriesWereExhausted: (e: any) => e?.__exhausted === true,
     };
 });
@@ -118,6 +119,22 @@ describe('shouldFailoverToNextModel', () => {
     it('does NOT cascade on abort / hard-timeout even if otherwise transient', () => {
         expect(
             shouldFailoverToNextModel(err('TRANSIENT', { __abort: true })),
+        ).toBe(false);
+    });
+
+    // #1844: the endpoint never accepted the connection; the fallback is
+    // another endpoint, and it costs the connect timeout, not a call's budget.
+    it('cascades on a connect timeout, though it reads as a timeout', () => {
+        expect(
+            shouldFailoverToNextModel(
+                err('TRANSIENT', { __abort: true, __connectTimeout: true }),
+            ),
+        ).toBe(true);
+        // Still classified: a connect timeout on an unknown error stays put.
+        expect(
+            shouldFailoverToNextModel(
+                err('UNKNOWN', { __abort: true, __connectTimeout: true }),
+            ),
         ).toBe(false);
     });
 });
