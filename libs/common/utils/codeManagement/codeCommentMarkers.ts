@@ -362,18 +362,81 @@ export const hasReviewMarker = (text: string | undefined | null): boolean => {
     return KODY_REVIEW_MARKER_PATTERN.test(text);
 };
 
+/** GitLab's multi-line quote fence: `>>>` alone on a line. */
+const QUOTE_FENCE = /^ {0,3}>{3,}\s*$/;
+
+/** A `>` quote line; four spaces of indent make it code instead. */
+const QUOTE_LINE = /^ {0,3}>/;
+
+/** A heading, code fence, rule or HTML block: it ends a paragraph and is not one. */
+const NOT_PARAGRAPH =
+    /^(?:#{1,6}(?:\s|$)|```|~~~|([-*_])(?:\s*\1){2,}\s*$|<(?:!--|\?|![A-Za-z]|!\[CDATA\[|(?:script|pre|style|textarea)(?:\s|>|$)|\/?(?:address|article|aside|blockquote|details|dialog|div|dl|dt|dd|fieldset|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|section|summary|table|tbody|td|th|thead|tr|ul)(?:\s|\/?>|$)))/i;
+
+/** A code fence: the lines up to its closing fence are code, not a paragraph. */
+const CODE_FENCE = /^(`{3,}|~{3,})(.*)$/;
+
+/** A list item, empty or not: it ends a quote's lazy lines. */
+const LIST_ITEM = /^(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+
 /**
- * The comment without the quote block it opens with. GitHub's "Quote reply"
- * puts the quoted text first and the `@kody` mention after it.
+ * The comment without the quotes it opens with. GitHub's "Quote reply" puts
+ * the quoted text first and the `@kody` mention after it. A quote ends where
+ * the rendered one does: a `>>>` fence at its closing `>>>`; a `>` block at
+ * a blank line, or at a line that starts a heading, code block or list. A
+ * plain line typed right under quoted text is shown inside the quote. An
+ * unclosed fence quotes the whole comment.
  */
 export const withoutLeadingQuote = (text: string): string => {
     const lines = text.split(/\r?\n/);
+    let codeFence = '';
+    const quotesText = (line: string) => {
+        const quoted = line.replace(/^(?:\s{0,3}>\s?)+/, '').trim();
+        const fence = quoted.match(CODE_FENCE);
+        if (!codeFence && fence) {
+            codeFence = fence[1];
+        } else if (
+            fence &&
+            fence[1][0] === codeFence[0] &&
+            fence[1].length >= codeFence.length &&
+            !fence[2].trim()
+        ) {
+            codeFence = '';
+            return false;
+        }
+        return !codeFence && !!quoted && !NOT_PARAGRAPH.test(quoted);
+    };
     let start = 0;
-    while (
-        start < lines.length &&
-        (!lines[start].trim() || lines[start].trimStart().startsWith('>'))
-    ) {
-        start++;
+    while (start < lines.length) {
+        const line = lines[start].trim();
+        if (!line) {
+            start++;
+        } else if (QUOTE_FENCE.test(lines[start])) {
+            const close = lines.findIndex(
+                (next, i) => i > start && QUOTE_FENCE.test(next),
+            );
+            if (close === -1) return '';
+            start = close + 1;
+        } else if (QUOTE_LINE.test(lines[start])) {
+            codeFence = '';
+            let open = quotesText(lines[start]);
+            start++;
+            while (start < lines.length) {
+                const next = lines[start].trim();
+                if (QUOTE_LINE.test(lines[start])) {
+                    open = quotesText(lines[start]);
+                } else if (
+                    !open ||
+                    !next ||
+                    NOT_PARAGRAPH.test(next) ||
+                    LIST_ITEM.test(next)
+                ) {
+                    break;
+                }
+                start++;
+            }
+        } else {
+            break;
+        }
     }
     return start ? lines.slice(start).join('\n') : text;
 };

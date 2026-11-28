@@ -21,6 +21,11 @@ describe('commandArgument', () => {
                 `> or run \`@kody -v business-logic\` followed by the task id (\`#123\`)\r\n\r\n@kody -v business-logic PROJ-42`,
             ),
         ).toBe('PROJ-42');
+        expect(
+            commandArgument(
+                '>>>\nFixed it? Comment `@kody -v business-logic` and this comment is updated.\n>>>\n\n@kody -v business-logic',
+            ),
+        ).toBeUndefined();
     });
 
     it('keeps a quote placed after the command', () => {

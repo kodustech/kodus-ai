@@ -93,7 +93,10 @@ describe('GitLabMergeRequestHandler.handleComment — replies without @kody (#19
             {} as any,
             {
                 getContext: jest.fn().mockResolvedValue({
-                    organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+                    organizationAndTeamData: {
+                        organizationId: 'o',
+                        teamId: 't',
+                    },
                     botUsername: 'kody',
                 }),
             } as any,
@@ -144,5 +147,25 @@ describe('GitLabMergeRequestHandler.handleComment — replies without @kody (#19
         );
 
         expect(chat.execute).not.toHaveBeenCalled();
+    });
+
+    it('ignores a note whose `@kody` is inside a `>>>` quote, and forwards one written after it', async () => {
+        const { handler, chat } = makeChatHandler();
+
+        await (handler as any).handleComment(
+            note({
+                note: '>>>\n@kody please check AC 3\n>>>\n\nthanks',
+                type: null,
+            }),
+        );
+        expect(chat.execute).not.toHaveBeenCalled();
+
+        await (handler as any).handleComment(
+            note({
+                note: '>>>\nOnly teachers can export\n>>>\n\n@kody this is in the guard',
+                type: null,
+            }),
+        );
+        expect(chat.execute).toHaveBeenCalledTimes(1);
     });
 });

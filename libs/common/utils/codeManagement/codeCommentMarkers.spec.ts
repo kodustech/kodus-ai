@@ -173,7 +173,7 @@ describe('a mention after a quote (GitHub "Quote reply")', () => {
         expect(isKodyMentionNonReview(`${quoted}\r\n\r\n@kody done`)).toBe(
             true,
         );
-        expect(isKodyMentionNonReview(`  > a\n@mybot done`, 'mybot')).toBe(
+        expect(isKodyMentionNonReview(`  > a\n\n@mybot done`, 'mybot')).toBe(
             true,
         );
     });
@@ -192,6 +192,49 @@ describe('a mention after a quote (GitHub "Quote reply")', () => {
     it('leaves a comment that does not open with a quote as it is', () => {
         expect(withoutLeadingQuote('@kody a\n> b')).toBe('@kody a\n> b');
         expect(withoutLeadingQuote('> a\n\n@kody b\n> c')).toBe('@kody b\n> c');
+    });
+
+    it('keeps a line typed right under a quoted line inside the quote, as it renders', () => {
+        expect(isKodyMentionNonReview('> Only teachers\n@kody done')).toBe(
+            false,
+        );
+        expect(isKodyMentionNonReview('> a\nb\n@kody done')).toBe(false);
+        expect(isKodyMentionNonReview('> a\n>\n@kody done')).toBe(true);
+        expect(isKodyMentionNonReview('> a\nb\n\n@kody done')).toBe(true);
+    });
+
+    it('ends the quote where a heading, list or code block starts, as it renders', () => {
+        expect(isKodyMentionNonReview('> a\n- item\n\n@kody done')).toBe(false);
+        expect(isKodyMentionNonReview('> a\n# title\n\n@kody done')).toBe(
+            false,
+        );
+        expect(
+            isKodyMentionNonReview('> ```\n> code line\n> ```\n@kody done'),
+        ).toBe(true);
+        expect(isKodyMentionNonReview('> ```\n> code line\n@kody done')).toBe(
+            true,
+        );
+        expect(isKodyMentionNonReview('    > code\n\n@kody done')).toBe(false);
+    });
+
+    it('reads a GitLab `>>>` quote as one block, mention inside or after it', () => {
+        expect(
+            isKodyMentionNonReview(
+                '>>>\n@kody please check AC 3\n>>>\n\nthanks',
+            ),
+        ).toBe(false);
+        expect(
+            isKodyMentionNonReview(
+                '>>>\r\nOnly teachers\r\n\r\nsecond paragraph\r\n>>>\r\n\r\n@kody done',
+            ),
+        ).toBe(true);
+        expect(isKodyMentionNonReview('>>>\nquoted\n>>>\n@kody done')).toBe(
+            true,
+        );
+        expect(isKodyMentionNonReview('>>>\n@kody unclosed')).toBe(false);
+        expect(isKodyMentionNonReview('> a\n\n>>>\nb\n>>>\n\n@kody done')).toBe(
+            true,
+        );
     });
 });
 
