@@ -20,7 +20,7 @@
  * Lives in `infrastructure/ai-sdk/` — the only layer allowed to know the AI SDK
  * exists; the domain contracts stay framework-agnostic.
  */
-import type { Tool } from 'ai';
+import { asSchema, type Tool } from 'ai';
 
 import type { JSONSchema } from '../../domain/contracts/json-schema.contract';
 import type {
@@ -72,6 +72,35 @@ export class AiSdkToolRegistry implements ToolRegistry, AiSdkToolSource {
 
     get(name: string): AgentTool | undefined {
         return this.views.get(name);
+    }
+
+    /**
+     * Each tool as the provider is sent it (name, description, input schema),
+     * for counting what the tool list costs in a request. The views `list()`
+     * returns keep an empty schema; counting those left ~7.5k tokens of 29
+     * tool schemas out of a 24k window (#2233).
+     */
+    definitions(): Array<{
+        name: string;
+        description: string;
+        inputSchema: unknown;
+    }> {
+        return Object.entries(this.tools).map(([name, t]) => {
+            let inputSchema: unknown = {};
+            try {
+                inputSchema = t.inputSchema
+                    ? asSchema(t.inputSchema as never).jsonSchema
+                    : {};
+            } catch {
+                // A schema the SDK can't render counts as empty, as before.
+            }
+            return {
+                name,
+                description:
+                    typeof t.description === 'string' ? t.description : '',
+                inputSchema,
+            };
+        });
     }
 
     list(): readonly AgentTool[] {

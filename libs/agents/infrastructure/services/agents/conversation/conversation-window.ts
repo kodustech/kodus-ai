@@ -17,6 +17,34 @@ import { slotContextWindow, slotInputRoom } from '@libs/llm/slot-window';
  * budget: the slot's own `maxOutputTokens`, and the thinking budget Anthropic
  * adds on top, else the conversation's own answer limit.
  */
+/** The answer a conversation reserves when the slot sets none. */
+export const CONVERSATION_ANSWER_TOKENS = 20_000;
+
+/**
+ * The answer a conversation reserves when the slot sets no maxOutputTokens:
+ * 20k, but never more than a quarter of the smallest window the call may run
+ * on (the slot or its fallback). A 24k slot reserved 20k and left 4k for a
+ * prompt whose tool schemas alone took 7.5k, so the final trim cut the
+ * developer's question (#2233 QA).
+ */
+export function conversationAnswerTokens(
+    slot: NormalizedModel | undefined,
+): number {
+    const windows = [
+        slotContextWindow(slot ? { ...slot, fallback: undefined } : undefined),
+        ...(slot?.fallback
+            ? [slotContextWindow(slot.fallback as NormalizedModel)]
+            : []),
+    ];
+    return Math.max(
+        1_024,
+        Math.min(
+            CONVERSATION_ANSWER_TOKENS,
+            Math.floor(Math.min(...windows) / 4),
+        ),
+    );
+}
+
 export async function conversationCompression(params: {
     slot: NormalizedModel | undefined;
     systemPrompt: string;

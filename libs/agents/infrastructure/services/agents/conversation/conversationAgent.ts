@@ -56,7 +56,10 @@ import {
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
 import { DecisionLoopPolicy } from './decision-loop.policy';
-import { conversationCompression } from './conversation-window';
+import {
+    conversationAnswerTokens,
+    conversationCompression,
+} from './conversation-window';
 import {
     buildSystemPrompt,
     buildUserPrompt,
@@ -116,7 +119,6 @@ export class ConversationAgentProvider {
      * NOT set here — the slot owns it, and LLM.run withholds it for providers that
      * reject a fixed value (e.g. Anthropic 4.7+, kimi-k2.7-code).
      */
-    private readonly maxOutputTokensFallback = 20000;
 
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -249,6 +251,7 @@ export class ConversationAgentProvider {
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
         // reasoning from the slot and records the cost span; the spec carries only
         // the harness concerns + the cost labels. maxSteps applies the ReAct bound.
+        const answerTokens = conversationAnswerTokens(slot);
         const runner = new AiSdkAgentRunner(slot, {
             organizationId: organizationAndTeamData.organizationId?.toString(),
             reporter: this.byokErrorCounter
@@ -277,13 +280,15 @@ export class ConversationAgentProvider {
                 await conversationCompression({
                     slot,
                     systemPrompt,
-                    tools: registry.list(),
-                    answerTokens: this.maxOutputTokensFallback,
+                    // With their input schemas: what the provider is sent.
+                    tools: registry.definitions(),
+                    answerTokens,
                 }),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,
-            // Conversation keeps its own max-output default when the slot omits one.
-            maxOutputTokens: this.maxOutputTokensFallback,
+            // Conversation keeps its own max-output default when the slot
+            // omits one, sized to the slot's window (#2233).
+            maxOutputTokens: answerTokens,
         };
 
         // Standard run context: signal + hard timeout, same guarantee as the
@@ -402,6 +407,7 @@ export class ConversationAgentProvider {
                     userLanguage,
                     prompt,
                     ctx,
+                    answerTokens,
                 );
             }
 
@@ -458,6 +464,7 @@ export class ConversationAgentProvider {
         userLanguage: string,
         prompt: string,
         ctx: ToolContext,
+        answerTokens: number,
     ): Promise<string | null> {
         try {
             const spec: AgentSpec = {
@@ -470,7 +477,7 @@ export class ConversationAgentProvider {
                 tools: new AiSdkToolRegistry({}),
                 policies: [],
                 maxSteps: 1,
-                maxOutputTokens: this.maxOutputTokensFallback,
+                maxOutputTokens: answerTokens,
             };
 
             const state = await runner.run(
