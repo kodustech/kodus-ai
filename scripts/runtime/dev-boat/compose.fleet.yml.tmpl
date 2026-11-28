@@ -1,0 +1,13 @@
+# Dev only: boat hosts register at the hub over the VM's public name (mTLS, single-use fleet tokens).
+# Rendered by scripts/runtime/dev-boat-up.sh. Do not edit the rendered copy; re-run the script.
+services:
+    runtime-hub:
+        ports: !override
+            - '0.0.0.0:3410:3410'
+            - '127.0.0.1:9464:9464'
+    runtime-fleet:
+        command: sh -c 'set -a && . /certs/container.env && . /certs/fleet.env && . /run/fleet/boat.env && set +a && exec node -r ts-node/register/transpile-only -r tsconfig-paths/register apps/runtime/src/fleet/main.ts'
+        environment:
+            RUNTIME_FLEET_HUB_PUBLIC_URL: https://@@PUBLIC_HOST@@:3410
+        volumes:
+            - @@FLEET_DIR@@/boat.env:/run/fleet/boat.env:ro
