@@ -26,11 +26,20 @@ import { isOpenAiReasonerId } from '../kernel/model-family';
 /** OpenAI's own API, the native provider's default base URL. */
 export const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
 
-/** A base URL on OpenAI's own API host. */
+/** OpenAI's own API hosts: the default and the data-residency ones, as listed by
+ *  the OpenAI SDK (`dataResidency`). */
+const OPENAI_API_HOSTS = new Set([
+    'api.openai.com',
+    'us.api.openai.com',
+    'eu.api.openai.com',
+    'ae.api.openai.com',
+]);
+
+/** A base URL on one of OpenAI's own API hosts. */
 export function isOpenAiHost(baseURL: string | undefined): boolean {
     if (!baseURL) return false;
     try {
-        return new URL(baseURL).hostname.toLowerCase() === 'api.openai.com';
+        return OPENAI_API_HOSTS.has(new URL(baseURL).hostname.toLowerCase());
     } catch {
         return false;
     }
