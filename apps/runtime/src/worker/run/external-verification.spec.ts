@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import { FakeEnvironmentRuntime } from '@libs/runtime/environment';
-import type { Probe } from '@libs/runtime/probe';
+import { isWarmupProbe, type Probe } from '@libs/runtime/probe';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
 import { inMemoryRunDeps } from './testing';
@@ -75,7 +75,7 @@ async function rig(regression = true) {
     const seen: Probe[] = [];
     const runProbe = h.deps.env.probe.bind(h.deps.env);
     h.deps.env.probe = async (claim, probe, stepId) => {
-        seen.push(probe);
+        if (!isWarmupProbe(probe)) seen.push(probe);
         return runProbe(claim, probe, stepId);
     };
     return { ...h, rawEnv: env, seen, classify };

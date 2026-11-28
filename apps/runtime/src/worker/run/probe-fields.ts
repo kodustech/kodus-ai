@@ -36,6 +36,7 @@ export function toGateStep(args: {
             timedOut: result.code === 'timeout',
             fields: {},
             expectedHolds: false,
+            ...(round === 1 ? { warmup: true } : {}),
         };
     }
     return {
@@ -51,6 +52,8 @@ export function toGateStep(args: {
         timedOut: false,
         fields: normalizeFields(probe, result, { baselineRound: args.baselineRound }),
         expectedHolds: expectedHolds(probe, result, args.assertions, args.intent),
+        // Round 1 follows the side's first reset: the gate may set it aside when only it differs (GateStep.warmup).
+        ...(round === 1 ? { warmup: true } : {}),
         requests: (result.requests ?? []).map((r) => ({ method: r.method, route: r.route })),
         ...(args.readyStatus !== undefined ? { readyStatus: args.readyStatus } : {}),
     };

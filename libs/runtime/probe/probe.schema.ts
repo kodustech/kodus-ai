@@ -333,3 +333,7 @@ export type ProbeResult = z.infer<typeof ProbeResultSchema>;
 export function decidesVerdict(spec: ProbeSpec): boolean {
     return spec.kind !== 'shell';
 }
+
+/** The id suffix of a warm-up send: a request sent before a round to wake a cold route, never a round of its own. */
+export const WARMUP_PROBE_SUFFIX = ':warmup';
+export const isWarmupProbe = (probe: { id: string }) => probe.id.endsWith(WARMUP_PROBE_SUFFIX);

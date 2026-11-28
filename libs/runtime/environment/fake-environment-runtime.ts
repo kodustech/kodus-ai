@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { routeShapeOf } from '@libs/runtime/entry-points/coverage';
-import type { Probe } from '@libs/runtime/probe';
+import { isWarmupProbe, type Probe } from '@libs/runtime/probe';
 import type { EvidenceRequest } from '@libs/runtime/protocol';
 import { type CellIsolation, isolationSatisfies } from '@libs/runtime/contracts/isolation';
 
@@ -107,6 +107,8 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
         if (probe.spec.kind === 'shell') {
             throw new Error('shell probes run inside the VM through exec, never on the observer');
         }
+        // A warm-up send is no round: the app answers it and the scripted rounds do not move.
+        if (isWarmupProbe(probe)) return { stepId, executor: 'observer', imageId: c.claim.manifest.imageId, requests: [], durationMs: 1, transport: 'ok', vmHealth: 'ok', http: { status: 204, headers: {}, body: '' } };
         const side = c.req.ref.side === 'pr' ? 'pr' : 'base';
         const answer = this.envs[c.req.environmentId].probes?.[probe.id]?.[side]?.(++c.rounds) ?? {};
         // Like the cell's observer: the log holds what was sent, by method and route.

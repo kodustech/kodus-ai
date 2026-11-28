@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { FakeEnvironmentRuntime } from '@libs/runtime/environment';
-import { ProbeSchema } from '@libs/runtime/probe';
+import { isWarmupProbe, ProbeSchema } from '@libs/runtime/probe';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
 import { RecordedLlmGateway } from '../agent/llm-gateway';
@@ -24,7 +24,7 @@ describe('Shop HTTP expectation replay', () => {
         const env = {
             reset: async () => ({ ok: true }),
             probe: async (claim: string, played: typeof p, stepId: string) => {
-                sent.push(played);
+                if (!isWarmupProbe(played)) sent.push(played);
                 const refused = quantity === 0 && claim === 'base';
                 return {
                     stepId, executor: 'observer', imageId: 'img', transport: 'ok', vmHealth: 'ok', durationMs: 1,
@@ -106,7 +106,7 @@ describe('stable stepId', () => {
         const seen: { side: string; stepId: string }[] = [];
         const probeFn = env.probe.bind(env);
         env.probe = async (claimId, p, stepId) => {
-            seen.push({ side: claimId === claims.base ? 'base' : 'pr', stepId });
+            if (!isWarmupProbe(p)) seen.push({ side: claimId === claims.base ? 'base' : 'pr', stepId });
             return probeFn(claimId, p, stepId);
         };
         const step = retryingStep();
@@ -198,14 +198,14 @@ describe('ready check after the reset', () => {
         expect(out.steps.length).toBeGreaterThanOrEqual(3);
         // After a reset the round asks every second, not every five.
         expect(new Set(slept)).toEqual(new Set([1_000]));
-        // Every round of a claim: reset, the ready check until it answers, then the probe; never the probe on a cold app.
+        // Every round of a claim: reset, the ready check until it answers, the warm-up, then the probe; never the probe on a cold app.
         // The two claims' rounds run side by side, so each claim's calls are read on their own.
         for (const claim of ['b', 'p']) {
             const own = calls.filter((c) => c.endsWith(`:${claim}`));
             for (const [i, c] of own.entries()) {
-                if (c.startsWith(`${probe.id}:`)) expect(own[i - 1]).toBe(`run-ready:${claim}`);
+                if (c.startsWith(`${probe.id}:`) && !c.startsWith(`${probe.id}:warmup`)) expect(own[i - 1]).toBe(`${probe.id}:warmup:${claim}`);
             }
-            expect(own.slice(0, 5)).toEqual([`reset:${claim}`, `run-ready:${claim}`, `run-ready:${claim}`, `run-ready:${claim}`, `${probe.id}:${claim}`]);
+            expect(own.slice(0, 5)).toEqual([`reset:${claim}`, `run-ready:${claim}`, `run-ready:${claim}`, `run-ready:${claim}`, `${probe.id}:warmup:${claim}`]);
         }
     });
 });
@@ -418,5 +418,93 @@ describe('stability history (ADR-050)', () => {
         const claims = await shopClaims(env);
         const { steps } = await replayProbe({ run: RUN, index: 0, probe, claims, pinnedImageId: 'img-shop-1', env, step: plain, stability: { baseRounds: 0, knownUnstableFields: [] } });
         expect(steps.filter((s) => s.side === 'base').length).toBe(2);
+    });
+});
+
+describe('warm-up after the reset', () => {
+    const getProbe = ProbeSchema.parse({
+        id: 'list-items',
+        origin: 'agent',
+        purpose: 'the list answers',
+        expected: '200',
+        compare: ['status'],
+        spec: { kind: 'http', target: { service: 'web', port: 3000 }, method: 'GET', path: '/items', timeoutMs: 1_000 },
+    });
+    const step = ((_n: string, fn: () => Promise<unknown>) => fn()) as StepRunner;
+    const http = (stepId: string, status: number) => ({ stepId, executor: 'observer', imageId: 'img', transport: 'ok', vmHealth: 'ok', durationMs: 1, http: { status, headers: {}, body: '{}' }, requests: [{ method: 'GET', route: '/items', status }] });
+    /** An env whose app answers `cold` 5xx after each reset, then `healthy(claim)`. Records every send with whether it asked for evidence. */
+    const envOf = (cold: number, healthy: (claim: string) => number) => {
+        const left = new Map<string, number>();
+        const sends: { claim: string; evidence: boolean }[] = [];
+        const env = {
+            reset: async (claim: string) => {
+                left.set(claim, cold);
+                return { ok: true };
+            },
+            probe: async (claim: string, _p: unknown, stepId: string, evidence?: unknown) => {
+                sends.push({ claim, evidence: evidence !== undefined });
+                const n = left.get(claim) ?? 0;
+                left.set(claim, n - 1);
+                return http(stepId, n > 0 ? 500 : healthy(claim));
+            },
+        } as any;
+        return { env, sends };
+    };
+    const play = (env: any) => replayProbe({ run: RUN, index: 0, probe: getProbe, claims: { base: 'b', pr: 'p' }, pinnedImageId: 'img', env, step, now: () => 0, sleep: async () => undefined });
+
+    // Behavior: a service still cold after the reset answers the warm-up, so the round that is recorded is the warm one.
+    it('does not record the cold answers of a service that is still starting', async () => {
+        const { env } = envOf(2, () => 200);
+        const out = await play(env);
+        expect(out.steps.map((s) => s.fields.status)).not.toContain('500');
+        expect(out.decision).toMatchObject({ verdict: 'not_reproduced' });
+    });
+
+    // Behavior: the warm-up is not evidence; only the round's own send asks the cell to capture it.
+    it('sends the warm-up without evidence capture and the round with it', async () => {
+        const { env, sends } = envOf(1, () => 200);
+        const objects = new Map<string, unknown>();
+        await replayProbe({ run: RUN, index: 0, probe: getProbe, claims: { base: 'b', pr: 'p' }, pinnedImageId: 'img', env, step, maxRoundsPerSide: 1, evidence: { organizationId: 'o', store: { put: async (k: string) => void objects.set(k, 1) } } as any, now: () => 0, sleep: async () => undefined });
+        const own = sends.filter((s) => s.claim === 'b');
+        expect(own).toEqual([{ claim: 'b', evidence: false }, { claim: 'b', evidence: false }, { claim: 'b', evidence: true }]);
+    });
+
+    // Behavior: a PR that answers 500 after the warm-up is still a regression.
+    it('still reports a PR that fails after the warm-up', async () => {
+        const { env } = envOf(1, (claim) => (claim === 'p' ? 500 : 200));
+        const out = await play(env);
+        expect(out.steps.filter((s) => s.side === 'pr').every((s) => s.fields.status === '500')).toBe(true);
+        expect(out.decision).toMatchObject({ verdict: 'finding' });
+    });
+
+    // Behavior: a write is never sent twice; its URL is warmed with OPTIONS (then HEAD) and the write itself is sent once per round.
+    it('warms a write with OPTIONS on its URL and sends the write once per round', async () => {
+        const left = new Map<string, number>();
+        const sent: { claim: string; method: string; body?: string }[] = [];
+        const env = {
+            reset: async (claim: string) => {
+                left.set(claim, 2);
+                return { ok: true };
+            },
+            probe: async (claim: string, p: any, stepId: string) => {
+                sent.push({ claim, method: p.spec.method, body: p.spec.body });
+                const n = left.get(claim) ?? 0;
+                left.set(claim, n - 1);
+                // The cold function answers 502 twice; then OPTIONS answers 404 (loaded) and the order is created.
+                const status = p.spec.method === 'POST' ? 200 : n > 0 ? 502 : 404;
+                return http(stepId, status);
+            },
+        } as any;
+        const post = ProbeSchema.parse({ ...probe, spec: { ...probe.spec, method: 'POST', path: '/v1/order', body: '{"a":1}' } });
+        const out = await replayProbe({ run: RUN, index: 0, probe: post, claims: { base: 'b', pr: 'p' }, pinnedImageId: 'img', env, step, maxRoundsPerSide: 2, now: () => 0, sleep: async () => undefined });
+        for (const claim of ['b', 'p']) {
+            const own = sent.filter((s) => s.claim === claim);
+            // The write goes once per recorded round of the side, never as a warm-up.
+            expect(own.filter((s) => s.method === 'POST')).toHaveLength(out.steps.filter((s) => s.side === (claim === 'b' ? 'base' : 'pr')).length);
+            // Each POST is preceded by its warm-up: two cold sends (OPTIONS, HEAD) and the OPTIONS that answered.
+            expect(own.slice(0, 4).map((s) => s.method)).toEqual(['OPTIONS', 'HEAD', 'OPTIONS', 'POST']);
+            expect(own.filter((s) => s.method !== 'POST').every((s) => s.body === undefined)).toBe(true);
+        }
+        expect(out.steps.every((s) => s.fields.status === '200')).toBe(true);
     });
 });
