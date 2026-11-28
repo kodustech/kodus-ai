@@ -1,3 +1,4 @@
+import { withoutLeadingQuote } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import type {
     BusinessValidationOutcome,
     Task,
@@ -9,15 +10,20 @@ const COMMAND = /@kody\s+-v\s+business-logic\b/i;
 /** Text passed to the command that names no task is the task itself, if it says this much. */
 const MIN_INLINE_TASK = 40;
 
-/** What follows `@kody -v business-logic` in a comment: a task id, a link, or the task itself. */
+/**
+ * What follows `@kody -v business-logic` in a comment: a task id, a link, or
+ * the task itself. A quote the comment opens with is not read: quoting Kody's
+ * comment would otherwise pass its footer or example as the task.
+ */
 export function commandArgument(
     comment: string | undefined,
 ): string | undefined {
-    const match = comment?.match(COMMAND);
+    const text = comment && withoutLeadingQuote(comment);
+    const match = text?.match(COMMAND);
     if (!match || match.index === undefined) {
         return undefined;
     }
-    const rest = comment!.slice(match.index + match[0].length).trim();
+    const rest = text!.slice(match.index + match[0].length).trim();
     return rest || undefined;
 }
 

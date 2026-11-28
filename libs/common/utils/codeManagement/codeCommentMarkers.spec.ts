@@ -16,6 +16,7 @@ import {
     isHeavyReviewCommand,
     isKodyMentionNonReview,
     requestedReviewModeOf,
+    withoutLeadingQuote,
 } from './codeCommentMarkers';
 
 describe('isReviewCommand', () => {
@@ -157,6 +158,40 @@ describe('isKodyMentionNonReview', () => {
         expect(
             isKodyMentionNonReview('@kody what do you think?', 'mybot'),
         ).toBe(true);
+    });
+});
+
+describe('a mention after a quote (GitHub "Quote reply")', () => {
+    const quoted = '> Only teachers can download the export\n>\n> second line';
+
+    it('reads the mention that follows the quote block', () => {
+        expect(
+            isKodyMentionNonReview(
+                `${quoted}\n\n@kody this is in roles.guard.ts`,
+            ),
+        ).toBe(true);
+        expect(isKodyMentionNonReview(`${quoted}\r\n\r\n@kody done`)).toBe(
+            true,
+        );
+        expect(isKodyMentionNonReview(`  > a\n@mybot done`, 'mybot')).toBe(
+            true,
+        );
+    });
+
+    it('is not a mention when only the quote names Kody, or after the quote comes a review command', () => {
+        expect(isKodyMentionNonReview('> @kody said this\n\nthanks')).toBe(
+            false,
+        );
+        expect(isKodyMentionNonReview(`${quoted}\n\n@kody review`)).toBe(false);
+        expect(isKodyMentionNonReview(`${quoted}\n\nhey @kody done`)).toBe(
+            false,
+        );
+        expect(isKodyMentionNonReview('> only a quote')).toBe(false);
+    });
+
+    it('leaves a comment that does not open with a quote as it is', () => {
+        expect(withoutLeadingQuote('@kody a\n> b')).toBe('@kody a\n> b');
+        expect(withoutLeadingQuote('> a\n\n@kody b\n> c')).toBe('@kody b\n> c');
     });
 });
 

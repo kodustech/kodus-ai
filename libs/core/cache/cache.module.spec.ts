@@ -3,7 +3,11 @@ import { Test } from '@nestjs/testing';
 import type { Cache } from 'cache-manager';
 
 import { BoundedMemoryStore } from './bounded-memory-store';
-import { GLOBAL_CACHE_BOUNDS, GlobalCacheModule } from './cache.module';
+import {
+    GLOBAL_CACHE_BOUNDS,
+    GlobalCacheModule,
+    globalCacheMaxBytes,
+} from './cache.module';
 
 /**
  * The global cache grew without bound in production (Nov 2026): the options
@@ -20,11 +24,29 @@ describe('GlobalCacheModule', () => {
         cache = moduleRef.get<Cache>(CACHE_MANAGER);
     });
 
-    it('is bounded at 50,000 entries, 256M characters, 8M per entry', () => {
-        expect(GLOBAL_CACHE_BOUNDS).toEqual({
-            maxEntries: 50_000,
-            maxChars: 268_435_456,
-            maxEntryChars: 8_388_608,
+    it('is bounded at 200,000 entries and 8 MB per entry', () => {
+        expect(GLOBAL_CACHE_BOUNDS.maxEntries).toBe(200_000);
+        expect(GLOBAL_CACHE_BOUNDS.maxEntryBytes).toBe(8_388_608);
+        expect(GLOBAL_CACHE_BOUNDS.maxBytes).toBe(globalCacheMaxBytes());
+    });
+
+    describe('byte budget', () => {
+        const GB = 1024 ** 3;
+
+        // Production review workers run with an 8 GB heap.
+        it('holds 2 GB of values on an 8 GB heap', () => {
+            expect(globalCacheMaxBytes(8 * GB)).toBe(2 * GB);
+        });
+
+        // A self-hosted worker on Node's default heap: 2 GB of cache would
+        // take all of it.
+        it('holds a quarter of a smaller heap', () => {
+            expect(globalCacheMaxBytes(2 * GB)).toBe(GB / 2);
+            expect(globalCacheMaxBytes(1 * GB)).toBe(GB / 4);
+        });
+
+        it('never holds more than 2 GB however large the heap', () => {
+            expect(globalCacheMaxBytes(64 * GB)).toBe(2 * GB);
         });
     });
 
@@ -43,7 +65,9 @@ describe('GlobalCacheModule', () => {
         }
         expect(store.size).toBe(GLOBAL_CACHE_BOUNDS.maxEntries);
         expect(await cache.get('k:count:0')).toBeUndefined();
-        expect(await cache.get(`k:count:${GLOBAL_CACHE_BOUNDS.maxEntries}`)).toBe('v');
+        expect(
+            await cache.get(`k:count:${GLOBAL_CACHE_BOUNDS.maxEntries}`),
+        ).toBe('v');
     });
 
     it('caches an ordinary value', async () => {
