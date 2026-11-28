@@ -21,11 +21,177 @@ export type DiffFile = {
     hunks: DiffHunk[];
 };
 
+const C_ESCAPES: Record<string, number> = {
+    a: 7,
+    b: 8,
+    t: 9,
+    n: 10,
+    v: 11,
+    f: 12,
+    r: 13,
+    '"': 34,
+    "\\": 92,
+};
+
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder("utf-8");
+
+/** Decode a Git C-quoted path (`"a/caf\303\251.txt"` -> `a/café.txt`). */
+function unquoteGitPath(raw: string): string {
+    if (!(raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))) {
+        return raw;
+    }
+
+    const body = raw.slice(1, -1);
+    const bytes: number[] = [];
+    let literalStart = 0;
+
+    for (let i = 0; i < body.length; i++) {
+        if (body[i] !== "\\") continue;
+        if (i > literalStart) {
+            bytes.push(...utf8Encoder.encode(body.slice(literalStart, i)));
+        }
+        const octal = body.slice(i + 1, i + 4);
+        const next = body[i + 1];
+        if (/^[0-7]{3}$/.test(octal)) {
+            bytes.push(parseInt(octal, 8));
+            i += 3;
+        } else if (next !== undefined && Object.hasOwn(C_ESCAPES, next)) {
+            bytes.push(C_ESCAPES[next]);
+            i += 1;
+        } else {
+            bytes.push(92);
+        }
+        literalStart = i + 1;
+    }
+    if (body.length > literalStart) {
+        bytes.push(...utf8Encoder.encode(body.slice(literalStart)));
+    }
+
+    return utf8Decoder.decode(new Uint8Array(bytes));
+}
+
+function stripGitPrefix(path: string, prefix: "a/" | "b/"): string {
+    return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
+function parseDiffGitHeader(
+    line: string,
+): { oldPath: string | null; newPath: string | null } | null {
+    if (!line.startsWith("diff --git ")) return null;
+    const rest = line.slice("diff --git ".length);
+    if (!rest) return null;
+
+    if (rest.startsWith('"')) {
+        const quotedOld = rest.match(/^("(?:[^"\\]|\\.)*") (.+)$/);
+        if (quotedOld) {
+            return {
+                oldPath: stripGitPrefix(unquoteGitPath(quotedOld[1]), "a/"),
+                newPath: stripGitPrefix(unquoteGitPath(quotedOld[2]), "b/"),
+            };
+        }
+    }
+
+    const quotedNew = rest.match(/^(.+?) ("b\/(?:[^"\\]|\\.)*")$/);
+    if (quotedNew) {
+        return {
+            oldPath: stripGitPrefix(unquoteGitPath(quotedNew[1]), "a/"),
+            newPath: stripGitPrefix(unquoteGitPath(quotedNew[2]), "b/"),
+        };
+    }
+
+    // Same unquoted path on both sides: "a/P b/P" — split at midpoint so
+    // paths containing " b/" are not cut at the wrong boundary.
+    const half = (rest.length - 5) / 2;
+    if (
+        Number.isInteger(half) &&
+        half > 0 &&
+        rest.startsWith("a/") &&
+        rest.slice(2 + half, 5 + half) === " b/" &&
+        rest.slice(2, 2 + half) === rest.slice(5 + half)
+    ) {
+        const path = rest.slice(5 + half);
+        return { oldPath: path, newPath: path };
+    }
+
+    const unquoted = rest.match(/^a\/(.+?) b\/(.+)$/);
+    return unquoted ? { oldPath: unquoted[1], newPath: unquoted[2] } : null;
+}
+
+/**
+ * Derive the canonical decoded path key for a single `diff --git ...` chunk,
+ * matching the `DiffFile.path` identity emitted by `parseUnifiedDiff`.
+ */
+export function extractDiffPatchPath(chunk: string): string | null {
+    const headerEnd = chunk.search(/\r?\n@@/m);
+    const head = headerEnd === -1 ? chunk : chunk.slice(0, headerEnd);
+    const renameTo = head.match(/^rename to (.+)$/m)?.[1];
+    if (renameTo) {
+        return unquoteGitPath(renameTo.replace(/\r$/, ""));
+    }
+    const firstLine = head.split(/\r?\n/, 1)[0] ?? "";
+    const parsed = parseDiffGitHeader(firstLine);
+    return parsed?.newPath ?? parsed?.oldPath ?? null;
+}
+
+const LEGACY_SERVER_HEADER_RE =
+    /^diff --git (?:"a\/|a\/).+?"? (?:"b\/|b\/)(.+?)"?$/;
+
+function splitDiffChunks(diffText: string): string[] {
+    if (!diffText) return [];
+    return diffText
+        .split(/(?=^diff --git )/m)
+        .filter((chunk) => chunk.startsWith("diff --git "));
+}
+
+/**
+ * Resolve `groupings[].files` entries to `DiffFile` using the raw `diff --git`
+ * headers in `rawDiff` when available, so Git-quoted paths (e.g. `café.txt`)
+ * and literal-backslash filenames (e.g. `caf\303\251.txt`) stay distinct.
+ */
+export function createGroupedFileResolver(
+    files: readonly DiffFile[],
+    rawDiff?: string,
+    groupings?: readonly { files: readonly string[] }[],
+): (rawPath: string) => DiffFile | undefined {
+    const byCanonical = new Map<string, DiffFile>();
+    for (const file of files) {
+        byCanonical.set(file.path, file);
+    }
+    if (!rawDiff) {
+        return (rawPath) => byCanonical.get(rawPath);
+    }
+
+    const byLegacyHeader = new Map<string, DiffFile>();
+    for (const chunk of splitDiffChunks(rawDiff)) {
+        const canonicalPath = extractDiffPatchPath(chunk);
+        const file = canonicalPath ? byCanonical.get(canonicalPath) : undefined;
+        if (!file) continue;
+        const firstLine = chunk.split(/\r?\n/, 1)[0] ?? "";
+        const legacyKey = firstLine.match(LEGACY_SERVER_HEADER_RE)?.[1];
+        if (legacyKey) {
+            byLegacyHeader.set(legacyKey, file);
+        }
+    }
+
+    const hasLegacyOnlyPath =
+        groupings?.some((g) =>
+            g.files.some((p) => byLegacyHeader.has(p) && !byCanonical.has(p)),
+        ) ?? false;
+    const preferCanonical =
+        (groupings?.length ?? 0) > 0 && !hasLegacyOnlyPath;
+
+    return (rawPath) =>
+        preferCanonical
+            ? (byCanonical.get(rawPath) ?? byLegacyHeader.get(rawPath))
+            : (byLegacyHeader.get(rawPath) ?? byCanonical.get(rawPath));
+}
+
 /**
  * Parse a unified diff (the format GitHub returns with
  * `Accept: application/vnd.github.v3.diff`) into a list of files and hunks
  * with per-line metadata. Just enough to render — not a full git plumbing
- * parser, so binary diffs, copy/rename metadata and submodule entries are
+ * parser, so binary diffs, copy metadata and submodule entries are
  * tolerated but ignored.
  */
 export function parseUnifiedDiff(diffText: string): DiffFile[] {
@@ -41,18 +207,13 @@ export function parseUnifiedDiff(diffText: string): DiffFile[] {
 
     for (const line of lines) {
         if (line.startsWith("diff --git")) {
-            // Git wraps paths with spaces / special chars in double
-            // quotes: `diff --git "a/file with space" "b/file with space"`.
-            // The optional `"a\/` branch (and trailing `"?`) catches that
-            // form so those files don't fall through as "(unknown)".
-            const match = line.match(
-                /diff --git (?:"a\/|a\/)(.+?)"? (?:"b\/|b\/)(.+?)"?$/,
-            );
-            const oldPath = match?.[1] ?? null;
-            const newPath = match?.[2] ?? oldPath ?? "(unknown)";
+            const parsed = parseDiffGitHeader(line);
+            const oldPath = parsed?.oldPath ?? null;
+            const newPath = parsed?.newPath ?? oldPath ?? "(unknown)";
             current = {
                 path: newPath,
-                oldPath: oldPath !== newPath ? oldPath : null,
+                oldPath:
+                    oldPath !== null && oldPath !== newPath ? oldPath : null,
                 status: "modified",
                 additions: 0,
                 deletions: 0,
@@ -74,6 +235,22 @@ export function parseUnifiedDiff(diffText: string): DiffFile[] {
         }
         if (line.startsWith("rename from") || line.startsWith("rename to")) {
             current.status = "renamed";
+            if (!currentHunk) {
+                if (line.startsWith("rename from ")) {
+                    const from = unquoteGitPath(
+                        line.slice("rename from ".length),
+                    );
+                    current.oldPath = from !== current.path ? from : null;
+                } else if (line.startsWith("rename to ")) {
+                    const to = unquoteGitPath(line.slice("rename to ".length));
+                    if (current.oldPath === null && to !== current.path) {
+                        current.oldPath = current.path;
+                    } else if (current.oldPath === to) {
+                        current.oldPath = null;
+                    }
+                    current.path = to;
+                }
+            }
             continue;
         }
 

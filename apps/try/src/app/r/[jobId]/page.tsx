@@ -277,6 +277,7 @@ export default function ResultPage({
                                     <FileTreeGrouped
                                         groupings={snapshot.pr.groupings}
                                         files={diffFiles}
+                                        rawDiff={snapshot.diff}
                                         issues={issues}
                                         activePath={activeFile}
                                         viewed={viewed}
