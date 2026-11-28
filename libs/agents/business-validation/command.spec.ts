@@ -1,5 +1,34 @@
-import { inlineTask, replyFor } from './command';
+import { commandArgument, inlineTask, replyFor } from './command';
 import { gradeTask, canJudgeAgainst } from './task-quality';
+
+describe('commandArgument', () => {
+    it('reads what follows the command', () => {
+        expect(commandArgument('@kody -v business-logic PROJ-42')).toBe(
+            'PROJ-42',
+        );
+        expect(commandArgument('@kody -v business-logic')).toBeUndefined();
+        expect(commandArgument(undefined)).toBeUndefined();
+    });
+
+    it("does not read Kody's own command text from a quote the comment opens with", () => {
+        const footer =
+            '> Fixed it? Comment `@kody -v business-logic` and this comment is updated.';
+        expect(
+            commandArgument(`${footer}\n\n@kody -v business-logic`),
+        ).toBeUndefined();
+        expect(
+            commandArgument(
+                `> or run \`@kody -v business-logic\` followed by the task id (\`#123\`)\r\n\r\n@kody -v business-logic PROJ-42`,
+            ),
+        ).toBe('PROJ-42');
+    });
+
+    it('keeps a quote placed after the command', () => {
+        expect(
+            commandArgument('@kody -v business-logic PROJ-42\n> context'),
+        ).toBe('PROJ-42\n> context');
+    });
+});
 
 describe('inlineTask', () => {
     it('judges a task written in the command even when it is shorter than a tracker description', () => {
