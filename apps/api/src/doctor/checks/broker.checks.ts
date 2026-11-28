@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import * as amqplib from 'amqplib';
 import { DataSource } from 'typeorm';
 
+import { RETRY_EXCHANGE_BY_BASE } from '@libs/core/infrastructure/queue/config/rabbitmq-topology.config';
+
 import {
     DoctorCheck,
     DoctorContext,
@@ -22,8 +24,12 @@ export const REVIEW_QUEUES = [
     },
 ];
 
-/** Declared x-delayed-message (rabbitmq-topology.config.ts:18). */
-export const DELAYED_EXCHANGE = 'workflow.exchange.delayed';
+/**
+ * Where a failed workflow job waits before it is retried: an x-delayed-message
+ * exchange bound to the jobs exchange, which routes it back to its queue.
+ */
+export const RETRY_TARGET_EXCHANGE = 'workflow.exchange';
+export const DELAYED_EXCHANGE = RETRY_EXCHANGE_BY_BASE[RETRY_TARGET_EXCHANGE];
 
 export const STALE_JOB_MINUTES = 30;
 
@@ -73,11 +79,13 @@ export interface BrokerProbe {
         consumerCount(queue: string): Promise<number | null>;
         exchangeExists(exchange: string): Promise<boolean>;
         /**
-         * Publishes one message with an x-delay to a private queue bound to
-         * the exchange, and says whether it arrived within `waitMs`.
+         * Publishes one message with an x-delay to `exchange`, for a private
+         * queue bound to `boundTo`, and says whether it arrived within
+         * `waitMs`.
          */
         delayedRoundTrip(
             exchange: string,
+            boundTo: string,
             delayMs: number,
             waitMs: number,
         ): Promise<DelayedRoundTrip>;
@@ -150,7 +158,7 @@ export const amqpBrokerProbe: BrokerProbe = {
             // An exclusive, server-named queue bound with a key no consumer
             // pattern matches (workflow.jobs.*.<TYPE>): the probe message
             // reaches nobody else, and the queue goes away with the channel.
-            delayedRoundTrip: (exchange, delayMs, waitMs) =>
+            delayedRoundTrip: (exchange, boundTo, delayMs, waitMs) =>
                 withChannel(
                     async (ch) => {
                         const { queue } = await ch.assertQueue('', {
@@ -159,7 +167,7 @@ export const amqpBrokerProbe: BrokerProbe = {
                             durable: false,
                         });
                         const routingKey = `kodus.doctor.probe.${randomUUID()}`;
-                        await ch.bindQueue(queue, exchange, routingKey);
+                        await ch.bindQueue(queue, boundTo, routingKey);
                         // The broker may have blocked the connection already,
                         // during the checks above: a publish now is swallowed.
                         if (blocked) {
@@ -285,10 +293,12 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
                     });
                 } else {
                     // The exchange can exist and still drop every delayed
-                    // message (RabbitMQ 4.2 with the khepri_db flag, #2654):
-                    // only a message that comes back proves it works.
+                    // message (a topic-typed one on RabbitMQ 4.2 with
+                    // khepri_db, #2654): only a message that comes back the
+                    // way a retry does proves it works.
                     const trip = await broker.delayedRoundTrip(
                         DELAYED_EXCHANGE,
+                        RETRY_TARGET_EXCHANGE,
                         DELAYED_PROBE_DELAY_MS,
                         DELAYED_PROBE_WAIT_MS,
                     );
@@ -325,7 +335,7 @@ function delayedTripResult(trip: DelayedRoundTrip): DoctorResult {
         status: 'warn',
         title: `A test message sent with a ${DELAYED_PROBE_DELAY_MS / 1000}s delay never came back after ${DELAYED_PROBE_WAIT_MS / 1000}s.`,
         impact: 'Retries are lost: a review that hits a temporary error (rate limit, provider timeout) is never retried, so that pull request gets no review.',
-        fix: 'A known problem of RabbitMQ 4.2 with the khepri_db feature flag on (rabbitmqctl list_feature_flags), tracked in kodustech/kodus-ai#2654. Until a broker image without it ships, ask again for a review that failed with @kody start-review.',
+        fix: `Check that ${DELAYED_EXCHANGE} is bound to ${RETRY_TARGET_EXCHANGE} (rabbitmqctl list_bindings -p <vhost> source_name destination_name; api and worker bind it when they start) and that rabbitmq_delayed_message_exchange is enabled. Until then, ask again for a review that failed with @kody start-review.`,
     };
 }
 

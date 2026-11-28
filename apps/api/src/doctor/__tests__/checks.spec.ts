@@ -291,6 +291,33 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expectActionable(results);
         });
 
+        it('probes the path a retry takes: the fanout retry exchange back through the jobs exchange (#2654)', async () => {
+            const exchangeExists = jest.fn(async () => true);
+            const delayedRoundTrip = jest.fn(
+                async (): Promise<DelayedRoundTrip> => ({ outcome: 'arrived' }),
+            );
+            const probe: BrokerProbe = {
+                connect: async () => ({
+                    consumerCount: async () => 1,
+                    exchangeExists,
+                    delayedRoundTrip,
+                    close: async () => undefined,
+                }),
+            };
+
+            await brokerCheck(probe).run(ctx());
+
+            expect(exchangeExists).toHaveBeenCalledWith(
+                'workflow.exchange.retry',
+            );
+            expect(delayedRoundTrip).toHaveBeenCalledWith(
+                'workflow.exchange.retry',
+                'workflow.exchange',
+                expect.any(Number),
+                expect.any(Number),
+            );
+        });
+
         it('a broker that blocks publishers (resource alarm, #1694) fails, and the worker lines are kept', async () => {
             const results = await brokerCheck(
                 healthyBroker({
