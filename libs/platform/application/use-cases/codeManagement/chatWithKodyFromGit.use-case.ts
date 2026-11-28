@@ -446,7 +446,12 @@ export class ChatWithKodyFromGitUseCase {
             // decision on that comment, not a question for the chat.
             const businessLogicReply =
                 commandType === CommandType.CONVERSATION &&
-                this.isGeneralComment(params)
+                (await this.isGeneralComment(
+                    params,
+                    repository,
+                    pullRequestNumber,
+                    organizationAndTeamData,
+                ))
                     ? await this.handleBusinessLogicReply(
                           params,
                           repository,
@@ -694,7 +699,12 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     /** A comment on the PR itself, not on a line of code. */
-    private isGeneralComment(params: WebhookParams): boolean {
+    private async isGeneralComment(
+        params: WebhookParams,
+        repository?: Repository,
+        pullRequestNumber?: number,
+        organizationAndTeamData?: OrganizationAndTeamData,
+    ): Promise<boolean> {
         switch (params.platformType) {
             case PlatformType.GITHUB:
                 return params.event !== 'pull_request_review_comment';
@@ -705,15 +715,23 @@ export class ChatWithKodyFromGitUseCase {
             case PlatformType.AZURE_REPOS:
                 return !params.payload?.resource?.comment?.threadContext
                     ?.filePath;
-            case PlatformType.FORGEJO:
-                // The comment carries no path; a code comment links to the
-                // PR's files tab.
-                return (
-                    params.event !== 'pull_request_review_comment' &&
-                    !String(params.payload?.comment?.html_url ?? '').includes(
-                        '/files#',
-                    )
+            case PlatformType.FORGEJO: {
+                // Forgejo sends every PR comment as issue_comment, with no
+                // path or review id and the same URL shape: a comment is
+                // inline only when it is one of the PR's review comments.
+                const commentId = this.getCommentId(params);
+                const reviewComments =
+                    await this.codeManagementService.getPullRequestReviewComment(
+                        {
+                            organizationAndTeamData,
+                            filters: { pullRequestNumber, repository },
+                        },
+                    );
+                return !(
+                    Array.isArray(reviewComments) &&
+                    reviewComments.some((c) => c?.id === commentId)
                 );
+            }
             default:
                 return !params.payload?.comment?.path;
         }

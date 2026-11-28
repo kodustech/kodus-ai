@@ -237,6 +237,69 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    describe('Forgejo inline replies (#2790 review)', () => {
+        // Real Forgejo shape: a reply in Kody's submitted review is an
+        // issue_comment whose URL carries no /files# and no path.
+        const reply = (id: number) => ({
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                action: 'created',
+                is_pull: true,
+                repository: {
+                    id: 26,
+                    name: 'r',
+                    full_name: 'o/r',
+                    html_url: 'https://codeberg.org/o/r',
+                },
+                issue: { number: 21, pull_request: { merged: false } },
+                comment: {
+                    id,
+                    body: '@kody is this still needed for CU-86a1b2c3d?',
+                    html_url: `https://codeberg.org/o/r/pulls/21#issuecomment-${id}`,
+                    user: { id: 7, login: 'bob' },
+                },
+                sender: { id: 7, login: 'bob' },
+            },
+        });
+        const run = async (reviewComments: object[]) => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                reviewComments,
+            );
+            const businessLogic = jest
+                .spyOn(useCase as any, 'handleBusinessLogicReply')
+                .mockResolvedValue(true);
+            const conversation = jest
+                .spyOn(useCase as any, 'handleConversationFlow')
+                .mockResolvedValue(undefined);
+            await useCase.execute(reply(50) as any);
+            return { businessLogic, conversation };
+        };
+
+        it('answers an @kody reply under a Kody code finding in the conversation, not Business Logic', async () => {
+            const { businessLogic, conversation } = await run([
+                {
+                    id: 40,
+                    body: 'Possible null.\n<!-- kody-codereview -->',
+                    path: 'a.ts',
+                    position: 3,
+                },
+                { id: 50, body: 'reply', path: 'a.ts', position: 3 },
+            ]);
+
+            expect(businessLogic).not.toHaveBeenCalled();
+            expect(conversation).toHaveBeenCalledTimes(1);
+        });
+
+        it('still offers a top-level comment to Business Logic first', async () => {
+            const { businessLogic } = await run([
+                { id: 40, body: 'finding', path: 'a.ts', position: 3 },
+            ]);
+
+            expect(businessLogic).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('resolves a Forgejo comment on the instance that sent it', async () => {
         const webhookContextService = {
             getContext: jest.fn().mockResolvedValue(null),
@@ -1567,29 +1630,44 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
     });
 
     describe('Forgejo lookups (#2779)', () => {
-        const issueComment = {
+        // Forgejo sends every PR comment, general or code, as issue_comment
+        // with the same shape: issue + pull_request, no path or review id.
+        const forgejoComment = (id: number, pullRequest: object = {}) => ({
             event: 'issue_comment',
             platformType: PlatformType.FORGEJO,
             payload: {
-                repository: { default_branch: 'main' },
-                issue: { number: 21, body: 'Issue body' },
-                comment: { id: 123, body: '@kody explain' },
-            },
-        };
-        const reviewComment = {
-            event: 'pull_request_review_comment',
-            platformType: PlatformType.FORGEJO,
-            payload: {
-                repository: { default_branch: 'main' },
-                pull_request: {
-                    number: 22,
-                    body: 'PR body',
-                    head: { ref: 'feature/x' },
-                    base: { ref: 'develop' },
+                action: 'created',
+                is_pull: true,
+                repository: { id: 26, full_name: 'o/r', default_branch: 'main' },
+                issue: {
+                    number: 21,
+                    body: 'Issue body',
+                    pull_request: { merged: false },
                 },
-                comment: { id: 456, body: '@kody explain' },
+                pull_request: { number: 21, ...pullRequest },
+                comment: {
+                    id,
+                    body: '@kody explain',
+                    html_url: `https://codeberg.org/o/r/pulls/21#issuecomment-${id}`,
+                    pull_request_url: 'https://codeberg.org/o/r/pulls/21',
+                    user: { id: 7, login: 'bob' },
+                },
+                sender: { id: 7, login: 'bob' },
+            },
+        });
+        const issueComment = {
+            ...forgejoComment(123),
+            payload: {
+                ...forgejoComment(123).payload,
+                pull_request: undefined,
             },
         };
+        const reviewComment = forgejoComment(456, {
+            number: 22,
+            body: 'PR body',
+            head: { ref: 'feature/x' },
+            base: { ref: 'develop' },
+        });
         const lookups = Object.assign(
             Object.create(ChatWithKodyFromGitUseCase.prototype),
             { logger: { log: jest.fn(), warn: jest.fn() } },
@@ -1624,42 +1702,9 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
             expect(call('getDefaultBranch', issueComment)).toBe('main');
         });
 
-        it('tells an inline reply from a general comment', () => {
-            const inline = {
-                ...issueComment,
-                payload: {
-                    ...issueComment.payload,
-                    comment: {
-                        id: 7,
-                        html_url:
-                            'https://codeberg.org/o/r/pulls/21/files#issuecomment-7',
-                    },
-                },
-            };
-            const general = {
-                ...issueComment,
-                payload: {
-                    ...issueComment.payload,
-                    comment: {
-                        id: 8,
-                        html_url:
-                            'https://codeberg.org/o/r/pulls/21#issuecomment-8',
-                    },
-                },
-            };
-            expect(call('isGeneralComment', inline)).toBe(false);
-            expect(call('isGeneralComment', reviewComment)).toBe(false);
-            expect(call('isGeneralComment', general)).toBe(true);
-        });
-
         it('reads the git user from the comment', () => {
             expect(
-                call('getGitUser', {
-                    ...issueComment,
-                    payload: {
-                        comment: { id: 1, user: { id: 7, login: 'bob' } },
-                    },
-                }),
+                call('getGitUser', issueComment),
             ).toEqual({ id: 7, username: 'bob' });
         });
 
