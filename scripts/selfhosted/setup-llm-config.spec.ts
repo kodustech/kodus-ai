@@ -106,6 +106,61 @@ function parseEnvLines(text: string): Record<string, string> {
     return env;
 }
 
+/**
+ * The VM `.env` as the api container gets it: the installer hands it to docker
+ * compose as `env_file`, and compose parses each value again (measured on
+ * compose 5.6.1). Unquoted, a value is trimmed, ends at ` #`, and `$x` or
+ * `${x}` is interpolated (to nothing here) with `$$` for `$`. Double-quoted,
+ * `\\`, `\"` and `\n` are escapes, `$` interpolates the same way. Single-
+ * quoted, a value is literal but for `\'`.
+ */
+function composeEnvLines(text: string): Record<string, string> {
+    const env: Record<string, string> = {};
+    const interpolate = (v: string) =>
+        v.replace(/\$(\$|\{[^}]*\}|[A-Za-z_][A-Za-z0-9_]*)/g, (_, x) =>
+            x === '$' ? '$' : '',
+        );
+    for (const line of text.split('\n')) {
+        const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+        if (!match) continue;
+        const raw = match[2];
+        let value: string;
+        if (raw.startsWith("'")) {
+            const end = /(?<!\\)'/g;
+            end.lastIndex = 1;
+            const close = end.exec(raw);
+            if (!close) throw new Error(`compose: unterminated ${match[1]}`);
+            value = raw.slice(1, close.index).replace(/\\'/g, "'");
+        } else if (raw.startsWith('"')) {
+            let out = '';
+            let i = 1;
+            for (; i < raw.length && raw[i] !== '"'; i++) {
+                if (raw[i] === '\\' && i + 1 < raw.length) {
+                    const next = raw[++i];
+                    out += next === 'n' ? '\n' : next;
+                } else if (raw[i] === '$') {
+                    const token =
+                        /^\$(\$|\{[^}]*\}|[A-Za-z_][A-Za-z0-9_]*)?/.exec(
+                            raw.slice(i),
+                        )![0];
+                    out += token.length > 1 ? interpolate(token) : '$';
+                    i += token.length - 1;
+                } else {
+                    out += raw[i];
+                }
+            }
+            if (i >= raw.length) {
+                throw new Error(`compose: unterminated ${match[1]}`);
+            }
+            value = out;
+        } else {
+            value = interpolate(raw.replace(/\s+#.*$/, '').trim());
+        }
+        env[match[1]] = value;
+    }
+    return env;
+}
+
 /** The LLM vars `_common.sh` hands provision.sh for the VM `.env`. */
 function vmLlmEnv(
     box: Sandbox,
@@ -550,7 +605,7 @@ function vmDotEnv(
         renderShell,
         [
             '-c',
-            `. "${common}" && declare -f selfhosted_env_set && echo 'env_set() { selfhosted_env_set "$@"; }' && selfhosted_llm_env_sets`,
+            `. "${common}" && declare -f selfhosted_env_value selfhosted_env_set && echo 'env_set() { selfhosted_env_set "$@"; }' && selfhosted_llm_env_sets`,
         ],
         { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
     ).toString();
@@ -561,7 +616,7 @@ function vmDotEnv(
         stdio: ['pipe', 'pipe', 'pipe'],
     });
     expect(existsSync(join(vm, 'RAN'))).toBe(false);
-    return parseEnvLines(readFileSync(join(vm, '.env'), 'utf8'));
+    return composeEnvLines(readFileSync(join(vm, '.env'), 'utf8'));
 }
 
 describe('selfhosted provision.sh writes the VM .env as the config holds it', () => {
@@ -588,6 +643,45 @@ describe('selfhosted provision.sh writes the VM .env as the config holds it', ()
             expect(env.OTHER).toBe('1');
         },
     );
+
+    // QA of #2789: the VM .env held each value byte for byte, but compose
+    // parses it again for the api container. `ab$cd` still arrived as `ab`, a
+    // ` #` started a comment, quotes and edge spaces were dropped, a value
+    // opening with `"` stopped the stack, and one opening with `'` swallowed
+    // the lines after it.
+    it.each([
+        'ab$cd',
+        'ab${cd}',
+        'model$HOME',
+        'ab$$cd',
+        'k #frag',
+        'k#frag',
+        '  lead trail  ',
+        '"x"',
+        "'x'",
+        '"open',
+        "'open",
+        'ends with \\',
+        'a\\"b\\\\c\\n',
+        "it's `x` $(y) & | ; é %",
+        'plain-sk_123.abc/+=',
+    ])('hands the api container %j exactly', (key) => {
+        const box = sandbox();
+        const url = 'https://x.example/v1?a=1&b=2';
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            `API_LLM_API_KEY='${key.replace(/'/g, `'\\''`)}'`,
+            `API_LLM_BASE_URL='${url}'`,
+        ]);
+
+        const env = vmDotEnv(box, 'OTHER=1\n');
+
+        expect(env.API_LLM_API_KEY).toBe(key);
+        expect(env.API_LLM_BASE_URL).toBe(url);
+        expect(env.API_LLM_PROVIDER).toBe('openai_compatible');
+        expect(env.OTHER).toBe('1');
+    });
 
     // Before provision.sh, the config itself: setup.sh wrote values unquoted
     // and the scripts source it, so a base URL lost everything after its `&`

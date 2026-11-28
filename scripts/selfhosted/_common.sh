@@ -218,16 +218,44 @@ selfhosted_llm_env_sets() {
     return 0
 }
 
+# A value written the way docker compose reads it back: the installer hands
+# the VM .env to the api container as `env_file`, and compose parses it again.
+# Unquoted, `$x` is interpolated, ` #` starts a comment, edge spaces and
+# quotes are dropped, and a leading `"` stops the stack (QA of #2789). A value
+# outside a plain set goes in double quotes, with `\`, `"` and newlines
+# escaped and `$` written `$$`; a plain one stays as it was.
+selfhosted_env_value() {
+    local value="$1" quoted='' char i
+    case "$value" in
+        *[!A-Za-z0-9_./:@%+,=-]*) ;;
+        *)
+            printf '%s' "$value"
+            return 0
+            ;;
+    esac
+    for ((i = 0; i < ${#value}; i++)); do
+        char=${value:i:1}
+        case "$char" in
+            '\' | '"') quoted+="\\$char" ;;
+            '$') quoted+='$$' ;;
+            $'\n') quoted+='\n' ;;
+            *) quoted+=$char ;;
+        esac
+    done
+    printf '"%s"' "$quoted"
+}
+
 # Sets K=V in ./.env as the VM runs it (provision.sh ships it with
-# `declare -f`): replaces the first K= line, drops later ones, or appends.
-# The value never enters a sed pattern, where `&`, `|` and `\` are syntax;
-# awk reads it from the environment. The file is rewritten in place, so its
-# permissions stay.
+# `declare -f`, beside selfhosted_env_value): replaces the first K= line,
+# drops later ones, or appends. The value never enters a sed pattern, where
+# `&`, `|` and `\` are syntax; awk reads it from the environment. The file is
+# rewritten in place, so its permissions stay.
 selfhosted_env_set() {
-    local tmp
+    local tmp value
+    value=$(selfhosted_env_value "$2") || return 1
     tmp=$(mktemp) || return 1
     # A failure returns 1, which ends the caller's `set -e` script as sed did.
-    K="$1" V="$2" awk '
+    K="$1" V="$value" awk '
         BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
         substr($0, 1, length(key)) == key { if (!done) print line; done = 1; next }
         { print }
