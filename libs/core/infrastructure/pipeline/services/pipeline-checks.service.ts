@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { retryWithBackoff } from '@libs/common/utils/polling';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { IPipelineChecksService } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-checks-service.interface';
 import { Injectable } from '@nestjs/common';
@@ -462,23 +463,34 @@ export class PipelineChecksService implements IPipelineChecksService {
         }
 
         try {
-            await adapter.updateCheckRun({
-                checkRunId,
-                organizationAndTeamData,
-                repository,
-                status: CheckStatus.COMPLETED,
-                conclusion,
-                output: summary
-                    ? { title: title ?? 'Code Review', summary }
-                    : undefined,
-            });
+            await retryWithBackoff(
+                async () => {
+                    const written = await adapter.updateCheckRun({
+                        checkRunId,
+                        organizationAndTeamData,
+                        repository,
+                        status: CheckStatus.COMPLETED,
+                        conclusion,
+                        output: summary
+                            ? { title: title ?? 'Code Review', summary }
+                            : undefined,
+                    });
+
+                    // Adapters also signal a failed write by returning false.
+                    if (!written) {
+                        throw new Error('Check status update was unsuccessful');
+                    }
+                },
+                { maxAttempts: 3 },
+            );
 
             observerContext.checkRunId = undefined;
-        } catch (e) {
+        } catch (error) {
             this.logger.error({
                 message: 'Failed to finalize check',
-                error: e as Error,
+                error: error as Error,
                 context: PipelineChecksService.name,
+                metadata: { checkRunId, platformType, conclusion },
             });
         }
     }

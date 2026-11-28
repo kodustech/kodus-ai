@@ -30,6 +30,15 @@ import { resolveDeclaredEnvProvider } from '@libs/llm/env-declared-provider';
 
 const SELFHOSTED = __dirname;
 
+/**
+ * The bash in PATH, and macOS's own bash 3.2 when present: setup.sh and the
+ * provision render run on a developer's Mac, where 3.2 reads some quoting
+ * differently (an escaped quote in a replacement kept its backslashes).
+ */
+const SHELLS = [
+    ...new Set(['bash', ...(existsSync('/bin/bash') ? ['/bin/bash'] : [])]),
+];
+
 interface Sandbox {
     home: string;
     scripts: string;
@@ -71,10 +80,15 @@ function scriptEnv(box: Sandbox, extra: Record<string, string> = {}) {
 }
 
 /** Runs setup.sh answering each prompt with a line of `answers` ('' = Enter). */
-function runSetup(box: Sandbox, answers: string[]): Record<string, string> {
+function runSetup(
+    box: Sandbox,
+    answers: string[],
+    shell = 'bash',
+): Record<string, string> {
     // The trailing "n" declines the direnv offer when direnv is installed.
-    execFileSync('bash', [join(box.scripts, 'setup.sh')], {
+    execFileSync(shell, [join(box.scripts, 'setup.sh')], {
         input: `${[...answers, 'n'].join('\n')}\n`,
+        cwd: box.home,
         env: scriptEnv(box),
         stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -100,7 +114,11 @@ function vmLlmEnv(
     const out = execFileSync(
         'bash',
         ['-c', `. "${join(box.scripts, '_common.sh')}" && selfhosted_llm_env`],
-        { env: scriptEnv(box, callerEnv), stdio: ['pipe', 'pipe', 'pipe'] },
+        {
+            cwd: box.home,
+            env: scriptEnv(box, callerEnv),
+            stdio: ['pipe', 'pipe', 'pipe'],
+        },
     ).toString();
     return parseEnvLines(out);
 }
@@ -210,6 +228,61 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
         const config = runSetup(box, ['', '', '', '', '', '', '', '']);
 
         expect(config.API_LLM_API_KEY).toBe('AIza-fake-studio-key');
+        expect(config.API_OPEN_AI_API_KEY).toBe('');
+    });
+
+    // QA of #2700: the Gemini key had its own var and no base URL pointed the
+    // OpenAI slot anywhere, so that slot was the api.openai.com embeddings
+    // key, and Enter wrote it empty.
+    it('a re-run over a legacy Gemini config with its own key keeps the OpenAI embeddings key', () => {
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_GOOGLE_AI_API_KEY=AIza-fake-studio-key',
+            'API_OPEN_AI_API_KEY=sk-fake-openai-embeddings',
+            'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, ['', '', '', '', '', '', '', '']);
+
+        expect(config.API_LLM_PROVIDER).toBe('google_gemini');
+        expect(config.API_LLM_API_KEY).toBe('AIza-fake-studio-key');
+        expect(config.API_OPEN_AI_API_KEY).toBe('sk-fake-openai-embeddings');
+    });
+
+    it('a re-run never keeps a slot the old base URL sent to Gemini, even with a Gemini key of its own', () => {
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_GOOGLE_AI_API_KEY=AIza-fake-studio-key',
+            'API_OPEN_AI_API_KEY=AIza-fake-key-in-the-openai-slot',
+            'API_OPENAI_FORCE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/',
+            'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, ['', '', '', '', '', '', '', '']);
+
+        expect(config.API_LLM_PROVIDER).toBe('google_gemini');
+        expect(config.API_OPEN_AI_API_KEY).toBe('');
+    });
+
+    // The OpenAI slot was the LLM key itself (no key of the provider's own):
+    // it is not an embeddings key, base URL or not.
+    it('a re-run where the OpenAI slot was the Claude key does not keep it for embeddings', () => {
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_OPEN_AI_API_KEY=sk-ant-fake-claude',
+            'API_LLM_PROVIDER_MODEL=claude-sonnet-5-5',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, ['', '', '', '', '', '', '', '']);
+
+        expect(config.API_LLM_PROVIDER).toBe('anthropic');
+        expect(config.API_LLM_API_KEY).toBe('sk-ant-fake-claude');
         expect(config.API_OPEN_AI_API_KEY).toBe('');
     });
 
@@ -455,6 +528,214 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
             'API_LLM_PROVIDER must be one of',
         );
         expect(existsSync(join(box.home, '.kodus-dev', 'config'))).toBe(false);
+    });
+});
+
+/**
+ * What provision.sh's remote block does with the config: `_common.sh`'s
+ * env_set (shipped with `declare -f`) and env_set lines, run by a bash that
+ * parses them again, as the VM's does, against a `.env` in a temp dir.
+ */
+function vmDotEnv(
+    box: Sandbox,
+    existing: string,
+    /** The developer's shell, which renders the block; the VM runs bash. */
+    renderShell = 'bash',
+): Record<string, string> {
+    const vm = join(box.home, 'vm');
+    mkdirSync(vm, { recursive: true });
+    writeFileSync(join(vm, '.env'), existing);
+    const common = join(box.scripts, '_common.sh');
+    const remote = execFileSync(
+        renderShell,
+        [
+            '-c',
+            `. "${common}" && declare -f selfhosted_env_set && echo 'env_set() { selfhosted_env_set "$@"; }' && selfhosted_llm_env_sets`,
+        ],
+        { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+    ).toString();
+    execFileSync('bash', ['-s'], {
+        input: `set -e\n${remote}`,
+        cwd: vm,
+        env: { PATH: process.env.PATH ?? '' },
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    expect(existsSync(join(vm, 'RAN'))).toBe(false);
+    return parseEnvLines(readFileSync(join(vm, '.env'), 'utf8'));
+}
+
+describe('selfhosted provision.sh writes the VM .env as the config holds it', () => {
+    // QA of #2700: `ab$cd` arrived as `ab`, a backtick ran on the VM, a `"`
+    // ended the script, and sed mangled an `&` in a URL already in the file.
+    it.each(SHELLS)(
+        'writes every LLM value exactly, whatever shell or sed syntax it holds (rendered by %s)',
+        (shell) => {
+            const box = sandbox();
+            const key = 'ab$cd`touch RAN`"q\'x\\y';
+            const url = 'https://x.example/v1?a=1&b=2|c';
+            writeConfig(box, [
+                'API_LLM_PROVIDER=openai_compatible',
+                'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+                `API_LLM_API_KEY='${key.replace(/'/g, `'\\''`)}'`,
+                `API_LLM_BASE_URL='${url}'`,
+            ]);
+
+            const env = vmDotEnv(box, 'API_LLM_BASE_URL=old\nOTHER=1\n', shell);
+
+            expect(env.API_LLM_API_KEY).toBe(key);
+            expect(env.API_LLM_BASE_URL).toBe(url);
+            expect(env.API_LLM_PROVIDER).toBe('openai_compatible');
+            expect(env.OTHER).toBe('1');
+        },
+    );
+
+    // Before provision.sh, the config itself: setup.sh wrote values unquoted
+    // and the scripts source it, so a base URL lost everything after its `&`
+    // and a `$` in a key expanded on the developer's machine.
+    it('carries values typed at setup to the VM exactly, through the config', () => {
+        const box = sandbox();
+        const key = 'sk-ab$cd`touch RAN`';
+        const url = 'https://gw.example/v1?api-version=2&tier=b';
+        writeConfig(box, [`DIGITALOCEAN_TOKEN=${DO_TOKEN}`]);
+
+        runSetup(box, [
+            '',
+            '',
+            '',
+            'openai_compatible',
+            'kimi-k2.6',
+            key,
+            url,
+            '',
+        ]);
+
+        // Every source of the config ran in box.home: a backtick would land here.
+        expect(existsSync(join(box.home, 'RAN'))).toBe(false);
+        expect(vmLlmEnv(box)).toMatchObject({
+            API_LLM_API_KEY: key,
+            API_LLM_BASE_URL: url,
+        });
+        const env = vmDotEnv(box, '');
+        expect(env.API_LLM_API_KEY).toBe(key);
+        expect(env.API_LLM_BASE_URL).toBe(url);
+    });
+
+    // A path typed at the prompt arrives as typed: `~/…` was expanded when
+    // the scripts sourced the unquoted value, and a quoted one never is.
+    it('keeps an installer path typed with ~ pointing at the home directory', () => {
+        const box = sandbox();
+        writeConfig(box, [`DIGITALOCEAN_TOKEN=${DO_TOKEN}`]);
+        runSetup(box, [
+            '',
+            '',
+            '',
+            'openai_compatible',
+            'kimi-k2.6',
+            'sk-x',
+            'https://x.example/v1',
+            '',
+            '~/kodus-installer',
+        ]);
+        const sourced = execFileSync(
+            'bash',
+            [
+                '-c',
+                'set -a; . "$HOME/.kodus-dev/config"; printf %s "$KODUS_INSTALLER_PATH"',
+            ],
+            { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+        ).toString();
+        expect(sourced).toBe(join(box.home, 'kodus-installer'));
+    });
+
+    // scripts/e2e reads the same file line by line (`load_config_file`),
+    // not by sourcing it: a value setup.sh had to quote reads back exactly.
+    it.each(SHELLS)(
+        'lets the e2e scripts read back a quoted value, apostrophe included (%s)',
+        (shell) => {
+            const box = sandbox();
+            const installer = "/tmp/o'brien/kodus-installer";
+            const url = 'https://gw.example/v1?api-version=2&tier=b';
+            writeConfig(box, [`DIGITALOCEAN_TOKEN=${DO_TOKEN}`]);
+            runSetup(
+                box,
+                [
+                    '',
+                    '',
+                    '',
+                    'openai_compatible',
+                    'kimi-k2.6',
+                    'sk-x',
+                    url,
+                    '',
+                    installer,
+                ],
+                shell,
+            );
+            const sourced = execFileSync(
+                shell,
+                [
+                    '-c',
+                    'set -a; . "$HOME/.kodus-dev/config"; printf %s "$KODUS_INSTALLER_PATH"',
+                ],
+                { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+            ).toString();
+            expect(sourced).toBe(installer);
+            for (const script of ['run.sh', 'cloud-setup-tenants.sh']) {
+                const loader = join(SELFHOSTED, '..', 'e2e', script);
+                const read = execFileSync(
+                    shell,
+                    [
+                        '-c',
+                        `eval "$(sed -n '/^load_config_file() {/,/^}/p' "${loader}")"; load_config_file "$HOME/.kodus-dev/config"; printf '%s\\n%s' "$KODUS_INSTALLER_PATH" "$API_LLM_BASE_URL"`,
+                    ],
+                    { env: scriptEnv(box), stdio: ['pipe', 'pipe', 'pipe'] },
+                ).toString();
+                expect(read).toBe(`${installer}\n${url}`);
+            }
+        },
+    );
+
+    // The sed it replaces ended provision's `set -e` block on failure; a
+    // write that fails must not leave the VM running without its LLM key.
+    it('ends the remote block when .env cannot be written', () => {
+        const box = sandbox();
+        const vm = join(box.home, 'vm-missing');
+        mkdirSync(vm, { recursive: true });
+        const common = join(box.scripts, '_common.sh');
+        expect(() =>
+            execFileSync(
+                'bash',
+                [
+                    '-c',
+                    `set -e; . "${common}"; selfhosted_env_set API_LLM_API_KEY k; echo after`,
+                ],
+                {
+                    cwd: vm,
+                    env: scriptEnv(box),
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                },
+            ),
+        ).toThrow();
+        expect(existsSync(join(vm, '.env'))).toBe(false);
+    });
+
+    it('replaces a key already in .env where it is, once', () => {
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=google_gemini',
+            'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+            'API_LLM_API_KEY=AIza-new',
+        ]);
+        const vm = join(box.home, 'vm');
+
+        vmDotEnv(
+            box,
+            'A=1\nAPI_LLM_API_KEY=old\nAPI_LLM_API_KEY_EXTRA=keep\nAPI_LLM_API_KEY=dup\n',
+        );
+
+        expect(readFileSync(join(vm, '.env'), 'utf8')).toBe(
+            'A=1\nAPI_LLM_API_KEY=AIza-new\nAPI_LLM_API_KEY_EXTRA=keep\nAPI_LLM_PROVIDER=google_gemini\nAPI_LLM_PROVIDER_MODEL=gemini-3.5-flash\n',
+        );
     });
 });
 

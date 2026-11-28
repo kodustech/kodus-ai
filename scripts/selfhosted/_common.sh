@@ -202,6 +202,41 @@ selfhosted_llm_env() {
     return 0
 }
 
+# One `env_set K V` line for the VM's shell, V quoted with %q: provision.sh
+# renders these into a heredoc the VM's bash parses again, so a `$`, a
+# backtick or a `"` in a key used to be expanded, run, or end the script
+# there (QA of #2700).
+selfhosted_env_set_line() {
+    printf 'env_set %s %q\n' "$1" "$2"
+}
+
+selfhosted_llm_env_sets() {
+    local var
+    for var in $SELFHOSTED_LLM_VARS; do
+        [ -n "${!var:-}" ] && selfhosted_env_set_line "$var" "${!var}"
+    done
+    return 0
+}
+
+# Sets K=V in ./.env as the VM runs it (provision.sh ships it with
+# `declare -f`): replaces the first K= line, drops later ones, or appends.
+# The value never enters a sed pattern, where `&`, `|` and `\` are syntax;
+# awk reads it from the environment. The file is rewritten in place, so its
+# permissions stay.
+selfhosted_env_set() {
+    local tmp
+    tmp=$(mktemp) || return 1
+    # A failure returns 1, which ends the caller's `set -e` script as sed did.
+    K="$1" V="$2" awk '
+        BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
+        substr($0, 1, length(key)) == key { if (!done) print line; done = 1; next }
+        { print }
+        END { if (!done) print line }
+    ' .env > "$tmp" || { rm -f "$tmp"; return 1; }
+    cat "$tmp" > .env || { rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
+}
+
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; GRAY='\033[0;90m'; NC='\033[0m'
 log()  { echo -e "${BLUE}[selfhosted]${NC} $*"; }
 ok()   { echo -e "${GREEN}[ok]${NC}          $*"; }

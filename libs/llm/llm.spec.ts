@@ -30,6 +30,7 @@ jest.mock('@libs/llm/error-classifier', () => ({
     classifyLLMError: (e: any) => ({ category: e?.__cat ?? 'UNKNOWN' }),
     isTerminalCategory: (c: string) => c === 'AUTH_INVALID',
     isAbortOrHardTimeout: (e: any) => !!e?.__abort,
+    isConnectTimeout: (e: any) => !!e?.__connectTimeout,
 }));
 
 const runStructuredReviewCall = jest.fn();

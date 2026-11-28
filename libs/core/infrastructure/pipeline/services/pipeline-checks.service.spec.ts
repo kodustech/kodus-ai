@@ -42,7 +42,7 @@ describe('PipelineChecksService', () => {
     beforeEach(async () => {
         checksAdapter = {
             createCheckRun: jest.fn(),
-            updateCheckRun: jest.fn(),
+            updateCheckRun: jest.fn().mockResolvedValue(true),
             findCheckRun: jest.fn().mockResolvedValue(null),
         } as any;
 
@@ -455,21 +455,81 @@ describe('PipelineChecksService', () => {
             );
         });
 
-        it('should log error if adapter throws', async () => {
-            checksAdapter.updateCheckRun.mockRejectedValue(
-                new Error('Finalize error'),
-            );
-            await service.finalizeCheck(
-                mockObserverContext,
-                mockContext,
-                CheckConclusion.SUCCESS,
+        describe('retrying the final status', () => {
+            beforeEach(() => {
+                jest.useFakeTimers();
+            });
+            afterEach(() => {
+                jest.useRealTimers();
+            });
+
+            const finalize = async () => {
+                const done = service.finalizeCheck(
+                    mockObserverContext,
+                    mockContext,
+                    CheckConclusion.SKIPPED,
+                    '_pipelineEndSkipped',
+                );
+                await jest.runAllTimersAsync();
+                await done;
+            };
+
+            it.each([
+                ['returns false', async () => false],
+                [
+                    'throws',
+                    async () => {
+                        throw new Error('connection closed');
+                    },
+                ],
+            ] as const)(
+                'retries the same final status when the adapter %s',
+                async (_case, fail) => {
+                    checksAdapter.updateCheckRun.mockImplementationOnce(fail);
+
+                    await finalize();
+
+                    expect(checksAdapter.updateCheckRun).toHaveBeenCalledTimes(
+                        2,
+                    );
+                    const [first, retry] =
+                        checksAdapter.updateCheckRun.mock.calls;
+                    expect(retry).toEqual(first);
+                    expect(retry[0]).toEqual({
+                        checkRunId: '123',
+                        organizationAndTeamData:
+                            mockContext.organizationAndTeamData,
+                        repository: { owner: 'owner', name: 'repo' },
+                        status: CheckStatus.COMPLETED,
+                        conclusion: CheckConclusion.SKIPPED,
+                        output: {
+                            title: 'Code Review Skipped',
+                            summary: 'Review skipped.',
+                        },
+                    });
+                    expect(mockObserverContext.checkRunId).toBeUndefined();
+                    expect(loggerMock.error).not.toHaveBeenCalled();
+                },
             );
 
-            expect(loggerMock.error).toHaveBeenCalledWith(
-                expect.objectContaining({
+            it('logs a persistent failure and keeps the run ID after three attempts', async () => {
+                checksAdapter.updateCheckRun.mockResolvedValue(false);
+
+                await finalize();
+
+                expect(checksAdapter.updateCheckRun).toHaveBeenCalledTimes(3);
+                expect(mockObserverContext.checkRunId).toBe('123');
+                expect(loggerMock.error).toHaveBeenCalledWith({
                     message: 'Failed to finalize check',
-                }),
-            );
+                    error: new Error('Check status update was unsuccessful'),
+                    context: PipelineChecksService.name,
+                    metadata: {
+                        checkRunId: '123',
+                        platformType: PlatformType.GITHUB,
+                        conclusion: CheckConclusion.SKIPPED,
+                    },
+                });
+            });
         });
     });
 });

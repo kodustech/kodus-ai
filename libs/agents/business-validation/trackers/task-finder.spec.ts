@@ -5,12 +5,13 @@ import { resolveTasks } from '../task-resolver';
 import { extractTaskReferences } from '../task-references';
 import { CustomMcpTracker } from './custom-mcp.tracker';
 import { LinearTracker } from './linear.tracker';
-import { TaskNotFoundError, type McpToolSession } from './mcp-tool-session';
+import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import {
     type AgentRun,
     createTaskFinder,
     type FoundByFinder,
 } from './task-finder';
+import { buildTaskTrackers } from './tracker-catalog';
 
 /**
  * What the task finder accepts when a tracker's direct read misses: the
@@ -632,5 +633,103 @@ describe('the resolver asks the finder only after every direct read missed', () 
 
         expect(resolution.kind).toBe('found');
         expect(finder).not.toHaveBeenCalled();
+    });
+});
+
+// #1941 review: the finder is handed the reference's own repository, so the
+// task's id has to be decided against the PR's, or `acme/specs#31` reads as
+// the PR's `#31` and the dedupe drops one of the two.
+describe('an issue read through the finder of a chosen Git Issues source', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    async function resolveThroughFinder(body: string) {
+        jest.spyOn(McpToolSession.prototype, 'tools').mockResolvedValue([
+            tool(
+                'get_issue',
+                {
+                    owner: { type: 'string' },
+                    repo: { type: 'string' },
+                    issue_number: { type: 'number' },
+                },
+                { readOnlyHint: true },
+            ),
+        ]);
+        jest.spyOn(McpToolSession.prototype, 'close').mockResolvedValue();
+        jest.spyOn(McpToolSession.prototype, 'call').mockImplementation(
+            async (name, args) =>
+                name === 'get_issue'
+                    ? {
+                          number: args.issue_number,
+                          title: `${args.repo} export`,
+                          body: `- ${args.repo} criterion`,
+                          html_url: `https://github.com/${args.owner}/${args.repo}/issues/${args.issue_number}`,
+                      }
+                    : // The direct read breaks, not down: the finder is asked.
+                      { success: false, message: 'Unexpected arguments' },
+        );
+        // Reads the issue the prompt names, as the model would.
+        const agent: AgentRun = async (spec) => {
+            const named =
+                /issue #(\d+) of the repository ([\w.-]+)\/([\w.-]+)\./.exec(
+                    spec.systemPrompt,
+                );
+            if (!named) {
+                return;
+            }
+            const [, number, owner, repo] = named;
+            await spec.tools
+                .get('get_issue')!
+                .execute(
+                    { owner, repo, issue_number: Number(number) },
+                    {} as any,
+                );
+        };
+        const trackers = buildTaskTrackers(
+            [
+                {
+                    name: 'Git Issues',
+                    type: 'http' as any,
+                    url: 'http://localhost',
+                    integrationId: 'kodus-issues-default',
+                },
+            ],
+            {
+                taskSource: 'kodus-issues-default',
+                finder: createTaskFinder(agent),
+            },
+        );
+        // A failed read waits a second before its retry; skip it.
+        jest.useFakeTimers();
+        let resolution: Awaited<ReturnType<typeof resolveTasks>>;
+        try {
+            const pending = resolveTasks(
+                extractTaskReferences({ body }),
+                trackers,
+                {
+                    organizationAndTeamData: { organizationId: 'org-1' } as any,
+                    repository: { owner: 'acme', name: 'web' },
+                },
+            );
+            await jest.runAllTimersAsync();
+            resolution = await pending;
+        } finally {
+            jest.useRealTimers();
+        }
+        return resolution.kind === 'found' ? resolution.tasks : [];
+    }
+
+    it("keeps another repository's #31 apart from the PR's own #31", async () => {
+        const tasks = await resolveThroughFinder(
+            'Closes #31, closes acme/specs#31',
+        );
+        expect(tasks.map((t) => t.task.id)).toEqual(['#31', 'acme/specs#31']);
+        expect(tasks[1].task.description).toContain('specs criterion');
+    });
+
+    it("names the PR repository's issue #31 when the PR gives its URL", async () => {
+        const tasks = await resolveThroughFinder(
+            'Closes https://github.com/acme/web/issues/31',
+        );
+        expect(tasks.map((t) => t.task.id)).toEqual(['#31']);
     });
 });

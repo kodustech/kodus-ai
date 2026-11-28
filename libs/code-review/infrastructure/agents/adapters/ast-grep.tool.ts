@@ -118,11 +118,18 @@ function parseStream(stdout: string): ParsedMatch[] {
     return matches;
 }
 
-function formatMatches(matches: ParsedMatch[], header: string): string {
+/** Said when the sandbox stopped ast-grep at its output cap (#2744). */
+const CUT_NOTE =
+    "ast-grep's output was cut at the sandbox's output limit, so there may be more matches than listed; narrow the pattern or paths.";
+
+function formatMatches(
+    matches: ParsedMatch[],
+    header: string,
+    cut: boolean,
+): string {
     const shown = matches.slice(0, MAX_AST_GREP_MATCHES);
-    const lines = [
-        `${matches.length} ${matches.length === 1 ? 'match' : 'matches'} ${header}:`,
-    ];
+    const count = `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}`;
+    const lines = [`${cut ? `At least ${count}` : count} ${header}:`];
     for (const m of shown) {
         const rule = m.ruleId
             ? ` [${m.ruleId}]${m.message ? ` ${m.message}` : ''}`
@@ -140,6 +147,7 @@ function formatMatches(matches: ParsedMatch[], header: string): string {
             `... ${hidden} more not shown; narrow the pattern or paths.`,
         );
     }
+    if (cut) lines.push(CUT_NOTE);
     return lines.join('\n');
 }
 
@@ -328,6 +336,14 @@ export function buildAstGrepTool(
         const stderr = withoutDiagnosticsSummary(result.stderr ?? '')
             .trim()
             .slice(0, MAX_STDERR);
+        const cut = result.truncated === true;
+
+        if (cut && matches.length === 0) {
+            return {
+                output: `No match could be read ${header}: ${CUT_NOTE}`,
+                meta: { mode, matches: 0, truncated: true },
+            };
+        }
 
         // 0 = matches, 1 = no match (also used when a path is missing) or
         // matches of `severity: error` rules; anything else, or an `Error:`
@@ -351,8 +367,12 @@ export function buildAstGrepTool(
         const notes = stderr ? `\n\nast-grep warnings: ${stderr}` : '';
         const citations = mode === 'rules' ? formatRuleCitations(matches) : '';
         return {
-            output: formatMatches(matches, header) + citations + notes,
-            meta: { mode, matches: matches.length },
+            output: formatMatches(matches, header, cut) + citations + notes,
+            meta: {
+                mode,
+                matches: matches.length,
+                ...(cut ? { truncated: true } : {}),
+            },
         };
     };
 

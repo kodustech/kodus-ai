@@ -45,11 +45,20 @@ function match(
 }
 
 function setup(overrides: Partial<AstGrepToolDeps> = {}) {
-    const exec = jest.fn(async (_command: string) => ({
-        stdout: '',
-        stderr: '',
-        exitCode: 1,
-    }));
+    const exec = jest.fn(
+        async (
+            _command: string,
+        ): Promise<{
+            stdout: string;
+            stderr: string;
+            exitCode: number;
+            truncated?: boolean;
+        }> => ({
+            stdout: '',
+            stderr: '',
+            exitCode: 1,
+        }),
+    );
     const writeFile = jest.fn(async (_path: string, _content: string) => {});
     const readTargetFile = jest.fn(async (_path: string) => null as any);
     const deps: AstGrepToolDeps = {
@@ -249,8 +258,11 @@ describe('astGrep tool', () => {
 
         const r = await tool.execute({ pattern: '$F()', language: 'ts' }, ctx);
         expect(r.output).toContain(`${MAX_AST_GREP_MATCHES + 7} matches`);
-        expect(r.output).toContain('7 more not shown');
+        expect(r.output).toMatch(/\.\.\. 7 more not shown/);
         expect(r.output).not.toContain(`call${MAX_AST_GREP_MATCHES}()`);
+        // A whole output is a total, not a lower bound.
+        expect(r.output).not.toMatch(/at least|output was cut/i);
+        expect(r.meta).not.toHaveProperty('truncated');
     });
 
     it('keeps the matches it can parse when the stream was cut mid-line', async () => {
@@ -269,6 +281,58 @@ describe('astGrep tool', () => {
         expect(r.isError).toBeFalsy();
         expect(r.output).toContain('1 match');
         expect(r.output).toContain('src/orders/cart.ts:4:5');
+    });
+
+    // The sandbox stops a command past its output cap (#2744): what was read
+    // is a lower bound, and the model must not take it as the total.
+    describe('when the sandbox cut the output', () => {
+        it('gives the count it read as a lower bound', async () => {
+            const { tool, exec } = setup();
+            const lines = Array.from(
+                { length: MAX_AST_GREP_MATCHES + 7 },
+                (_, i) => match('src/orders/checkout.ts', i + 1, `call${i}()`),
+            );
+            exec.mockResolvedValueOnce({
+                stdout: lines.join('\n') + '\n{"text":"cal',
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+
+            const r = await tool.execute(
+                { pattern: '$F()', language: 'ts' },
+                ctx,
+            );
+            expect(r.isError).toBeFalsy();
+            expect(r.output).toContain(
+                `At least ${MAX_AST_GREP_MATCHES + 7} matches`,
+            );
+            expect(r.output).toMatch(/output was cut/i);
+            expect(r.meta).toMatchObject({ truncated: true });
+        });
+
+        it('does not answer "no matches" when nothing could be read', async () => {
+            const { tool, exec } = setup();
+            exec.mockResolvedValueOnce({
+                stdout: '{"text":"cal',
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+
+            const r = await tool.execute(
+                { pattern: '$F()', language: 'ts' },
+                ctx,
+            );
+            expect(r.output).not.toMatch(/no matches/i);
+            expect(r.output).toMatch(/output was cut/i);
+            expect(r.isError).toBeFalsy();
+            expect(r.meta).toEqual({
+                mode: 'pattern',
+                matches: 0,
+                truncated: true,
+            });
+        });
     });
 
     it('reports no matches as a plain answer, not an error', async () => {
