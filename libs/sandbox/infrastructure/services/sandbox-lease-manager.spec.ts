@@ -2092,6 +2092,76 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
 
+        // astGrep writes its config, reads its rule file from the target
+        // branch (not a sandbox command), then writes it and scans: the
+        // release lands in the read and must not give the checkout back
+        // before the scan (#2628)
+        it('keeps the sandbox through a held call that waits on something else between its commands', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finishScan!: () => void;
+            (provided.run as jest.Mock)
+                .mockResolvedValueOnce({ stdout: '', exitCode: 0 })
+                .mockReturnValueOnce(
+                    new Promise<any>(
+                        (resolve) =>
+                            (finishScan = () =>
+                                resolve({ stdout: 'match', exitCode: 0 })),
+                    ),
+                );
+            let finishRead!: (rules: string) => void;
+            const readRules = new Promise<string>(
+                (resolve) => (finishRead = resolve),
+            );
+
+            const call = sandbox.remoteCommands.hold!(async () => {
+                await sandbox.run('write sgconfig.yml');
+                const rules = await readRules;
+                return sandbox.run(`scan ${rules}`);
+            });
+            await settle();
+            releasedWith(0);
+
+            // The read takes 6s: well past the config write's quiet window
+            await jest.advanceTimersByTimeAsync(1_000);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            await jest.advanceTimersByTimeAsync(5_000);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            finishRead('rules.yml');
+            await settle();
+            expect(provided.run).toHaveBeenLastCalledWith('scan rules.yml');
+            await jest.advanceTimersByTimeAsync(2_000);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            finishScan();
+            await expect(call).resolves.toEqual({
+                stdout: 'match',
+                exitCode: 0,
+            });
+            await jest.advanceTimersByTimeAsync(999);
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not stamp a held call as a use of the sandbox', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+
+            await expect(
+                sandbox.remoteCommands.hold!(async () => 'read elsewhere'),
+            ).resolves.toBe('read elsewhere');
+            await goQuiet();
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().firstUsedAt).toBeUndefined();
+            expect(sandbox.usage?.().lastUsedAt).toBeUndefined();
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
         // A process that exits right after a release (a security-scan slice
         // child closes Nest, then exits) must still decrement the lease
         describe('at shutdown', () => {

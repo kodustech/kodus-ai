@@ -57,6 +57,12 @@ export interface RemoteCommands {
          */
         truncated?: boolean;
     }>;
+    /**
+     * Run `work` as if it were a command on the sandbox: a release of the
+     * lease waits for it to end. Set by the lease manager; a tool call runs
+     * inside it, so the checkout outlives the call's last command.
+     */
+    hold?: <T>(work: () => Promise<T>) => Promise<T>;
 }
 
 export type CrossFileContextSnippet = {

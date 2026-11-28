@@ -163,5 +163,30 @@ export function buildFinderToolRegistry(options: FinderToolRegistryOptions): {
 
     // Return the cache alongside the registry so the caller (composition root)
     // owns its lifecycle and can surface hit/miss stats for the run.
-    return { registry: new InMemoryToolRegistry(cached), cache };
+    const hold = options.remoteCommands?.hold;
+    return {
+        registry: new InMemoryToolRegistry(
+            hold ? cached.map((tool) => holdingSandbox(tool, hold)) : cached,
+        ),
+        cache,
+    };
+}
+
+/**
+ * The whole call holds the sandbox: a release waits for it, not only for its
+ * commands. A tool may await something else between two commands (astGrep
+ * reads its rules from the target branch, then scans), and an orchestrator
+ * that timed out releases the sandbox while the call is in that gap (#2628).
+ */
+function holdingSandbox(
+    tool: AgentTool,
+    hold: NonNullable<RemoteCommands['hold']>,
+): AgentTool {
+    return {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        ...(tool.strict !== undefined && { strict: tool.strict }),
+        execute: (input, ctx) => hold(() => tool.execute(input, ctx)),
+    };
 }

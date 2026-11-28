@@ -13,6 +13,7 @@ jest.mock('../engine/agent-tools.factory', () => ({
 
 import { buildAgentTools } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
+import { buildAstGrepTool } from '@libs/code-review/infrastructure/agents/adapters/ast-grep.tool';
 
 const ctx = { runId: 'r' } as any;
 
@@ -123,5 +124,102 @@ describe('buildFinderToolRegistry', () => {
         await reg.get('astGrep')!.execute({}, ctx);
         const second = await reg.get('astGrep')!.execute({}, ctx);
         expect(second.output).toBe('ast 2');
+    });
+
+    // A release waits for the whole call, not only its commands: astGrep
+    // reads its rules from the target branch between two commands (#2628)
+    it('runs every tool, extra tools included, inside the sandbox hold', async () => {
+        (buildAgentTools as jest.Mock).mockReturnValue({
+            readFile: {
+                description: 'read a file',
+                inputSchema: jsonSchema({ type: 'object', properties: {} }),
+                execute: async () => {
+                    expect(held).toBe(1);
+                    return 'content';
+                },
+            },
+        });
+        let held = 0;
+        const hold = jest.fn(async (work: () => Promise<unknown>) => {
+            held += 1;
+            try {
+                return await work();
+            } finally {
+                held -= 1;
+            }
+        });
+        const astGrep = {
+            name: 'astGrep',
+            description: 'structural search',
+            inputSchema: { type: 'object' as const, properties: {} },
+            strict: true,
+            execute: async () => {
+                expect(held).toBe(1);
+                return { output: 'match' };
+            },
+        };
+
+        const { registry: reg } = buildFinderToolRegistry({
+            remoteCommands: { hold } as any,
+            extraTools: [astGrep],
+        });
+
+        expect(reg.get('astGrep')!.strict).toBe(true);
+        expect((await reg.get('readFile')!.execute({}, ctx)).output).toBe(
+            'content',
+        );
+        expect((await reg.get('astGrep')!.execute({}, ctx)).output).toBe(
+            'match',
+        );
+        expect(hold).toHaveBeenCalledTimes(2);
+        expect(held).toBe(0);
+    });
+
+    it("holds the sandbox through astGrep's rule read from the target branch", async () => {
+        (buildAgentTools as jest.Mock).mockReturnValue({});
+        let held = 0;
+        const seen: string[] = [];
+        const hold = async (work: () => Promise<unknown>) => {
+            held += 1;
+            try {
+                return await work();
+            } finally {
+                held -= 1;
+            }
+        };
+        const astGrep = buildAstGrepTool({
+            exec: async (command) => {
+                seen.push(`exec ${command.split(' ')[0]} held=${held}`);
+                return { stdout: '', stderr: '', exitCode: 1 };
+            },
+            writeFile: async (path) => {
+                seen.push(`write ${path.split('/').pop()} held=${held}`);
+            },
+            removeDir: async () => {
+                seen.push(`remove held=${held}`);
+            },
+            changedFiles: ['src/a.ts'],
+            rulesPath: '.kody/rules.yml',
+            readTargetFile: async () => {
+                seen.push(`read rules held=${held}`);
+                return 'id: no-eval\nlanguage: ts\nrule: { pattern: eval($X) }\n';
+            },
+            workDirName: '.kody-ast-grep-test',
+        });
+
+        const { registry: reg } = buildFinderToolRegistry({
+            remoteCommands: { hold } as any,
+            extraTools: [astGrep as any],
+        });
+        await reg.get('astGrep')!.execute({ useRules: true }, ctx);
+
+        expect(seen).toEqual([
+            'write sgconfig.yml held=1',
+            'read rules held=1',
+            'write rules.yml held=1',
+            "exec 'ast-grep' held=1",
+            'remove held=1',
+        ]);
+        expect(held).toBe(0);
     });
 });
