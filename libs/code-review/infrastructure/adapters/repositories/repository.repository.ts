@@ -1,3 +1,4 @@
+import { AST_GRAPH_BUILD_TIMEOUT_MS } from '@libs/code-review/domain/graph-job-attempt';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -126,20 +127,28 @@ export class RepositoryRepository implements IRepositoryRepository {
         // caller back to the normal incremental path. Webhooks can arrive out
         // of order, so two different merges become '' (unknown), which always
         // gets a catch-up instead of trusting whichever landed last.
-        const result = await this.repo
-            .createQueryBuilder()
-            .update()
-            .set({
-                astGraphMergedDuringBuild: () =>
-                    `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE '' END`,
-            })
-            .where('uuid = :uuid AND ast_graph_status = :building', {
-                uuid,
-                building: AstGraphStatus.BUILDING,
-            })
-            .setParameter('sha', mergeSha ?? '')
-            .execute();
-        return !!result.affected;
+        // A full build holds this row locked while it writes its rows, which
+        // on a large graph outlasts the default statement timeout. Wait as
+        // long as the build may run, so its merge is not dropped.
+        return this.repo.manager.transaction(async (manager) => {
+            await manager.query(
+                `SET LOCAL statement_timeout = ${AST_GRAPH_BUILD_TIMEOUT_MS}`,
+            );
+            const result = await manager
+                .createQueryBuilder(RepositoryModel, 'repository')
+                .update()
+                .set({
+                    astGraphMergedDuringBuild: () =>
+                        `CASE WHEN ast_graph_merged_during_build IS NULL OR ast_graph_merged_during_build = :sha THEN :sha ELSE '' END`,
+                })
+                .where('uuid = :uuid AND ast_graph_status = :building', {
+                    uuid,
+                    building: AstGraphStatus.BUILDING,
+                })
+                .setParameter('sha', mergeSha ?? '')
+                .execute();
+            return !!result.affected;
+        });
     }
 
     async clearMergeDeferredDuringBuild(

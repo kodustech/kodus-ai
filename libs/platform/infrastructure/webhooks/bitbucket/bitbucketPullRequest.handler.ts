@@ -51,6 +51,17 @@ import { CodeManagementService } from '../../adapters/services/codeManagement.se
  * Handler for Bitbucket webhook events.
  * Processes both pull request and comment events.
  */
+/**
+ * The commit a merge produced. On Data Center `toRef.latestCommit` is the
+ * target tip before the merge, which a graph build can already contain while
+ * missing the merge itself, so it must not stand in for the merge commit.
+ */
+export function bitbucketMergeCommitSha(payload: any): string | undefined {
+    return payload?.isDataCenterEvent
+        ? payload?.pullrequest?.properties?.mergeCommit?.id
+        : payload?.pullrequest?.merge_commit?.hash;
+}
+
 @Injectable()
 export class BitbucketPullRequestHandler implements IWebhookEventHandler {
     private readonly logger = createLogger(BitbucketPullRequestHandler.name);
@@ -399,11 +410,9 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                                             repoName: repository.name,
                                             platform: PlatformType.BITBUCKET,
                                             baseBranch: baseRef,
-                                            newSha: isDataCenterEvent
-                                                ? payload?.pullrequest?.toRef
-                                                      ?.latestCommit
-                                                : payload?.pullrequest
-                                                      ?.merge_commit?.hash,
+                                            newSha: bitbucketMergeCommitSha(
+                                                payload,
+                                            ),
                                             organizationAndTeamData:
                                                 context.organizationAndTeamData,
                                         })

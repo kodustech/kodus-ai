@@ -13,7 +13,10 @@ jest.mock(
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IWebhookEventParams } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
-import { BitbucketPullRequestHandler } from './bitbucketPullRequest.handler';
+import {
+    BitbucketPullRequestHandler,
+    bitbucketMergeCommitSha,
+} from './bitbucketPullRequest.handler';
 
 describe('BitbucketPullRequestHandler deterministic logic', () => {
     let handler: BitbucketPullRequestHandler;
@@ -282,5 +285,27 @@ describe('BitbucketPullRequestHandler deterministic logic', () => {
                 false,
             );
         });
+    });
+});
+
+describe('bitbucketMergeCommitSha', () => {
+    it('reads the merge commit, not the pre-merge target tip, on Data Center', () => {
+        expect(
+            bitbucketMergeCommitSha({
+                isDataCenterEvent: true,
+                pullrequest: {
+                    toRef: { latestCommit: 'target-tip' },
+                    properties: { mergeCommit: { id: 'merge-commit' } },
+                },
+            }),
+        ).toBe('merge-commit');
+    });
+
+    it('reads merge_commit.hash on Cloud', () => {
+        expect(
+            bitbucketMergeCommitSha({
+                pullrequest: { merge_commit: { hash: 'cloud-merge' } },
+            }),
+        ).toBe('cloud-merge');
     });
 });

@@ -50,7 +50,11 @@ const db = new DataSource({
             columns: { uuid: { type: 'uuid', primary: true } },
         }),
     ],
-    extra: { options: `-c search_path=${schema},public` },
+    // Short like the app's 30s, so a defer that waits on a build's write
+    // would time out without its own longer limit.
+    extra: {
+        options: `-c search_path=${schema},public -c statement_timeout=1000`,
+    },
 });
 
 const run =
@@ -334,6 +338,27 @@ function node(name: string): GraphNodeJson {
                 astGraphSha: commits[2],
                 astGraphMergedDuringBuild: null,
             });
+        });
+
+        it('records a merge that waits on a build write longer than the statement timeout', async () => {
+            const build = db.createQueryRunner();
+            await build.connect();
+            await build.startTransaction();
+            await build.query('SET LOCAL statement_timeout = 0');
+            await build.query(
+                'SELECT 1 FROM repositories WHERE uuid = $1 FOR NO KEY UPDATE',
+                [repoId],
+            );
+            const deferred = merge(commits[2]);
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await build.commitTransaction();
+            await build.release();
+
+            expect(await deferred).toEqual({
+                enqueued: false,
+                reason: 'deferred until graph build finishes',
+            });
+            expect((await state()).astGraphMergedDuringBuild).toBe(commits[2]);
         });
 
         it('catches up when merges arrive out of order', async () => {
