@@ -165,19 +165,24 @@ interface Outcome {
  * The dual-stack rows are the edge. The aggregate carries no message (captured
  * for ECONNREFUSED above), so the SDK's message is "Cannot connect to API: "
  * with nothing after the colon: the classifier reads the cause's `code`
- * instead. A dual-stack ETIMEDOUT is a connect timeout like the single-address
- * one, so it keeps the no-failover rule. That shape is built, not captured:
- * through fetch it needs the kernel's connect timeout to fire before undici's
- * own 10s ConnectTimeoutError.
+ * instead. That shape is built, not captured: through fetch it needs the
+ * kernel's connect timeout to fire before undici's own 10s ConnectTimeoutError
+ * (captured on Node 22.23 against 192.0.2.1: TypeError('fetch failed'), cause
+ * ConnectTimeoutError {code: 'UND_ERR_CONNECT_TIMEOUT'}, after 10.5 s).
+ *
+ * A connect timeout fails over like a refused or unresolved host (#1844): the
+ * endpoint never answered, and the fallback is another one. It costs the
+ * connect timeout, not a call's budget; a headers or body timeout, where the
+ * provider answered and the model is slow, keeps the no-failover rule.
  */
 const TRANSPORT_OUTCOME: Record<TransportMode, Outcome> = {
     'refused': { category: C.TRANSIENT, failover: true },
     'refused-dual-stack': { category: C.TRANSIENT, failover: true },
     'dns-enotfound': { category: C.TRANSIENT, failover: true },
     'dns-eai-again': { category: C.TRANSIENT, failover: true },
-    'connect-timeout': { category: C.TRANSIENT, failover: false },
-    'etimedout': { category: C.TRANSIENT, failover: false },
-    'etimedout-dual-stack': { category: C.TRANSIENT, failover: false },
+    'connect-timeout': { category: C.TRANSIENT, failover: true },
+    'etimedout': { category: C.TRANSIENT, failover: true },
+    'etimedout-dual-stack': { category: C.TRANSIENT, failover: true },
 };
 
 // ─── HTTP failures, in each vendor's own envelope ───────────────────────────

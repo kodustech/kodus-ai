@@ -23,6 +23,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     classifyLLMError,
     isAbortOrHardTimeout,
+    isConnectTimeout,
     isTerminalCategory,
     LlmErrorCategory,
     retriesWereExhausted,
@@ -69,11 +70,13 @@ export async function recordModelFailovers<T>(
  *    `retriesWereExhausted`).
  *  - CONTEXT_OVERFLOW — the prompt is too big; a same-class fallback won't fit it.
  *  - Abort / hard-timeout — the failure is latency or a cancel, not the model;
- *    re-running burns the whole timeout budget again.
+ *    re-running burns the whole timeout budget again. A CONNECT timeout is not
+ *    one: the endpoint never accepted the connection, nothing was waiting on
+ *    the model, and the fallback is another endpoint (#1844).
  *  - UNKNOWN — unclassified; stay conservative rather than spend a 2nd billed call.
  */
 export function shouldFailoverToNextModel(err: unknown): boolean {
-    if (isAbortOrHardTimeout(err)) {
+    if (isAbortOrHardTimeout(err) && !isConnectTimeout(err)) {
         return false;
     }
     const { category } = classifyLLMError(err);
