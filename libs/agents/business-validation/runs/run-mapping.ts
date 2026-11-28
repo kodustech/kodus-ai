@@ -94,6 +94,7 @@ type ResultFields = Pick<
     | 'unseenFiles'
     | 'attempts'
     | 'references'
+    | 'headSha'
 >;
 
 /**
@@ -104,7 +105,8 @@ type ResultFields = Pick<
  * one by the match the comment's "was missing" uses (`matchPrevious`), so a
  * re-quote in other words is not a change, and AC01 fixed while AC02 broke
  * is. The commit is left out: a new push with the same verdict is the same
- * result.
+ * result. It only decides how out-of-scope changes match: by their files on
+ * the same commit, by their text across commits (`matchOutOfScope`).
  */
 export function sameResult(
     previous: ResultFields,
@@ -116,9 +118,10 @@ export function sameResult(
     const before = new Map(
         (previous.tasks ?? []).map((t) => [`${t.tracker}:${t.id}`, t]),
     );
+    const sameCommit = !!previous.headSha && previous.headSha === next.headSha;
     return (next.tasks ?? []).every((task) => {
         const prior = before.get(`${task.tracker}:${task.id}`);
-        return !!prior && sameTaskVerdict(prior, task);
+        return !!prior && sameTaskVerdict(prior, task, sameCommit);
     });
 }
 
@@ -166,7 +169,11 @@ function acceptanceKey(accepted: Acceptance | undefined): string {
         : 'none';
 }
 
-function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
+function sameTaskVerdict(
+    before: RunTask,
+    now: RunTask,
+    sameCommit: boolean,
+): boolean {
     const was = before.requirements ?? [];
     const is = now.requirements ?? [];
     if (was.length !== is.length) {
@@ -187,11 +194,13 @@ function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
         );
     });
     // An out-of-scope change is the same one by the match a re-check uses to
-    // carry its acceptance (`matchOutOfScope`): the judge rewords it on
-    // every run, the files it cites stay.
+    // carry its acceptance (`matchOutOfScope`): on one commit the judge
+    // rewords it and the files it cites stay.
     const wasChanges = before.outOfScope ?? [];
     const isChanges = now.outOfScope ?? [];
-    const matchedChanges = matchOutOfScope(isChanges, wasChanges);
+    const matchedChanges = matchOutOfScope(isChanges, wasChanges, {
+        sameCommit,
+    });
     const sameChanges =
         wasChanges.length === isChanges.length &&
         isChanges.every((c, i) => {

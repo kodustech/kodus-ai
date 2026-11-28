@@ -16,23 +16,30 @@ import type { RunTask } from './runs/validation-run.model';
 /**
  * A re-check on top of the PR's previous run: what a reviewer accepted stays
  * accepted (UC-37), and a requirement whose state changed says what it was
- * ("was missing", UC-34).
+ * ("was missing", UC-34). `sameCommit`: the previous run judged the same
+ * head, so an out-of-scope change reworded on the same files is the same one
+ * (`matchOutOfScope`).
  */
 export function carryOver(
     outcome: BusinessValidationOutcome,
     previous: RunTask[] | undefined,
+    { sameCommit = false }: { sameCommit?: boolean } = {},
 ): BusinessValidationOutcome {
     if (outcome.kind !== 'validated' || !previous?.length) {
         return outcome;
     }
     const checks = outcome.checks.map((check) => {
         const before = previous.find((t) => t.id === check.task.id);
-        return before ? applyPrevious(check, before) : check;
+        return before ? applyPrevious(check, before, sameCommit) : check;
     });
     return { ...outcome, checks, passed: checks.every((c) => c.passed) };
 }
 
-function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
+function applyPrevious(
+    check: TaskCheck,
+    before: RunTask,
+    sameCommit: boolean,
+): TaskCheck {
     const current = check.verdict.requirements ?? [];
     // Likeness may only stand in for the same text when the task's text is
     // the one the acceptance was given on: edited, "on the orders page"
@@ -65,7 +72,9 @@ function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
             .map((c) => [requirementKey(c.change), c.accepted!]),
     );
     const currentChanges = check.verdict.outOfScope ?? [];
-    const priorChanges = matchOutOfScope(currentChanges, before.outOfScope);
+    const priorChanges = matchOutOfScope(currentChanges, before.outOfScope, {
+        sameCommit,
+    });
     const outOfScope = currentChanges.map((c, i) => {
         const at = priorChanges[i];
         const accepted =
@@ -149,17 +158,20 @@ export function matchPrevious(
 
 /**
  * For each out-of-scope change of this run, the index of the same one in the
- * last run, each earlier change taken once. The judge words a change anew on
- * every run; the files it cites are what stays. The exact text wins, then a
- * change citing the same set of files, when no other unmatched change on
- * either side cites that set: two changes on one file, both reworded, can't
- * be told apart, so neither is matched (QA of #2681). The texts must still
- * be alike (`SAME_CHANGE`): the accepted change gone and another one in the
- * same file is a change nobody reviewed, not the same one reworded.
+ * last run, each earlier change taken once. The exact text wins. On the same
+ * commit the code is the same and only the judge's wording changes, so a
+ * change citing the same set of files is the same one, when no other
+ * unmatched change on either side cites that set: two changes on one file,
+ * both reworded, can't be told apart, so neither is matched (QA of #2681).
+ * Across commits only the text counts: a new push can put a different change
+ * in the same file, and its wording shares most words with the last one
+ * ("Adds …, which the task does not ask for"), so no likeness tells them
+ * apart, and an acceptance must not move to a change nobody reviewed.
  */
 export function matchOutOfScope(
     now: readonly OutOfScopeChange[],
     before: readonly OutOfScopeChange[],
+    { sameCommit }: { sameCommit: boolean },
 ): Array<number | undefined> {
     const taken = new Set<number>();
     const result: Array<number | undefined> = now.map(() => undefined);
@@ -175,6 +187,9 @@ export function matchOutOfScope(
             result[i] = exact;
         }
     });
+    if (!sameCommit) {
+        return result;
+    }
     const countFiles = (
         changes: readonly OutOfScopeChange[],
         open: (k: number) => boolean,
@@ -201,33 +216,10 @@ export function matchOutOfScope(
         const j = before.findIndex(
             (b, k) => !taken.has(k) && citedFiles(b) === key,
         );
-        if (
-            overlap(changeWords(c.change), changeWords(before[j].change)) <
-            SAME_CHANGE
-        ) {
-            return;
-        }
         taken.add(j);
         result[i] = j;
     });
     return result;
-}
-
-/**
- * How alike two wordings of one out-of-scope change on the same files must
- * be, in shared words. Measured on the judge's rewordings of one change
- * across re-checks of one commit: 0.50 to 1.00; a different change on the
- * same file: 0.38 at most (QA of #2681).
- */
-const SAME_CHANGE = 0.5;
-
-/** A change's words, plural or not: the judge writes "cache" and "caches". */
-function changeWords(text: string): Set<string> {
-    return new Set(
-        [...words(text)].map((w) =>
-            w.length > 3 && !w.endsWith('ss') ? w.replace(/s$/, '') : w,
-        ),
-    );
 }
 
 /** The files a change cites, as one key; empty when it cites none. */

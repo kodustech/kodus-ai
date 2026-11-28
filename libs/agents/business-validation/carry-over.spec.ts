@@ -210,8 +210,10 @@ describe('carryOver of an accepted out-of-scope change', () => {
         return result.checks[0].verdict.outOfScope ?? [];
     };
 
-    // The judge words the same change differently on every run.
-    it('keeps the acceptance when the change is reworded on the same files', () => {
+    const sameCommit = { sameCommit: true };
+
+    // On one commit the judge words the same change differently on every run.
+    it('keeps the acceptance when the change is reworded on the same files, on the same commit', () => {
         const result = carryOver(
             nowWith([
                 {
@@ -226,6 +228,7 @@ describe('carryOver of an accepted out-of-scope change', () => {
                     accepted,
                 },
             ]),
+            sameCommit,
         );
         expect(changes(result)[0].accepted).toMatchObject({ by: 'nina' });
     });
@@ -247,6 +250,7 @@ describe('carryOver of an accepted out-of-scope change', () => {
                 },
                 { change: 'Adds a debug log', evidence: file },
             ]),
+            sameCommit,
         );
         expect(changes(result).map((c) => c.accepted)).toEqual([
             undefined,
@@ -289,20 +293,41 @@ describe('carryOver of an accepted out-of-scope change', () => {
         ).toEqual([]);
     });
 
-    // The accepted change is gone (reverted or fixed) and another one shows
-    // up in the same file: nobody reviewed it, so it is not accepted.
-    it('never moves an acceptance to a different change on the same file', () => {
+    // A new push can put a different change in the same file, worded much
+    // like the accepted one (#2788 review): across commits only the text
+    // carries an acceptance, so nobody's name lands on a change they never saw.
+    it('never moves an acceptance to another change on the same file after a push', () => {
+        const file = [{ file: 'src/signup/signup.ts' }];
         const result = carryOver(
             nowWith([
                 {
-                    change: 'Deletes the admin check before a refund is issued',
-                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                    change: 'Adds phone number validation in signup.ts, which the task does not ask for',
+                    evidence: file,
                 },
             ]),
             beforeWith([
                 {
+                    change: 'Adds email format validation in signup.ts, which the task does not ask for',
+                    evidence: file,
+                    accepted,
+                },
+            ]),
+        );
+        expect(changes(result)[0].accepted).toBeUndefined();
+    });
+
+    // The cost of the rule above, as before #2788: across commits a reworded
+    // change is asked about again.
+    it('asks again about a change reworded after a push', () => {
+        const file = [{ file: 'src/refunds/cache.ts' }];
+        const result = carryOver(
+            nowWith([
+                { change: 'Caches refund lookups in Redis', evidence: file },
+            ]),
+            beforeWith([
+                {
                     change: 'Adds a Redis cache in front of refunds',
-                    evidence: [{ file: 'src/refunds/cache.ts' }],
+                    evidence: file,
                     accepted,
                 },
             ]),
@@ -325,6 +350,7 @@ describe('carryOver of an accepted out-of-scope change', () => {
                     accepted,
                 },
             ]),
+            sameCommit,
         );
         expect(changes(result)[0].accepted).toBeUndefined();
     });
@@ -335,12 +361,14 @@ describe('matchOutOfScope', () => {
         change: text,
         evidence: files.map((file) => ({ file })),
     });
+    const sameCommit = { sameCommit: true };
 
     it('takes the exact text first, each earlier change once', () => {
         expect(
             matchOutOfScope(
                 [change('A', 'x.ts'), change('A', 'x.ts'), change('B')],
                 [change('A', 'x.ts'), change('B'), change('A', 'x.ts')],
+                sameCommit,
             ),
         ).toEqual([0, 2, 1]);
     });
@@ -350,6 +378,7 @@ describe('matchOutOfScope', () => {
             matchOutOfScope(
                 [change('Caches refunds', 'b.ts', 'a.ts', 'a.ts')],
                 [change('Adds a cache', 'a.ts', 'b.ts')],
+                sameCommit,
             ),
         ).toEqual([0]);
     });
@@ -362,6 +391,7 @@ describe('matchOutOfScope', () => {
                     change('Caches refund lookups', 'a.ts'),
                 ],
                 [change('Adds a refund cache', 'a.ts')],
+                sameCommit,
             ),
         ).toEqual([undefined, undefined]);
         expect(
@@ -371,6 +401,7 @@ describe('matchOutOfScope', () => {
                     change('Adds a refund cache', 'a.ts'),
                     change('Adds a cache of refunds', 'a.ts'),
                 ],
+                sameCommit,
             ),
         ).toEqual([undefined]);
     });
@@ -383,6 +414,7 @@ describe('matchOutOfScope', () => {
                     change('Caches refunds by id', 'b.ts'),
                     change('Adds a refund cache', 'a.ts'),
                 ],
+                sameCommit,
             ),
         ).toEqual([1]);
     });
@@ -398,6 +430,7 @@ describe('matchOutOfScope', () => {
                     change('Kept', 'a.ts'),
                     change('Logs every refund lookup', 'a.ts'),
                 ],
+                sameCommit,
             ),
         ).toEqual([0, 1]);
     });
@@ -405,29 +438,45 @@ describe('matchOutOfScope', () => {
     it('never matches by files a change that cites none, or another set', () => {
         const reworded = ['Caches refunds', 'Adds a refund cache'] as const;
         expect(
-            matchOutOfScope([change(reworded[0])], [change(reworded[1])]),
+            matchOutOfScope(
+                [change(reworded[0])],
+                [change(reworded[1])],
+                sameCommit,
+            ),
         ).toEqual([undefined]);
         expect(
             matchOutOfScope(
                 [change(reworded[0], 'a.ts', 'b.ts')],
                 [change(reworded[1], 'a.tsb.ts')],
+                sameCommit,
             ),
         ).toEqual([undefined]);
         expect(
             matchOutOfScope(
                 [change(reworded[0], 'a.ts')],
                 [change(reworded[1], 'b.ts')],
+                sameCommit,
             ),
         ).toEqual([undefined]);
     });
 
-    it('never takes a different change on the same files as the same one', () => {
+    // Across commits only the text counts: a different change in the same
+    // file shares most of its words with the last one (#2788 review).
+    it('matches across commits by the exact text alone', () => {
+        const email = change(
+            'Adds email format validation in signup.ts, which the task does not ask for',
+            'signup.ts',
+        );
+        const phone = change(
+            'Adds phone number validation in signup.ts, which the task does not ask for',
+            'signup.ts',
+        );
         expect(
-            matchOutOfScope(
-                [change('Deletes the admin check before a refund', 'a.ts')],
-                [change('Adds a Redis cache in front of refunds', 'a.ts')],
-            ),
+            matchOutOfScope([phone], [email], { sameCommit: false }),
         ).toEqual([undefined]);
+        expect(
+            matchOutOfScope([email], [phone, email], { sameCommit: false }),
+        ).toEqual([1]);
     });
 
     it('never gives one earlier change to two', () => {
@@ -435,6 +484,7 @@ describe('matchOutOfScope', () => {
             matchOutOfScope(
                 [change('Same'), change('Reworded', 'a.ts')],
                 [change('Same', 'a.ts')],
+                sameCommit,
             ),
         ).toEqual([0, undefined]);
     });

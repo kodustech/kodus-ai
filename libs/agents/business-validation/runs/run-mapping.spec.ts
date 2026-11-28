@@ -172,10 +172,10 @@ describe('sameResult (#2423)', () => {
     // QA of #2681: two runs on the same commit, the same 4 out-of-scope
     // changes on the same files, only the model's wording differed, and the
     // reply said "the result changed".
-    it('reads the same out-of-scope changes in other words, on the same files, as the same result', () => {
+    it('reads the same out-of-scope changes in other words, on the same files and commit, as the same result', () => {
         const at = (...files: string[]) => files.map((file) => ({ file }));
         const before = run(
-            {},
+            { headSha: 'b930556' },
             {
                 outOfScope: [
                     {
@@ -190,7 +190,7 @@ describe('sameResult (#2423)', () => {
             },
         );
         const reworded = run(
-            {},
+            { headSha: 'b930556' },
             {
                 outOfScope: [
                     {
@@ -205,6 +205,11 @@ describe('sameResult (#2423)', () => {
             },
         );
         expect(sameResult(before, reworded)).toBe(true);
+        // After a push the wording alone can't tell a reworded change from a
+        // different one: it is a change, as before #2788.
+        expect(sameResult(before, { ...reworded, headSha: 'c0ffee1' })).toBe(
+            false,
+        );
     });
 
     it('reads a run stored without an out-of-scope list as having none', () => {
@@ -267,6 +272,35 @@ describe('sameResult (#2423)', () => {
             sameResult(
                 on('Adds a Redis cache in front of refunds'),
                 on('Deletes the admin check before a refund is issued'),
+            ),
+        ).toBe(false);
+    });
+
+    // #2788 review: after a push, a different change in the same file is
+    // worded much like the last one; the reply must not say "same result".
+    it('reads a different change in the same file after a push as a change', () => {
+        const on = (change: string, headSha: string) =>
+            run(
+                { headSha },
+                {
+                    outOfScope: [
+                        {
+                            change,
+                            evidence: [{ file: 'src/signup/signup.ts' }],
+                        },
+                    ],
+                },
+            );
+        expect(
+            sameResult(
+                on(
+                    'Adds email format validation in signup.ts, which the task does not ask for',
+                    'b930556',
+                ),
+                on(
+                    'Adds phone number validation in signup.ts, which the task does not ask for',
+                    'c0ffee1',
+                ),
             ),
         ).toBe(false);
     });
