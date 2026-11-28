@@ -1750,6 +1750,13 @@ export class SandboxLeaseManager
         // Every command counts as running until it settles, so the release
         // waits for it (drainInFlight).
         let warnedUseAfterRelease = false;
+        const settled = () => {
+            inFlight.running -= 1;
+            inFlight.lastSettledAt = Date.now();
+            if (inFlight.running === 0) {
+                for (const resolve of inFlight.waiters.splice(0)) resolve();
+            }
+        };
         const stamped =
             <A extends unknown[], R>(command: (...args: A) => Promise<R>) =>
             async (...args: A): Promise<R> => {
@@ -1777,31 +1784,41 @@ export class SandboxLeaseManager
                         if (!use.releasedAt) use.lastUsedAt = new Date();
                     }
                 } finally {
-                    inFlight.running -= 1;
-                    inFlight.lastSettledAt = Date.now();
-                    if (inFlight.running === 0) {
-                        for (const resolve of inFlight.waiters.splice(0)) {
-                            resolve();
-                        }
-                    }
+                    settled();
                 }
             };
+
+        // A tool can wait on something else between two of its commands
+        // (astGrep reads its rule file from the target branch, then writes it
+        // and scans), so the release waits for the whole call, not only for
+        // its commands. Not a use: nothing is stamped (#2628).
+        const hold = async <T>(work: () => Promise<T>): Promise<T> => {
+            inFlight.running += 1;
+            try {
+                return await work();
+            } finally {
+                settled();
+            }
+        };
 
         // Every repository tool is one of these, so each one is stamped,
         // including a tool added later. Callers tell a missing command by its
         // absence (`sandbox?.run`), so only the ones present are wrapped.
         const remoteCommands =
             sandbox.remoteCommands &&
-            (Object.fromEntries(
-                Object.entries(sandbox.remoteCommands).map(
-                    ([name, command]) => [
-                        name,
-                        typeof command === 'function'
-                            ? stamped(command)
-                            : command,
-                    ],
+            ({
+                ...Object.fromEntries(
+                    Object.entries(sandbox.remoteCommands).map(
+                        ([name, command]) => [
+                            name,
+                            typeof command === 'function'
+                                ? stamped(command)
+                                : command,
+                        ],
+                    ),
                 ),
-            ) as unknown as RemoteCommands);
+                hold,
+            } as unknown as RemoteCommands);
 
         return {
             ...sandbox,
