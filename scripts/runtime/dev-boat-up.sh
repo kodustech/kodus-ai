@@ -194,11 +194,12 @@ if [[ $SKIP_LLM -eq 1 ]]; then step "LLM preflight skipped: the org needs a work
 # 6. Start, wait, apply -----------------------------------------------------------------------------
 step "starting the stack (the first build takes a while)"
 "${DC[@]}" up -d
-# hub, worker and fleet run ts-node from the mounted code and their compose definition does not change
-# between runs, so `up -d` leaves an old process running. Restart them so they load the current code.
-step "restarting the runtime services that run mounted code"
+# The runtime services and the API/worker run the mounted code and their compose definition does not
+# change between runs, so `up -d` leaves an old process running. Restart them so they load the current code.
+step "restarting the services that run mounted code"
 SINCE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 docker restart kodus_runtime_hub kodus_runtime_worker kodus_runtime_fleet >/dev/null
+for c in kodus_api kodus_worker; do [[ -n "$(docker ps -q -f "name=^${c}$")" ]] && docker restart "$c" >/dev/null; done
 step "waiting for the hub"
 for _ in $(seq 1 120); do docker logs --since "$SINCE" kodus_runtime_hub 2>&1 | grep -q 'runtime-hub listening' && break; sleep 5; done
 docker logs --since "$SINCE" kodus_runtime_hub 2>&1 | grep -q 'runtime-hub listening' || die "the hub did not log 'runtime-hub listening' in 10 minutes: docker logs kodus_runtime_hub"
