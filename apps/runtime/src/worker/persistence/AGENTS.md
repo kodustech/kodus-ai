@@ -40,5 +40,6 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime/src/worker`](../AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 
 <!-- module-map:end -->

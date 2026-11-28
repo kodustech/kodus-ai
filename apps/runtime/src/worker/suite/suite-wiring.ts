@@ -8,6 +8,7 @@ import { PgEnvTemplates } from '../../shared/persistence/env-templates';
 import { PgHostPoolReader } from '../../shared/persistence/host-pools';
 import { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import { PgSuiteDemand } from '../../shared/persistence/suite-demand';
+import { PgRunClaims } from '../persistence/pg-run-claims';
 import type { RunDependenciesFactory } from '../dbos/run-deps.factory';
 import { AmqpSuitePublishRequester } from '../publish/amqp-suite-publish-requester';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
@@ -50,6 +51,7 @@ export function buildSuiteService(d: {
         setups: d.setups,
         environment: (ctx) => d.deps.envForSuite(ctx),
         demand: (scope) => new PlacementSuiteDemand(demand, pools, scope),
+        claims: new PgRunClaims(d.pool),
         runs: d.runs,
         stats: new PgSuiteSpecStats(d.pool),
         queue: new PgSuiteQueue(d.pool),

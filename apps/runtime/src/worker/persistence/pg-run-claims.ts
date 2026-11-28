@@ -17,6 +17,15 @@ export class PgRunClaims implements RunClaims, HardExpiredClaims {
         return r.rows.map((x) => ({ claimId: x.claim_id as string, side: x.side as string }));
     }
 
+    async endDemand(organizationId: string, runId: string) {
+        // The Run's keys: the whole-Run key and one per side (`boundKeyOfRun`, `boundKeyOfRunSide`).
+        await this.pool.query(
+            `UPDATE runtime.runtime_pool_demand SET expires_at = now()
+              WHERE organization_id = $1 AND expires_at > now() AND (bound_key = 'run:' || $1::text || '/' || $2::text OR starts_with(bound_key, 'run:' || $1::text || '/' || $2::text || '/'))`,
+            [organizationId, runId],
+        );
+    }
+
     async egressBlocked(organizationId: string, claimIds: string[]) {
         if (!claimIds.length) return [];
         const r = await this.pool.query(`SELECT host, port, phase FROM runtime.runtime_egress_events WHERE claim_id = ANY($1::text[]) AND org_id = $2 ORDER BY at`, [

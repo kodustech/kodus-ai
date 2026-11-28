@@ -139,6 +139,24 @@ describe('running a suite as a workflow', () => {
         expect(w.cell.claims.size).toBe(w.cell.released.length);
     });
 
+    // dev, 2026-11-28: a recovered baseline threw on a cell the hub did not hold and the workflow ended ERROR with its run `requested`.
+    it('a workflow that throws ends the run errored, closes its check, gives back its claims and ends its demand, and the error goes on up', async () => {
+        const w = world({ publisher: true });
+        const acquire = w.cell.acquire.bind(w.cell);
+        let n = 0;
+        w.cell.acquire = async (r: AcquireRequest) => {
+            // The listing host comes up; the first shard's claim does not.
+            if (++n > 1) throw new Error('hub answered 500');
+            return acquire(r);
+        };
+        await expect(w.service.run(request(), passthrough)).rejects.toThrow('hub answered 500');
+        expect((await w.runs.get(ORG, 'sr-1'))?.state).toBe('errored');
+        expect(w.published).toEqual(['started:ci', 'finished:ran:apps/dashboard']);
+        expect(w.finishedStates).toEqual(['errored']);
+        expect(w.demand.ended).toBeGreaterThanOrEqual(1);
+        expect(w.cell.claims.size).toBe(w.cell.released.length);
+    });
+
     it('a workflow cancelled after its check opened closes the check too, and the cancel goes on up', async () => {
         const w = world({ publisher: true });
         const step = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {

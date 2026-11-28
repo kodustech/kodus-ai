@@ -509,11 +509,19 @@ function roomBudget(deps: RunDeps, req: RuntimeRunRequested, started: RunStart, 
     };
 }
 
-/** Releases the Run's claims through the hub; a failed release is reported and left to the reaper. */
+/**
+ * What every end of a Run goes through (a verdict, a timeout, an error, a stop): its claims released through the hub (a
+ * failed release is reported and left to the reaper) and its demand for hosts ended, so the fleet retires them at once.
+ * Each is tried on its own: a release that throws never keeps the demand alive.
+ */
 export async function releaseClaims(deps: RunDeps, organizationId: string, runId: string): Promise<void> {
     await deps.step('claims:release', async () => {
-        for (const c of await deps.claims.forRun(organizationId, runId)) {
-            await deps.env.release(c.claimId).catch((e) => deps.onReleaseFailed?.(c.claimId, e as Error));
+        try {
+            for (const c of await deps.claims.forRun(organizationId, runId)) {
+                await deps.env.release(c.claimId).catch((e) => deps.onReleaseFailed?.(c.claimId, e as Error));
+            }
+        } finally {
+            await deps.claims.endDemand?.(organizationId, runId).catch((e) => deps.log?.warn({ msg: 'run.demand_end_failed', runId, error: (e as Error).name }));
         }
     });
 }

@@ -49,6 +49,7 @@ import { cleanSpecResult } from './result-hygiene';
 import { execInService } from './suite-environment';
 import type { Canary } from '../canary/canary';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
+import type { RunClaims } from '../run/ports';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
 import { CellUnavailableError } from '../../shared/errors';
 
@@ -136,7 +137,13 @@ export interface SuiteHostDemand {
 
 export interface SuiteEngineDeps {
     env: Pick<EnvironmentRuntime, 'acquire' | 'exec' | 'release'>;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'> & Partial<Pick<PgSuiteRuns, 'markShard' | 'results'>>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'> & Partial<Pick<PgSuiteRuns, 'markShard' | 'results' | 'closeShards'>>;
+    /**
+     * The claims the hub still holds for the run (`runtime_claims` by run id, the suite run id): what the run gives back when it
+     * ends, beyond the ones this engine knows. A restarted process lost its list, and an acquire in flight when the run ended has
+     * no entry yet; the hub's rows are the whole truth. Absent: only the claims this engine took are released.
+     */
+    claims?: Pick<RunClaims, 'forRun'>;
     /**
      * The spec queue of the run (section 6, dynamic queue): the first pass seeds it with every spec and each shard pulls the next
      * ones until it is empty, so a slow shard never becomes the tail and a lost shard's claims go back to the others after a lease.
@@ -357,7 +364,22 @@ export class SuiteEngine {
             if (held?.finishedAt) return { suiteRunId: req.suiteRunId, state: held.state, replayed: true, firstPass: [] };
         }
         const side = req.mode === 'baseline' ? 'base' : 'pr';
-        const ctx: RunCtx = {
+        let ctx: RunCtx | undefined;
+        try {
+            ctx = await this.begin(req, inputs, side);
+            return await this.drive(ctx);
+        } catch (e) {
+            // However the run threw, its row is closed: a person never sees it running for good.
+            await runs.finish(req.organizationId, req.suiteRunId, 'errored', new Date(clock.now()), ctx ? this.machineOf(ctx) : {}).catch(() => undefined);
+            throw e;
+        } finally {
+            await this.cleanup(req, ctx);
+        }
+    }
+
+    private async begin(req: RuntimeSuiteRequested, inputs: SuiteInputs, side: 'base' | 'pr'): Promise<RunCtx> {
+        const { clock } = this.d;
+        return {
             req,
             inputs,
             side,
@@ -379,19 +401,19 @@ export class SuiteEngine {
             cleaned: false,
             hostMs: { firstPass: 0, rerun: 0 },
         };
-        try {
-            await this.firstPass(ctx);
-            const firstPass = this.firstPassOf(ctx);
-            // A canary in an artifact halts the suite: nothing is re-run or judged.
-            if (ctx.leaked) return await this.concludeLeaked(ctx, firstPass);
-            // Cancelled: what ran is stored as it ran; nothing is re-run or judged.
-            if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
-            const classification = req.mode === 'baseline' ? undefined : await this.rerunPhase(ctx, firstPass);
-            if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
-            return await this.conclude(ctx, firstPass, classification);
-        } finally {
-            await this.cleanup(ctx);
-        }
+    }
+
+    private async drive(ctx: RunCtx): Promise<SuiteOutcome> {
+        const { req } = ctx;
+        await this.firstPass(ctx);
+        const firstPass = this.firstPassOf(ctx);
+        // A canary in an artifact halts the suite: nothing is re-run or judged.
+        if (ctx.leaked) return await this.concludeLeaked(ctx, firstPass);
+        // Cancelled: what ran is stored as it ran; nothing is re-run or judged.
+        if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
+        const classification = req.mode === 'baseline' ? undefined : await this.rerunPhase(ctx, firstPass);
+        if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
+        return await this.conclude(ctx, firstPass, classification);
     }
 
     /** Runs `work` and adds the time it held a host to the run's machine time: `firstPass` for the shards, `rerun` for everything after. */
@@ -1296,10 +1318,17 @@ export class SuiteEngine {
         return ctx.inputs.config.gate === 'strict' ? 'failed' : 'neutral';
     }
 
-    private async cleanup(ctx: RunCtx): Promise<void> {
-        ctx.cleaned = true;
-        for (const claimId of ctx.claims) await this.d.env.release(claimId).catch(() => undefined);
+    /**
+     * The one path every end goes through (a conclusion, a cancel, a throw): the claims given back, the demand ended so the
+     * fleet retires the hosts, the shards closed. The claims are the ones this engine took and the ones the hub still has for
+     * the run, so none outlives it for want of an entry here; each release is tried on its own.
+     */
+    private async cleanup(req: RuntimeSuiteRequested, ctx: RunCtx | undefined): Promise<void> {
+        if (ctx) ctx.cleaned = true;
+        const held = await this.d.claims?.forRun(req.organizationId, req.suiteRunId).then((rows) => rows.map((r) => r.claimId), () => [] as string[]);
+        for (const claimId of new Set([...(ctx?.claims ?? []), ...(held ?? [])])) await this.d.env.release(claimId).catch(() => undefined);
         await this.d.demand.end().catch(() => undefined);
+        await this.d.runs.closeShards?.(req.organizationId, req.suiteRunId, new Date(this.d.clock.now())).catch(() => undefined);
     }
 }
 

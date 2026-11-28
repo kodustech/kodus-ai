@@ -194,6 +194,48 @@ describe('the perRun host workflow', () => {
         }
     });
 
+    // A leaked host: a claim row nobody released (a workflow that died, a release that raced a boot) keeps the host
+    // for its whole hard expiry. The Run or suite that owned it is over, so the fleet takes it back on its own.
+    describe('a host whose Run or suite run is over', () => {
+        it.each([['a Run', 'run:org-a/r-1/pr'], ['a suite shard', 'suite:org-a/sr-1/0']])('%s that ended leaves a claim nobody released: the host is retired after the grace, not at the claim\'s hard expiry', async (_n, boundKey) => {
+            const w = world({ boundKey });
+            const endedAt = w.clock.t + 10 * 60_000;
+            w.runEndsAt(endedAt);
+            w.store.claims.set(w.hostId, 1);
+            w.store.consumerEndedAt.set(boundKey, endedAt);
+            expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'served' });
+            expect(w.store.hosts.get(w.hostId)!.state).toBe('terminated');
+            expect(w.store.events.find((e) => e.to === 'terminating')!.reason).toBe('abandoned');
+            // Within minutes of the end, not at the 2 h bound of the pool.
+            expect(w.clock.t - endedAt).toBeLessThan(15 * 60_000);
+            expect(w.hub.retired).toEqual([w.hostId]);
+        });
+
+        it('keeps the host while the consumer is not over, whatever the claims say', async () => {
+            const w = world({ boundKey: 'suite:org-a/sr-1/0' });
+            w.runEndsAt(w.clock.t + 10 * 60_000);
+            w.store.claims.set(w.hostId, 1);
+            expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'expired' });
+        });
+
+        it('keeps the host while its demand is live, even if the consumer reads as over', async () => {
+            const w = world({ boundKey: 'run:org-a/r-1/pr' });
+            w.runEndsAt(w.clock.t + 24 * 3_600_000);
+            w.store.claims.set(w.hostId, 1);
+            w.store.consumerEndedAt.set(w.boundKey, w.clock.t);
+            expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'expired' });
+        });
+
+        it('keeps the host of a claim held for diagnosis: its machines are evidence', async () => {
+            const w = world({ boundKey: 'run:org-a/r-1/pr' });
+            w.runEndsAt(w.clock.t + 10 * 60_000);
+            w.store.claims.set(w.hostId, 1);
+            w.store.heldOnHost.add(w.hostId);
+            w.store.consumerEndedAt.set(w.boundKey, w.clock.t);
+            expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'expired' });
+        });
+    });
+
     it('a host lost while it serves (its cell gone) is destroyed and the Run is told', async () => {
         const w = world();
         w.runEndsAt(w.clock.t + 30 * 60_000);
