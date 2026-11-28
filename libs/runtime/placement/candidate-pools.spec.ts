@@ -1,4 +1,4 @@
-import { templateSetupKey, boundKeyOfRun, boundKeyOfSetup, boundKeyOfSuite, boundKeyOfTemplate, candidatePools, suiteKeyOf, type PoolView } from './candidate-pools';
+import { pairFitsHost, boundKeyOfRunSide, templateSetupKey, boundKeyOfRun, boundKeyOfSetup, boundKeyOfSuite, boundKeyOfTemplate, candidatePools, suiteKeyOf, type PoolView } from './candidate-pools';
 
 const pool = (over: Partial<PoolView> & Pick<PoolView, 'poolId'>): PoolView => ({
     scope: 'kodus',
@@ -126,5 +126,52 @@ describe('candidatePools', () => {
             expect(suiteKeyOf('kodus', 'run:kodus/r-1')).toBeNull();
             expect(suiteKeyOf('kodus', undefined)).toBeNull();
         });
+    });
+});
+
+describe('a Run whose two sides do not fit one host', () => {
+    const large = { memoryMb: 15_991, cpus: 8 };
+    const sized = (hostClass?: { memoryMb: number; cpus: number }) => pool({ ...boat, hostClass });
+    const ask = (side: 'base' | 'pr', memoryMb: number, cpus = 4) => ({ ...run, side, sideSize: { memoryMb, cpus } });
+
+    // Behavior: two sides of 8192 MB (16384 MB together) cannot share a host that keeps 1024 MB for the cell and holds 15991 MB.
+    it('the pair does not fit when both sides together exceed the host memory less the cell reserve', () => {
+        expect(pairFitsHost({ memoryMb: 8192, cpus: 4 }, large)).toBe(false);
+    });
+
+    // Behavior: two sides of 4096 MB and 2 CPUs fit the same host, so today's single host stays.
+    it('the pair fits when both sides together are within the host memory less the reserve and its CPUs', () => {
+        expect(pairFitsHost({ memoryMb: 4096, cpus: 2 }, large)).toBe(true);
+    });
+
+    // Behavior: sides small in memory but together over the host CPUs do not fit one host.
+    it('the pair does not fit when both sides together ask more CPUs than the host has', () => {
+        expect(pairFitsHost({ memoryMb: 1024, cpus: 5 }, large)).toBe(false);
+    });
+
+    // Behavior: with no host class known the pair is assumed to fit (never split on a guess).
+    it('an unknown host class keeps one host for the Run', () => {
+        expect(pairFitsHost({ memoryMb: 65_536, cpus: 32 }, undefined)).toBe(true);
+    });
+
+    // Behavior: a pair that fits gets today's single run key whichever side asks.
+    it('when the pair fits, base and PR share the one key run:<org>/<run>', () => {
+        for (const side of ['base', 'pr'] as const) {
+            expect(candidatePools([sized(large)], ask(side, 4096, 2))).toEqual({ pools: ['boat-eu-perrun'], perRun: ['boat-eu-perrun'], boundKey: 'run:kodus/r-1' });
+        }
+    });
+
+    // Behavior: a pair that does not fit gets one key per side, so each side has its own perRun host.
+    it("when the pair does not fit, each side gets its own key (run:<org>/<run>/base and /pr)", () => {
+        const base = candidatePools([sized(large)], ask('base', 8192));
+        const pr = candidatePools([sized(large)], ask('pr', 8192));
+        expect(base?.boundKey).toBe('run:kodus/r-1/base');
+        expect(pr?.boundKey).toBe(boundKeyOfRunSide('kodus', 'r-1', 'pr'));
+        expect(base?.splitSides).toBe(true);
+    });
+
+    // Behavior: a pool with no recorded host class never splits, as before.
+    it('a pool without a host class keeps the single key even for a large size', () => {
+        expect(candidatePools([sized(undefined)], ask('pr', 8192))?.boundKey).toBe('run:kodus/r-1');
     });
 });

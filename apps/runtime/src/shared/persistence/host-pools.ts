@@ -30,6 +30,7 @@ export function poolViewOf(row: { pool_id: string; scope: string; provider: stri
         cordoned: row.cordoned_at !== null,
         // A pool the controller never wrote a status for is scalable only when it is static (nothing to scale).
         scalable: row.provider === 'static' ? true : row.status?.scalable === true,
+        ...(Number(row.status?.hostClass?.memoryMb) > 0 && Number(row.status?.hostClass?.cpus) > 0 ? { hostClass: { memoryMb: Number(row.status.hostClass.memoryMb), cpus: Number(row.status.hostClass.cpus) } } : {}),
     };
 }
 

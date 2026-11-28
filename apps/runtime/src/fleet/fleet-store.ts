@@ -33,6 +33,8 @@ export interface PoolStatus {
     lastFailureAt?: string;
     lastError?: string;
     reason?: string;
+    /** What one host of the pool's class holds, from the provider adapter: placement splits a Run's sides across hosts when the pair does not fit one. */
+    hostClass?: { memoryMb: number; cpus: number };
 }
 
 export interface Demand {

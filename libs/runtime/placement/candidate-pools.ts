@@ -22,6 +22,33 @@ export interface PoolView {
     cordoned: boolean;
     /** The controller's word: false while its breaker is open or its start budget is spent. */
     scalable: boolean;
+    /** What one perRun host of the pool's class holds (the controller's word, from the provider adapter); absent: unknown, so the pair is assumed to fit. */
+    hostClass?: HostCapacity;
+}
+
+/** What a host holds, in MB and CPUs, before the cell's own reserve. */
+export interface HostCapacity {
+    memoryMb: number;
+    cpus: number;
+}
+
+/** A Run's two sides: the machine size each claims. */
+export interface PairSize {
+    memoryMb: number;
+    cpus: number;
+}
+
+/** What the cell keeps for the host itself (Docker, the cell, egress): the cell's -memory-reserve-mb default. */
+export const CELL_MEMORY_RESERVE_MB = 1024;
+
+/**
+ * Whether a Run's base and PR claims together fit one host of the class: their memory and CPUs (both sides run at
+ * once) against the host's memory less the cell's reserve, and its CPUs. Unknown capacity: it fits (today's single
+ * host), because placement must not split on a guess.
+ */
+export function pairFitsHost(pair: PairSize, host: HostCapacity | undefined, reserveMb: number = CELL_MEMORY_RESERVE_MB): boolean {
+    if (!host) return true;
+    return pair.memoryMb * 2 <= host.memoryMb - reserveMb && pair.cpus * 2 <= host.cpus;
 }
 
 export interface PlacementAsk {
@@ -35,7 +62,13 @@ export interface PlacementAsk {
     /** An environment's own setup (consumer 'setup'): its key names the perRun host bound to that setup. */
     setupKey?: string;
     isolation?: IsolationMinimum;
+    /** A Run's side (consumer 'runtime'): which side is placed, so a pair that does not fit one host gets one key per side. */
+    side?: RunSide;
+    /** The machine size of each of the Run's sides (the environment's size): with the pool's host class, decides whether the pair splits. */
+    sideSize?: PairSize;
 }
+
+export type RunSide = 'base' | 'pr';
 
 export interface Placement {
     /** Pool ids, best first. */
@@ -44,7 +77,12 @@ export interface Placement {
     perRun: string[];
     /** The key a perRun host's cell is bound to: present when a perRun pool is a candidate. */
     boundKey?: string;
+    /** The Run's pair does not fit one host of the first perRun pool: each side has its own bound key (run:<org>/<run>/<side>). */
+    splitSides?: boolean;
 }
+
+/** The key that binds a perRun host to one side of one Run of one org, for a pair that does not fit one host. */
+export const boundKeyOfRunSide = (organizationId: string, runId: string, side: RunSide) => `run:${organizationId}/${runId}/${side}`;
 
 /** The key that binds a perRun host to one Run of one org. */
 export const boundKeyOfRun = (organizationId: string, runId: string) => `run:${organizationId}/${runId}`;
@@ -98,17 +136,23 @@ export function candidatePools(pools: readonly PoolView[], ask: PlacementAsk): P
     );
     if (!usable.some((p) => p.provider !== 'static')) return null;
     const ordered = [...usable].sort((a, b) => Number(b.scope === own) - Number(a.scope === own) || b.weight - a.weight || a.poolId.localeCompare(b.poolId));
-    const perRun = ordered.filter((p) => p.lifecycle === 'perRun').map((p) => p.poolId);
+    const perRunPools = ordered.filter((p) => p.lifecycle === 'perRun');
+    const perRun = perRunPools.map((p) => p.poolId);
+    // Decided here, where the host class and the size meet: a pair that cannot share the first perRun host gets a host per side.
+    const splitSides =
+        ask.consumer === 'runtime' && !!ask.runId && !!ask.sideSize && !!perRunPools.length && ordered[0] === perRunPools[0] && !pairFitsHost(ask.sideSize, perRunPools[0].hostClass);
     return {
         pools: ordered.map((p) => p.poolId),
         perRun,
-        ...(perRun.length ? { boundKey: boundKeyOf(ask, suiteBound, setupBound) } : {}),
+        ...(perRun.length ? { boundKey: boundKeyOf(ask, suiteBound, setupBound, splitSides) } : {}),
+        ...(splitSides ? { splitSides } : {}),
     };
 }
 
-function boundKeyOf(ask: PlacementAsk, suiteBound: boolean, setupBound: boolean): string {
+function boundKeyOf(ask: PlacementAsk, suiteBound: boolean, setupBound: boolean, splitSides = false): string {
     if (suiteBound) return boundKeyOfSuite(ask.organizationId, ask.suiteRunId!, ask.shard!);
     if (setupBound) return boundKeyOfSetup(ask.organizationId, ask.setupKey!);
+    if (splitSides && ask.side) return boundKeyOfRunSide(ask.organizationId, ask.runId!, ask.side);
     return boundKeyOfRun(ask.organizationId, ask.runId!);
 }
 

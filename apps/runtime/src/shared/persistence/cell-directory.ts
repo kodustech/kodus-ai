@@ -91,6 +91,8 @@ export interface CellWant {
     /** Who places the claim ('runtime' for a Run's side), its Run and environment: what placement and demand need. */
     consumer?: string;
     runId?: string;
+    /** A Run's side (consumer 'runtime'): with `size`, lets placement give each side its own perRun host when the pair does not fit one. */
+    side?: 'base' | 'pr';
     /** A suite shard's claim (consumer 'suite'): the suite run and the shard, which name the host bound to it. */
     suiteRunId?: string;
     shard?: number;
@@ -404,7 +406,7 @@ export class PgCellDirectory implements CellDirectory {
         const placement =
             want.placement ??
             (this.opts.pools && want.consumer
-                ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, suiteRunId: want.suiteRunId, shard: want.shard, setupKey: want.setupKey, isolation: want.isolation }) ?? undefined)
+                ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, ...(want.side && want.size ? { side: want.side, sideSize: { memoryMb: want.size.memoryMb, cpus: want.size.cpus } } : {}), suiteRunId: want.suiteRunId, shard: want.shard, setupKey: want.setupKey, isolation: want.isolation }) ?? undefined)
                 : undefined);
         const r = await reserveCellCapped(this.opts.inTransaction, orgId, { ...want, placement, sharedClaimCap: this.opts.sharedClaimCap ?? DEFAULT_ORG_SHARED_CLAIM_CAP });
         if ('row' in r) return { cellId: r.row.cell_id, replicaUrl: r.row.replica_url, owner: r.row.owner, orgId: r.row.org_id };

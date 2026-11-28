@@ -51,7 +51,7 @@ export async function reconcileOnce(d: ReconcileDeps, opts: { orphans?: boolean 
     return out;
 }
 
-async function statusOf(p: StoredPool, d: ReconcileDeps): Promise<{ scalable: boolean; reason?: string }> {
+async function statusOf(p: StoredPool, d: ReconcileDeps): Promise<{ scalable: boolean; reason?: string; hostClass?: { memoryMb: number; cpus: number } }> {
     if (p.pool.lifecycle !== 'perRun') return { scalable: false, reason: 'lifecycle_not_built' };
     const provider = d.providerFor(p.pool.provider);
     if (!provider) return { scalable: false, reason: 'provider_not_configured' };
@@ -72,7 +72,8 @@ async function statusOf(p: StoredPool, d: ReconcileDeps): Promise<{ scalable: bo
     if (quotas && !quotas.classAvailable) return { scalable: false, reason: 'class_unavailable' };
     if (quotas && !quotas.canStart) return { scalable: false, reason: 'cannot_start' };
     if (quotas && quotas.startsRemaining.minute === 0) return { scalable: false, reason: 'rate_budget' };
-    return { scalable: true };
+    const facts = provider.describe(p.pool.hostClass);
+    return { scalable: true, hostClass: { memoryMb: facts.memoryMb, cpus: facts.vcpu } };
 }
 
 /**

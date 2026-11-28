@@ -479,6 +479,8 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             // Placement by pool (docs/runtime/host-providers.md §6): a Run's side may wait for its own perRun host.
             consumer: req.consumer,
             ...(req.runId ? { runId: req.runId } : {}),
+            // A Run's side: a pair that does not fit one perRun host gets one host per side (candidatePools).
+            ...(req.consumer === 'runtime' && req.runId && (req.ref.side === 'base' || req.ref.side === 'pr') ? { side: req.ref.side } : {}),
             ...(req.environmentId ? { environmentId: req.environmentId } : {}),
             // A template's setup: only the cell bound to its key (the directory checks it is this org's).
             ...(req.consumer === 'setup' && req.boundKey ? { boundKey: req.boundKey } : {}),
