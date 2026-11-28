@@ -17,6 +17,7 @@ import {
     CliReviewResponse,
 } from '@libs/cli-review/domain/types/cli-review.types';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { CliInputConverter } from '@libs/cli-review/infrastructure/converters/cli-input.converter';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
@@ -646,9 +647,10 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 (syncedEntity ?? kodyRulesEntity)?.toObject()?.rules || [];
 
             const { standardRules, memoryRules } =
-                this.kodyRulesValidationService.filterKodyRules(
+                await this.rulesForRepository(
+                    organizationAndTeamData,
                     effectiveRules,
-                    repositoryId,
+                    { id: repositoryId, name: repositoryName },
                 );
 
             if (standardRules.length > 0 || memoryRules.length > 0) {
@@ -707,6 +709,36 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 repositoryName: null,
             };
         }
+    }
+
+    /**
+     * The rules this review applies. A connection's own global rules review
+     * only that connection's repositories, so the repository's connection is
+     * looked up when the key names none.
+     */
+    private async rulesForRepository(
+        organizationAndTeamData: OrganizationAndTeamData,
+        rules: Partial<IKodyRule>[],
+        repository: { id: string; name: string | null },
+    ) {
+        const integrationId =
+            organizationAndTeamData.integrationId ??
+            (repository.id !== 'global'
+                ? await this.codeManagementService.connectionIdFor(
+                      organizationAndTeamData,
+                      {
+                          id: repository.id,
+                          ...(repository.name ? { name: repository.name } : {}),
+                      },
+                  )
+                : undefined);
+        return this.kodyRulesValidationService.filterKodyRules(
+            rules,
+            repository.id,
+            undefined,
+            undefined,
+            integrationId,
+        );
     }
 
     /**

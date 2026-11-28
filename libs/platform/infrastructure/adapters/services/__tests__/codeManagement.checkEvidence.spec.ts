@@ -10,7 +10,7 @@ import { PlatformIntegrationFactory } from '../platformIntegration.factory';
 describe('CodeManagementService check-evidence dispatch', () => {
     let service: CodeManagementService;
     let factory: PlatformIntegrationFactory;
-    let integrationService: { findOne: jest.Mock };
+    let integrationService: { resolveCodeManagementConnection: jest.Mock };
 
     const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
     const repository = { owner: 'acme', name: 'widget-api' };
@@ -26,7 +26,7 @@ describe('CodeManagementService check-evidence dispatch', () => {
         );
 
     beforeEach(async () => {
-        integrationService = { findOne: jest.fn() };
+        integrationService = { resolveCodeManagementConnection: jest.fn() };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -44,7 +44,10 @@ describe('CodeManagementService check-evidence dispatch', () => {
     });
 
     const usePlatform = (platform: PlatformType) =>
-        integrationService.findOne.mockResolvedValue({ platform });
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            ambiguous: false,
+            platform,
+        });
 
     it('dispatches to the team platform implementation', async () => {
         usePlatform(PlatformType.GITHUB);
@@ -84,7 +87,10 @@ describe('CodeManagementService check-evidence dispatch', () => {
     });
 
     it('returns [] when the team has no code-management integration', async () => {
-        integrationService.findOne.mockResolvedValue(null);
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            platform: null,
+            ambiguous: false,
+        });
 
         expect(
             await service.getCheckEvidence({
@@ -112,7 +118,7 @@ describe('CodeManagementService check-evidence dispatch', () => {
         ).toEqual([]);
     });
 
-    it('honours an explicitly passed platform without looking up the integration', async () => {
+    it('honours an explicitly passed platform, handing it to the connection lookup', async () => {
         const getCheckEvidence = jest.fn().mockResolvedValue([]);
         register(PlatformType.GITLAB, { getCheckEvidence });
 
@@ -125,7 +131,12 @@ describe('CodeManagementService check-evidence dispatch', () => {
             PlatformType.GITLAB,
         );
 
-        expect(integrationService.findOne).not.toHaveBeenCalled();
+        expect(
+            integrationService.resolveCodeManagementConnection,
+        ).toHaveBeenCalledWith(
+            orgTeam,
+            expect.objectContaining({ platform: PlatformType.GITLAB }),
+        );
         expect(getCheckEvidence).toHaveBeenCalled();
     });
 });
@@ -133,12 +144,12 @@ describe('CodeManagementService check-evidence dispatch', () => {
 describe('CodeManagementService check-evidence capability probe', () => {
     let service: CodeManagementService;
     let factory: PlatformIntegrationFactory;
-    let integrationService: { findOne: jest.Mock };
+    let integrationService: { resolveCodeManagementConnection: jest.Mock };
 
     const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
 
     beforeEach(async () => {
-        integrationService = { findOne: jest.fn() };
+        integrationService = { resolveCodeManagementConnection: jest.fn() };
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CodeManagementService,
@@ -163,7 +174,8 @@ describe('CodeManagementService check-evidence capability probe', () => {
         );
 
     it('reports no support when the platform omits the reader', async () => {
-        integrationService.findOne.mockResolvedValue({
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            ambiguous: false,
             platform: PlatformType.FORGEJO,
         });
         register(PlatformType.FORGEJO, {});
@@ -177,7 +189,8 @@ describe('CodeManagementService check-evidence capability probe', () => {
     // A platform that reads statuses but has no line-level concept must say so
     // rather than let callers infer "no findings" from an empty array.
     it('reports status-only support when the platform declares it', async () => {
-        integrationService.findOne.mockResolvedValue({
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            ambiguous: false,
             platform: PlatformType.AZURE_REPOS,
         });
         register(PlatformType.AZURE_REPOS, {
@@ -196,7 +209,8 @@ describe('CodeManagementService check-evidence capability probe', () => {
     // Implementing the reader without the probe means statuses work; claiming
     // annotations would be a lie, so the default stays conservative.
     it('defaults to status-only when the reader exists but the probe does not', async () => {
-        integrationService.findOne.mockResolvedValue({
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            ambiguous: false,
             platform: PlatformType.GITHUB,
         });
         register(PlatformType.GITHUB, { getCheckEvidence: jest.fn() });

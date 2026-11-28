@@ -5,23 +5,35 @@ import { exitWithCode } from '../../utils/cli-exit.js';
 import { normalizeCommandError } from '../../utils/command-errors.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 
-export type ConfigCentralizedStatusOptions = {
+type ConnectionOption = {
+    /** The Git connection, when the workspace has several. */
+    connection?: string;
+};
+
+export type ConfigCentralizedStatusOptions = ConnectionOption & {
     json?: boolean;
 };
 
-export type ConfigCentralizedInitOptions = {
+export type ConfigCentralizedInitOptions = ConnectionOption & {
     syncOption?: string;
     json?: boolean;
 };
 
-export type ConfigCentralizedDownloadOptions = {
+export type ConfigCentralizedDownloadOptions = ConnectionOption & {
     out: string;
     json?: boolean;
 };
 
-export type ConfigCentralizedActionOptions = {
+export type ConfigCentralizedActionOptions = ConnectionOption & {
     json?: boolean;
 };
+
+function connectionScope(
+    options: ConnectionOption,
+): [] | [{ connectionId: string }] {
+    const connectionId = options.connection?.trim();
+    return connectionId ? [{ connectionId }] : [];
+}
 
 function resolveSyncOption(value: string | undefined): 'pr' | 'manual' {
     if (!value) {
@@ -47,10 +59,25 @@ export async function configCentralizedStatusAction(
     options: ConfigCentralizedStatusOptions = {},
 ): Promise<void> {
     try {
-        const status = await centralizedConfigService.getStatus();
+        const status = await centralizedConfigService.getStatus(
+            ...connectionScope(options),
+        );
 
         if (options.json) {
             cliInfo(JSON.stringify(status, null, 2));
+            return;
+        }
+
+        if (status.connections?.length) {
+            cliInfo('Centralized config per Git connection:');
+            for (const connection of status.connections) {
+                cliInfo(
+                    connection.enabled && connection.repository
+                        ? `  ${connection.connectionId}: enabled, ${formatRepositoryLabel(connection.repository)} (${connection.repository.id})`
+                        : `  ${connection.connectionId}: disabled`,
+                );
+            }
+            cliInfo('Pass --connection <id> to manage one.');
             return;
         }
 
@@ -79,6 +106,7 @@ export async function configCentralizedInitAction(
         const response = await centralizedConfigService.init({
             repository,
             syncOption,
+            ...(connectionScope(options)[0] ?? {}),
         });
 
         if (options.json) {
@@ -113,7 +141,9 @@ export async function configCentralizedSyncAction(
     options: ConfigCentralizedActionOptions = {},
 ): Promise<void> {
     try {
-        const response = await centralizedConfigService.sync();
+        const response = await centralizedConfigService.sync(
+            ...connectionScope(options),
+        );
 
         if (options.json) {
             cliInfo(JSON.stringify(response, null, 2));
@@ -132,7 +162,9 @@ export async function configCentralizedDisableAction(
     options: ConfigCentralizedActionOptions = {},
 ): Promise<void> {
     try {
-        const response = await centralizedConfigService.disable();
+        const response = await centralizedConfigService.disable(
+            ...connectionScope(options),
+        );
 
         if (options.json) {
             cliInfo(JSON.stringify(response, null, 2));
@@ -151,7 +183,10 @@ export async function configCentralizedDownloadAction(
     options: ConfigCentralizedDownloadOptions,
 ): Promise<void> {
     try {
-        const result = await centralizedConfigService.download(options.out);
+        const result = await centralizedConfigService.download(
+            options.out,
+            ...connectionScope(options),
+        );
 
         if (options.json) {
             cliInfo(JSON.stringify(result, null, 2));

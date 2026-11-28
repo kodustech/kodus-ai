@@ -110,6 +110,17 @@
     }
   },
   {
+    "key": "cockpit.controller.ts#access",
+    "httpMethod": "GET",
+    "urlPath": "/cockpit/access",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "cockpit.controller.ts#bugRatioChart",
     "httpMethod": "GET",
     "urlPath": "/code-health/charts/bug-ratio",
@@ -759,6 +770,17 @@
     }
   },
   {
+    "key": "integration.controller.ts#getConnectionAccess",
+    "httpMethod": "GET",
+    "urlPath": "/integration/connections/:connectionId/access",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "integration.controller.ts#getConnections",
     "httpMethod": "GET",
     "urlPath": "/integration/connections",
@@ -789,6 +811,28 @@
       "billing_manager": "allow",
       "repo_admin": "allow",
       "contributor": "allow"
+    }
+  },
+  {
+    "key": "integration.controller.ts#setConnectionAccess",
+    "httpMethod": "PUT",
+    "urlPath": "/integration/connections/:connectionId/access",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "integration.controller.ts#updateConnection",
+    "httpMethod": "PATCH",
+    "urlPath": "/integration/connections/:connectionId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
     }
   },
   {
@@ -1455,6 +1499,17 @@
     "key": "organizationParameters.controller.ts#testByokModel",
     "httpMethod": "POST",
     "urlPath": "/organization-parameters/test-byok-model",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#updateAuthorFilters",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/author-filters",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

@@ -7,6 +7,7 @@ import {
     Headers,
     Inject,
     Post,
+    Query,
     Res,
     UnauthorizedException,
 } from '@nestjs/common';
@@ -17,7 +18,9 @@ import {
     ApiOperation,
     ApiTags,
 } from '@nestjs/swagger';
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import { Response } from 'express';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { finished } from 'stream/promises';
 
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
@@ -63,6 +66,7 @@ export class CliCentralizedConfigController {
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
         private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
+        private readonly connectionScope: CentralizedConfigConnectionScope,
     ) {}
 
     @Get('/status')
@@ -108,25 +112,46 @@ export class CliCentralizedConfigController {
     async getStatus(
         @Headers('x-team-key') teamKey?: string,
         @Headers('authorization') authHeader?: string,
+        @Query('connectionId') connectionId?: string,
     ) {
         const authContext = await this.resolveCliContext(teamKey, authHeader);
         this.ensureRepositoryConfigCapability(authContext);
 
-        const context = this.toOrganizationAndTeamData(authContext);
+        const workspace = this.toOrganizationAndTeamData(authContext);
+        const connections = await this.connectionScope.connectionsOf(workspace);
 
-        const parameter = await this.parametersService.findByKey(
-            ParametersKey.CENTRALIZED_CONFIG,
-            context,
-        );
-
-        const configValue = parameter?.configValue ?? {
-            enabled: false,
-            repository: null,
+        const statusOf = async (context: OrganizationAndTeamData) => {
+            const parameter = await this.parametersService.findByKey(
+                ParametersKey.CENTRALIZED_CONFIG,
+                context,
+            );
+            return {
+                enabled: parameter?.configValue?.enabled === true,
+                repository: parameter?.configValue?.repository ?? null,
+            };
         };
 
+        if (connectionId || connections.length < 2) {
+            return statusOf(
+                this.connectionScope.scopeTo(
+                    workspace,
+                    connections,
+                    connectionId,
+                ),
+            );
+        }
+
         return {
-            enabled: configValue?.enabled === true,
-            repository: configValue?.repository ?? null,
+            ...(await statusOf(workspace)),
+            connections: await Promise.all(
+                connections.map(async (connection) => ({
+                    connectionId: connection.integrationId,
+                    ...(await statusOf({
+                        ...workspace,
+                        integrationId: connection.integrationId,
+                    })),
+                })),
+            ),
         };
     }
 
@@ -168,6 +193,7 @@ export class CliCentralizedConfigController {
         body: {
             repositoryId: string;
             syncOption?: 'pr' | 'manual';
+            connectionId?: string;
         },
         @Headers('x-team-key') teamKey?: string,
         @Headers('authorization') authHeader?: string,
@@ -175,12 +201,23 @@ export class CliCentralizedConfigController {
         const authContext = await this.resolveCliContext(teamKey, authHeader);
         this.ensureRepositoryConfigCapability(authContext);
 
-        const context = this.toOrganizationAndTeamData(authContext);
-        await this.ensureCodeManagementIntegration(context);
+        const workspace = this.toOrganizationAndTeamData(authContext);
 
         if (!body?.repositoryId) {
             throw new BadRequestException('repositoryId is required');
         }
+
+        const connections = await this.connectionScope.connectionsOf(workspace);
+        const context = this.connectionScope.scopeTo(
+            workspace,
+            connections,
+            body.connectionId ??
+                this.connectionScope.connectionListing(
+                    connections,
+                    body.repositoryId,
+                ),
+        );
+        await this.ensureCodeManagementIntegration(context);
 
         const repository = await this.getSelectedRepository(
             context,
@@ -237,11 +274,17 @@ export class CliCentralizedConfigController {
     async sync(
         @Headers('x-team-key') teamKey?: string,
         @Headers('authorization') authHeader?: string,
+        @Query('connectionId') connectionId?: string,
     ) {
         const authContext = await this.resolveCliContext(teamKey, authHeader);
         this.ensureRepositoryConfigCapability(authContext);
 
-        const context = this.toOrganizationAndTeamData(authContext);
+        const workspace = this.toOrganizationAndTeamData(authContext);
+        const context = this.connectionScope.scopeTo(
+            workspace,
+            await this.connectionScope.connectionsOf(workspace),
+            connectionId,
+        );
         await this.ensureCodeManagementIntegration(context);
 
         return this.centralizedConfigSyncUseCase.execute({
@@ -280,11 +323,17 @@ export class CliCentralizedConfigController {
     async disable(
         @Headers('x-team-key') teamKey?: string,
         @Headers('authorization') authHeader?: string,
+        @Query('connectionId') connectionId?: string,
     ) {
         const authContext = await this.resolveCliContext(teamKey, authHeader);
         this.ensureRepositoryConfigCapability(authContext);
 
-        const context = this.toOrganizationAndTeamData(authContext);
+        const workspace = this.toOrganizationAndTeamData(authContext);
+        const context = this.connectionScope.scopeTo(
+            workspace,
+            await this.connectionScope.connectionsOf(workspace),
+            connectionId,
+        );
 
         await this.createOrUpdateParametersUseCase.execute(
             ParametersKey.CENTRALIZED_CONFIG,
@@ -323,21 +372,31 @@ export class CliCentralizedConfigController {
         @Res() response: Response,
         @Headers('x-team-key') teamKey?: string,
         @Headers('authorization') authHeader?: string,
+        @Query('connectionId') connectionId?: string,
     ) {
         const authContext = await this.resolveCliContext(teamKey, authHeader);
         this.ensureRepositoryConfigCapability(authContext);
 
-        const context = this.toOrganizationAndTeamData(authContext);
+        const workspace = this.toOrganizationAndTeamData(authContext);
+        const connections = await this.connectionScope.connectionsOf(workspace);
+        const context = this.connectionScope.scopeTo(
+            workspace,
+            connections,
+            connectionId,
+        );
 
-        const archive =
-            await this.centralizedConfigDownloadZipUseCase.execute(
-                this.buildCliUser(authContext),
-                context.teamId,
-                {
-                    skipAuthorization: true,
-                    organizationId: context.organizationId,
-                },
-            );
+        const archive = await this.centralizedConfigDownloadZipUseCase.execute(
+            this.buildCliUser(authContext),
+            context.teamId,
+            {
+                skipAuthorization: true,
+                organizationId: context.organizationId,
+                ...(await this.connectionScope.downloadScope(
+                    context,
+                    connections,
+                )),
+            },
+        );
 
         response.set({
             'Content-Type': 'application/zip',
@@ -408,10 +467,9 @@ export class CliCentralizedConfigController {
         };
     }
 
-    private async ensureCodeManagementIntegration(context: {
-        organizationId: string;
-        teamId: string;
-    }) {
+    private async ensureCodeManagementIntegration(
+        context: OrganizationAndTeamData,
+    ) {
         const integrationType =
             await this.codeManagementService.getTypeIntegration(context);
 
@@ -425,10 +483,7 @@ export class CliCentralizedConfigController {
     }
 
     private async getSelectedRepository(
-        context: {
-            organizationId: string;
-            teamId: string;
-        },
+        context: OrganizationAndTeamData,
         repositoryId: string,
     ) {
         const selectedRepositories =

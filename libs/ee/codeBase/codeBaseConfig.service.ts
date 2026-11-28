@@ -190,6 +190,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     repository.id,
                     mergedConfigs.directoryId,
                     limited,
+                    organizationAndTeamData.integrationId,
                 ) || { standardRules: [], memoryRules: [] };
 
             const fullConfig = {
@@ -854,6 +855,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         const hasIntegration =
             await this.codeManagementService.getTypeIntegration(
                 organizationAndTeamData,
+                { id: repository.id, name: repository.name },
             );
         if (!hasIntegration) return;
 

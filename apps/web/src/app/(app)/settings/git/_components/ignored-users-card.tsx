@@ -12,11 +12,8 @@ import {
 } from "@components/ui/card";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
-import {
-    OrganizationParametersAutoAssignConfig,
-    OrganizationParametersConfigKey,
-} from "@services/parameters/types";
+import { updateAuthorFilters } from "@services/organizationParameters/fetch";
+import { OrganizationParametersAutoAssignConfig } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { Check, ChevronsUpDown } from "lucide-react";
@@ -46,28 +43,42 @@ type FilterMode = "ignore" | "allow";
 export const IgnoredUsersCard = ({
     organizationMembers,
     autoLicenseAssignmentConfig,
+    connectionId,
+    connectionName,
 }: {
     organizationMembers: OrganizationMember[];
     autoLicenseAssignmentConfig?: OrganizationParametersAutoAssignConfig;
+    /** Set when the workspace has several Git connections: the lists are that connection's. */
+    connectionId?: string;
+    connectionName?: string;
 }) => {
+    const ownLists = connectionId
+        ? autoLicenseAssignmentConfig?.connections?.[connectionId]
+        : undefined;
+    const lists = {
+        ignoredUsers:
+            (ownLists ?? autoLicenseAssignmentConfig)?.ignoredUsers ?? [],
+        allowedUsers:
+            (ownLists ?? autoLicenseAssignmentConfig)?.allowedUsers ?? [],
+        seededBotIds:
+            (ownLists ?? autoLicenseAssignmentConfig)?.seededBotIds ?? [],
+    };
     const { organizationId } = useOrganizationContext();
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<FilterMode>(
-        (autoLicenseAssignmentConfig?.allowedUsers?.length ?? 0) > 0
-            ? "allow"
-            : "ignore",
+        lists.allowedUsers.length > 0 ? "allow" : "ignore",
     );
     const [pendingIgnoredUsers, setPendingIgnoredUsers] = useState<string[]>(
-        autoLicenseAssignmentConfig?.ignoredUsers ?? [],
+        lists.ignoredUsers,
     );
     const [pendingAllowedUsers, setPendingAllowedUsers] = useState<string[]>(
-        autoLicenseAssignmentConfig?.allowedUsers ?? [],
+        lists.allowedUsers,
     );
 
     const resetPendingUsersFromConfig = () => {
-        setPendingIgnoredUsers(autoLicenseAssignmentConfig?.ignoredUsers ?? []);
-        setPendingAllowedUsers(autoLicenseAssignmentConfig?.allowedUsers ?? []);
+        setPendingIgnoredUsers(lists.ignoredUsers);
+        setPendingAllowedUsers(lists.allowedUsers);
     };
 
     const canEditGitSettings = usePermission(
@@ -75,22 +86,13 @@ export const IgnoredUsersCard = ({
         ResourceType.GitSettings,
     );
 
-    // Always merge into the stored config: it also carries the auto-revoke
-    // settings, the pending-revocation timers written by the cron, and the
-    // record of which bots were auto-ignored. Replacing it wholesale drops
-    // them and lets an ignored bot be seeded back on the next discovery run.
-    const saveAutoAssignConfig = (
-        patch: Partial<OrganizationParametersAutoAssignConfig>,
-    ) =>
-        createOrUpdateOrganizationParameter(
-            OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-            {
-                enabled: false,
-                ignoredUsers: [],
-                ...autoLicenseAssignmentConfig,
-                ...patch,
-            },
-        );
+    // Only this connection's lists (or the organization's) are sent; the
+    // server merges them into what is stored now, so the revocation timers,
+    // the bots seeded meanwhile and the other connections' lists stay.
+    const saveAutoAssignConfig = (patch: {
+        ignoredUsers: string[];
+        allowedUsers: string[];
+    }) => updateAuthorFilters({ connectionId, ...patch });
 
     const [handleIgnoredUsersChange, { loading: isSavingIgnoredUsers }] =
         useAsyncAction(async () => {
@@ -192,7 +194,9 @@ export const IgnoredUsersCard = ({
     return (
         <div className="mt-5 flex flex-col gap-4">
             <h2 className="text-md font-bold">
-                Choose which PR authors Kody reviews in enabled repositories.
+                {connectionName
+                    ? `${connectionName}: choose which PR authors Kody reviews in its enabled repositories.`
+                    : "Choose which PR authors Kody reviews in enabled repositories."}
             </h2>
             <div className="space-y-4 pt-0">
                 <div className="grid gap-3 md:grid-cols-2">

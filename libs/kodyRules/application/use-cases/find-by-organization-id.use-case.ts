@@ -18,6 +18,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
+import { ruleVisibleToConnections } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 
 @Injectable()
 export class FindByOrganizationIdKodyRulesUseCase {
@@ -36,7 +37,8 @@ export class FindByOrganizationIdKodyRulesUseCase {
         private readonly authorizationService: AuthorizationService,
     ) {}
 
-    async execute() {
+    /** `restriction`: the Git connections a member granted only some of them reads. */
+    async execute(restriction?: { connectionIds: ReadonlySet<string> } | null) {
         try {
             if (!this.request.user.organization.uuid) {
                 throw new Error('Organization ID not found');
@@ -59,7 +61,8 @@ export class FindByOrganizationIdKodyRulesUseCase {
             let visibleRules = (existing.rules || []).filter(
                 (rule) =>
                     rule.status !== KodyRulesStatus.DELETED &&
-                    rule.status !== KodyRulesStatus.APPLIED,
+                    rule.status !== KodyRulesStatus.APPLIED &&
+                    ruleVisibleToConnections(rule, restriction?.connectionIds),
             );
 
             // A repo-scoped member sees the org-level (global) rules and the

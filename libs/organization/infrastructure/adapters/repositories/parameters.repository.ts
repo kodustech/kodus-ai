@@ -143,6 +143,21 @@ export class ParametersRepository implements IParametersRepository {
         }
     }
 
+    /** Writes `next` only while the row still holds `expected`. */
+    async compareAndSetConfigValue(
+        uuid: string,
+        expected: unknown,
+        next: unknown,
+    ): Promise<boolean> {
+        const [, affected] = (await this.parametersRepository.manager.query(
+            `UPDATE "parameters"
+                SET "configValue" = $3::jsonb, "updatedAt" = now()
+              WHERE "uuid" = $1 AND "configValue" = $2::jsonb`,
+            [uuid, JSON.stringify(expected ?? null), JSON.stringify(next)],
+        )) as [unknown, number];
+        return affected > 0;
+    }
+
     async update<K extends ParametersKey>(
         filter: Partial<IParameters<K>>,
         data: Partial<IParameters<K>>,
@@ -207,6 +222,23 @@ export class ParametersRepository implements IParametersRepository {
             .getOne();
 
         return mapSimpleModelToEntity(parametersSelected, ParametersEntity);
+    }
+
+    async findActiveByKeyInOrganization<K extends ParametersKey>(
+        configKey: K,
+        organizationId: string,
+    ): Promise<ParametersEntity<K>[]> {
+        const parameters = await this.parametersRepository
+            .createQueryBuilder('parameters')
+            .innerJoinAndSelect('parameters.team', 'team')
+            .where('parameters.configKey = :configKey', { configKey })
+            .andWhere('parameters.active = :active', { active: true })
+            .andWhere('team.organization_id = :organizationId', {
+                organizationId,
+            })
+            .getMany();
+
+        return mapSimpleModelsToEntities(parameters, ParametersEntity);
     }
 
     async createNewActiveVersion<K extends ParametersKey>(

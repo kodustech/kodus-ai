@@ -3,19 +3,24 @@ import {
     Controller,
     Get,
     Inject,
+    Param,
+    Patch,
     Post,
+    Put,
     Query,
     UseGuards,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     Action,
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -23,6 +28,8 @@ import { checkPermissions } from '@libs/identity/infrastructure/adapters/service
 import { CheckHasIntegrationByPlatformUseCase } from '@libs/integrations/application/use-cases/check-has-connection.use-case';
 import { CloneIntegrationUseCase } from '@libs/integrations/application/use-cases/clone-integration.use-case';
 import { GetConnectionsUseCase } from '@libs/platform/application/use-cases/integrations/get-connections.use-case';
+import { UpdateConnectionUseCase } from '@libs/platform/application/use-cases/integrations/update-connection.use-case';
+import { ConnectionAccessUseCase } from '@libs/identity/application/use-cases/permissions/connection-access.use-case';
 import { GetOrganizationIdUseCase } from '@libs/integrations/application/use-cases/get-organization-id.use-case';
 import { TeamQueryDto } from '@libs/organization/dtos/teamId-query.dto';
 import {
@@ -41,6 +48,7 @@ import {
     ApiStringResponseDto,
 } from '../dtos/api-response.dto';
 import { IntegrationCloneResponseDto } from '../dtos/integration-response.dto';
+import { SetConnectionAccessDto } from '../dtos/connection-access.dto';
 
 @ApiTags('Integration')
 @ApiBearerAuth('jwt')
@@ -52,11 +60,14 @@ export class IntegrationController {
         private readonly cloneIntegrationUseCase: CloneIntegrationUseCase,
         private readonly checkHasIntegrationByPlatformUseCase: CheckHasIntegrationByPlatformUseCase,
         private readonly getConnectionsUseCase: GetConnectionsUseCase,
+        private readonly updateConnectionUseCase: UpdateConnectionUseCase,
+        private readonly connectionAccessUseCase: ConnectionAccessUseCase,
         private readonly codeManagementService: CodeManagementService,
         // HTTP-only controller — REQUEST carries the org from the JWT; the team
         // comes from the query (the web passes the selected team).
         @Inject(REQUEST)
         private readonly request: UserRequest,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     @Post('/clone-integration')
@@ -172,6 +183,7 @@ export class IntegrationController {
 
     @Get('/connections')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -185,6 +197,107 @@ export class IntegrationController {
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getConnections(@Query() query: TeamQueryDto) {
-        return this.getConnectionsUseCase.execute(query.teamId);
+        const connections = await this.getConnectionsUseCase.execute(
+            query.teamId,
+        );
+        if (!Array.isArray(connections)) return connections;
+        const restriction = await this.connectionAccess.restrictionFor(
+            this.request?.user,
+        );
+        type Listed = { category?: string; connectionId?: string };
+        const isGit = (connection: Listed) =>
+            connection?.category === 'CODE_MANAGEMENT';
+        // How many the workspace has, which a member granted some of them
+        // does not see: the page lays itself out by it.
+        const workspaceConnectionCount = connections.filter(isGit).length;
+        return connections
+            .filter(
+                (connection: Listed) =>
+                    !restriction ||
+                    !isGit(connection) ||
+                    restriction.connectionIds.has(connection.connectionId),
+            )
+            .map((connection: Listed) =>
+                isGit(connection)
+                    ? { ...connection, workspaceConnectionCount }
+                    : connection,
+            );
+    }
+
+    @Patch('/connections/:connectionId')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Update a Git connection',
+        description:
+            'Rename a Git connection of the workspace, or turn its reviews on or off.',
+    })
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    public async updateConnection(
+        @Param('connectionId') connectionId: string,
+        @Query() query: TeamQueryDto,
+        @Body() body: { name?: string | null; reviewEnabled?: boolean },
+    ) {
+        return this.updateConnectionUseCase.execute({
+            teamId: query.teamId,
+            connectionId,
+            name: body?.name,
+            reviewEnabled: body?.reviewEnabled,
+        });
+    }
+
+    @Get('/connections/:connectionId/access')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'List who reads a Git connection',
+        description:
+            'Members granted read access to the connection. Owners read every connection.',
+    })
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    public async getConnectionAccess(
+        @Param('connectionId') connectionId: string,
+        @Query() query: TeamQueryDto,
+    ) {
+        return this.connectionAccessUseCase.list({
+            teamId: query.teamId,
+            connectionId,
+        });
+    }
+
+    @Put('/connections/:connectionId/access')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Set who reads a Git connection',
+        description:
+            'Replaces the members granted read access to the connection.',
+    })
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    public async setConnectionAccess(
+        @Param('connectionId') connectionId: string,
+        @Query() query: TeamQueryDto,
+        @Body() body: SetConnectionAccessDto,
+    ) {
+        return this.connectionAccessUseCase.replace({
+            teamId: query.teamId,
+            connectionId,
+            userIds: body.userIds,
+        });
     }
 }

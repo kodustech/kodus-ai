@@ -113,18 +113,34 @@ export class SetRepositorySelectionUseCase {
             );
         }
 
-        const integration = await this.integrationService.findOne({
-            organization: { uuid: organizationAndTeamData.organizationId },
-            team: { uuid: organizationAndTeamData.teamId },
-            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-            status: true,
-        });
+        const connections =
+            (await this.integrationService.find({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            })) ?? [];
+        const named = organizationAndTeamData.integrationId;
+        const integration = named
+            ? connections.find((connection) => connection.uuid === named)
+            : connections.length === 1
+              ? connections[0]
+              : undefined;
 
+        if (!named && connections.length > 1) {
+            throw new BadRequestException(
+                'This workspace has several Git connections: choose the one whose repositories to review.',
+            );
+        }
         if (!integration?.uuid) {
             throw new BadRequestException(
                 'Connect a git integration before choosing which repositories to review.',
             );
         }
+        const scoped = {
+            ...organizationAndTeamData,
+            integrationId: integration.uuid,
+        };
 
         const selection: RepositorySelectionConfig = {
             mode,
@@ -153,7 +169,7 @@ export class SetRepositorySelectionUseCase {
 
         if (mode === 'all') {
             void this.syncAllRepositoriesUseCase
-                .syncTeam(organizationAndTeamData, 'enable')
+                .syncTeam(scoped, 'enable')
                 .catch((error) => {
                     this.logger.error({
                         message: 'The first repository sync failed',

@@ -9,8 +9,11 @@ const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
 
 describe('RepositoryConnectionService', () => {
     let jobQueueService: { enqueue: jest.Mock; listJobs: jest.Mock };
-    let repositoryService: { findOrCreate: jest.Mock; findByExternalId: jest.Mock };
-    let integrationConfigService: { findOne: jest.Mock };
+    let repositoryService: {
+        findOrCreate: jest.Mock;
+        findByExternalId: jest.Mock;
+    };
+    let integrationConfigService: { findOne: jest.Mock; find: jest.Mock };
     let backfill: { execute: jest.Mock };
     let telemetry: { repositoryConnected: jest.Mock };
     let service: RepositoryConnectionService;
@@ -34,6 +37,7 @@ describe('RepositoryConnectionService', () => {
         };
         integrationConfigService = {
             findOne: jest.fn().mockResolvedValue({ uuid: 'repos-config-1' }),
+            find: jest.fn().mockResolvedValue([{ uuid: 'repos-config-1' }]),
         };
         backfill = { execute: jest.fn().mockResolvedValue(undefined) };
         telemetry = { repositoryConnected: jest.fn() };
@@ -57,7 +61,7 @@ describe('RepositoryConnectionService', () => {
 
         // The active integration's row: a team that switched providers keeps
         // the old integration's rows until they are deleted.
-        expect(integrationConfigService.findOne).toHaveBeenCalledWith({
+        expect(integrationConfigService.find).toHaveBeenCalledWith({
             team: { uuid: 'team-1' },
             configKey: IntegrationConfigKey.REPOSITORIES,
             integration: { status: true },
@@ -78,29 +82,79 @@ describe('RepositoryConnectionService', () => {
         [AstGraphStatus.FAILED, true],
         [AstGraphStatus.BUILDING, false],
         [AstGraphStatus.READY, false],
-    ])('enqueues an AST build for a %s record: %s', async (status, expected) => {
-        const enqueued = await service.enqueueAstBuild({
-            organizationAndTeamData: orgTeam,
-            record: {
-                uuid: 'rec-1',
-                astGraphStatus: status,
-                defaultBranch: 'main',
-                fullName: 'acme/api',
-                platform: 'gitlab',
-            } as any,
-            cloneUrl: 'https://git.example/acme/api.git',
+    ])(
+        'enqueues an AST build for a %s record: %s',
+        async (status, expected) => {
+            const enqueued = await service.enqueueAstBuild({
+                organizationAndTeamData: orgTeam,
+                record: {
+                    uuid: 'rec-1',
+                    astGraphStatus: status,
+                    defaultBranch: 'main',
+                    fullName: 'acme/api',
+                    platform: 'gitlab',
+                } as any,
+                cloneUrl: 'https://git.example/acme/api.git',
+            });
+
+            expect(enqueued).toBe(expected);
+            expect(jobQueueService.enqueue).toHaveBeenCalledTimes(
+                expected ? 1 : 0,
+            );
+            if (expected) {
+                expect(jobQueueService.enqueue).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        workflowType: WorkflowType.AST_GRAPH_BUILD,
+                        payload: expect.objectContaining({
+                            repositoryId: 'rec-1',
+                        }),
+                    }),
+                );
+            }
+        },
+    );
+
+    it("registers the records under the named connection's own repositories row", async () => {
+        integrationConfigService.findOne.mockResolvedValue({
+            uuid: 'repos-config-gl-b',
         });
 
-        expect(enqueued).toBe(expected);
-        expect(jobQueueService.enqueue).toHaveBeenCalledTimes(expected ? 1 : 0);
-        if (expected) {
-            expect(jobQueueService.enqueue).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    workflowType: WorkflowType.AST_GRAPH_BUILD,
-                    payload: expect.objectContaining({ repositoryId: 'rec-1' }),
-                }),
-            );
-        }
+        const registered = await service.registerRepositoryRecords({
+            organizationAndTeamData: { ...orgTeam, integrationId: 'gl-b' },
+            platform: 'gitlab',
+            repositories: [{ id: '7', name: 'acme/api' } as any],
+        });
+
+        expect(integrationConfigService.findOne).toHaveBeenCalledWith({
+            team: { uuid: 'team-1' },
+            configKey: IntegrationConfigKey.REPOSITORIES,
+            integration: { status: true, uuid: 'gl-b' },
+        });
+        expect(repositoryService.findOrCreate).toHaveBeenCalledTimes(1);
+        expect(repositoryService.findOrCreate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                integrationConfigId: 'repos-config-gl-b',
+                externalId: '7',
+            }),
+        );
+        expect(registered.map(({ record }) => record.uuid)).toEqual(['rec-7']);
+    });
+
+    it('registers nothing when no connection is named and several list repositories', async () => {
+        integrationConfigService.find.mockResolvedValue([
+            { uuid: 'repos-config-gh-a' },
+            { uuid: 'repos-config-gl-b' },
+        ]);
+
+        const registered = await service.registerRepositoryRecords({
+            organizationAndTeamData: orgTeam,
+            platform: 'gitlab',
+            repositories: [{ id: '7', name: 'acme/api' } as any],
+        });
+
+        expect(registered).toEqual([]);
+        expect(repositoryService.findOrCreate).not.toHaveBeenCalled();
+        expect(telemetry.repositoryConnected).not.toHaveBeenCalled();
     });
 
     it('counts the team AST builds that are queued or running, ignoring stale ones', async () => {

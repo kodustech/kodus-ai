@@ -62,12 +62,21 @@ function setup() {
         execute: jest.fn(async () => ({ uuid: 'scan-9' })),
     };
     const gate = { isEnabledFor: jest.fn(async () => true) };
+    // The visible repositories, as the scans listing resolves them.
+    const scans = {
+        repositoryScope: jest.fn(async (_org: string, ids?: string[]) =>
+            ids === undefined
+                ? undefined
+                : ids.map((id) => ({ ...repositoryKey, id })),
+        ),
+    };
     const useCase = new SecurityScanSchedulesUseCase(
         schedules as any,
         start as any,
         gate as any,
+        scans as any,
     );
-    return { useCase, schedules, start, gate };
+    return { useCase, schedules, start, gate, scans };
 }
 
 const now = new Date('2026-11-24T03:01:00Z');
@@ -387,5 +396,33 @@ describe('SecurityScanSchedulesUseCase', () => {
         const got = await useCase.list('org-1', ['repo-2']);
 
         expect(got.map((s) => s.repository.id)).toEqual(['repo-2']);
+    });
+
+    it('lists a schedule only when its whole repository identity is visible, not just its id', async () => {
+        const { useCase, schedules, scans } = setup();
+        schedules.list.mockResolvedValue([
+            schedule(),
+            schedule({
+                uuid: 'sch-other-host',
+                repository: { ...repositoryKey, host: 'git.acme.io' },
+            }),
+            schedule({
+                uuid: 'sch-other-platform',
+                repository: { ...repositoryKey, platform: 'GITLAB' },
+            }),
+        ]);
+
+        const got = await useCase.list('org-1', ['repo-1']);
+
+        expect(scans.repositoryScope).toHaveBeenCalledWith('org-1', ['repo-1']);
+        expect(got).toEqual([schedule()]);
+    });
+
+    it('lists every schedule for a caller who sees every repository', async () => {
+        const { useCase } = setup();
+
+        const got = await useCase.list('org-1');
+
+        expect(got.map((s) => s.uuid)).toEqual(['sch-1', 'sch-2']);
     });
 });

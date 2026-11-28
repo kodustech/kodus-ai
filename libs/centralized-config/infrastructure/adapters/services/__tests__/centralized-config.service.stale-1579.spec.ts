@@ -234,6 +234,7 @@ async function buildHarness(opts: {
             return Promise.resolve({ configValue: {} });
         }),
         findOne: jest.fn(),
+        findActiveByKeyInOrganization: jest.fn().mockResolvedValue([]),
     };
 
     const integrationConfigService = {
@@ -324,7 +325,10 @@ async function buildHarness(opts: {
             },
             {
                 provide: CodeManagementService,
-                useValue: { getRepositoryTree: jest.fn() },
+                useValue: {
+                    getRepositoryTree: jest.fn(),
+                    connectionServerKey: jest.fn(),
+                },
             },
             {
                 provide: UpdateOrCreateCodeReviewParameterUseCase,

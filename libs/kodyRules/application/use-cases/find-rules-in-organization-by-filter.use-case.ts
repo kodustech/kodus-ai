@@ -10,6 +10,7 @@ import {
     Action,
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import {
     IKodyRulesService,
@@ -24,6 +25,7 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
+import { ruleVisibleToConnections } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 
 @Injectable()
 export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUseCase {
@@ -43,6 +45,8 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
         private readonly contextReferenceService: IContextReferenceService,
 
         private readonly authorizationService: AuthorizationService,
+
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     async execute(
@@ -102,6 +106,17 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
                 filteredRules = filteredRules.filter(
                     (rule) =>
                         !rule.repositoryId || allowed.has(rule.repositoryId),
+                );
+            }
+
+            // A connection's own global rules review only its repositories,
+            // so they are shown to members granted that connection.
+            const restriction = this.request?.user
+                ? await this.connectionAccess.restrictionFor(this.request.user)
+                : null;
+            if (restriction) {
+                filteredRules = filteredRules.filter((rule) =>
+                    ruleVisibleToConnections(rule, restriction.connectionIds),
                 );
             }
 

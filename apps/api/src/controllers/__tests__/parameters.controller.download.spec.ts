@@ -44,6 +44,14 @@ const buildController = (
         centralizedConfigDownloadZipUseCase as any,
         null as any, // centralizedConfigInitUseCase
         null as any, // codeBaseConfigService
+        null as any, // connectionAccess
+        {
+            // A single-connection workspace: nothing to scope.
+            workspaceConfigScope: jest.fn(
+                async (workspace: object) => workspace,
+            ),
+            downloadScope: jest.fn().mockResolvedValue({}),
+        } as any,
     );
 
 describe('ParametersController › downloadCentralizedConfig', () => {
@@ -78,7 +86,7 @@ describe('ParametersController › downloadCentralizedConfig', () => {
         });
         expect(
             centralizedConfigDownloadZipUseCase.execute,
-        ).toHaveBeenCalledWith(user, 'team-1');
+        ).toHaveBeenCalledWith(user, 'team-1', {});
 
         const output = Buffer.concat(chunks);
         expect(output.subarray(0, 4)).toEqual(ZIP_MAGIC);

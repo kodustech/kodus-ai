@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    ForbiddenException,
     Get,
     Inject,
     Post,
@@ -8,6 +9,9 @@ import {
     Res,
     UseGuards,
 } from '@nestjs/common';
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import { narrowParameterToConnections } from '@libs/organization/domain/parameters/utils/narrow-parameter-to-connections';
 import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { REQUEST } from '@nestjs/core';
 import {
@@ -47,6 +51,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -103,6 +108,10 @@ export class ParametersController {
 
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+
+        private readonly connectionAccess: ConnectionAccessService,
+
+        private readonly connectionScope: CentralizedConfigConnectionScope,
     ) {}
 
     //#region Parameters
@@ -221,6 +230,7 @@ export class ParametersController {
     })
     @ApiOkResponse({ type: ParametersStoredResponseDto })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -232,12 +242,16 @@ export class ParametersController {
         @Query('teamId') teamId: string,
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
-
-        return maskCliSecrets(
-            await this.findByKeyParametersUseCase.execute(key, {
+        const [parameter, restriction] = await Promise.all([
+            this.findByKeyParametersUseCase.execute(key, {
                 teamId,
                 organizationId,
             }),
+            this.connectionAccess.restrictionFor(this.request?.user),
+        ]);
+
+        return maskCliSecrets(
+            narrowParameterToConnections(key, parameter, restriction),
         );
     }
 
@@ -254,6 +268,7 @@ export class ParametersController {
     @ApiQuery({ name: 'teamId', type: String, required: false })
     @ApiQuery({ name: 'repositoryId', type: String, required: false })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -270,6 +285,19 @@ export class ParametersController {
         @Query('teamId') teamId?: string,
         @Query('repositoryId') repositoryId?: string,
     ) {
+        if (repositoryId && repositoryId !== 'global') {
+            const restriction = await this.connectionAccess.restrictionFor(
+                this.request?.user,
+            );
+            if (
+                restriction &&
+                !restriction.allowsRepository({ id: repositoryId })
+            ) {
+                throw new ForbiddenException(
+                    'You are not granted the Git connection of this repository.',
+                );
+            }
+        }
         return this.listCodeReviewAutomationLabelsWithStatusUseCase.execute({
             codeReviewVersion,
             teamId,
@@ -368,6 +396,7 @@ export class ParametersController {
             "Overlay each repository's kodus-config.yml, read live from the git provider. Defaults to true; pass false for a fast response backed only by stored configuration.",
     })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -395,6 +424,7 @@ export class ParametersController {
     @Get('/code-review-scopes')
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -416,6 +446,7 @@ export class ParametersController {
 
     @Get('/default-code-review-parameter')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -436,6 +467,7 @@ export class ParametersController {
     @ApiQuery({ name: 'repositoryId', type: String, required: false })
     @ApiQuery({ name: 'directoryId', type: String, required: false })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -532,6 +564,7 @@ export class ParametersController {
 
     @Get('/e2b-ip')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -587,11 +620,14 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
+        // The web names no Git connection: the sync runs on the one the
+        // workspace's config belongs to, reading only its repositories.
         const result = await this.centralizedConfigSyncUseCase.execute({
-            organizationAndTeamData: {
-                organizationId,
-                teamId: body.teamId,
-            },
+            organizationAndTeamData:
+                await this.connectionScope.workspaceConfigScope({
+                    organizationId,
+                    teamId: body.teamId,
+                }),
         });
 
         return result;
@@ -600,6 +636,7 @@ export class ParametersController {
     @Get('/centralized-config-download')
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -622,9 +659,16 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
+        // Only the repositories of the connection the workspace's config
+        // belongs to, as a sync of that config would read them.
+        const scoped = await this.connectionScope.workspaceConfigScope({
+            organizationId,
+            teamId,
+        });
         const archive = await this.centralizedConfigDownloadZipUseCase.execute(
             this.request.user,
             teamId,
+            await this.connectionScope.downloadScope(scoped),
         );
 
         response.set({

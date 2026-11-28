@@ -1,3 +1,4 @@
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import { createLogger } from '@libs/core/log/logger';
 import { ParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -22,6 +23,7 @@ export class CentralizedConfigInitUseCase implements IUseCase {
         private readonly createOrUpdateParametersUseCase: CreateOrUpdateParametersUseCase,
         private readonly centralizedConfigDownloadUseCase: CentralizedConfigDownloadUseCase,
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
+        private readonly connectionScope: CentralizedConfigConnectionScope,
     ) {}
 
     async execute(params: {
@@ -38,8 +40,13 @@ export class CentralizedConfigInitUseCase implements IUseCase {
         message: string;
         prUrl?: string;
     }> {
-        const { user, organizationAndTeamData, repository, syncOption } =
-            params;
+        const { user, repository, syncOption } = params;
+        // The config repository's Git connection owns the config it sets up.
+        const organizationAndTeamData =
+            await this.centralizedConfigPrService.scopeToRepositoryConnection(
+                params.organizationAndTeamData,
+                repository?.id,
+            );
         const { organizationId, teamId } = organizationAndTeamData;
 
         let shouldRollbackEnable = false;
@@ -111,6 +118,9 @@ export class CentralizedConfigInitUseCase implements IUseCase {
                         params.skipAuthorizationForDownload ?? false,
                     organizationId: organizationAndTeamData.organizationId,
                     markRulesAsPendingWithSourcePath: true,
+                    ...(await this.connectionScope.downloadScope(
+                        organizationAndTeamData,
+                    )),
                 },
             );
 

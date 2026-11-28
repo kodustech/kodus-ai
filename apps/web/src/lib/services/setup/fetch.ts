@@ -7,10 +7,17 @@ import { SETUP_PATHS } from ".";
 /** GitHub's authorization page for linking `installationId` (see github-installation-authorization). */
 export async function getGithubInstallationAuthorizationUrl(
     installationId: string,
+    /** Sealed into GitHub's round trip, so this link alone adds a connection. */
+    newConnection?: boolean,
 ): Promise<string> {
     const response = await axiosAuthorized.fetcher<{ data: { url: string } }>(
         SETUP_PATHS.GITHUB_INSTALLATION_AUTHORIZATION,
-        { params: { installationId } },
+        {
+            params: {
+                installationId,
+                ...(newConnection ? { newConnection: "true" } : {}),
+            },
+        },
     );
     return response.data.url;
 }
@@ -30,10 +37,16 @@ export function getConnectionsOnClient(teamId: string) {
             isSetupComplete: boolean;
             hasConnection: boolean;
             category:
-                | "COMMUNICATION"
-                | "PROJECT_MANAGEMENT"
-                | "CODE_MANAGEMENT";
+                "COMMUNICATION" | "PROJECT_MANAGEMENT" | "CODE_MANAGEMENT";
             config?: { [key: string]: string };
+            /** The Git connection (code management only). */
+            connectionId?: string;
+            connectionName?: string | null;
+            reviewEnabled?: boolean;
+            /** Every Git connection of the workspace, those the member is not granted included. */
+            workspaceConnectionCount?: number;
+            /** Billed on a subscription of its own; null when billing could not be read. */
+            ownSubscription?: boolean | null;
         }>
     >;
 }
@@ -47,10 +60,16 @@ export function getConnections(teamId: string) {
             isSetupComplete: boolean;
             hasConnection: boolean;
             category:
-                | "COMMUNICATION"
-                | "PROJECT_MANAGEMENT"
-                | "CODE_MANAGEMENT";
+                "COMMUNICATION" | "PROJECT_MANAGEMENT" | "CODE_MANAGEMENT";
             config?: { [key: string]: string };
+            /** The Git connection (code management only). */
+            connectionId?: string;
+            connectionName?: string | null;
+            reviewEnabled?: boolean;
+            /** Every Git connection of the workspace, those the member is not granted included. */
+            workspaceConnectionCount?: number;
+            /** Billed on a subscription of its own; null when billing could not be read. */
+            ownSubscription?: boolean | null;
         }>
     >;
 }

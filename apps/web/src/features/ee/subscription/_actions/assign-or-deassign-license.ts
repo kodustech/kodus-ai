@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "src/core/config/auth";
 
+import { getBillingConnectionId } from "../_services/billing/billing-connection.server";
 import { assignOrDeassignUserLicense } from "../_services/billing/fetch";
 
 export const assignOrDeassignUserLicenseAction = async ({
@@ -22,6 +23,7 @@ export const assignOrDeassignUserLicenseAction = async ({
 
     const result = await assignOrDeassignUserLicense({
         teamId,
+        connectionId: await getBillingConnectionId(teamId),
         user: {
             gitId: user.git_id,
             gitTool: user.git_tool,

@@ -208,6 +208,14 @@ describe('CLI sandbox clone against a self-managed git host', () => {
     const buildResolver = (host: string, connected?: PlatformType) => {
         const integrationService = {
             // What getTypeIntegration reads to resolve the team's platform.
+            // Calls are routed to the team's one Git connection.
+            resolveCodeManagementConnection: jest.fn(async () => ({
+                integration: connected
+                    ? { uuid: 'int-1', platform: connected }
+                    : undefined,
+                platform: connected ?? null,
+                ambiguous: false,
+            })),
             findOne: jest.fn(async (filter: any) =>
                 filter?.integrationCategory ===
                     IntegrationCategory.CODE_MANAGEMENT && connected

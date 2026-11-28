@@ -105,6 +105,11 @@ export type CreditCheckoutResult = {
 export type UserWithLicense = {
     git_id: string;
     status?: 'active' | 'inactive';
+    /**
+     * A seat from before seats recorded their Git connection: it serves every
+     * connection of the workspace, so no single connection's members decide it.
+     */
+    sharedAcrossConnections?: true;
 };
 
 export type TrialUnlock = {
@@ -128,6 +133,20 @@ export type ConsumeTrialReviewCreditResult = {
 };
 
 export const LICENSE_SERVICE_TOKEN = Symbol.for('LicenseService');
+
+/** `ok: false`: billing could not be asked. `licensed: false`: billing has no licence for the workspace, so nothing binds. */
+export type BindPrimaryConnectionResult =
+    | { ok: false }
+    | { ok: true; licensed: false }
+    | { ok: true; licensed: true; primaryConnectionId: string | null };
+
+export type ReleaseConnectionResult = 'released' | 'not_held' | 'failed';
+
+export type WorkspaceConnectionLicenses = {
+    primaryConnectionId: string | null;
+    /** Connections billed on a subscription of their own. */
+    ownLicenceConnectionIds: string[];
+};
 
 export interface ILicenseService {
     /**
@@ -223,6 +242,50 @@ export interface ILicenseService {
         organizationAndTeamData: OrganizationAndTeamData,
         byok: boolean,
     ): Promise<boolean>;
+
+    /**
+     * Ask billing to name the workspace connection that keeps the workspace
+     * plan and seats. Billing names it only while none is named and the
+     * connection has no licence of its own; the answer carries the primary
+     * it holds afterwards. Never throws.
+     */
+    bindPrimaryConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<BindPrimaryConnectionResult>;
+
+    /** A connection left the workspace; frees the primary slot if it held it. Never throws. */
+    releaseConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<ReleaseConnectionResult>;
+
+    /**
+     * Records seats assigned before connections existed as the given
+     * connection's, the organization's only one, before another is added.
+     * Cloud seats live in billing, so only self-hosted has any.
+     */
+    attributeLegacySeats(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connection: { uuid: string; platform: string },
+    ): Promise<void>;
+
+    /**
+     * Before a connection is removed, its seats stop naming it and serve the
+     * organization's connections again, as seats from before connections
+     * did; a reconnected connection has a new id. Cloud seats live in
+     * billing, so only self-hosted has any.
+     */
+    detachConnectionSeats(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<void>;
+
+    /** The workspace's primary connection and the connections billed on their own licence; null when billing could not be asked, or did not answer within `timeoutMs`. */
+    getConnectionLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options?: { timeoutMs?: number },
+    ): Promise<WorkspaceConnectionLicenses | null>;
 
     // ── Prepaid credits ("Kodus as the provider") ────────────────────────
 

@@ -1,0 +1,332 @@
+import { SelfHostedLicenseService } from './self-hosted-license.service';
+
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({ log: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+}));
+
+type Entry = {
+    gitId: string;
+    status: 'active' | 'inactive';
+    provider?: string;
+    connectionId?: string;
+};
+
+const github = {
+    organizationId: 'org-1',
+    teamId: 'team-1',
+    integrationId: 'gh-a',
+};
+const gitlab = {
+    organizationId: 'org-1',
+    teamId: 'team-1',
+    integrationId: 'gl-b',
+};
+
+const build = (users: Entry[], seats = 10) => {
+    const store: { users: Entry[] } = { users };
+    const orgParams = {
+        findByKey: jest.fn(async () => ({
+            configValue: { users: store.users },
+        })),
+        find: jest.fn(async () => [{ configValue: { users: store.users } }]),
+        createOrUpdateConfig: jest.fn(
+            async (_key: unknown, value: { users: Entry[] }) => {
+                store.users = value.users;
+            },
+        ),
+    };
+    const service = new SelfHostedLicenseService(orgParams as any);
+    jest.spyOn(service, 'validateOrganizationLicense').mockResolvedValue({
+        valid: true,
+        numberOfLicenses: seats,
+    });
+    return { service, store };
+};
+
+describe('SelfHostedLicenseService per Git connection', () => {
+    it('records the provider and connection of a new seat', async () => {
+        const { service, store } = build([]);
+
+        await expect(
+            service.assignLicense(gitlab, '7', 'GITLAB'),
+        ).resolves.toBe(true);
+
+        expect(store.users).toEqual([
+            {
+                gitId: '7',
+                status: 'active',
+                provider: 'gitlab',
+                connectionId: 'gl-b',
+            },
+        ]);
+    });
+
+    it('gives a GitLab user a seat of their own even when a GitHub user holds the same id', async () => {
+        const { service, store } = build([
+            {
+                gitId: '7',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+        ]);
+
+        await service.assignLicense(gitlab, '7', 'gitlab');
+
+        expect(store.users).toHaveLength(2);
+    });
+
+    it("lists only the named connection's seats, plus seats from before connections were recorded", async () => {
+        const { service } = build([
+            {
+                gitId: '1',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+            {
+                gitId: '2',
+                status: 'active',
+                provider: 'gitlab',
+                connectionId: 'gl-b',
+            },
+            { gitId: '3', status: 'active' },
+        ]);
+
+        const seats = await service.getAllUsersWithLicense(gitlab);
+
+        expect(seats.map((s) => s.git_id).sort()).toEqual(['2', '3']);
+        expect(seats.find((s) => s.git_id === '3')).toMatchObject({
+            sharedAcrossConnections: true,
+        });
+        expect(
+            seats.find((s) => s.git_id === '2')?.sharedAcrossConnections,
+        ).toBeUndefined();
+    });
+
+    it('releases a seat on the named connection only', async () => {
+        const { service, store } = build([
+            {
+                gitId: '7',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+            {
+                gitId: '7',
+                status: 'active',
+                provider: 'gitlab',
+                connectionId: 'gl-b',
+            },
+        ]);
+
+        await service.unassignLicenses(gitlab, ['7']);
+
+        expect(store.users).toEqual([
+            expect.objectContaining({ connectionId: 'gh-a', status: 'active' }),
+            expect.objectContaining({
+                connectionId: 'gl-b',
+                status: 'inactive',
+            }),
+        ]);
+    });
+
+    it('counts one instance seat per provider identity', async () => {
+        const { service } = build(
+            [
+                {
+                    gitId: '7',
+                    status: 'active',
+                    provider: 'github',
+                    connectionId: 'gh-a',
+                },
+                {
+                    gitId: '7',
+                    status: 'active',
+                    provider: 'github',
+                    connectionId: 'gh-c',
+                },
+            ],
+            2,
+        );
+
+        await expect(
+            service.assignLicense(gitlab, '7', 'gitlab'),
+        ).resolves.toBe(true);
+        await expect(
+            service.assignLicense(github, '8', 'github'),
+        ).resolves.toBe(false);
+    });
+
+    it('keeps an org with no connection recorded working as before', async () => {
+        const { service, store } = build([{ gitId: '7', status: 'inactive' }]);
+
+        await service.assignLicense(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            '7',
+            'github',
+        );
+
+        expect(store.users).toEqual([{ gitId: '7', status: 'active' }]);
+    });
+
+    it('attributes seats from before connections to the connection that held them, so a second connection never shares them', async () => {
+        const { service, store } = build([
+            { gitId: '3', status: 'active' },
+            { gitId: '4', status: 'inactive' },
+            {
+                gitId: '5',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+        ]);
+
+        await service.attributeLegacySeats(gitlab, {
+            uuid: 'gl-b',
+            platform: 'GITLAB',
+        });
+
+        // Only the connection: the seat keeps being counted by git id.
+        expect(store.users).toEqual([
+            { gitId: '3', status: 'active', connectionId: 'gl-b' },
+            { gitId: '4', status: 'inactive', connectionId: 'gl-b' },
+            {
+                gitId: '5',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+        ]);
+
+        const forgejo = { ...gitlab, integrationId: 'fj-c' };
+        await expect(service.getAllUsersWithLicense(forgejo)).resolves.toEqual(
+            [],
+        );
+    });
+
+    it('writes nothing when every seat already names its connection', async () => {
+        const { service } = build([
+            {
+                gitId: '5',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+        ]);
+        const write = jest.spyOn(
+            (service as any).organizationParametersService,
+            'createOrUpdateConfig',
+        );
+
+        await service.attributeLegacySeats(github, {
+            uuid: 'gh-a',
+            platform: 'GITHUB',
+        });
+
+        expect(write).not.toHaveBeenCalled();
+    });
+
+    it('counts a seat from before connections once with any seat of the same git id, as before', async () => {
+        const { service } = build(
+            [
+                { gitId: '7', status: 'active' },
+                {
+                    gitId: '7',
+                    status: 'active',
+                    provider: 'github',
+                    connectionId: 'gh-a',
+                },
+            ],
+            2,
+        );
+
+        await expect(
+            service.assignLicense(github, '8', 'github'),
+        ).resolves.toBe(true);
+    });
+
+    it("keeps a removed connection's seat holders licensed once it reconnects under a new id", async () => {
+        const { service, store } = build([
+            {
+                gitId: '7',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+            { gitId: '8', status: 'active', connectionId: 'gl-b' },
+        ]);
+
+        await service.detachConnectionSeats(github, 'gh-a');
+
+        expect(store.users).toEqual([
+            { gitId: '7', status: 'active', provider: 'github' },
+            { gitId: '8', status: 'active', connectionId: 'gl-b' },
+        ]);
+        const reconnected = { ...github, integrationId: 'gh-new' };
+        await expect(
+            service.getAllUsersWithLicense(reconnected),
+        ).resolves.toEqual([{ git_id: '7', sharedAcrossConnections: true }]);
+    });
+
+    it("does not raise the instance count when two organizations' seats from before connections are attributed", async () => {
+        // Two organizations of one instance, each holding seat 7 from before
+        // connections: one on GitHub, the other on GitLab.
+        const stores: Record<string, Entry[]> = {
+            'org-x': [{ gitId: '7', status: 'active' }],
+            'org-y': [{ gitId: '7', status: 'active' }],
+        };
+        const orgParams = {
+            findByKey: jest.fn(async (_key: unknown, data: any) => ({
+                configValue: { users: stores[data.organizationId] },
+            })),
+            find: jest.fn(async () =>
+                Object.values(stores).map((users) => ({
+                    configValue: { users },
+                })),
+            ),
+            createOrUpdateConfig: jest.fn(
+                async (_key: unknown, value: { users: Entry[] }, data: any) => {
+                    stores[data.organizationId] = value.users;
+                },
+            ),
+        };
+        const service = new SelfHostedLicenseService(orgParams as any);
+        jest.spyOn(service, 'validateOrganizationLicense').mockResolvedValue({
+            valid: true,
+            numberOfLicenses: 2,
+        });
+        const orgX = { organizationId: 'org-x', teamId: 't-x' };
+        const orgY = { organizationId: 'org-y', teamId: 't-y' };
+
+        await service.attributeLegacySeats(orgX, {
+            uuid: 'gh-x',
+            platform: 'GITHUB',
+        });
+        await service.attributeLegacySeats(orgY, {
+            uuid: 'gl-y',
+            platform: 'GITLAB',
+        });
+
+        expect(stores).toEqual({
+            'org-x': [{ gitId: '7', status: 'active', connectionId: 'gh-x' }],
+            'org-y': [{ gitId: '7', status: 'active', connectionId: 'gl-y' }],
+        });
+        // Seat 7 counts once across the instance, as before connections:
+        // one of the two seats is still free.
+        await expect(
+            service.assignLicense(
+                { ...orgX, integrationId: 'gh-x' },
+                '8',
+                'github',
+            ),
+        ).resolves.toBe(true);
+        await expect(
+            service.assignLicense(
+                { ...orgY, integrationId: 'gl-y' },
+                '9',
+                'gitlab',
+            ),
+        ).resolves.toBe(false);
+    });
+});

@@ -61,9 +61,15 @@ export const columns: ColumnDef<Repository>[] = [
                     .rows.map((r) => r.original)
                     .filter((r) => r.id !== row.original.id);
 
+                // The connection's own list: with several, the save names it.
+                const { connectionId } = row.original as {
+                    connectionId?: string;
+                };
                 await createOrUpdateRepositories(
                     repositoriesWithoutThisOne,
                     teamId,
+                    "replace",
+                    connectionId ? { connectionId } : undefined,
                 );
 
                 await updateCodeReviewParameterRepositories(teamId);

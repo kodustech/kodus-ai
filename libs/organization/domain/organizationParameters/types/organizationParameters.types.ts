@@ -3,6 +3,13 @@ export type OrganizationParametersAutoJoinConfig = {
     domains: string[];
 };
 
+/** PR author filters of one Git connection; git ids differ per provider and host. */
+export type AutoAssignConnectionFilters = {
+    ignoredUsers?: string[];
+    allowedUsers?: string[];
+    seededBotIds?: string[];
+};
+
 export type OrganizationParametersAutoAssignConfig = {
     enabled: boolean;
     ignoredUsers: string[];
@@ -25,4 +32,9 @@ export type OrganizationParametersAutoAssignConfig = {
      * evidence they left — they are excluded from automatic seat revocation.
      */
     manuallyAssignedIds?: string[];
+    /**
+     * Filters of each Git connection, by integration id. A connection with no
+     * entry uses the lists above.
+     */
+    connections?: Record<string, AutoAssignConnectionFilters>;
 };

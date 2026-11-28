@@ -5,6 +5,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -77,6 +78,8 @@ import {
     ApiQuery,
     ApiTags,
 } from '@nestjs/swagger';
+import { UpdateAuthorFiltersDto } from '../dtos/author-filters.dto';
+import { UpdateAuthorFiltersUseCase } from '@libs/organization/application/use-cases/organizationParameters/update-author-filters.use-case';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import {
@@ -133,6 +136,8 @@ export class OrganizationParametersController {
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
+
+        private readonly updateAuthorFiltersUseCase: UpdateAuthorFiltersUseCase,
     ) {}
 
     @Post('/create-or-update')
@@ -633,6 +638,8 @@ export class OrganizationParametersController {
 
     @Get('/llm-config/status')
     @UseGuards(PolicyGuard)
+    // The organization's LLM settings: nothing of any Git connection.
+    @AppliesConnectionScope()
     @CheckPolicies(
         // Non-sensitive descriptor (never the API key). Code review settings
         // editors need the BYOK provider/model to render the model selector,
@@ -667,6 +674,8 @@ export class OrganizationParametersController {
 
     @Get('/byok/providers')
     @UseGuards(PolicyGuard)
+    // The organization's LLM settings: nothing of any Git connection.
+    @AppliesConnectionScope()
     @CheckPolicies(
         // Static, non-sensitive descriptor of the connectable BYOK providers
         // (registry-driven; never a secret). Same read gate as
@@ -697,6 +706,7 @@ export class OrganizationParametersController {
 
     @Get('/cockpit-metrics-visibility')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -784,6 +794,29 @@ export class OrganizationParametersController {
         return await this.ignoreBotsUseCase.execute({
             organizationId,
             teamId: body.teamId,
+        });
+    }
+
+    @Post('/author-filters')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Set the PR author filters',
+        description:
+            "Sets one Git connection's ignored and allowed PR authors, or the organization's when no connection is named. Nothing else stored with them changes.",
+    })
+    @ApiNoContentResponse({ description: 'Filters saved' })
+    public async updateAuthorFilters(@Body() body: UpdateAuthorFiltersDto) {
+        await this.updateAuthorFiltersUseCase.execute({
+            user: this.request?.user,
+            connectionId: body.connectionId,
+            ignoredUsers: body.ignoredUsers,
+            allowedUsers: body.allowedUsers,
         });
     }
 

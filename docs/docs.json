@@ -154,6 +154,7 @@
                                 "group": "Organization",
                                 "pages": [
                                     "en/how_to_use/workspace_roles",
+                                    "en/how_to_use/organization/git_connections",
                                     "en/how_to_use/auto_license_assignment",
                                     "en/how_to_use/security/sso",
                                     "en/how_to_use/organization/organization_settings",

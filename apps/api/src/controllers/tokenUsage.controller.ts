@@ -39,6 +39,10 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import {
+    BillingManagersReadEveryConnection,
+    FullConnectionAccessGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/full-connection-access.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import {
     ApiBearerAuth,
@@ -74,6 +78,7 @@ import {
         resource: ResourceType.TokenUsage,
     }),
 )
+@BillingManagersReadEveryConnection()
 @Controller({ path: 'usage', scope: Scope.REQUEST })
 export class TokenUsageController {
     constructor(
@@ -92,6 +97,7 @@ export class TokenUsageController {
     ) {}
 
     @Get('tokens/summary')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get token usage summary',
         description:
@@ -123,6 +129,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/overview')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get token usage overview (single request)',
         description:
@@ -150,6 +157,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/daily')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get daily token usage',
         description: 'Return daily token usage for the selected period.',
@@ -171,6 +179,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/by-pr')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get token usage by PR',
         description: 'Return token usage aggregated by pull request.',
@@ -192,6 +201,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/daily-by-pr')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get daily token usage by PR',
         description: 'Return daily token usage aggregated by pull request.',
@@ -213,6 +223,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/by-review')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get token usage by review run',
         description:
@@ -235,6 +246,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/by-area')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get token usage by process area',
         description:
@@ -257,6 +269,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/by-developer')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get token usage by developer',
         description: 'Return token usage aggregated by developer.',
@@ -278,6 +291,7 @@ export class TokenUsageController {
     }
 
     @Get('tokens/daily-by-developer')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get daily token usage by developer',
         description: 'Return daily token usage aggregated by developer.',
@@ -355,6 +369,7 @@ export class TokenUsageController {
     }
 
     @Get('cost-estimate')
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Get cost estimate',
         description: 'Return estimated token costs for the organization.',

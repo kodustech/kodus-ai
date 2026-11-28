@@ -389,8 +389,14 @@ export class StartSecurityScanUseCase {
     ) {
         // A failed lookup throws (a 5xx, worth retrying); only a confirmed
         // absence is the caller's to fix.
-        const platform =
-            await this.codeManagementService.findTypeIntegration(orgTeam);
+        const platform = await this.codeManagementService.findTypeIntegration(
+            orgTeam,
+            {
+                id: String(repository.id),
+                name: repository.name,
+                fullName: repository.full_name,
+            },
+        );
         // The platform is half the repository's identity (an id is only
         // unique on it): without an active integration there is no knowing
         // which repository this is, nor a way to clone it.

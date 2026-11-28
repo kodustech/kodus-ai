@@ -23,6 +23,10 @@ export function registerCentralizedConfigCommand(command: Command): void {
             'Show whether centralized config is enabled and its selected repository.',
         )
         .option('--json', 'Output centralized config status as JSON')
+        .option(
+            '--connection <id>',
+            'Git connection whose centralized config this is, when the workspace has several',
+        )
         .action(async (options: ConfigCentralizedStatusOptions) => {
             await configCentralizedStatusAction(options);
         });
@@ -38,6 +42,10 @@ export function registerCentralizedConfigCommand(command: Command): void {
             'pr',
         )
         .option('--json', 'Output centralized config init response as JSON')
+        .option(
+            '--connection <id>',
+            'Git connection whose centralized config this is, when the workspace has several',
+        )
         .action(
             async (
                 repository: string | undefined,
@@ -53,6 +61,10 @@ export function registerCentralizedConfigCommand(command: Command): void {
             'Sync current centralized config to selected repositories.',
         )
         .option('--json', 'Output centralized config sync response as JSON')
+        .option(
+            '--connection <id>',
+            'Git connection whose centralized config this is, when the workspace has several',
+        )
         .action(async (options: ConfigCentralizedActionOptions) => {
             await configCentralizedSyncAction(options);
         });
@@ -63,6 +75,10 @@ export function registerCentralizedConfigCommand(command: Command): void {
             'Disable centralized config and clear selected repository.',
         )
         .option('--json', 'Output centralized config disable response as JSON')
+        .option(
+            '--connection <id>',
+            'Git connection whose centralized config this is, when the workspace has several',
+        )
         .action(async (options: ConfigCentralizedActionOptions) => {
             await configCentralizedDisableAction(options);
         });
@@ -75,6 +91,10 @@ export function registerCentralizedConfigCommand(command: Command): void {
             'Output path for the downloaded zip file',
         )
         .option('--json', 'Output download metadata as JSON')
+        .option(
+            '--connection <id>',
+            'Git connection whose centralized config this is, when the workspace has several',
+        )
         .action(async (options: ConfigCentralizedDownloadOptions) => {
             await configCentralizedDownloadAction(options);
         });

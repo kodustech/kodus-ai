@@ -51,9 +51,12 @@ export class GetOrganizationLanguageUseCase implements IUseCase {
             10,
         );
 
+        // With connections on several platforms there is no single answer
+        // (null); each repository's language read then routes itself.
         const platformType =
             await this.codeManagementService.getTypeIntegration(
                 organizationAndTeamData,
+                params.repositoryId ? { id: params.repositoryId } : undefined,
             );
 
         let repositories = await this.getConfiguredRepositories(
@@ -67,10 +70,6 @@ export class GetOrganizationLanguageUseCase implements IUseCase {
         }
 
         if (!repositories?.length) {
-            return { language: null };
-        }
-
-        if (!platformType) {
             return { language: null };
         }
 

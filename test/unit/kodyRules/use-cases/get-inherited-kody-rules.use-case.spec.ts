@@ -32,7 +32,9 @@ describe('GetInheritedRulesKodyRulesUseCase', () => {
         const kodyRulesValidationService = {
             getKodyRulesForFolder: jest
                 .fn()
-                .mockImplementation((_path: any, candidateRules: any[]) => candidateRules),
+                .mockImplementation(
+                    (_path: any, candidateRules: any[]) => candidateRules,
+                ),
         };
 
         const parametersService = {
@@ -50,15 +52,66 @@ describe('GetInheritedRulesKodyRulesUseCase', () => {
             findByIds: jest.fn().mockResolvedValue([]),
         };
 
+        // The repository is on connection gh-a.
+        const codeManagementService = {
+            connectionIdFor: jest.fn().mockResolvedValue('gh-a'),
+        };
+
         const useCase = new GetInheritedRulesKodyRulesUseCase(
             kodyRulesValidationService as any,
             parametersService as any,
             kodyRulesService as any,
             contextReferenceService as any,
+            codeManagementService as any,
         );
 
-        return { useCase, kodyRulesService };
+        return { useCase, kodyRulesService, codeManagementService };
     };
+
+    it("inherits another connection's own global rules only on that connection's repositories", async () => {
+        const { useCase, codeManagementService } = buildUseCase([
+            {
+                uuid: 'other-connection',
+                repositoryId: 'global',
+                status: KodyRulesStatus.ACTIVE,
+                centralizedConfig: {
+                    sourceConnectionId: 'gl-b',
+                    connectionScoped: true,
+                },
+                inheritance: {},
+            },
+            {
+                uuid: 'own-connection',
+                repositoryId: 'global',
+                status: KodyRulesStatus.ACTIVE,
+                centralizedConfig: {
+                    sourceConnectionId: 'gh-a',
+                    connectionScoped: true,
+                },
+                inheritance: {},
+            },
+            {
+                uuid: 'workspace',
+                repositoryId: 'global',
+                status: KodyRulesStatus.ACTIVE,
+                inheritance: {},
+            },
+        ]);
+
+        const result = await useCase.execute(
+            organizationAndTeamData,
+            REPOSITORY_ID,
+        );
+
+        expect(codeManagementService.connectionIdFor).toHaveBeenCalledWith(
+            organizationAndTeamData,
+            { id: REPOSITORY_ID },
+        );
+        expect(result.globalRules.map((r) => r.uuid)).toEqual([
+            'own-connection',
+            'workspace',
+        ]);
+    });
 
     it('inherits only ACTIVE global rules', async () => {
         const { useCase } = buildUseCase([

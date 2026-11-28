@@ -23,6 +23,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { FindTeamKeyPullRequestUseCase } from '@libs/code-review/application/use-cases/pullRequests/find-team-key-pull-request.use-case';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
@@ -116,7 +118,7 @@ const mockTeamCliKeyService = { validateKey: jest.fn() };
 const mockCliDeviceService = {
     validateOrRegisterDevice: jest.fn().mockResolvedValue({}),
 };
-const mockPullRequestsService = { findOne: jest.fn() };
+const mockPullRequestsService = { findOne: jest.fn(), find: jest.fn() };
 const mockAutomationExecutionService = {
     create: jest.fn().mockResolvedValue({}),
 };
@@ -196,6 +198,17 @@ function buildProviders(eventEmitter: any) {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        // The real team-key lookup, over the mocked services.
+        FindTeamKeyPullRequestUseCase,
+        // The team key's workspace lists the pull requests' repository.
+        {
+            provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
+            useValue: {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'repo-123', name: 'repo' }]),
+            },
+        },
         // Org-wide member: no repository restriction.
         {
             provide: AuthorizationService,
@@ -209,9 +222,10 @@ function buildProviders(eventEmitter: any) {
 
 describe('PullRequestController', () => {
     let controller: PullRequestController;
+    let module: TestingModule;
 
     beforeEach(async () => {
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: buildProviders({ emit: jest.fn() }),
         })
             .overrideGuard(PolicyGuard)
@@ -230,6 +244,8 @@ describe('PullRequestController', () => {
             status: STATUS.ACTIVE,
         });
         mockPullRequestsService.findOne.mockResolvedValue(makePrEntity());
+        // The team-key path reads every matching record.
+        mockPullRequestsService.find.mockResolvedValue([makePrEntity()]);
         mockCliDeviceService.validateOrRegisterDevice.mockResolvedValue({});
         mockAutomationExecutionService.create.mockResolvedValue({});
         mockGetPullRequestSuggestionsUseCase.execute.mockResolvedValue({
@@ -463,129 +479,67 @@ describe('PullRequestController', () => {
     // =========================================================================
 
     describe('GET /pull-requests/suggestions – PR resolution', () => {
+        // Which record a team key reads is the use case's
+        // (find-team-key-pull-request.use-case.spec.ts); here, that the
+        // controller answers with it, or 404 without one.
         beforeEach(() => {
             mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
         });
 
-        it('finds PR by URL', async () => {
-            const result = await controller.getSuggestionsByPullRequest(
-                PR_URL,
-                undefined,
-                undefined,
+        const byKey = (
+            prUrl: string | undefined,
+            repositoryId: string | undefined,
+            prNumber: string | undefined,
+        ) =>
+            controller.getSuggestionsByPullRequest(
+                prUrl,
+                repositoryId,
+                prNumber,
                 'json',
                 undefined,
                 undefined,
                 TEAM_KEY,
             );
 
-            expect(mockPullRequestsService.findOne).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    url: PR_URL,
-                    organizationId: ORG_ID,
-                }),
-            );
+        it("answers the key workspace's pull request found by URL", async () => {
+            const result = await byKey(PR_URL, undefined, undefined);
+
+            expect(mockPullRequestsService.find.mock.calls[0]).toEqual([
+                { url: PR_URL, organizationId: ORG_ID },
+            ]);
             expect(result.prNumber).toBe(42);
         });
 
-        it('falls back to parsing GitHub URL when direct lookup fails', async () => {
-            mockPullRequestsService.findOne
-                .mockResolvedValueOnce(null) // direct URL lookup fails
-                .mockResolvedValueOnce(makePrEntity()); // fullName + number succeeds
+        it("answers the key workspace's pull request found by repository and number", async () => {
+            const result = await byKey(undefined, 'repo-123', '42');
 
-            const result = await controller.getSuggestionsByPullRequest(
-                PR_URL,
-                undefined,
-                undefined,
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(mockPullRequestsService.findOne).toHaveBeenCalledTimes(2);
+            expect(mockPullRequestsService.find.mock.calls[0]).toEqual([
+                {
+                    'number': 42,
+                    'organizationId': ORG_ID,
+                    'repository.id': 'repo-123',
+                },
+            ]);
             expect(result.prNumber).toBe(42);
         });
 
-        it('finds PR by repositoryId + prNumber', async () => {
-            mockPullRequestsService.findOne.mockResolvedValueOnce(
-                makePrEntity(),
+        it('throws 404 when no record of the key workspace is found', async () => {
+            mockPullRequestsService.find.mockResolvedValue([]);
+
+            await expect(byKey(PR_URL, undefined, undefined)).rejects.toThrow(
+                NotFoundException,
             );
-
-            const result = await controller.getSuggestionsByPullRequest(
-                undefined,
-                'repo-123',
-                '42',
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
+            await expect(byKey(undefined, 'repo-123', '999')).rejects.toThrow(
+                NotFoundException,
             );
-
-            expect(result.prNumber).toBe(42);
-        });
-
-        it('finds PR by repository fullName as repositoryId', async () => {
-            mockPullRequestsService.findOne
-                .mockResolvedValueOnce(null) // by repo.id fails
-                .mockResolvedValueOnce(makePrEntity()); // by fullName succeeds
-
-            const result = await controller.getSuggestionsByPullRequest(
-                undefined,
-                'org/repo',
-                '42',
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(mockPullRequestsService.findOne).toHaveBeenCalledTimes(2);
-            expect(result.prNumber).toBe(42);
-        });
-
-        it('throws 404 when PR is not found by URL', async () => {
-            mockPullRequestsService.findOne.mockResolvedValue(null);
-
-            await expect(
-                controller.getSuggestionsByPullRequest(
-                    'https://github.com/org/repo/pull/999',
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it('throws 404 when PR is not found by repoId + prNumber', async () => {
-            mockPullRequestsService.findOne.mockResolvedValue(null);
-
-            await expect(
-                controller.getSuggestionsByPullRequest(
-                    undefined,
-                    'repo-123',
-                    '999',
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
-            ).rejects.toThrow(NotFoundException);
+            expect(
+                mockGetPullRequestSuggestionsUseCase.execute,
+            ).not.toHaveBeenCalled();
         });
 
         it('throws 404 when no identifier is provided', async () => {
             await expect(
-                controller.getSuggestionsByPullRequest(
-                    undefined,
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                ),
+                byKey(undefined, undefined, undefined),
             ).rejects.toThrow(NotFoundException);
         });
     });
@@ -1089,6 +1043,8 @@ describe('PullRequestController', () => {
  * and the org filter. The bridge's own delivery mechanics are covered in
  * test/unit/core/cross-process-events.bridge.spec.ts.
  */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
 describe('SSE /pull-requests/executions/events (#1500)', () => {
     /** Mirrors BRIDGED_FLAG in cross-process-events.bridge.ts (not exported). */
     const BRIDGED_FLAG = '__kodusBridged';
@@ -1136,10 +1092,12 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
         emitter.removeAllListeners();
     });
 
-    it('delivers a non-ping frame when a bridged execution update arrives', () => {
+    it('delivers a non-ping frame when a bridged execution update arrives', async () => {
         const { frames, stop } = collectFrames();
 
         emitter.emit(PR_EXECUTION_UPDATED_EVENT, bridgedExecutionUpdate());
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(1);
@@ -1154,32 +1112,36 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
         });
     });
 
-    it('delivers updates emitted in-process too (single-process topology)', () => {
+    it('delivers updates emitted in-process too (single-process topology)', async () => {
         const { frames, stop } = collectFrames();
 
         // Same payload without the bridge marker: what an API-local emit
         // looks like when API and worker run in one process.
         const { [BRIDGED_FLAG]: _flag, ...local } = bridgedExecutionUpdate();
         emitter.emit(PR_EXECUTION_UPDATED_EVENT, local);
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(1);
         expect(frames[0].data.type).toBe('execution_updated');
     });
 
-    it('does not leak executions from other organizations', () => {
+    it('does not leak executions from other organizations', async () => {
         const { frames, stop } = collectFrames();
 
         emitter.emit(
             PR_EXECUTION_UPDATED_EVENT,
             bridgedExecutionUpdate({ organizationId: 'other-org-uuid' }),
         );
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(0);
     });
 
-    it('forwards every status transition, not just the first', () => {
+    it('forwards every status transition, not just the first', async () => {
         const { frames, stop } = collectFrames();
 
         emitter.emit(
@@ -1190,6 +1152,8 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
             PR_EXECUTION_UPDATED_EVENT,
             bridgedExecutionUpdate({ status: 'success' }),
         );
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames.map((f) => f.data.status)).toEqual([
@@ -1198,11 +1162,13 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
         ]);
     });
 
-    it('stops streaming after application shutdown', () => {
+    it('stops streaming after application shutdown', async () => {
         const { frames, stop } = collectFrames();
 
         sseController.onApplicationShutdown();
         emitter.emit(PR_EXECUTION_UPDATED_EVENT, bridgedExecutionUpdate());
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(0);

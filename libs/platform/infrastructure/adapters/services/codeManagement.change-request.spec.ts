@@ -9,7 +9,8 @@ const params = {
     prNumber: 7,
     reason: REASON,
 };
-const NOTE = 'Kody takes this request back once the findings above are resolved.';
+const NOTE =
+    'Kody takes this request back once the findings above are resolved.';
 
 /** The service without its constructor: only what a test hands it. */
 const make = <T extends object>(
@@ -26,22 +27,32 @@ const make = <T extends object>(
 
 const build = (provider: Record<string, unknown> | undefined) => {
     const getCodeManagementService = jest.fn().mockReturnValue(provider);
-    const getTypeIntegration = jest.fn().mockResolvedValue(PlatformType.FORGEJO);
+    // The workspace's only connection: on Forgejo, unnamed by the caller.
+    const resolveCodeManagementConnection = jest.fn().mockResolvedValue({
+        integration: undefined,
+        platform: PlatformType.FORGEJO,
+        ambiguous: false,
+    });
     const service = make(CodeManagementService, {
         platformIntegrationFactory: { getCodeManagementService },
-        getTypeIntegration,
+        integrationService: { resolveCodeManagementConnection },
     }) as any;
-    return { service, getCodeManagementService, getTypeIntegration };
+    return {
+        service,
+        getCodeManagementService,
+        resolveCodeManagementConnection,
+    };
 };
 
 describe('CodeManagementService — Kody change request', () => {
     describe('dismissOwnPullRequestChangeRequests', () => {
-        it('asks the host named by the caller, without looking the integration up', async () => {
+        it('asks the host named by the caller', async () => {
             const provider = {
-                dismissOwnPullRequestChangeRequests: jest.fn().mockResolvedValue(2),
+                dismissOwnPullRequestChangeRequests: jest
+                    .fn()
+                    .mockResolvedValue(2),
             };
-            const { service, getCodeManagementService, getTypeIntegration } =
-                build(provider);
+            const { service, getCodeManagementService } = build(provider);
 
             await expect(
                 service.dismissOwnPullRequestChangeRequests(
@@ -49,7 +60,6 @@ describe('CodeManagementService — Kody change request', () => {
                     PlatformType.GITHUB,
                 ),
             ).resolves.toBe(2);
-            expect(getTypeIntegration).not.toHaveBeenCalled();
             expect(getCodeManagementService).toHaveBeenCalledWith(
                 PlatformType.GITHUB,
             );
@@ -60,15 +70,21 @@ describe('CodeManagementService — Kody change request', () => {
 
         it('looks the host up when the caller does not name it', async () => {
             const provider = {
-                dismissOwnPullRequestChangeRequests: jest.fn().mockResolvedValue(1),
+                dismissOwnPullRequestChangeRequests: jest
+                    .fn()
+                    .mockResolvedValue(1),
             };
-            const { service, getCodeManagementService, getTypeIntegration } =
-                build(provider);
+            const {
+                service,
+                getCodeManagementService,
+                resolveCodeManagementConnection,
+            } = build(provider);
 
             await service.dismissOwnPullRequestChangeRequests(params);
 
-            expect(getTypeIntegration).toHaveBeenCalledWith(
+            expect(resolveCodeManagementConnection).toHaveBeenCalledWith(
                 params.organizationAndTeamData,
+                expect.objectContaining({ platform: undefined }),
             );
             expect(getCodeManagementService).toHaveBeenCalledWith(
                 PlatformType.FORGEJO,
@@ -98,25 +114,34 @@ describe('CodeManagementService — Kody change request', () => {
             account: { login: 'kody-ai[bot]', node_id: 'BOT_kody' },
         };
 
-        it.each([true, false])('passes on what the host answers (%s)', async (answer) => {
-            const provider = { isOwnAccount: jest.fn().mockResolvedValue(answer) };
-            const { service, getTypeIntegration } = build(provider);
+        it.each([true, false])(
+            'passes on what the host answers (%s)',
+            async (answer) => {
+                const provider = {
+                    isOwnAccount: jest.fn().mockResolvedValue(answer),
+                };
+                const { service, getCodeManagementService } = build(provider);
 
-            await expect(
-                service.isOwnAccount(input, PlatformType.GITHUB),
-            ).resolves.toBe(answer);
-            expect(provider.isOwnAccount).toHaveBeenCalledWith(input);
-            expect(getTypeIntegration).not.toHaveBeenCalled();
-        });
+                await expect(
+                    service.isOwnAccount(input, PlatformType.GITHUB),
+                ).resolves.toBe(answer);
+                expect(provider.isOwnAccount).toHaveBeenCalledWith(input);
+                expect(getCodeManagementService).toHaveBeenCalledWith(
+                    PlatformType.GITHUB,
+                );
+            },
+        );
 
         it.each([[undefined], [{}]])(
             'takes the account for somebody else on a host that cannot tell (%p)',
             async (provider) => {
-                const { service, getTypeIntegration } = build(provider);
+                const { service, resolveCodeManagementConnection } =
+                    build(provider);
 
                 await expect(service.isOwnAccount(input)).resolves.toBe(false);
-                expect(getTypeIntegration).toHaveBeenCalledWith(
+                expect(resolveCodeManagementConnection).toHaveBeenCalledWith(
                     input.organizationAndTeamData,
+                    expect.anything(),
                 );
             },
         );

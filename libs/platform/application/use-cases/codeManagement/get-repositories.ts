@@ -10,6 +10,11 @@ import {
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { createLogger } from '@libs/core/log/logger';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 
 export class GetRepositoriesUseCase implements IUseCase {
     private readonly logger = createLogger(GetRepositoriesUseCase.name);
@@ -20,6 +25,9 @@ export class GetRepositoriesUseCase implements IUseCase {
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
+
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
     ) {}
 
     public async execute(params: {
@@ -28,19 +36,81 @@ export class GetRepositoriesUseCase implements IUseCase {
         isSelected?: boolean;
         page?: number;
         perPage?: number;
+        /** The Git connection to list; every connection's when absent. */
+        connectionId?: string;
+        /** The connections the caller may read; every one when absent. */
+        readableConnectionIds?: string[];
     }) {
         try {
-            const repositories =
-                await this.codeManagementService.getRepositories({
-                    organizationAndTeamData: {
-                        organizationId: this.request.user.organization.uuid,
-                        teamId: params?.teamId,
-                    },
-                    filters: {
-                        organizationSelected: params?.organizationSelected,
-                    },
-                    options: { interactive: true },
-                });
+            const organizationId = this.request.user.organization.uuid;
+            const readable = params?.readableConnectionIds
+                ? new Set(params.readableConnectionIds)
+                : null;
+            const connectionIds = (
+                params?.connectionId
+                    ? [params.connectionId]
+                    : (
+                          (await this.integrationService.find({
+                              organization: { uuid: organizationId },
+                              team: { uuid: params?.teamId },
+                              integrationCategory:
+                                  IntegrationCategory.CODE_MANAGEMENT,
+                              status: true,
+                          })) ?? []
+                      ).map((connection) => connection.uuid)
+            ).filter((uuid) => !readable || readable.has(uuid));
+
+            const lists = await Promise.allSettled(
+                connectionIds.map(async (integrationId) =>
+                    (
+                        (await this.codeManagementService.getRepositories({
+                            organizationAndTeamData: {
+                                organizationId,
+                                teamId: params?.teamId,
+                                integrationId,
+                            },
+                            filters: {
+                                organizationSelected:
+                                    params?.organizationSelected,
+                            },
+                            options: { interactive: true },
+                        })) ?? []
+                    ).map((repository) => ({
+                        ...repository,
+                        connectionId: integrationId,
+                    })),
+                ),
+            );
+
+            lists.forEach((list, index) => {
+                if (list.status === 'rejected') {
+                    this.logger.warn({
+                        message:
+                            'Could not list a Git connection’s repositories',
+                        context: GetRepositoriesUseCase.name,
+                        error: list.reason,
+                        metadata: {
+                            organizationId,
+                            teamId: params?.teamId,
+                            integrationId: connectionIds[index],
+                        },
+                    });
+                }
+            });
+            // A provider failure reaches the picker as an error, not as an
+            // empty list; one connection failing beside others that answer
+            // is logged and the others are listed.
+            const failed = lists.find(
+                (list): list is PromiseRejectedResult =>
+                    list.status === 'rejected',
+            );
+            if (failed && lists.every((list) => list.status === 'rejected')) {
+                throw failed.reason;
+            }
+
+            const repositories = lists.flatMap((list) =>
+                list.status === 'fulfilled' ? list.value : [],
+            );
 
             const assignedRepositoryIds =
                 await this.authorizationService.getRepositoryScope({

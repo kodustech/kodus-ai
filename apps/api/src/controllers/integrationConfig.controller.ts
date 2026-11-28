@@ -1,4 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
+    assertConnectionReadable,
+    readableConnectionIds,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 
 import {
     Action,
@@ -27,6 +35,9 @@ import { ApiArrayResponseDto } from '../dtos/api-response.dto';
 export class IntegrationConfigController {
     constructor(
         private readonly getIntegrationConfigsByIntegrationCategoryUseCase: GetIntegrationConfigsByIntegrationCategoryUseCase,
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     @Get('/get-integration-configs-by-integration-category')
@@ -44,14 +55,28 @@ export class IntegrationConfigController {
     })
     @ApiQuery({ name: 'integrationCategory', type: String, required: true })
     @ApiQuery({ name: 'teamId', type: String, required: true })
+    @ApiQuery({
+        name: 'connectionId',
+        type: String,
+        required: false,
+        description:
+            'A Git connection of the workspace; every connection when absent.',
+    })
     @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getIntegrationConfigsByIntegrationCategory(
         @Query('integrationCategory') integrationCategory: string,
         @Query('teamId') teamId: string,
+        @Query('connectionId') connectionId?: string,
     ) {
+        const restriction = await this.connectionAccess.restrictionFor(
+            this.request?.user,
+        );
+        assertConnectionReadable(restriction, connectionId);
         return this.getIntegrationConfigsByIntegrationCategoryUseCase.execute({
             integrationCategory,
             teamId,
+            connectionId,
+            readableConnectionIds: readableConnectionIds(restriction),
         });
     }
 }

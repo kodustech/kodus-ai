@@ -56,6 +56,8 @@ type Props = {
     platformKey: UpdateTokenPlatformKey;
     platformName: string;
     teamId: string;
+    /** The Git connection whose token is rotated. */
+    connectionId?: string;
 };
 
 export const UpdateTokenIntegrationModal = ({
@@ -63,6 +65,7 @@ export const UpdateTokenIntegrationModal = ({
     platformKey,
     platformName,
     teamId,
+    connectionId,
 }: Props) => {
     const initialHost = host?.trim() ?? "";
     const [token, setToken] = useState("");
@@ -97,6 +100,7 @@ export const UpdateTokenIntegrationModal = ({
                 organizationAndTeamData: {
                     teamId,
                 },
+                connectionId,
             });
 
             // The endpoint can answer 200 with a status that is not SUCCESS —

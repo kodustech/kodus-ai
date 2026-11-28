@@ -35,7 +35,10 @@ describe('GithubService.authenticateWithCodeOauth — encrypts the installation 
         svc.checkRepositoryPermissions = jest
             .fn()
             .mockResolvedValue({ success: true });
-        svc.integrationService = { findOne: jest.fn().mockResolvedValue(null) };
+        svc.integrationService = {
+            findOne: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue([]),
+        };
         const handleIntegration = jest.fn().mockResolvedValue(undefined);
         svc.handleIntegration = handleIntegration;
         svc.findOneByOrganizationId = jest

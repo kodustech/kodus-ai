@@ -105,7 +105,7 @@ describe('GitlabService.resolveMrAuthorFromWebhookPayload', () => {
         });
 
         expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-            'gitlab-mr-author-org-1-42',
+            'gitlab-mr-author-org-1:workspace:team-1-42',
             mockAuthor,
             1800000,
         );

@@ -28,6 +28,11 @@ export class IntegrationRepository implements IIntegrationRepository {
     ) {}
 
     async find(filter?: Partial<IIntegration>): Promise<IntegrationEntity[]> {
+        // An id left undefined drops out of the where clause and widens the
+        // read to every organization (or every team of it).
+        if (!filter?.organization?.uuid) return [];
+        if (filter.team && !filter.team.uuid) return [];
+
         try {
             const {
                 organization,
@@ -63,6 +68,7 @@ export class IntegrationRepository implements IIntegrationRepository {
                     ...authIntegrationCondition,
                 },
                 relations: ['authIntegration'],
+                order: { createdAt: 'ASC' },
             };
 
             const integration =
@@ -112,6 +118,7 @@ export class IntegrationRepository implements IIntegrationRepository {
                     ...authIntegrationCondition,
                 },
                 relations: ['authIntegration'],
+                order: { createdAt: 'ASC' },
             };
 
             const integration =

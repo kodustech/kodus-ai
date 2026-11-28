@@ -39,6 +39,7 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
+import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -869,17 +870,15 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             organizationAndTeamData,
         );
 
-        const configValue =
-            config?.configValue as OrganizationParametersAutoAssignConfig;
+        const { allowedUsers, ignoredUsers } = authorFiltersFor(
+            config?.configValue as OrganizationParametersAutoAssignConfig,
+            organizationAndTeamData.integrationId,
+        );
 
         const excludedByAllowList =
-            Array.isArray(configValue?.allowedUsers) &&
-            configValue.allowedUsers.length > 0 &&
-            !configValue.allowedUsers.includes(userGitId);
+            allowedUsers.length > 0 && !allowedUsers.includes(userGitId);
 
-        const onIgnoreList =
-            configValue?.ignoredUsers?.length > 0 &&
-            configValue?.ignoredUsers.includes(userGitId);
+        const onIgnoreList = ignoredUsers.includes(userGitId);
 
         if (!excludedByAllowList && !onIgnoreList) {
             return { ignored: false };

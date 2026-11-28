@@ -265,6 +265,28 @@ describe('kodus-config.yml with app-only keys', () => {
         },
     );
 
+    it("checks the integration of the repository's own connection before reading its file", async () => {
+        const svc = service('automatedReviewActive: false\n');
+
+        await svc.getKodusConfigFile({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'hive-inventory' },
+            defaultBranch: 'main',
+        });
+
+        expect(
+            (svc as any).codeManagementService.getTypeIntegration.mock.calls,
+        ).toEqual([
+            [
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { id: 'repo-1', name: 'hive-inventory' },
+            ],
+        ]);
+    });
+
     it('applies the rest of the file and names the dropped keys', async () => {
         const merged = await merge(service(FILE));
 

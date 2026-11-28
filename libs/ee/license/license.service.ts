@@ -6,6 +6,7 @@ import { AxiosLicenseService } from '@libs/core/infrastructure/config/axios/micr
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import {
+    BindPrimaryConnectionResult,
     ConsumeTrialReviewCreditResult,
     CreditBalance,
     CreditCheckoutResult,
@@ -15,7 +16,9 @@ import {
     DebitCreditsResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
+    ReleaseConnectionResult,
     UserWithLicense,
+    WorkspaceConnectionLicenses,
 } from './interfaces/license.interface';
 
 /**
@@ -40,6 +43,12 @@ function isLicenseServiceUnreachable(error: unknown): boolean {
         status >= 500
     );
 }
+
+/** The Git connection a licence call is for, when the caller is routed to one. */
+const connectionParams = (organizationAndTeamData: OrganizationAndTeamData) =>
+    organizationAndTeamData.integrationId
+        ? { connectionId: organizationAndTeamData.integrationId }
+        : {};
 
 /**
  * LicenseService handles organization and user license validation via billing service endpoints.
@@ -67,6 +76,7 @@ export class LicenseService implements ILicenseService {
                     params: {
                         organizationId: organizationAndTeamData.organizationId,
                         teamId: organizationAndTeamData.teamId,
+                        ...connectionParams(organizationAndTeamData),
                     },
                 },
             );
@@ -210,6 +220,7 @@ export class LicenseService implements ILicenseService {
                 params: {
                     organizationId: organizationAndTeamData.organizationId,
                     teamId: organizationAndTeamData.teamId,
+                    ...connectionParams(organizationAndTeamData),
                 },
             });
         } catch (error) {
@@ -263,6 +274,7 @@ export class LicenseService implements ILicenseService {
             const result = await this.licenseRequest.post('assign-license', {
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                ...connectionParams(organizationAndTeamData),
                 users: [
                     {
                         gitId: userGitId,
@@ -316,6 +328,7 @@ export class LicenseService implements ILicenseService {
             const result = await this.licenseRequest.post('assign-license', {
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                ...connectionParams(organizationAndTeamData),
                 users: userGitIds.map((gitId) => ({
                     gitId,
                     // The billing service rejects the whole request with a 400
@@ -350,6 +363,159 @@ export class LicenseService implements ILicenseService {
                 },
             });
             return { revoked: [], failed: userGitIds };
+        }
+    }
+
+    /**
+     * Asks billing to name the workspace connection whose plan and seats
+     * live on the workspace licence, and answers the primary billing holds
+     * afterwards: billing keeps an existing one, and never names a
+     * connection billed on its own licence.
+     */
+    async bindPrimaryConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<BindPrimaryConnectionResult> {
+        try {
+            const result = await this.licenseRequest.post(
+                'connections/primary',
+                {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    connectionId,
+                },
+            );
+            const primaryConnectionId: string | null =
+                result?.primaryConnectionId ?? null;
+            this.logger.log({
+                message: 'license_primary_connection_bound',
+                context: LicenseService.name,
+                metadata: {
+                    ...organizationAndTeamData,
+                    connectionId,
+                    primaryConnectionId,
+                },
+            });
+            return { ok: true, licensed: true, primaryConnectionId };
+        } catch (error) {
+            // Billing's own "no licence for this workspace": nothing to bind.
+            // A 404 without that body is a billing service that predates the
+            // route, and must not read as answered.
+            const response = (error as AxiosError<{ error?: string }>)
+                ?.response;
+            if (
+                response?.status === 404 &&
+                response.data?.error === 'LICENSE_NOT_FOUND'
+            ) {
+                return { ok: true, licensed: false };
+            }
+            this.logger.error({
+                message: 'license_primary_connection_bind_failed',
+                context: LicenseService.name,
+                error,
+                metadata: { ...organizationAndTeamData, connectionId },
+            });
+            return { ok: false };
+        }
+    }
+
+    async releaseConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<ReleaseConnectionResult> {
+        try {
+            const result = await this.licenseRequest.post(
+                'connections/release',
+                {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    connectionId,
+                },
+            );
+            const released = Boolean(result?.released);
+            this.logger.log({
+                message: 'license_connection_released',
+                context: LicenseService.name,
+                metadata: {
+                    ...organizationAndTeamData,
+                    connectionId,
+                    released,
+                },
+            });
+            return released ? 'released' : 'not_held';
+        } catch (error) {
+            this.logger.error({
+                message: 'license_connection_release_failed',
+                context: LicenseService.name,
+                error,
+                metadata: { ...organizationAndTeamData, connectionId },
+            });
+            return 'failed';
+        }
+    }
+
+    // Cloud seats are held per connection in billing: none predate them.
+    async attributeLegacySeats(): Promise<void> {
+        return;
+    }
+
+    // Cloud seats are held per connection in billing, which keeps them.
+    async detachConnectionSeats(): Promise<void> {
+        return;
+    }
+
+    async getConnectionLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options: { timeoutMs?: number } = {},
+    ): Promise<WorkspaceConnectionLicenses | null> {
+        try {
+            const result = await this.licenseRequest.get('connections', {
+                params: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                },
+                ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
+            });
+            // Only a connection with its own subscription keeps its own
+            // plan: a licence row left by a failed seat call or an abandoned
+            // checkout does not stop it from taking the workspace plan. An
+            // entry billing does not fully describe is not read as either.
+            const connections = (result?.connections ?? []) as Array<{
+                connectionId?: string;
+                ownSubscription?: boolean;
+            }>;
+            if (
+                connections.some(
+                    (connection) =>
+                        typeof connection?.ownSubscription !== 'boolean' ||
+                        typeof connection?.connectionId !== 'string' ||
+                        !connection.connectionId,
+                )
+            ) {
+                this.logger.warn({
+                    message: 'license_connection_subscription_unknown',
+                    context: LicenseService.name,
+                    metadata: { ...organizationAndTeamData },
+                });
+                return null;
+            }
+            return {
+                primaryConnectionId: result?.primaryConnectionId ?? null,
+                ownLicenceConnectionIds: connections
+                    .filter((connection) => connection.ownSubscription === true)
+                    .map((connection) => connection.connectionId as string),
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'license_connection_licenses_read_failed',
+                context: LicenseService.name,
+                error,
+                metadata: {
+                    ...organizationAndTeamData,
+                    timeoutMs: options.timeoutMs ?? null,
+                },
+            });
+            return null;
         }
     }
 

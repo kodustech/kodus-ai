@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
+import { FullConnectionAccessGuard } from '@libs/identity/infrastructure/adapters/services/permissions/full-connection-access.guard';
 
 @ApiTags('Agent')
 @ApiBearerAuth('jwt')
@@ -27,6 +28,9 @@ export class AgentController {
     ) {}
 
     @Post('/conversation')
+    // Its tools read every Git connection of the organization: a member
+    // granted only some connections is refused until they are scoped.
+    @UseGuards(FullConnectionAccessGuard)
     @ApiOperation({
         summary: 'Start agent conversation',
         description: 'Send a prompt to the agent and return its response.',

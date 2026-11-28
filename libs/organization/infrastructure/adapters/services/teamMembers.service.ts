@@ -27,6 +27,7 @@ import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 
 @Injectable()
 export class TeamMemberService implements ITeamMemberService {
@@ -40,6 +41,8 @@ export class TeamMemberService implements ITeamMemberService {
         private readonly usersService: IUsersService,
 
         private readonly notificationService: NotificationService,
+
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     findManyById(ids: string[]): Promise<TeamMemberEntity[]> {
@@ -78,8 +81,30 @@ export class TeamMemberService implements ITeamMemberService {
         return this.teamMembersRepository.findOne(filter);
     }
 
+    /**
+     * A member joining a workspace reads its Git connections, granted in the
+     * same transaction: a member is never created without them. Connections
+     * added later start with owners only and are granted one by one.
+     */
     async create(teamMember: ITeamMember): Promise<any> {
-        return this.teamMembersRepository.create(teamMember);
+        const userId = teamMember?.user?.uuid;
+        const teamId = teamMember?.team?.uuid;
+        if (!userId || !teamId) {
+            return this.teamMembersRepository.create(teamMember);
+        }
+        const created = await this.teamMembersRepository.create(teamMember, {
+            alsoWithin: (runner) =>
+                this.connectionAccess.grantWorkspaceConnectionsWithin(
+                    runner,
+                    userId,
+                    teamId,
+                ),
+        });
+        this.connectionAccess.forgetUsers([userId]);
+        // The repository answers a rolled-back insert with its error: the
+        // member does not exist, and the caller must not invite them.
+        if (created instanceof Error) throw created;
+        return created;
     }
 
     async update(

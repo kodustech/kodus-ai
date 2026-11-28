@@ -310,6 +310,7 @@ export class GenerateKodyRulesUseCase {
                 title: string;
                 rule: string;
                 severity: string;
+                repositoryId?: string;
             }> = [];
             // Repos that received ≥1 persisted rule — promoted to isSelected:true
             // after the loop so the generated rules are visible in the UI.
@@ -532,6 +533,7 @@ export class GenerateKodyRulesUseCase {
                             title: rule.title,
                             rule: rule.rule,
                             severity: rule.severity,
+                            repositoryId: repository.id,
                         });
 
                         this.logger.log({
@@ -634,7 +636,10 @@ export class GenerateKodyRulesUseCase {
                 this.sendRulesNotificationUseCase
                     .execute(
                         organizationId,
-                        createdRules.map((r) => r.title),
+                        createdRules.map((r) => ({
+                            title: r.title,
+                            repositoryId: r.repositoryId,
+                        })),
                     )
                     .catch((error) => {
                         this.logger.error({

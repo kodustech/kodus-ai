@@ -71,7 +71,9 @@ describe('AutoAssignLicenseUseCase', () => {
     });
 
     it('NOT_ALLOWED_USER when allowedUsers excludes the author', async () => {
-        const { uc } = make({ config: enabled({ allowedUsers: ['other-user'] }) });
+        const { uc } = make({
+            config: enabled({ allowedUsers: ['other-user'] }),
+        });
 
         const res = await uc.execute(base);
 
@@ -89,7 +91,10 @@ describe('AutoAssignLicenseUseCase', () => {
 
         const res = await uc.execute(base);
 
-        expect(res).toEqual({ shouldProceed: true, reason: 'ALREADY_LICENSED' });
+        expect(res).toEqual({
+            shouldProceed: true,
+            reason: 'ALREADY_LICENSED',
+        });
         expect(licenseService.assignLicense).not.toHaveBeenCalled();
     });
 
@@ -135,6 +140,36 @@ describe('AutoAssignLicenseUseCase', () => {
             shouldProceed: false,
             reason: 'ASSIGNMENT_FAILED',
         });
+    });
+
+    it("IGNORED_USER from the ignore list of the PR's Git connection", async () => {
+        const { uc } = make({
+            config: enabled({
+                connections: { 'gl-b': { ignoredUsers: ['5993570'] } },
+            }),
+        });
+
+        const res = await uc.execute({
+            ...base,
+            organizationAndTeamData: { ...orgTeam, integrationId: 'gl-b' },
+        });
+
+        expect(res.reason).toBe('IGNORED_USER');
+    });
+
+    it("NOT_ALLOWED_USER from the allow list of the PR's Git connection", async () => {
+        const { uc } = make({
+            config: enabled({
+                connections: { 'gl-b': { allowedUsers: ['other-user'] } },
+            }),
+        });
+
+        const res = await uc.execute({
+            ...base,
+            organizationAndTeamData: { ...orgTeam, integrationId: 'gl-b' },
+        });
+
+        expect(res.reason).toBe('NOT_ALLOWED_USER');
     });
 
     it('ASSIGNMENT_FAILED (fail-closed) when the flow throws', async () => {

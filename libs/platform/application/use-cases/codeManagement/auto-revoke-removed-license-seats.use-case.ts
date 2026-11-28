@@ -169,10 +169,12 @@ export class AutoRevokeRemovedLicenseSeatsUseCase {
             return;
         }
 
-        await this.organizationParametersService.createOrUpdateConfig(
+        // Only the timers are written, merged into the stored value: a
+        // setting or list saved during the sweep stays.
+        await this.organizationParametersService.mergeConfigValue(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-            { ...current.configValue, pendingRevocations: next },
-            organizationAndTeamData,
+            organizationAndTeamData.organizationId,
+            { pendingRevocations: next },
         );
     }
 }

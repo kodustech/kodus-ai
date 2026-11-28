@@ -1,4 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    Optional,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
@@ -8,12 +14,33 @@ import {
     AUTH_INTEGRATION_SERVICE_TOKEN,
     IAuthIntegrationService,
 } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { IgnoreBotsUseCase } from '@libs/organization/application/use-cases/organizationParameters/ignore-bots.use-case';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { createLogger } from '@libs/core/log/logger';
+import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import { stateAsksForNewConnection } from '@libs/platform/infrastructure/adapters/services/github/installation-authorization';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+
+const SETTLE_ATTEMPTS = 3;
+const SETTLE_BACKOFF_MS = 100;
 
 @Injectable()
 export class CreateIntegrationUseCase implements IUseCase {
@@ -39,21 +66,87 @@ export class CreateIntegrationUseCase implements IUseCase {
         private readonly ignoreBotsUseCase: IgnoreBotsUseCase,
 
         private readonly telemetry: TelemetryService,
+
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
+
+        private readonly connectionBilling: ConnectionBillingService,
+
+        private readonly connectionAccess: ConnectionAccessService,
+
+        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
+        private readonly integrationConfigService: IIntegrationConfigService,
+
+        @Optional()
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
     ) {}
 
     public async execute(params: any): Promise<any> {
         const authMode = params?.authMode ?? AuthMode.OAUTH;
 
-        const organizationAndTeamData = {
+        const organizationAndTeamData: {
+            organizationId: string;
+            teamId: string;
+            integrationId?: string;
+        } = {
             organizationId:
                 params?.organizationAndTeamData?.organizationId ||
                 this.request.user?.organization?.uuid,
             teamId: params?.organizationAndTeamData?.teamId,
         };
 
+        // A named connection is reconnected; otherwise `newConnection` adds
+        // one beside the workspace's others, and neither keeps the old
+        // single-connection behaviour.
+        const connectionId: string | undefined = params?.connectionId;
+        if (connectionId) {
+            const connection = await this.integrationService.findOne({
+                uuid: connectionId,
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            });
+            if (!connection) {
+                throw new BadRequestException(
+                    'This Git connection is not in the workspace.',
+                );
+            }
+            organizationAndTeamData.integrationId = connectionId;
+        }
+        // A GitHub App link carries the request in its sealed state, tied
+        // to this flow; the request's own flag serves the token paths.
+        const newConnection =
+            !connectionId &&
+            (params?.githubState
+                ? stateAsksForNewConnection(params.githubState)
+                : params?.newConnection === true);
+        const workspace = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+        const connectionsBefore = connectionId
+            ? undefined
+            : new Set(
+                  (
+                      await this.connectionBilling.workspaceConnections(
+                          workspace,
+                      )
+                  ).map((connection) => connection.uuid),
+              );
+        if (!connectionId) {
+            await this.connectionBilling.attributeLegacySeatsBeforeAdding(
+                workspace,
+            );
+        }
+        const separateConnection = newConnection
+            ? await this.bindPrimaryConnection(organizationAndTeamData)
+            : false;
+
         const result = await this.codeManagementService.createAuthIntegration(
             {
                 ...params,
+                newConnection,
                 organizationAndTeamData,
                 authMode,
                 // Who links: a GitHub App installation is linked only for the
@@ -62,6 +155,48 @@ export class CreateIntegrationUseCase implements IUseCase {
             },
             params.integrationType,
         );
+
+        const integrationId: string | undefined = result?.integrationId;
+        const name = typeof params?.name === 'string' ? params.name.trim() : '';
+        if (integrationId && name) {
+            await this.integrationService.update(
+                {
+                    uuid: integrationId,
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    },
+                    team: { uuid: organizationAndTeamData.teamId },
+                },
+                { name: name.slice(0, 120) },
+            );
+        }
+
+        const separate =
+            result?.success && integrationId && connectionsBefore
+                ? await this.settleNewConnectionReaders(
+                      workspace,
+                      integrationId,
+                      connectionsBefore,
+                      separateConnection,
+                  )
+                : separateConnection;
+
+        if (result?.success) {
+            this.logger.log({
+                message: newConnection
+                    ? 'connection_created'
+                    : 'connection_updated',
+                context: CreateIntegrationUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    integrationId,
+                    platform: params.integrationType?.toUpperCase(),
+                    authMode,
+                    actorUserId: this.request.user?.uuid,
+                },
+            });
+        }
 
         // The step before any repository exists: the setup funnel counts
         // providers here, and `repositoryConnected` counts repos later.
@@ -78,6 +213,9 @@ export class CreateIntegrationUseCase implements IUseCase {
             .execute({
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                integrationId:
+                    integrationId ?? organizationAndTeamData.integrationId,
+                separateConnection: separate,
             })
             .catch((error) => {
                 this.logger.error({
@@ -130,5 +268,192 @@ export class CreateIntegrationUseCase implements IUseCase {
             });
 
         return result;
+    }
+
+    /**
+     * The workspace's first connection is read by every member, as the
+     * workspace was before connections existed. One added beside others
+     * starts with owners only, and with author lists of its own. Answers
+     * whether the connection is one added beside others.
+     *
+     * Every step can be repeated, so a failed one is tried again. When it
+     * still fails, the connection is kept inactive and the call answers 503:
+     * an inactive connection is new to the next connect, which settles it,
+     * and meanwhile nobody is locked out of a connection that reviews, nor
+     * reads one through another connection's author lists.
+     */
+    private async settleNewConnectionReaders(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+        connectionsBefore: ReadonlySet<string>,
+        separateConnection: boolean,
+    ): Promise<boolean> {
+        if (connectionsBefore.has(integrationId)) return separateConnection;
+        for (let attempt = 1; attempt <= SETTLE_ATTEMPTS; attempt++) {
+            try {
+                return await this.settleOnce(
+                    workspace,
+                    integrationId,
+                    separateConnection,
+                );
+            } catch (error) {
+                this.logger.warn({
+                    message: 'connection_readers_settle_failed',
+                    context: CreateIntegrationUseCase.name,
+                    error,
+                    metadata: { ...workspace, integrationId, attempt },
+                });
+                if (attempt < SETTLE_ATTEMPTS) {
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, attempt * SETTLE_BACKOFF_MS),
+                    );
+                }
+            }
+        }
+
+        this.logger.error({
+            message: 'connection_readers_unsettled',
+            context: CreateIntegrationUseCase.name,
+            metadata: { ...workspace, integrationId },
+        });
+        try {
+            await this.integrationService.update(
+                {
+                    uuid: integrationId,
+                    organization: { uuid: workspace.organizationId },
+                    team: { uuid: workspace.teamId },
+                },
+                { status: false },
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'connection_unsettled_left_active',
+                context: CreateIntegrationUseCase.name,
+                error,
+                metadata: { ...workspace, integrationId },
+            });
+        }
+        throw new ServiceUnavailableException(
+            'The Git connection was saved, but who can read it could not be set. Connect it again in a moment.',
+        );
+    }
+
+    private async settleOnce(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+        separateConnection: boolean,
+    ): Promise<boolean> {
+        // Two connections added at once to an empty workspace both read it
+        // empty; only the oldest of them is its first.
+        const separate =
+            separateConnection ||
+            !(await this.isOldestConnection(workspace, integrationId));
+        if (separate) {
+            if (!separateConnection) {
+                this.logger.warn({
+                    message: 'connection_added_beside_a_concurrent_first',
+                    context: CreateIntegrationUseCase.name,
+                    metadata: { ...workspace, integrationId },
+                });
+            }
+            await this.ignoreBotsUseCase.claimConnectionLists({
+                organizationId: workspace.organizationId,
+                integrationId,
+            });
+            return true;
+        }
+        const members = await this.connectionAccess.grantWorkspaceMembers(
+            workspace.teamId,
+            integrationId,
+        );
+        this.logger.log({
+            message: 'connection_granted_to_workspace_members',
+            context: CreateIntegrationUseCase.name,
+            metadata: { ...workspace, integrationId, members: members.length },
+        });
+        return false;
+    }
+
+    private async isOldestConnection(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+    ): Promise<boolean> {
+        const [oldest] =
+            await this.connectionBilling.workspaceConnections(workspace);
+        return oldest?.uuid === integrationId;
+    }
+
+    /**
+     * Before a connection is added beside others, billing records which one
+     * keeps the workspace plan; otherwise the new one would share the
+     * workspace's seats. Answers whether the workspace already had a
+     * connection.
+     */
+    private async bindPrimaryConnection(organizationAndTeamData: {
+        organizationId: string;
+        teamId: string;
+    }): Promise<boolean> {
+        const workspace = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+        const [oldest] =
+            await this.connectionBilling.workspaceConnections(workspace);
+        if (!oldest) return false;
+
+        // "Review all repositories" is offered for a workspace's only
+        // connection; beside another it could no longer be turned off.
+        const selection =
+            await this.integrationConfigService.findIntegrationConfigFormatted<{
+                mode?: string;
+            }>(IntegrationConfigKey.REPOSITORY_SELECTION, {
+                ...workspace,
+                integrationId: oldest.uuid,
+            });
+        if (selection?.mode === 'all') {
+            throw new BadRequestException(
+                'Turn off reviewing all repositories in Settings > Git before adding another Git connection.',
+            );
+        }
+        await this.recordCentralizedConfigOwner(workspace, oldest.uuid);
+
+        const handover = await this.connectionBilling.ensurePrimary(workspace, {
+            beforeAddingConnection: true,
+        });
+        if (handover.status === 'failed') {
+            throw new ServiceUnavailableException(
+                'Billing could not be reached to add this connection. Try again in a moment.',
+            );
+        }
+        return true;
+    }
+
+    /**
+     * A centralized config stored before the workspace had several Git
+     * connections serves every connection. Recorded on the existing one
+     * before another is added, so it keeps applying only to its repositories.
+     */
+    private async recordCentralizedConfigOwner(
+        organizationAndTeamData: { organizationId: string; teamId: string },
+        integrationId: string,
+    ): Promise<void> {
+        if (!this.parametersService) return;
+        const parameter = await this.parametersService.findByKey(
+            ParametersKey.CENTRALIZED_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = parameter?.configValue;
+        // A config never set up, or cleared, belongs to no connection.
+        if (!configValue?.repository?.id || configValue.integrationId) return;
+        await this.parametersService.createOrUpdateConfig(
+            ParametersKey.CENTRALIZED_CONFIG,
+            configValue,
+            { ...organizationAndTeamData, integrationId },
+        );
+        this.logger.log({
+            message: 'centralized_config_owner_recorded',
+            context: CreateIntegrationUseCase.name,
+            metadata: { ...organizationAndTeamData, integrationId },
+        });
     }
 }

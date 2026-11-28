@@ -13,6 +13,7 @@ import { KODY_RULE_DETECTOR_COMPILER_TOKEN } from '@libs/kodyRules/domain/contra
 import { PERMISSIONS_SERVICE_TOKEN } from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { PermissionsAbilityFactory } from '@libs/identity/infrastructure/adapters/services/permissions/permissionsAbility.factory';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import {
@@ -134,6 +135,14 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
                 CreateOrUpdateKodyRulesUseCase,
                 AuthorizationService,
                 PermissionsAbilityFactory,
+                // Every member reads every Git connection here.
+                {
+                    provide: ConnectionAccessService,
+                    useValue: {
+                        readScopeFor: async () => ({ kind: 'all' }),
+                        restrictionFor: async () => null,
+                    },
+                },
                 {
                     provide: PERMISSIONS_SERVICE_TOKEN,
                     useValue: permissionsServiceMock,

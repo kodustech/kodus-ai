@@ -30,7 +30,7 @@ describe('IntegrationService.getPlatformAuthDetails — error observability', ()
     it('logs the failure through the structured logger, not console.log', async () => {
         const boom = new Error('connection refused');
         const integrationRepository = {
-            findOne: jest.fn().mockRejectedValue(boom),
+            find: jest.fn().mockRejectedValue(boom),
         };
         const service = new IntegrationService(
             integrationRepository as any,
@@ -69,7 +69,7 @@ describe('IntegrationService.getPlatformAuthDetails — credential identity', ()
     const updatedAt = new Date('2026-11-10T15:30:00.000Z');
     const makeService = (integration: unknown) =>
         new IntegrationService(
-            { findOne: jest.fn().mockResolvedValue(integration) } as any,
+            { find: jest.fn().mockResolvedValue([integration]) } as any,
             {} as any,
         );
 
@@ -122,21 +122,29 @@ describe('IntegrationService.getPlatformAuthDetails — credential identity', ()
     it('reflects the row as it is on each read, so a rewritten credential reads as a new identity', async () => {
         const authDetails = { authToken: 'encrypted', authMode: 'token' };
         const later = new Date('2026-11-11T09:00:00.000Z');
-        const findOne = jest
+        const find = jest
             .fn()
-            .mockResolvedValueOnce({
-                uuid: 'integration-1',
-                authIntegration: { uuid: 'auth-row-1', updatedAt, authDetails },
-            })
-            .mockResolvedValueOnce({
-                uuid: 'integration-1',
-                authIntegration: {
-                    uuid: 'auth-row-1',
-                    updatedAt: later,
-                    authDetails,
+            .mockResolvedValueOnce([
+                {
+                    uuid: 'integration-1',
+                    authIntegration: {
+                        uuid: 'auth-row-1',
+                        updatedAt,
+                        authDetails,
+                    },
                 },
-            });
-        const service = new IntegrationService({ findOne } as any, {} as any);
+            ])
+            .mockResolvedValueOnce([
+                {
+                    uuid: 'integration-1',
+                    authIntegration: {
+                        uuid: 'auth-row-1',
+                        updatedAt: later,
+                        authDetails,
+                    },
+                },
+            ]);
+        const service = new IntegrationService({ find } as any, {} as any);
         const tenant = { organizationId: 'org-1', teamId: 'team-1' };
 
         const first = await service.getPlatformAuthDetails<any>(

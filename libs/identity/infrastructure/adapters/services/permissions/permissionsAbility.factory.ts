@@ -6,18 +6,40 @@ import {
 import {
     Action,
     ResourceType,
+    Role,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { ROLE_POLICIES } from '@libs/identity/domain/permissions/policies/role-policies';
+import {
+    CONNECTION_SCOPED_READS,
+    ROLE_POLICIES,
+} from '@libs/identity/domain/permissions/policies/role-policies';
 import { AppAbility } from '@libs/identity/domain/permissions/types/permissions.types';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { Inject, Injectable } from '@nestjs/common';
+
+import {
+    ConnectionAccessService,
+    ConnectionReadScope,
+} from './connection-access.service';
 
 @Injectable()
 export class PermissionsAbilityFactory {
     constructor(
         @Inject(PERMISSIONS_SERVICE_TOKEN)
         private readonly permissionsService: IPermissionsService,
+        // Always injected by Nest. Only the RBAC manifest builds abilities
+        // without a database, constructing this by hand without it: reads
+        // then stay as the role defines them.
+        private readonly connectionAccessService?: ConnectionAccessService,
     ) {}
+
+    /** Whether the user reads only some Git connections of the organization. */
+    async isConnectionRestricted(user: IUser): Promise<boolean> {
+        if (user?.role === Role.OWNER || !this.connectionAccessService) {
+            return false;
+        }
+        const scope = await this.connectionAccessService.readScopeFor(user);
+        return scope.kind === 'connections';
+    }
 
     async createForUser(
         user: IUser,
@@ -43,6 +65,18 @@ export class PermissionsAbilityFactory {
             });
             assignedRepoUuids =
                 permissionsEntity?.permissions?.assignedRepositoryIds || [];
+        }
+
+        const connectionScope: ConnectionReadScope =
+            userRole === Role.OWNER || !this.connectionAccessService
+                ? { kind: 'all' }
+                : await this.connectionAccessService.readScopeFor(user);
+
+        if (connectionScope.kind === 'connections') {
+            const reachable = new Set(connectionScope.repositoryIds);
+            assignedRepoUuids = assignedRepoUuids.filter((id) =>
+                reachable.has(String(id)),
+            );
         }
 
         const canInOrg = <S extends Subject, C>(
@@ -88,6 +122,19 @@ export class PermissionsAbilityFactory {
             for (const rule of policy) {
                 if (rule.scope === 'repo') {
                     canInRepo(rule.action, rule.resource, {}, rule.global);
+                } else if (
+                    connectionScope.kind === 'connections' &&
+                    rule.action === Action.Read &&
+                    CONNECTION_SCOPED_READS.has(rule.resource)
+                ) {
+                    // Read only what the granted connections list, plus the
+                    // workspace defaults.
+                    can(rule.action, rule.resource, {
+                        organizationId: userOrganizationId,
+                        repoId: {
+                            $in: [...connectionScope.repositoryIds, 'global'],
+                        },
+                    });
                 } else {
                     canInOrg(rule.action, rule.resource);
                 }

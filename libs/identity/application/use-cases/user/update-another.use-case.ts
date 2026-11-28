@@ -1,3 +1,5 @@
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -50,6 +52,8 @@ export class UpdateAnotherUserUseCase implements IUseCase {
         private readonly notificationService: NotificationService,
 
         private readonly telemetry: TelemetryService,
+
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     async execute(
@@ -118,6 +122,15 @@ export class UpdateAnotherUserUseCase implements IUseCase {
                 metadata: { userId, targetUserId, data },
             });
 
+            // Owners hold no grants: one demoted keeps reading what they
+            // read, every connection, until an owner narrows it.
+            if (previousRole === Role.OWNER && role && role !== Role.OWNER) {
+                await this.connectionAccess.grantOrganizationConnections(
+                    targetUserId,
+                    organizationId,
+                );
+            }
+
             if (role && previousRole !== role) {
                 const actingUser = await this.usersService.findOne({
                     uuid: userId,
@@ -161,8 +174,7 @@ export class UpdateAnotherUserUseCase implements IUseCase {
                     });
                 } catch (notifyError) {
                     this.logger.error({
-                        message:
-                            'Failed to emit org.role_changed notification',
+                        message: 'Failed to emit org.role_changed notification',
                         error:
                             notifyError instanceof Error
                                 ? notifyError

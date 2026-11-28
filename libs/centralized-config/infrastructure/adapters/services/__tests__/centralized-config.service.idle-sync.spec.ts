@@ -50,6 +50,7 @@ const storedRule = (name: string, overrides: Record<string, unknown> = {}) => ({
     centralizedConfig: {
         path: pathOf(name),
         status: KodyRuleCentralizedStatus.SYNCED,
+        sourceRepositoryId: 'config-repo',
     },
     origin: 'repo_file_sync',
     ...overrides,
@@ -68,13 +69,16 @@ function build(rules: any[], files: Record<string, any>) {
         }),
     };
     const service = new CentralizedConfigService(
-        {} as any,
+        {
+            findByKey: jest.fn(),
+            findActiveByKeyInOrganization: jest.fn().mockResolvedValue([]),
+        } as any,
         {
             findIntegrationConfigFormatted: jest
                 .fn()
                 .mockResolvedValue([{ id: 'repo-1', name: 'repo-1' }]),
         } as any,
-        {} as any,
+        { connectionServerKey: jest.fn() } as any,
         { execute: jest.fn() } as any,
         {} as any,
         {} as any,

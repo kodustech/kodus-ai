@@ -201,9 +201,12 @@ export class SyncAllRepositoriesUseCase {
                     organizationOf(row),
             )
             .map((row) => ({
+                // The selection belongs to one Git connection; every listing
+                // and write of the sync goes to that connection.
                 organizationAndTeamData: {
                     organizationId: organizationOf(row),
                     teamId: row.team.uuid,
+                    integrationId: row.integration?.uuid,
                 },
                 integrationId: row.integration?.uuid,
                 platform: row.integration?.platform as PlatformType,
@@ -357,8 +360,21 @@ export class SyncAllRepositoriesUseCase {
                 >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData)) ??
                 [];
             const currentIds = new Set(current.map((repo) => String(repo.id)));
+            // A repository is reviewed by one connection: one another
+            // connection on the same server lists stays with it, as a
+            // manual selection would be refused.
+            const listedElsewhere = organizationAndTeamData.integrationId
+                ? await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                      organizationAndTeamData.organizationId,
+                      organizationAndTeamData.integrationId,
+                  )
+                : new Set<string>();
             const added = eligible
-                .filter((repo) => !currentIds.has(String(repo.id)))
+                .filter(
+                    (repo) =>
+                        !currentIds.has(String(repo.id)) &&
+                        !listedElsewhere.has(String(repo.id)),
+                )
                 .map((repo) => ({ ...repo, selected: true }));
 
             const pendingWebhookIds = new Set(
@@ -409,13 +425,20 @@ export class SyncAllRepositoriesUseCase {
                     target.platform,
                 );
 
-                await this.updateCodeReviewParameterRepositoriesUseCase.execute({
-                    organizationAndTeamData,
-                    actor: {
-                        source: 'sync',
-                        organizationId: organizationAndTeamData.organizationId,
+                // The review config covers the whole workspace: it is built
+                // from every connection's repositories, not only this one's.
+                const { integrationId: _connection, ...workspace } =
+                    organizationAndTeamData;
+                await this.updateCodeReviewParameterRepositoriesUseCase.execute(
+                    {
+                        organizationAndTeamData: workspace,
+                        actor: {
+                            source: 'sync',
+                            organizationId:
+                                organizationAndTeamData.organizationId,
+                        },
                     },
-                });
+                );
 
                 await this.repositoryConnectionService.registerRepositoryRecords(
                     {

@@ -152,6 +152,8 @@ describe('GitLab seat prune, adapter to revocation', () => {
             codeManagementService as any,
             cacheService as any,
             licenseService as any,
+            // The workspace's only Git connection.
+            { find: jest.fn().mockResolvedValue([{ uuid: 'conn-1' }]) } as any,
         );
         page = new GetCodeManagementMemberListUseCase(
             memberList,
@@ -163,6 +165,7 @@ describe('GitLab seat prune, adapter to revocation', () => {
             codeManagementService as any,
             licenseService as any,
             { findByKey: jest.fn().mockResolvedValue(undefined) } as any,
+            { workspaceConnections: jest.fn().mockResolvedValue([]) } as any,
         );
     });
 

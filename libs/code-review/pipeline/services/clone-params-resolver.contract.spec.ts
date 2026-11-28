@@ -48,6 +48,14 @@ describe('CloneParamsResolver × real platform adapters (self-managed host)', ()
     const buildResolver = (connected?: PlatformType) => {
         const integrationService = {
             // getTypeIntegration reads the team's connected integration here.
+            // Calls are routed to the team's one Git connection.
+            resolveCodeManagementConnection: jest.fn(async () => ({
+                integration: connected
+                    ? { uuid: 'int-1', platform: connected }
+                    : undefined,
+                platform: connected ?? null,
+                ambiguous: false,
+            })),
             findOne: jest.fn(async (filter: any) =>
                 filter?.integrationCategory ===
                     IntegrationCategory.CODE_MANAGEMENT && connected
@@ -175,6 +183,13 @@ describe('CodeManagementService.getCloneParams (platform not supplied)', () => {
 
     const buildService = (connected?: PlatformType) => {
         const integrationService = {
+            resolveCodeManagementConnection: jest.fn(async () => ({
+                integration: connected
+                    ? { uuid: 'int-1', platform: connected }
+                    : undefined,
+                platform: connected ?? null,
+                ambiguous: false,
+            })),
             findOne: jest
                 .fn()
                 .mockResolvedValue(

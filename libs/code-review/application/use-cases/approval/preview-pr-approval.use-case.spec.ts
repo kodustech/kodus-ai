@@ -92,6 +92,16 @@ describe(PreviewPrApprovalUseCase.name, () => {
         return { useCase, evaluate, executions, codeManagement, pullRequests };
     }
 
+    it("resolves the platform of the repository's own connection", async () => {
+        const { useCase, codeManagement } = setup();
+
+        await useCase.execute(input);
+
+        expect(codeManagement.getTypeIntegration.mock.calls).toEqual([
+            [input.organizationAndTeamData, { id: 'repo', name: 'example' }],
+        ]);
+    });
+
     it('uses only the matching recorded clean snapshot and delegates to the real policy service', async () => {
         const { useCase, evaluate, executions } = setup();
         const result = await useCase.execute(input);

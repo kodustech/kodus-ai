@@ -138,10 +138,9 @@ export class GitHubRateLimitGateService implements IRateLimitGateService {
         cacheKey: string,
     ): Promise<CachedRateLimit | null> {
         try {
-            const octokit =
-                await this.githubService.getAuthenticatedOctokit(
-                    organizationAndTeamData,
-                );
+            const octokit = await this.githubService.getAuthenticatedOctokit(
+                organizationAndTeamData,
+            );
             const response = (await octokit.rest.rateLimit.get()) as any;
             const core = response?.data?.resources?.core;
 
@@ -203,6 +202,6 @@ export class GitHubRateLimitGateService implements IRateLimitGateService {
     }
 
     private makeCacheKey(o: OrganizationAndTeamData): string {
-        return `rl:github:${o.organizationId}:${o.teamId ?? 'no-team'}`;
+        return `rl:github:${o.organizationId}:${o.teamId ?? 'no-team'}${o.integrationId ? `:${o.integrationId}` : ''}`;
     }
 }

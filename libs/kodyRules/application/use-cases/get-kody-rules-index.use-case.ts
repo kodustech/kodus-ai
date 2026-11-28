@@ -17,6 +17,7 @@ import {
     IKodyRuleIndexEntry,
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { ruleVisibleToConnections } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 
 /**
  * An organization's rules as a picker needs them: id, title and scope, nothing
@@ -42,17 +43,28 @@ export class GetKodyRulesIndexUseCase implements IUseCase {
         private readonly authorizationService: AuthorizationService,
     ) {}
 
-    async execute(organizationId: string): Promise<IKodyRuleIndexEntry[]> {
+    /** `restriction`: the Git connections a member granted only some of them reads. */
+    async execute(
+        organizationId: string,
+        restriction?: { connectionIds: ReadonlySet<string> } | null,
+    ): Promise<IKodyRuleIndexEntry[]> {
         try {
             const entries =
                 await this.kodyRulesService.findRulesIndex(organizationId);
 
-            const visible = entries.filter(
-                (entry) =>
-                    entry.uuid &&
-                    entry.status !== KodyRulesStatus.DELETED &&
-                    entry.status !== KodyRulesStatus.APPLIED,
-            );
+            // The source decides visibility and is not part of the answer.
+            const visible = entries
+                .filter(
+                    (entry) =>
+                        entry.uuid &&
+                        entry.status !== KodyRulesStatus.DELETED &&
+                        entry.status !== KodyRulesStatus.APPLIED &&
+                        ruleVisibleToConnections(
+                            entry,
+                            restriction?.connectionIds,
+                        ),
+                )
+                .map(({ centralizedConfig: _source, ...entry }) => entry);
 
             // REQUEST is @Optional because this use case is also constructed
             // outside a request scope (tests, and any future non-HTTP caller),

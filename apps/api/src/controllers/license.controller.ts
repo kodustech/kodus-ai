@@ -2,8 +2,10 @@ import {
     BadRequestException,
     Body,
     Controller,
+    ForbiddenException,
     Get,
     Inject,
+    NotFoundException,
     Post,
     Query,
     UseGuards,
@@ -29,6 +31,8 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { SelfHostedLicenseService } from '@libs/ee/license/self-hosted-license.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import { assertConnectionReadable } from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 import { PruneRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/prune-removed-license-seats.use-case';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TrialExtensionNotifierService } from '../services/trial-extension-notifier.service';
@@ -46,6 +50,7 @@ export class LicenseController {
         private readonly trialExtensionNotifierService: TrialExtensionNotifierService,
         private readonly pruneRemovedLicenseSeatsUseCase: PruneRemovedLicenseSeatsUseCase,
         private readonly telemetry: TelemetryService,
+        private readonly connectionAccess: ConnectionAccessService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -198,7 +203,9 @@ export class LicenseController {
         description:
             'Return all users who have ever been assigned a license seat (active and inactive).',
     })
-    public async usersWithLicense() {
+    public async usersWithLicense(
+        @Query('connectionId') connectionId?: string,
+    ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -207,8 +214,14 @@ export class LicenseController {
             );
         }
 
+        const seatConnectionId = await this.seatConnection(
+            organizationId,
+            undefined,
+            connectionId,
+        );
         return this.licenseService.getAllUsersEverWithLicense({
             organizationId,
+            ...(seatConnectionId ? { integrationId: seatConnectionId } : {}),
         });
     }
 
@@ -229,6 +242,7 @@ export class LicenseController {
         @Body()
         body: {
             teamId?: string;
+            connectionId?: string;
             users: Array<{
                 gitId: string;
                 gitTool: string;
@@ -246,9 +260,15 @@ export class LicenseController {
             );
         }
 
+        const seatConnectionId = await this.seatConnection(
+            organizationId,
+            body.teamId,
+            body.connectionId,
+        );
         const orgData = {
             organizationId,
             teamId: body.teamId,
+            ...(seatConnectionId ? { integrationId: seatConnectionId } : {}),
         };
 
         const successful: any[] = [];
@@ -299,9 +319,15 @@ export class LicenseController {
         description:
             'Lists the git ids holding a seat while no longer belonging to the git organization. Returns a "members_unavailable" status when the code platform could not be reached.',
     })
-    public async removableSeats(@Query('teamId') teamId?: string) {
+    public async removableSeats(
+        @Query('teamId') teamId?: string,
+        @Query('connectionId') connectionId?: string,
+    ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
-            organizationAndTeamData: this.resolveOrganizationAndTeamData(teamId),
+            organizationAndTeamData: await this.resolveOrganizationAndTeamData(
+                teamId,
+                connectionId,
+            ),
             dryRun: true,
         });
     }
@@ -320,11 +346,17 @@ export class LicenseController {
             'Releases the seats of users who no longer belong to the git organization. Never runs when the member list could not be confirmed.',
     })
     public async pruneSeats(
-        @Body() body: { teamId?: string; gitIds?: string[] },
+        @Body()
+        body: {
+            teamId?: string;
+            connectionId?: string;
+            gitIds?: string[];
+        },
     ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
-            organizationAndTeamData: this.resolveOrganizationAndTeamData(
+            organizationAndTeamData: await this.resolveOrganizationAndTeamData(
                 body?.teamId,
+                body?.connectionId,
             ),
             gitIds: body?.gitIds,
         });
@@ -358,7 +390,10 @@ export class LicenseController {
         });
     }
 
-    private resolveOrganizationAndTeamData(teamId?: string) {
+    private async resolveOrganizationAndTeamData(
+        teamId?: string,
+        connectionId?: string,
+    ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -367,6 +402,70 @@ export class LicenseController {
             );
         }
 
-        return { organizationId, teamId };
+        const seatConnectionId = await this.seatConnection(
+            organizationId,
+            teamId,
+            connectionId,
+        );
+        return {
+            organizationId,
+            teamId,
+            ...(seatConnectionId ? { integrationId: seatConnectionId } : {}),
+        };
+    }
+
+    /**
+     * The connection a seat call is on. It may name only a connection of the
+     * caller's workspace (or organization, when no workspace is given) that
+     * the caller is granted. A member granted only some connections who
+     * names none is on the one they are granted there, else refused: the
+     * workspace's seats include the other connections'.
+     */
+    private async seatConnection(
+        organizationId: string,
+        teamId: string | undefined,
+        requested: string | undefined,
+    ): Promise<string | undefined> {
+        const restriction = await this.connectionAccess.restrictionFor(
+            this.request?.user,
+        );
+        const connectionId =
+            requested ??
+            (restriction
+                ? await this.onlyGrantedConnection(restriction, teamId)
+                : undefined);
+        if (!connectionId) return undefined;
+        assertConnectionReadable(restriction, connectionId);
+        const known = teamId
+            ? await this.connectionAccess.connectionInWorkspace(
+                  organizationId,
+                  teamId,
+                  connectionId,
+              )
+            : await this.connectionAccess.connectionInOrganization(
+                  organizationId,
+                  connectionId,
+              );
+        if (!known) {
+            throw new NotFoundException('Git connection not found.');
+        }
+        return connectionId;
+    }
+
+    private async onlyGrantedConnection(
+        restriction: { connectionIds: ReadonlySet<string> },
+        teamId: string | undefined,
+    ): Promise<string> {
+        const candidates = teamId
+            ? (
+                  await this.connectionAccess.workspaceConnectionIds(teamId)
+              ).filter((id) => restriction.connectionIds.has(id))
+            : [...restriction.connectionIds];
+        if (candidates.length !== 1) {
+            throw new ForbiddenException(
+                'Name one of your Git connections (connectionId).',
+            );
+        }
+        return candidates[0];
     }
 }

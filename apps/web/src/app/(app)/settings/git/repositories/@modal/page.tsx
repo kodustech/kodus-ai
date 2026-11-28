@@ -6,35 +6,30 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 import { safeArray } from "src/core/utils/safe-array";
 
 import { SelectRepositoriesModal } from "../../_components/_modals/select-repositories-modal";
+import { connectionLabel } from "../../_constants";
 
-const providers = {
-    azure_repos: {
-        readableName: "Azure Repos",
-    },
-    github: {
-        readableName: "Github",
-    },
-    gitlab: {
-        readableName: "Gitlab",
-    },
-    bitbucket: {
-        readableName: "Bitbucket",
-    },
-    forgejo: {
-        readableName: "Forgejo",
-    },
-} as const satisfies Record<string, { readableName: string }>;
-
-export default async function GitRepositories() {
+export default async function GitRepositories({
+    searchParams,
+}: {
+    searchParams: Promise<{ connectionId?: string }>;
+}) {
     const teamId = await getGlobalSelectedTeamId();
+    const { connectionId: requestedConnectionId } = await searchParams;
 
     let connectionsError = false;
-    const [connectionsResult, selectedRepositories] = await Promise.all([
+    // With the connection named, its saved repositories need nothing from
+    // the connections list: both are read together, then checked.
+    const [connectionsResult, namedRepositories] = await Promise.all([
         getConnections(teamId).catch(() => {
             connectionsError = true;
             return [];
         }),
-        getIntegrationConfig({ teamId }),
+        requestedConnectionId
+            ? getIntegrationConfig({
+                  teamId,
+                  connectionId: requestedConnectionId,
+              })
+            : undefined,
     ]);
 
     if (connectionsError) {
@@ -46,20 +41,29 @@ export default async function GitRepositories() {
         );
     }
 
-    const gitConnection = safeArray(connectionsResult).find(
+    const gitConnections = safeArray(connectionsResult).filter(
         (c) => c.category === "CODE_MANAGEMENT",
     );
+    // The named connection, or the workspace's only one.
+    const gitConnection = requestedConnectionId
+        ? gitConnections.find((c) => c.connectionId === requestedConnectionId)
+        : gitConnections.length === 1
+          ? gitConnections[0]
+          : undefined;
     if (!gitConnection) redirect("/settings/git");
 
-    const provider =
-        providers[
-            gitConnection.platformName.toLowerCase() as keyof typeof providers
-        ];
+    const selectedRepositories =
+        namedRepositories ??
+        (await getIntegrationConfig({
+            teamId,
+            connectionId: gitConnection.connectionId,
+        }));
 
     return (
         <SelectRepositoriesModal
-            platformName={provider.readableName}
+            platformName={connectionLabel(gitConnection, gitConnections)}
             selectedRepositories={selectedRepositories}
+            connectionId={gitConnection.connectionId}
         />
     );
 }

@@ -3,6 +3,8 @@ import { ContextReferenceModule } from '@libs/code-review/modules/contextReferen
 import { PromptsModule } from '@libs/code-review/modules/prompts.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
+import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
+import { CentralizedConfigConnectionScope } from '../application/services/centralized-config-connection-scope.service';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
@@ -30,9 +32,11 @@ import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-re
         forwardRef(() => ContextReferenceModule),
         forwardRef(() => PullRequestMessagesModule),
         forwardRef(() => IntegrationConfigModule),
+        forwardRef(() => IntegrationModule),
         forwardRef(() => CodeReviewConfigurationModule),
     ],
     providers: [
+        CentralizedConfigConnectionScope,
         CentralizedConfigSyncUseCase,
         CentralizedConfigSyncListener,
         CentralizedConfigPrService,
@@ -45,6 +49,7 @@ import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-re
         },
     ],
     exports: [
+        CentralizedConfigConnectionScope,
         CentralizedConfigSyncUseCase,
         CentralizedConfigPrService,
         CentralizedConfigDownloadUseCase,

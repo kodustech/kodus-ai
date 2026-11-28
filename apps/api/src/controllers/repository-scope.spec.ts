@@ -13,6 +13,7 @@ import { FindByOrganizationIdKodyRulesUseCase } from '@libs/kodyRules/applicatio
 
 import { KodyRulesTenantGuard } from '../guards/kody-rules-tenant.guard';
 import { KodyRulesController } from './kodyRules.controller';
+import { FindTeamKeyPullRequestUseCase } from '@libs/code-review/application/use-cases/pullRequests/find-team-key-pull-request.use-case';
 import { ParametersController } from './parameters.controller';
 import { PullRequestController } from './pullRequest.controller';
 
@@ -157,6 +158,38 @@ describe('repository scope — kody rules', () => {
             );
         }
         expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('GET /kody-rules/past-reviewers takes no `global` as a scoped repository, and passes the granted connections', async () => {
+        const execute = jest.fn().mockResolvedValue([]);
+        const controller = make(KodyRulesController, {
+            listPastReviewersUseCase: { execute },
+            connectionAccess: {
+                restrictionFor: jest
+                    .fn()
+                    .mockResolvedValue({ connectionIds: new Set(['gh-a']) }),
+            },
+        });
+        controller.authorizationService.getRepositoryScope.mockResolvedValue([
+            ALLOWED,
+            'global',
+        ]);
+
+        await expect(
+            controller.listPastReviewers('team-2', 'global'),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        await controller.listPastReviewers('team-2', ALLOWED);
+
+        expect(execute.mock.calls).toEqual([
+            [
+                {
+                    teamId: 'team-2',
+                    repositoryId: ALLOWED,
+                    months: undefined,
+                    readableConnectionIds: new Set(['gh-a']),
+                },
+            ],
+        ]);
     });
 
     it('GET /kody-rules/find-by-organization-id hides rules of repositories outside the scope', async () => {
@@ -315,5 +348,238 @@ describe('repository scope — CLI suggestions with a user JWT', () => {
             ),
         ).rejects.toBeInstanceOf(ForbiddenException);
         expect(execute).not.toHaveBeenCalled();
+    });
+});
+
+describe('workspace scope — suggestions with a team CLI key', () => {
+    const storedPr = {
+        toObject: () => ({
+            number: 1,
+            repository: { id: OTHER, fullName: 'acme/other' },
+        }),
+    };
+    const teamKeyController = (teamRepositoryIds: string[]) => {
+        const execute = jest.fn().mockResolvedValue({
+            response: {},
+            suggestionsCount: 0,
+        });
+        const controller = make(PullRequestController, {
+            teamCliKeyService: {
+                validateKey: jest.fn().mockResolvedValue({
+                    organization: { uuid: 'org-1' },
+                    team: { uuid: 'team-1' },
+                }),
+            },
+            integrationConfigService: {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue(
+                        teamRepositoryIds.map((id) => ({ id, name: id })),
+                    ),
+            },
+            pullRequestsService: {
+                findOne: jest.fn().mockResolvedValue(storedPr),
+                find: jest.fn().mockResolvedValue([storedPr]),
+            },
+            getPullRequestSuggestionsUseCase: { execute },
+            eventEmitter: { emit: jest.fn() },
+        });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
+        return { controller, execute };
+    };
+
+    it("serves the key's own repository when another server has one with the same id", async () => {
+        const execute = jest.fn().mockResolvedValue({
+            response: {},
+            suggestionsCount: 0,
+        });
+        const pr = (fullName: string) => ({
+            toObject: () => ({
+                number: 12,
+                repository: { id: '3', fullName },
+            }),
+        });
+        const controller = make(PullRequestController, {
+            teamCliKeyService: {
+                validateKey: jest.fn().mockResolvedValue({
+                    organization: { uuid: 'org-1' },
+                    team: { uuid: 'team-1' },
+                }),
+            },
+            integrationConfigService: {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 3, name: 'api', organizationName: 'acme' },
+                    ]),
+            },
+            pullRequestsService: {
+                findOne: jest.fn().mockResolvedValue(pr('other/tool')),
+                find: jest
+                    .fn()
+                    .mockResolvedValue([pr('other/tool'), pr('acme/api')]),
+            },
+            getPullRequestSuggestionsUseCase: { execute },
+            eventEmitter: { emit: jest.fn() },
+            automationExecutionService: {
+                create: jest.fn().mockResolvedValue(undefined),
+            },
+        });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
+
+        await controller.getSuggestionsByPullRequest(
+            undefined,
+            '3',
+            '12',
+            'json',
+            undefined,
+            undefined,
+            'kodus_key',
+        );
+
+        expect(execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pr: expect.objectContaining({
+                    repository: { id: '3', fullName: 'acme/api' },
+                }),
+            }),
+        );
+    });
+
+    it("refuses a pull request of a repository outside the key's workspace", async () => {
+        const { controller, execute } = teamKeyController([ALLOWED]);
+
+        await expect(
+            controller.getSuggestionsByPullRequest(
+                undefined,
+                OTHER,
+                '1',
+                'json',
+                undefined,
+                undefined,
+                'kodus_key',
+            ),
+        ).rejects.toThrow('Pull request not found');
+        expect(execute).not.toHaveBeenCalled();
+    });
+
+    it("serves a pull request of a repository of the key's workspace", async () => {
+        const { controller, execute } = teamKeyController([OTHER]);
+
+        await controller
+            .getSuggestionsByPullRequest(
+                undefined,
+                OTHER,
+                '1',
+                'json',
+                undefined,
+                undefined,
+                'kodus_key',
+            )
+            .catch(() => undefined);
+
+        expect(execute).toHaveBeenCalled();
+    });
+});
+
+describe('repository scope — execution events stream', () => {
+    it('streams only the executions of repositories in the scope', async () => {
+        const { EventEmitter2 } = await import('@nestjs/event-emitter');
+        const { Subject, firstValueFrom, filter, take, toArray } =
+            await import('rxjs');
+        const eventEmitter = new EventEmitter2();
+        const controller = make(PullRequestController, {
+            eventEmitter,
+            shutdown$: new Subject<void>(),
+        });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
+
+        const received = firstValueFrom<
+            Array<{ data: { executionUuid?: string } }>
+        >(
+            controller.executionEvents().pipe(
+                filter((event: any) => event.data.type === 'execution_updated'),
+                take(2),
+                toArray(),
+            ),
+        );
+        await flush();
+        for (const [executionUuid, repositoryId] of [
+            ['e-other', OTHER],
+            ['e-mine', ALLOWED],
+            ['e-signal', undefined],
+        ]) {
+            eventEmitter.emit('pr-execution.updated', {
+                organizationId: 'org-1',
+                executionUuid,
+                repositoryId,
+                status: 'success',
+            });
+        }
+
+        expect(
+            (await received).map((event) => event.data.executionUuid),
+        ).toEqual(['e-mine', 'e-signal']);
+    });
+
+    it('stops streaming a repository soon after the grant to it is revoked', async () => {
+        const { EventEmitter2 } = await import('@nestjs/event-emitter');
+        const { Subject } = await import('rxjs');
+        const eventEmitter = new EventEmitter2();
+        const authorizationService = makeAuthorization();
+        const controller = make(PullRequestController, {
+            eventEmitter,
+            authorizationService,
+            shutdown$: new Subject<void>(),
+        });
+        // The team-key lookup, over the services above.
+        controller.findTeamKeyPullRequestUseCase =
+            new FindTeamKeyPullRequestUseCase(
+                controller.pullRequestsService,
+                controller.integrationConfigService,
+            );
+        let now = 1_000_000;
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        const received: string[] = [];
+        const subscription = controller
+            .executionEvents()
+            .subscribe((event: any) => {
+                if (event.data.type === 'execution_updated') {
+                    received.push(event.data.executionUuid);
+                }
+            });
+        const emit = (executionUuid: string) =>
+            eventEmitter.emit('pr-execution.updated', {
+                organizationId: 'org-1',
+                executionUuid,
+                repositoryId: ALLOWED,
+                status: 'success',
+            });
+
+        emit('before');
+        await flush();
+        authorizationService.getRepositoryScope.mockResolvedValue([]);
+        now += 16_000;
+        emit('after');
+        await flush();
+
+        subscription.unsubscribe();
+        clock.mockRestore();
+        expect(received).toEqual(['before']);
     });
 });

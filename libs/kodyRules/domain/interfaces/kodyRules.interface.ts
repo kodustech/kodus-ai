@@ -62,6 +62,11 @@ export interface IKodyRuleIndexEntry {
     directoryId?: string;
     type?: KodyRulesType;
     status: KodyRulesStatus;
+    /** Read to decide who sees the rule; not returned to callers. */
+    centralizedConfig?: Pick<
+        IKodyRuleCentralizedConfig,
+        'connectionScoped' | 'sourceConnectionId'
+    > | null;
 }
 
 export type KodyRuleAutoPauseState = 'ignored' | 'noisy';
@@ -263,6 +268,17 @@ export type KodyRuleSourceFileIssue = 'not_a_rule_template';
 export interface IKodyRuleCentralizedConfig {
     path: string;
     status: KodyRuleCentralizedStatus;
+    /** The centralized config repository the rule was synced from. */
+    sourceRepositoryId?: string;
+    /** `PLATFORM|host` of the server holding that repository. */
+    sourceServerKey?: string;
+    /** The Git connection whose own config the rule came from. */
+    sourceConnectionId?: string;
+    /**
+     * Synced from a Git connection's own centralized config: a global rule
+     * applies only to that connection's repositories.
+     */
+    connectionScoped?: boolean;
 }
 
 export interface IKodyRuleMemory extends Omit<

@@ -21,6 +21,10 @@ describe('GetRepositoriesUseCase', () => {
     const authorizationService = {
         getRepositoryScope: jest.fn().mockResolvedValue(null),
     };
+    // The workspace's only Git connection.
+    const integrationService = {
+        find: jest.fn().mockResolvedValue([{ uuid: 'conn-1' }]),
+    };
 
     it('rethrows a provider failure instead of answering an empty list', async () => {
         const rateLimited = new HttpException(
@@ -28,13 +32,19 @@ describe('GetRepositoriesUseCase', () => {
             HttpStatus.TOO_MANY_REQUESTS,
         );
         const useCase = new GetRepositoriesUseCase(
-            { getRepositories: jest.fn().mockRejectedValue(rateLimited) } as any,
+            {
+                getRepositories: jest.fn().mockRejectedValue(rateLimited),
+            } as any,
             authorizationService as any,
             request,
+            integrationService as any,
         );
 
         await expect(
-            useCase.execute({ teamId: 'team-1', organizationSelected: undefined }),
+            useCase.execute({
+                teamId: 'team-1',
+                organizationSelected: undefined,
+            }),
         ).rejects.toBe(rateLimited);
     });
 
@@ -47,10 +57,16 @@ describe('GetRepositoriesUseCase', () => {
             } as any,
             authorizationService as any,
             request,
+            integrationService as any,
         );
 
         await expect(
-            useCase.execute({ teamId: 'team-1', organizationSelected: undefined }),
-        ).resolves.toEqual([{ id: 'r1', selected: true }]);
+            useCase.execute({
+                teamId: 'team-1',
+                organizationSelected: undefined,
+            }),
+        ).resolves.toEqual([
+            { id: 'r1', selected: true, connectionId: 'conn-1' },
+        ]);
     });
 });

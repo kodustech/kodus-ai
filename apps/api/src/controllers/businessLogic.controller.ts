@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     Body,
+    ForbiddenException,
     Controller,
     Get,
     Inject,
@@ -28,6 +29,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -111,6 +113,20 @@ export class BusinessLogicController {
         });
     }
 
+    /** Refuses a member who reads only some Git connections. */
+    private async ensureReadsEveryConnection(): Promise<void> {
+        const readable = await this.authorization.getRepositoryScope({
+            user: this.request.user,
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        });
+        if (readable !== null) {
+            throw new ForbiddenException(
+                'Name a repository: the organization-wide status spans Git connections you are not granted.',
+            );
+        }
+    }
+
     private organizationId(): string {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
@@ -128,12 +144,17 @@ export class BusinessLogicController {
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @ApiQuery({ name: 'repositoryId', type: String, required: false })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadSettings)
     async status(
         @Query('teamId') teamId: string,
         @Query('repositoryId') repositoryId?: string,
     ) {
         await this.ensureRepository(Action.Read, repositoryId);
+        // The organization-wide status spans every Git connection.
+        if (!repositoryId || repositoryId === 'global') {
+            await this.ensureReadsEveryConnection();
+        }
         return this.insights.status(this.organizationId(), {
             teamId,
             repositoryId:
@@ -151,6 +172,7 @@ export class BusinessLogicController {
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadSettings)
     taskSources(@Query('teamId') teamId: string) {
         return this.businessValidationService.taskSources({
@@ -167,6 +189,7 @@ export class BusinessLogicController {
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadSettings)
     readTools(
         @Param('integrationId') integrationId: string,
@@ -318,6 +341,7 @@ export class BusinessLogicController {
             "The Cockpit's repository picker: `owner/name`. All the caller can read when absent.",
     })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadCockpit)
     async intent(
         @Query('startDate') startDate: string,

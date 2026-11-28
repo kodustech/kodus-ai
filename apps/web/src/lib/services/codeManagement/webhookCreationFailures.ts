@@ -21,6 +21,8 @@ export type WebhookCreationFailure = {
 
 export const getWebhookCreationFailures = async (
     teamId: string,
+    /** One Git connection's failures; the only connection's when absent. */
+    connectionId?: string,
 ): Promise<Record<string, WebhookCreationFailure>> => {
     // Server components read this through the authorized server-side path:
     // axiosAuthorized attaches no bearer token, so the API's JWT guard
@@ -29,7 +31,7 @@ export const getWebhookCreationFailures = async (
     const response = await authorizedFetch<{
         failures: Record<string, WebhookCreationFailure>;
     }>(CODE_MANAGEMENT_API_PATHS.GET_WEBHOOK_CREATION_FAILURES, {
-        params: { teamId },
+        params: { teamId, ...(connectionId ? { connectionId } : {}) },
     });
 
     return response?.failures ?? {};

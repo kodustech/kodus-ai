@@ -37,6 +37,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -276,6 +277,7 @@ export class SecurityScansController {
         description: 'The most recent scans of the repositories you can see.',
     })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadScans)
     async list(@Query('limit') limit?: string) {
         // Only a positive whole number is a limit; anything else (blank,
@@ -295,6 +297,7 @@ export class SecurityScansController {
             'The schedules of the repositories you can see: cadence, limit, mode, model, next and last run.',
     })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadScans)
     async listSchedules() {
         return this.schedules.list(
@@ -430,6 +433,7 @@ export class SecurityScansController {
         description: 'Status, spend, coverage and outcome of one scan.',
     })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadScans)
     async get(@Param('id') id: string) {
         return this.getSecurityScans.get(

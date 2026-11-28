@@ -17,6 +17,7 @@ import { columns } from "./table-columns";
 
 export const GitRepositoriesTable = ({
     platformName,
+    connectionId,
     repositories,
     webhookFailures,
     webhookFailuresUnavailable,
@@ -24,6 +25,8 @@ export const GitRepositoriesTable = ({
 }: {
     repositories: AwaitedReturnType<typeof getIntegrationConfig>;
     platformName: string;
+    /** The Git connection the repositories belong to. */
+    connectionId?: string;
     webhookFailures?: Record<string, WebhookCreationFailure>;
     webhookFailuresUnavailable?: boolean;
     /** The sync adds every repository, so removing or adding by hand is off. */
@@ -105,7 +108,12 @@ export const GitRepositoriesTable = ({
                     />
 
                     {!reviewsAllRepositories && (
-                        <Link href="/settings/git/repositories">
+                        <Link
+                            href={
+                                connectionId
+                                    ? `/settings/git/repositories?connectionId=${encodeURIComponent(connectionId)}`
+                                    : "/settings/git/repositories"
+                            }>
                             <Button
                                 size="md"
                                 decorative

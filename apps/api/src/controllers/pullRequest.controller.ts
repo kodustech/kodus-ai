@@ -51,8 +51,8 @@ import { REQUEST } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { fromEvent, interval, merge, Subject } from 'rxjs';
-import { filter, map, takeUntil } from 'rxjs/operators';
+import { from, fromEvent, interval, merge, Subject } from 'rxjs';
+import { filter, map, mergeMap, takeUntil } from 'rxjs/operators';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { BackfillPRsDto } from '../dtos/backfill-prs.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
@@ -66,6 +66,7 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -101,11 +102,15 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { FindTeamKeyPullRequestUseCase } from '@libs/code-review/application/use-cases/pullRequests/find-team-key-pull-request.use-case';
 import { PullRequestSuggestionsResponseDto } from '../dtos/pull-request-suggestions-response.dto';
 import {
     PullRequestBackfillResponseDto,
     PullRequestExecutionsResponseDto,
 } from '../dtos/pull-request-executions-response.dto';
+
+/** How long a stream trusts the repository scope it read. */
+const EXECUTION_STREAM_SCOPE_TTL_MS = 15_000;
 
 @ApiTags('Pull Requests')
 @ApiStandardResponses()
@@ -140,6 +145,7 @@ export class PullRequestController implements OnApplicationShutdown {
         private readonly configService: ConfigService,
         private readonly eventEmitter: EventEmitter2,
         private readonly authorizationService: AuthorizationService,
+        private readonly findTeamKeyPullRequestUseCase: FindTeamKeyPullRequestUseCase,
     ) {
         this.jwtConfig = this.configService.get<JWT>('jwtConfig');
     }
@@ -152,6 +158,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -172,6 +179,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions/totals')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -192,6 +200,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions/summary')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -222,6 +231,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions/facets')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -256,6 +266,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/awaiting')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -275,6 +286,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/authors')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -305,6 +317,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Sse('/executions/events')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -325,11 +338,46 @@ export class PullRequestController implements OnApplicationShutdown {
             );
         }
 
+        // A member who reads only some repositories (assignment, or the
+        // Git connections they are granted) hears only about those. The
+        // scope is read again every few seconds, so a revoked grant stops
+        // the stream without a reconnect.
+        const user = this.request.user;
+        let scope: { value: Promise<string[] | null>; readAt: number } | null =
+            null;
+        const currentScope = () => {
+            if (
+                !scope ||
+                Date.now() - scope.readAt >= EXECUTION_STREAM_SCOPE_TTL_MS
+            ) {
+                scope = {
+                    value: this.authorizationService.getRepositoryScope({
+                        user,
+                        action: Action.Read,
+                        resource: ResourceType.PullRequests,
+                    }),
+                    readAt: Date.now(),
+                };
+            }
+            return scope.value;
+        };
+
         const events$ = fromEvent(
             this.eventEmitter,
             PR_EXECUTION_UPDATED_EVENT,
         ).pipe(
             filter((event: any) => event?.organizationId === organizationId),
+            mergeMap((event: any) =>
+                from(currentScope()).pipe(
+                    filter(
+                        (readable) =>
+                            readable === null ||
+                            event?.repositoryId == null ||
+                            readable.includes(String(event.repositoryId)),
+                    ),
+                    map(() => event),
+                ),
+            ),
             map((event: any) => ({
                 data: {
                     type: 'execution_updated',
@@ -525,6 +573,8 @@ export class PullRequestController implements OnApplicationShutdown {
         let organizationId: string | undefined;
         // Set on the JWT route only: a team CLI key is team-wide.
         let jwtUser: Partial<IUser> | undefined;
+        // Set on the team-key route: the key reads its own workspace only.
+        let keyTeamId: string | undefined;
 
         // Route 1: Team CLI key (via x-team-key or Bearer kodus_...)
         if (teamKey || bearerToken?.startsWith('kodus_')) {
@@ -536,6 +586,7 @@ export class PullRequestController implements OnApplicationShutdown {
                 );
             }
             organizationId = teamData.organization.uuid;
+            keyTeamId = teamData.team?.uuid;
         }
         // Route 2: JWT Bearer token
         else if (bearerToken) {
@@ -588,12 +639,20 @@ export class PullRequestController implements OnApplicationShutdown {
             }
         }
 
-        const prEntity = await this.findPrEntity({
-            prUrl,
-            repositoryId,
-            prNumber,
-            organizationId,
-        });
+        const prEntity = jwtUser
+            ? await this.findPrEntity({
+                  prUrl,
+                  repositoryId,
+                  prNumber,
+                  organizationId,
+              })
+            : await this.findTeamKeyPullRequestUseCase.execute({
+                  prUrl,
+                  repositoryId,
+                  prNumber,
+                  organizationId,
+                  teamId: keyTeamId,
+              });
 
         if (!prEntity) {
             throw new NotFoundException('Pull request not found');

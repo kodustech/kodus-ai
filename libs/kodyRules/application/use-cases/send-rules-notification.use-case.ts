@@ -11,6 +11,10 @@ import {
     ORGANIZATION_SERVICE_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { NotificationService } from '@libs/notifications/application/notification.service';
+import {
+    ConnectionAccessService,
+    ConnectionRestriction,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
 @Injectable()
@@ -22,9 +26,16 @@ export class SendRulesNotificationUseCase {
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
         private readonly notificationService: NotificationService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
-    async execute(organizationId: string, rules: string[]): Promise<void> {
+    async execute(
+        organizationId: string,
+        rules: Array<string | { title: string; repositoryId?: string }>,
+    ): Promise<void> {
+        const entries = (rules ?? []).map((rule) =>
+            typeof rule === 'string' ? { title: rule } : rule,
+        ) as Array<{ title: string; repositoryId?: string }>;
         try {
             this.logger.log({
                 message: 'Starting Kody Rules notification process',
@@ -76,19 +87,62 @@ export class SendRulesNotificationUseCase {
                 return;
             }
 
-            // Formatar dados dos usuários para o notification payload
-            const emailUsers = users.map((user) => ({
-                email: user.email,
-                name: this.extractUserName(user),
-            }));
+            // A member granted only some Git connections hears only about
+            // the rules of those connections' repositories, so members are
+            // grouped by the rules they may see and each group gets its own.
+            const groups = new Map<
+                string,
+                { titles: string[]; users: typeof users }
+            >();
+            // One pass for every member. Unreadable access: nobody hears.
+            let restrictions: Map<string, ConnectionRestriction | null>;
+            try {
+                restrictions = await this.connectionAccess.restrictionsFor(
+                    users.map((user) => ({
+                        uuid: user.uuid,
+                        role: user.role,
+                        organization: { uuid: organizationId },
+                    })),
+                );
+            } catch (error) {
+                this.logger.error({
+                    message:
+                        'Could not read which Git connections members are granted; rules notification not sent',
+                    context: SendRulesNotificationUseCase.name,
+                    error,
+                    metadata: { organizationId },
+                });
+                return;
+            }
+            for (const user of users) {
+                if (!restrictions.has(user.uuid)) continue;
+                const restriction = restrictions.get(user.uuid);
+                const titles = entries
+                    .filter(
+                        (rule) =>
+                            !restriction ||
+                            !rule.repositoryId ||
+                            rule.repositoryId === 'global' ||
+                            restriction.allowsRepository({
+                                id: rule.repositoryId,
+                            }),
+                    )
+                    .map((rule) => rule.title);
+                if (titles.length === 0) continue;
+                const key = titles.join('\u0000');
+                const group = groups.get(key) ?? { titles, users: [] };
+                group.users.push(user);
+                groups.set(key, group);
+            }
 
             this.logger.log({
                 message: 'Emitting Kody Rules notification',
                 context: SendRulesNotificationUseCase.name,
                 metadata: {
                     organizationId,
-                    usersCount: emailUsers.length,
+                    usersCount: users.length,
                     rulesCount: rules.length,
+                    groups: groups.size,
                     organizationName: organization.name,
                 },
             });
@@ -97,19 +151,24 @@ export class SendRulesNotificationUseCase {
             // dispatcher fans out to each recipient and routes per
             // channel. `users` stays in the payload for the email
             // template (the recap lists everyone who got it).
-            await this.notificationService.emit({
-                event: NotificationEvent.KODY_RULES_GENERATED,
-                payload: {
-                    users: emailUsers,
-                    rules,
-                    organizationName: organization.name,
-                },
-                organizationId,
-                recipients: users.map((u) => ({
-                    kind: 'user',
-                    userId: u.uuid,
-                })),
-            });
+            for (const group of groups.values()) {
+                await this.notificationService.emit({
+                    event: NotificationEvent.KODY_RULES_GENERATED,
+                    payload: {
+                        users: group.users.map((user) => ({
+                            email: user.email,
+                            name: this.extractUserName(user),
+                        })),
+                        rules: group.titles,
+                        organizationName: organization.name,
+                    },
+                    organizationId,
+                    recipients: group.users.map((u) => ({
+                        kind: 'user',
+                        userId: u.uuid,
+                    })),
+                });
+            }
 
             this.logger.log({
                 message: 'Kody Rules notification emitted successfully',

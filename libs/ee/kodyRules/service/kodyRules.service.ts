@@ -112,6 +112,11 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 
+import {
+    keepCentralizedSource,
+    ruleAppliesToConnection,
+} from '@libs/kodyRules/domain/utils/centralized-rule-source';
+
 // Full-form and sync saves may echo the whole rule. Write only changes so
 // background compiler records committed since the read survive the save.
 function changedRuleFields(
@@ -956,6 +961,10 @@ export class KodyRulesService implements IKodyRulesService {
             ...detectorPatch,
             ...statusOverride,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
+            centralizedConfig: keepCentralizedSource(
+                existingRule.centralizedConfig,
+                kodyRule.centralizedConfig ?? existingRule.centralizedConfig,
+            ),
             updatedAt: new Date(),
         };
 
@@ -2578,6 +2587,12 @@ Analyze the suggestions and recommend the most relevant rules.`;
                 );
 
             const filteredMemories = inheritedMemories
+                .filter((rule) =>
+                    ruleAppliesToConnection(
+                        rule,
+                        organizationAndTeamData.integrationId,
+                    ),
+                )
                 .filter((rule): rule is IKodyRule => {
                     if (normalizedKeywords.length === 0) {
                         return true;

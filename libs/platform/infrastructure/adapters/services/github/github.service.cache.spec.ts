@@ -92,7 +92,7 @@ describe('GithubService — cache behavior', () => {
 
             expect(result).toBe(cached);
             expect(cacheService.getFromCache).toHaveBeenCalledWith(
-                'gh:user:org-1:cached-user',
+                'gh:user:org-1:workspace:team-1:cached-user',
             );
             expect(octokit.rest.users.getByUsername).not.toHaveBeenCalled();
             expect(cacheService.addToCache).not.toHaveBeenCalled();
@@ -109,13 +109,13 @@ describe('GithubService — cache behavior', () => {
             expect(result).toEqual({ id: 1, login: 'octocat' });
             // Key is lowercased — GitHub usernames are case-insensitive.
             expect(cacheService.getFromCache).toHaveBeenCalledWith(
-                'gh:user:org-1:octocat',
+                'gh:user:org-1:workspace:team-1:octocat',
             );
             expect(octokit.rest.users.getByUsername).toHaveBeenCalledWith({
                 username: 'Octocat',
             });
             expect(cacheService.addToCache).toHaveBeenCalledWith(
-                'gh:user:org-1:octocat',
+                'gh:user:org-1:workspace:team-1:octocat',
                 { id: 1, login: 'octocat' },
                 24 * 60 * 60 * 1000,
             );
@@ -141,7 +141,7 @@ describe('GithubService — cache behavior', () => {
             // round-trip when a stale reviewer is referenced repeatedly
             // across saves.
             expect(cacheService.addToCache).toHaveBeenCalledWith(
-                'gh:user:org-1:ghost',
+                'gh:user:org-1:workspace:team-1:ghost',
                 null,
                 24 * 60 * 60 * 1000,
             );
@@ -179,8 +179,8 @@ describe('GithubService — cache behavior', () => {
                 (c) => c[0],
             );
             expect(getCalls).toEqual([
-                'gh:user:org-A:shared',
-                'gh:user:org-B:shared',
+                'gh:user:org-A:workspace:t:shared',
+                'gh:user:org-B:workspace:t:shared',
             ]);
         });
     });

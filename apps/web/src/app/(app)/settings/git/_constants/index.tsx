@@ -35,3 +35,55 @@ export const CODE_MANAGEMENT_PLATFORMS = {
         }
     >
 >;
+
+type LabelledConnection = {
+    connectionId?: string;
+    connectionName?: string | null;
+    platformName: string;
+};
+
+/**
+ * How a Git connection is shown: its name, else its provider's readable
+ * name, numbered when the workspace has more than one unnamed connection of
+ * that provider. A generated label never repeats a connection's own name.
+ */
+export const connectionLabel = (
+    connection: LabelledConnection,
+    connections: LabelledConnection[] = [connection],
+): string => {
+    const named = connection.connectionName?.trim();
+    if (named) return named;
+    const readable =
+        CODE_MANAGEMENT_PLATFORMS[
+            connection.platformName.toLowerCase() as keyof typeof CODE_MANAGEMENT_PLATFORMS
+        ]?.platformName ?? connection.platformName;
+    const taken = new Set(
+        connections
+            .map((other) => other.connectionName?.trim().toLowerCase())
+            .filter((name): name is string => !!name),
+    );
+    const unnamedAlike = connections.filter(
+        (other) =>
+            !other.connectionName?.trim() &&
+            other.platformName === connection.platformName,
+    );
+    if (unnamedAlike.length < 2 && !taken.has(readable.toLowerCase())) {
+        return readable;
+    }
+    const position = Math.max(
+        0,
+        unnamedAlike.findIndex(
+            (other) =>
+                other === connection ||
+                (!!other.connectionId &&
+                    other.connectionId === connection.connectionId),
+        ),
+    );
+    // The (position + 1)th number no named connection already uses.
+    let label: string = readable;
+    for (let n = 1, free = 0; free <= position; n++) {
+        label = `${readable} ${n}`;
+        if (!taken.has(label.toLowerCase())) free++;
+    }
+    return label;
+};

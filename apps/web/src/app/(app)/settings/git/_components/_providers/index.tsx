@@ -8,11 +8,18 @@ import { ProviderOptionButton } from "./option-button";
 
 const typedProvidersArray = typedObjectKeys(CODE_MANAGEMENT_PLATFORMS);
 
-export const GitProviders = () => {
+export const GitProviders = (props: {
+    /** Add a Git connection beside the workspace's others. */
+    newConnection?: { name?: string };
+}) => {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Connect a provider</CardTitle>
+                <CardTitle>
+                    {props.newConnection
+                        ? "Choose the provider"
+                        : "Connect a provider"}
+                </CardTitle>
             </CardHeader>
 
             <CardContent className="flex gap-4">
@@ -25,7 +32,10 @@ export const GitProviders = () => {
                             />
                         )}
 
-                        <ProviderOptionButton provider={provider} />
+                        <ProviderOptionButton
+                            provider={provider}
+                            newConnection={props.newConnection}
+                        />
                     </Fragment>
                 ))}
             </CardContent>

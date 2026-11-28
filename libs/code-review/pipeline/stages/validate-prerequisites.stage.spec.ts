@@ -658,6 +658,65 @@ describe('ValidatePrerequisitesStage', () => {
             );
         });
 
+        it('applies the ignore list of the Git connection the PR came through', async () => {
+            const context = makeContext({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    integrationId: 'gl-b',
+                },
+            });
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    ignoredUsers: [],
+                    connections: { 'gl-b': { ignoredUsers: ['user-1'] } },
+                },
+            });
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        });
+
+        it("does not apply another connection's ignore list", async () => {
+            const context = makeContext({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    integrationId: 'gh-a',
+                },
+            });
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    ignoredUsers: [],
+                    connections: { 'gl-b': { ignoredUsers: ['user-1'] } },
+                },
+            });
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+
         it('does not look up seats when the identity is not filtered out', async () => {
             const context = makeContext();
 

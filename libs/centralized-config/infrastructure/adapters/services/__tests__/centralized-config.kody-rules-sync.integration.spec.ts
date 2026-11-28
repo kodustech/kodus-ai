@@ -196,13 +196,23 @@ let available = false;
             );
 
             service = new CentralizedConfigService(
-                {} as any, // parametersService
+                {
+                    findByKey: jest.fn(),
+                    findActiveByKeyInOrganization: jest
+                        .fn()
+                        .mockResolvedValue([]),
+                } as any, // parametersService
                 {
                     findIntegrationConfigFormatted: jest
                         .fn()
                         .mockResolvedValue([{ id: 'repo-1', name: 'repo-1' }]),
                 } as any,
-                {} as any, // codeManagementService
+                // The rules' source is stamped with the connection's server.
+                {
+                    connectionServerKey: jest
+                        .fn()
+                        .mockResolvedValue('GITHUB|github.com'),
+                } as any, // codeManagementService
                 { execute: jest.fn() } as any,
                 {} as any,
                 {} as any,
@@ -365,8 +375,10 @@ let available = false;
             // One rule edited, one brought back: two writes, nothing else.
             expect(editSync.writes).toBe(2);
             expect(editSync.compiles).toBe(2);
-            // Each write returns the rule it wrote, not the document.
-            expect(editSync.replyBytes).toBeLessThan(before.bytes * 4);
+            // Each write returns the rule it wrote, not the document: the
+            // sync reads four documents, and two writes returning theirs
+            // would make it six.
+            expect(editSync.replyBytes).toBeLessThan(before.bytes * 5);
 
             const afterEdit = await ruleOf(3);
             expect(afterEdit?.uuid).toBe(edited?.uuid);

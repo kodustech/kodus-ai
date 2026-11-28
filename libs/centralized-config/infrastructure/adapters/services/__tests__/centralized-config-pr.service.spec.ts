@@ -33,6 +33,7 @@ describe('CentralizedConfigPrService', () => {
         centralizedConfigOverride?: any;
         openPullRequests?: any[];
         uploadFilesResult?: boolean;
+        teamRepositoryConfigs?: any[];
     }) => {
         const resolvedCentralizedConfig =
             overrides?.centralizedConfigOverride || centralizedConfig;
@@ -46,6 +47,9 @@ describe('CentralizedConfigPrService', () => {
 
         const integrationConfigService = {
             findIntegrationConfigFormatted: jest.fn().mockResolvedValue([]),
+            findAllOfTeamByConfigKey: jest
+                .fn()
+                .mockResolvedValue(overrides?.teamRepositoryConfigs ?? []),
         };
 
         const kodyRulesService = {
@@ -97,6 +101,7 @@ describe('CentralizedConfigPrService', () => {
             service,
             parametersService,
             codeManagementService,
+            integrationConfigService,
         };
     };
 
@@ -250,6 +255,146 @@ describe('CentralizedConfigPrService', () => {
             }),
             organizationAndTeamData,
         );
+    });
+
+    describe('scopeToRepositoryConnection', () => {
+        const configs = [
+            {
+                integration: { uuid: 'gh-a' },
+                configValue: [{ id: 'repo-gh' }],
+            },
+            {
+                integration: { uuid: 'gl-b' },
+                configValue: [{ id: 'repo-gl' }],
+            },
+        ];
+
+        it("routes a repository's change to its Git connection's centralized config", async () => {
+            const { service } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await expect(
+                service.scopeToRepositoryConnection(
+                    organizationAndTeamData,
+                    'repo-gl',
+                ),
+            ).resolves.toEqual({
+                ...organizationAndTeamData,
+                integrationId: 'gl-b',
+            });
+        });
+
+        it('keeps a workspace-wide change, or an already named connection, as it is', async () => {
+            const { service, integrationConfigService } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await expect(
+                service.scopeToRepositoryConnection(
+                    organizationAndTeamData,
+                    'global',
+                ),
+            ).resolves.toEqual(organizationAndTeamData);
+            await expect(
+                service.scopeToRepositoryConnection(
+                    { ...organizationAndTeamData, integrationId: 'gh-a' },
+                    'repo-gl',
+                ),
+            ).resolves.toEqual({
+                ...organizationAndTeamData,
+                integrationId: 'gh-a',
+            });
+            expect(
+                integrationConfigService.findAllOfTeamByConfigKey,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("routes a change to a connection's own global rule to that connection's config", async () => {
+            const { service, parametersService } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await expect(
+                service.scopeToRepositoryConnection(
+                    organizationAndTeamData,
+                    'global',
+                    {
+                        path: 'x.yml',
+                        status: 'synced',
+                        sourceRepositoryId: 'cfg-b',
+                        sourceConnectionId: 'gl-b',
+                        connectionScoped: true,
+                    } as any,
+                ),
+            ).resolves.toEqual({
+                ...organizationAndTeamData,
+                integrationId: 'gl-b',
+            });
+
+            await service
+                .createMutationPullRequestIfEnabled({
+                    organizationAndTeamData,
+                    repositoryId: 'global',
+                    ruleSource: {
+                        path: 'x.yml',
+                        status: 'synced',
+                        sourceConnectionId: 'gl-b',
+                        connectionScoped: true,
+                    },
+                    files: [],
+                    title: 't',
+                    description: 'd',
+                    commitMessage: 'c',
+                } as any)
+                .catch(() => undefined);
+
+            expect(parametersService.findByKey).toHaveBeenCalledWith(
+                expect.anything(),
+                { ...organizationAndTeamData, integrationId: 'gl-b' },
+            );
+        });
+
+        it('keeps a workspace global rule on the workspace config', async () => {
+            const { service } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await expect(
+                service.scopeToRepositoryConnection(
+                    organizationAndTeamData,
+                    'global',
+                    {
+                        path: 'x.yml',
+                        status: 'synced',
+                        sourceRepositoryId: 'cfg',
+                        sourceServerKey: 'GITHUB|github.com',
+                    } as any,
+                ),
+            ).resolves.toEqual(organizationAndTeamData);
+        });
+
+        it('opens the mutation pull request on the connection that lists the repository', async () => {
+            const { service, parametersService } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await service
+                .createMutationPullRequestIfEnabled({
+                    organizationAndTeamData,
+                    repositoryId: 'repo-gl',
+                    files: [],
+                    title: 't',
+                    description: 'd',
+                    commitMessage: 'c',
+                } as any)
+                .catch(() => undefined);
+
+            expect(parametersService.findByKey).toHaveBeenCalledWith(
+                expect.anything(),
+                { ...organizationAndTeamData, integrationId: 'gl-b' },
+            );
+        });
     });
 
     describe('getCentralizedConfigWithValidatedPullRequest', () => {

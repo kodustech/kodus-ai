@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { assertGitServerUrlAllowed } from '../git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import {
@@ -15,6 +16,7 @@ import { v4 } from 'uuid';
 
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -233,7 +235,8 @@ export class BitbucketDataCenterService implements Omit<
         email?: string;
         host?: string;
         authMode?: AuthMode;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const {
                 organizationAndTeamData,
@@ -280,14 +283,20 @@ export class BitbucketDataCenterService implements Omit<
                 );
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.BITBUCKET,
-            });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.BITBUCKET,
+                    params.newConnection,
+                );
 
+            let integrationId = integration?.uuid;
             if (!integration) {
-                await this.addAccessToken(organizationAndTeamData, authDetails);
+                const created = await this.addAccessToken(
+                    organizationAndTeamData,
+                    authDetails,
+                );
+                integrationId = created?.uuid;
             } else {
                 await this.updateAuthIntegration({
                     organizationAndTeamData,
@@ -300,6 +309,7 @@ export class BitbucketDataCenterService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const linkError = toIntegrationLinkError(
@@ -331,6 +341,7 @@ export class BitbucketDataCenterService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -377,6 +388,8 @@ export class BitbucketDataCenterService implements Omit<
 
             const bitbucketOrg = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 status: true,
                 platform: PlatformType.BITBUCKET,
             });
@@ -452,6 +465,7 @@ export class BitbucketDataCenterService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -992,6 +1006,7 @@ export class BitbucketDataCenterService implements Omit<
                         uuid: organizationAndTeamData.organizationId,
                     },
                     team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     platform: PlatformType.BITBUCKET,
                 })
             )?.uuid;
@@ -3466,6 +3481,7 @@ export class BitbucketDataCenterService implements Omit<
                 email: params.email,
                 host: params.host,
                 authMode: resolvedAuthMode,
+                newConnection: params.newConnection,
             });
 
             // Trigger background syncs if MCP is configured
@@ -3500,6 +3516,7 @@ export class BitbucketDataCenterService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -3771,12 +3788,13 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            const repositories = <Repositories[]>(
-                    await this.integrationConfigService.findOne({
-                        team: { uuid: organizationAndTeamData.teamId },
-                        configKey: IntegrationConfigKey.REPOSITORIES,
-                    })
-                )?.configValue || [];
+            const repositories =
+                <Repositories[]>(
+                    await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                        organizationAndTeamData,
+                        IntegrationConfigKey.REPOSITORIES,
+                    )
+                ) || [];
 
             const webhookUrl =
                 this.configService.get<string>(
@@ -3785,7 +3803,20 @@ export class BitbucketDataCenterService implements Omit<
 
             if (!webhookUrl) return;
 
-            for (const repo of repositories) {
+            // The hook URL is shared: a repository another connection still
+            // lists keeps it.
+            const integrationId = (authDetails as { integrationId?: string })
+                .integrationId;
+            const listedElsewhere = integrationId
+                ? await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                      organizationAndTeamData.organizationId,
+                      integrationId,
+                  )
+                : new Set<string>();
+
+            for (const repo of repositories.filter(
+                (r) => !listedElsewhere.has(String(r?.id)),
+            )) {
                 const projectKey = repo.workspaceId;
                 const repoSlug = repo.name;
 

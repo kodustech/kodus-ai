@@ -28,6 +28,9 @@ export const ORGANIZATION_PARAMETERS_PATHS = {
     UPDATE_COCKPIT_METRICS_VISIBILITY: pathToApiUrl(
         "/organization-parameters/cockpit-metrics-visibility",
     ),
+    UPDATE_AUTHOR_FILTERS: pathToApiUrl(
+        "/organization-parameters/author-filters",
+    ),
     UPDATE_AUTO_LICENSE_ALLOWED_USERS: pathToApiUrl(
         "/organization-parameters/auto-license/allowed-users",
     ),

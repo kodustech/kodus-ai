@@ -1,3 +1,4 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ListPastReviewersUseCase } from './list-past-reviewers.use-case';
 
 jest.mock('@libs/common/utils/transforms/date', () => ({
@@ -12,8 +13,13 @@ function build(opts: {
     repos?: any[];
     prsByRepo?: Record<string, any[] | Error>;
     cached?: any[];
+    /** The connection that lists the repository in the named workspace. */
+    repositoryConnection?: string;
 }) {
     const codeManagementService = {
+        connectionIdFor: jest
+            .fn()
+            .mockResolvedValue(opts.repositoryConnection ?? 'gh-a'),
         getListMembers: jest.fn().mockResolvedValue(opts.members ?? []),
         getRepositories: jest.fn().mockResolvedValue(opts.repos ?? []),
         getPullRequestsByRepository: jest.fn((params: any) => {
@@ -42,6 +48,114 @@ function build(opts: {
 const author = (id: any, name?: string) => ({ user: { id, name } });
 
 describe('ListPastReviewersUseCase', () => {
+    it("lists the members of the repository's own connection", async () => {
+        const { useCase, codeManagementService } = build({
+            repos: [{ id: 'r1', name: 'api' }],
+        });
+
+        await useCase.execute({ teamId: 't1', repositoryId: 'r1' });
+
+        expect(codeManagementService.connectionIdFor).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 't1' },
+            { id: 'r1' },
+        );
+        expect(codeManagementService.getListMembers).toHaveBeenCalledWith({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 't1',
+                integrationId: 'gh-a',
+            },
+        });
+    });
+
+    it('refuses a member whose granted connections do not hold the repository in that workspace', async () => {
+        const { useCase, codeManagementService } = build({
+            repositoryConnection: 'gl-c',
+        });
+
+        await expect(
+            useCase.execute({
+                teamId: 'w2',
+                repositoryId: 'r1',
+                readableConnectionIds: new Set(['gh-a']),
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(codeManagementService.getListMembers).not.toHaveBeenCalled();
+    });
+
+    it('answers not found for a named repository whose connection cannot be resolved, instead of reading the whole workspace', async () => {
+        const { useCase, codeManagementService } = build({});
+        codeManagementService.connectionIdFor.mockResolvedValue(undefined);
+
+        await expect(
+            useCase.execute({ teamId: 't1', repositoryId: 'r-unknown' }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(codeManagementService.getListMembers).not.toHaveBeenCalled();
+    });
+
+    it("answers the reviewers of the repository's current connection after it moves, not the cached ones of the previous", async () => {
+        // A cache that keeps what it is given, by key.
+        const cache = new Map<string, unknown>();
+        const { useCase, codeManagementService, cacheService } = build({
+            repos: [{ id: 'r1', name: 'api' }],
+            repositoryConnection: 'gh-a',
+            members: [{ id: 'gh-1', name: 'Ana' }],
+        });
+        cacheService.getFromCache.mockImplementation(async (key: string) =>
+            cache.has(key) ? cache.get(key) : null,
+        );
+        cacheService.addToCache.mockImplementation(
+            async (key: string, value: unknown) => {
+                cache.set(key, value);
+            },
+        );
+
+        const before = await useCase.execute({
+            teamId: 't1',
+            repositoryId: 'r1',
+        });
+        codeManagementService.connectionIdFor.mockResolvedValue('gl-b');
+        codeManagementService.getListMembers.mockResolvedValue([
+            { id: 'gl-7', name: 'Bruno' },
+        ]);
+        const after = await useCase.execute({
+            teamId: 't1',
+            repositoryId: 'r1',
+        });
+
+        expect(before.map(({ id }) => id)).toEqual(['gh-1']);
+        expect(after.map(({ id }) => id)).toEqual(['gl-7']);
+    });
+
+    it("keys the cached list by the repository's connection", async () => {
+        const { useCase, cacheService } = build({
+            repos: [{ id: 'r1', name: 'api' }],
+            repositoryConnection: 'gl-b',
+        });
+
+        await useCase.execute({ teamId: 't1', repositoryId: 'r1' });
+
+        expect(cacheService.getFromCache).toHaveBeenCalledWith(
+            'past_reviewers_org-1_t1_gl-b_r1_3',
+        );
+    });
+
+    it('refuses a member granted some connections who names no repository of a connection', async () => {
+        const { useCase, codeManagementService } = build({});
+        codeManagementService.connectionIdFor.mockResolvedValue(undefined);
+
+        for (const repositoryId of [undefined, 'global']) {
+            await expect(
+                useCase.execute({
+                    teamId: 't1',
+                    repositoryId,
+                    readableConnectionIds: new Set(['gh-a']),
+                }),
+            ).rejects.toBeInstanceOf(ForbiddenException);
+        }
+        expect(codeManagementService.getListMembers).not.toHaveBeenCalled();
+    });
+
     it('unions current members with PR authors, deduped by id and sorted by name', async () => {
         const { useCase } = build({
             members: [

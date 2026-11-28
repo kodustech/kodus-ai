@@ -8,7 +8,10 @@ import { TeamMemberModel } from './schemas/teamMember.model';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { ITeamMemberRepository } from '@libs/organization/domain/teamMembers/contracts/teamMembers.repository.contracts';
+import {
+    ITeamMemberRepository,
+    TeamMemberInsertRunner,
+} from '@libs/organization/domain/teamMembers/contracts/teamMembers.repository.contracts';
 import { TeamMemberEntity } from '@libs/organization/domain/teamMembers/entities/teamMember.entity';
 import { TeamMemberRole } from '@libs/organization/domain/teamMembers/enums/teamMemberRole.enum';
 import {
@@ -298,13 +301,28 @@ export class TeamMemberDatabaseRepository implements ITeamMemberRepository {
     //#endregion
 
     //#region CRUD
-    async create(teamMember: ITeamMember): Promise<any> {
+    async create(
+        teamMember: ITeamMember,
+        options: {
+            alsoWithin?: (runner: TeamMemberInsertRunner) => Promise<void>;
+        } = {},
+    ): Promise<any> {
         try {
             const teamMembersModel =
                 this.teamMembersRepository.create(teamMember);
 
-            const savedTeamMembers =
-                await this.teamMembersRepository.save(teamMembersModel);
+            const savedTeamMembers = options.alsoWithin
+                ? await this.teamMembersRepository.manager.transaction(
+                      async (transaction) => {
+                          const saved = await transaction.save(
+                              TeamMemberModel,
+                              teamMembersModel,
+                          );
+                          await options.alsoWithin!(transaction);
+                          return saved;
+                      },
+                  )
+                : await this.teamMembersRepository.save(teamMembersModel);
 
             return mapSimpleModelToEntity(savedTeamMembers, TeamMemberEntity);
         } catch (err) {

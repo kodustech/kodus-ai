@@ -2,6 +2,7 @@ import { BadRequestException, HttpException } from '@nestjs/common';
 import { AddressInfo } from 'net';
 import * as http from 'http';
 
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 import { GatewayAddressRefusedError } from '@libs/llm/gateway-address-guard';
 import axios from 'axios';
 import pino from 'pino';
@@ -74,7 +75,9 @@ const service = (Service: any) => {
         log: jest.fn(),
         debug: jest.fn(),
     };
-    svc.integrationService = { findOne: jest.fn().mockResolvedValue(null) };
+    svc.integrationService = {
+        connectionToUpdate: jest.fn().mockResolvedValue(undefined),
+    };
     return svc;
 };
 
@@ -124,7 +127,7 @@ const harnesses: Harness[] = [
             svc.checkRepositoryPermissions = jest
                 .fn()
                 .mockResolvedValue({ success: true });
-            svc.integrationService.findOne.mockRejectedValue(err);
+            svc.integrationService.connectionToUpdate.mockRejectedValue(err);
         },
     },
     {
@@ -150,7 +153,7 @@ const harnesses: Harness[] = [
             svc.checkRepositoryPermissions = jest
                 .fn()
                 .mockResolvedValue({ success: true });
-            svc.integrationService.findOne.mockRejectedValue(err);
+            svc.integrationService.connectionToUpdate.mockRejectedValue(err);
         },
     },
     {
@@ -179,7 +182,7 @@ const harnesses: Harness[] = [
                     .fn()
                     .mockResolvedValue({ status: 200, data: { values: [] } }),
             }));
-            svc.integrationService.findOne.mockRejectedValue(err);
+            svc.integrationService.connectionToUpdate.mockRejectedValue(err);
         },
     },
     {
@@ -205,7 +208,7 @@ const harnesses: Harness[] = [
             svc.checkRepositoryPermissions = jest
                 .fn()
                 .mockResolvedValue({ success: true });
-            svc.integrationService.findOne.mockRejectedValue(err);
+            svc.integrationService.connectionToUpdate.mockRejectedValue(err);
         },
     },
     {
@@ -230,7 +233,7 @@ const harnesses: Harness[] = [
             svc.checkRepositoryPermissions = jest
                 .fn()
                 .mockResolvedValue({ success: true });
-            svc.integrationService.findOne.mockRejectedValue(err);
+            svc.integrationService.connectionToUpdate.mockRejectedValue(err);
         },
     },
 ];
@@ -264,6 +267,18 @@ describe.each(harnesses)('$provider createAuthIntegration', (h) => {
             metadata: h.metadata,
         });
         expect(JSON.stringify(logs(svc))).not.toContain(PAT);
+    });
+
+    it('answers a workspace with several connections to the provider with that refusal, not a credentials error', async () => {
+        const svc = h.make();
+        const ambiguous = new AmbiguousConnectionException();
+        h.faultAfterHost(svc, ambiguous);
+
+        const thrown = await h.link(svc).catch((e) => e);
+
+        expect(thrown).toBe(ambiguous);
+        expect(svc.logger.error).not.toHaveBeenCalled();
+        expect(svc.logger.warn).toHaveBeenCalledTimes(1);
     });
 
     it('leaves a database connection failure after the host to the exception filter', async () => {

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 
 import {
     ILicenseService,
@@ -56,12 +57,13 @@ export class AutoAssignLicenseUseCase {
                 return { shouldProceed: false, reason: 'AUTO_ASSIGN_DISABLED' };
             }
 
+            const { allowedUsers, ignoredUsers } = authorFiltersFor(
+                config.configValue,
+                organizationAndTeamData.integrationId,
+            );
+
             // 2. If allowedUsers is set, only those users are eligible
-            if (
-                Array.isArray(config?.configValue?.allowedUsers) &&
-                config.configValue.allowedUsers.length > 0 &&
-                !config.configValue.allowedUsers.includes(userGitId)
-            ) {
+            if (allowedUsers.length > 0 && !allowedUsers.includes(userGitId)) {
                 return { shouldProceed: false, reason: 'NOT_ALLOWED_USER' };
             }
 
@@ -79,10 +81,8 @@ export class AutoAssignLicenseUseCase {
             }
 
             // 4. Check if user is ignored
-            if (config?.configValue?.ignoredUsers?.length > 0) {
-                if (config?.configValue?.ignoredUsers.includes(userGitId)) {
-                    return { shouldProceed: false, reason: 'IGNORED_USER' };
-                }
+            if (ignoredUsers.includes(userGitId)) {
+                return { shouldProceed: false, reason: 'IGNORED_USER' };
             }
 
             // 5. Use the provided PR count

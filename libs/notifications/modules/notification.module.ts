@@ -4,6 +4,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+import { ConnectionAccessModule } from '@libs/identity/modules/connection-access.module';
+
 // Domain models
 import { NotificationDeliveryModel } from '../infrastructure/repositories/schemas/notification-delivery.model';
 import { UserNotificationModel } from '../infrastructure/repositories/schemas/user-notification.model';
@@ -87,6 +89,7 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
             UserNotificationModel,
             RoutingRuleModel,
         ]),
+        ConnectionAccessModule,
     ],
     providers: [
         // Stops @GatedCron runs before the database closes. Provided here

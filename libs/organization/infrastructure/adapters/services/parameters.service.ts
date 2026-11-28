@@ -15,6 +15,15 @@ import { IParametersService } from '@libs/organization/domain/parameters/contrac
 import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { IParameters } from '@libs/organization/domain/parameters/interfaces/parameters.interface';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import { CentralizedConfigParameter } from '@libs/organization/domain/parameters/types/configValue.type';
+import {
+    centralizedConfigFor,
+    StoredCentralizedConfig,
+    withCentralizedConfigFor,
+} from '@libs/organization/domain/parameters/utils/centralized-config-scope';
+
+/** Saves racing on the shared centralized config row before giving up. */
+const CENTRALIZED_SAVE_ATTEMPTS = 5;
 
 @Injectable()
 export class ParametersService implements IParametersService {
@@ -65,6 +74,18 @@ export class ParametersService implements IParametersService {
         return this.parametersRepository.delete(uuid);
     }
 
+    compareAndSetConfigValue(
+        uuid: string,
+        expected: unknown,
+        next: unknown,
+    ): Promise<boolean> {
+        return this.parametersRepository.compareAndSetConfigValue(
+            uuid,
+            expected,
+            next,
+        );
+    }
+
     deleteByTeamId(teamId: string): Promise<void> {
         return this.parametersRepository.deleteByTeamId(teamId);
     }
@@ -73,9 +94,31 @@ export class ParametersService implements IParametersService {
         configKey: K,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ParametersEntity<K>> {
-        return this.parametersRepository.findByKey(
+        const parameter = await this.parametersRepository.findByKey(
             configKey,
             organizationAndTeamData,
+        );
+        if (configKey !== ParametersKey.CENTRALIZED_CONFIG || !parameter) {
+            return parameter;
+        }
+        // Each Git connection has its own centralized config; callers see the
+        // one of the connection they name.
+        return ParametersEntity.create({
+            ...parameter.toObject(),
+            configValue: centralizedConfigFor(
+                parameter.configValue as StoredCentralizedConfig,
+                organizationAndTeamData?.integrationId,
+            ),
+        } as IParameters<K>);
+    }
+
+    findActiveByKeyInOrganization<K extends ParametersKey>(
+        configKey: K,
+        organizationId: string,
+    ): Promise<ParametersEntity<K>[]> {
+        return this.parametersRepository.findActiveByKeyInOrganization(
+            configKey,
+            organizationId,
         );
     }
 
@@ -124,6 +167,24 @@ export class ParametersService implements IParametersService {
                 ? existingParameters.version + 1
                 : 1;
 
+            if (
+                parametersKey === ParametersKey.CENTRALIZED_CONFIG &&
+                existingParameters
+            ) {
+                return this.saveCentralizedConfig(
+                    existingParameters,
+                    configValue as CentralizedConfigParameter,
+                    organizationAndTeamData,
+                );
+            }
+            if (parametersKey === ParametersKey.CENTRALIZED_CONFIG) {
+                configValue = withCentralizedConfigFor(
+                    undefined,
+                    organizationAndTeamData.integrationId,
+                    configValue as CentralizedConfigParameter,
+                ) as ParametersEntity<K>['configValue'];
+            }
+
             if (parametersKey !== ParametersKey.CODE_REVIEW_CONFIG) {
                 return existingParameters
                     ? this.updateExistingParameters(
@@ -162,6 +223,46 @@ export class ParametersService implements IParametersService {
                 cause: err,
             });
         }
+    }
+
+    /**
+     * Every Git connection's centralized config shares one row. Each save
+     * writes over the value it read only, and reads again when another save
+     * landed in between, so concurrent syncs of two connections keep both.
+     */
+    private async saveCentralizedConfig<K extends ParametersKey>(
+        read: ParametersEntity<K>,
+        value: CentralizedConfigParameter,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        let current: ParametersEntity<K> | undefined = read;
+        for (let attempt = 0; attempt < CENTRALIZED_SAVE_ATTEMPTS; attempt++) {
+            if (attempt > 0) {
+                current = await this.findOne({
+                    team: { uuid: organizationAndTeamData.teamId },
+                    configKey: read.configKey,
+                    active: true,
+                });
+                if (!current) break;
+            }
+            const next = withCentralizedConfigFor(
+                current.configValue as StoredCentralizedConfig,
+                organizationAndTeamData.integrationId,
+                value,
+            );
+            if (
+                await this.parametersRepository.compareAndSetConfigValue(
+                    current.uuid,
+                    current.configValue,
+                    next,
+                )
+            ) {
+                return true;
+            }
+        }
+        throw new ConflictException(
+            'The centralized config changed while saving; try again.',
+        );
     }
 
     private async updateExistingParameters<K extends ParametersKey>(

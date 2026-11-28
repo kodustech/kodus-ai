@@ -34,6 +34,16 @@ import * as path from 'path';
 type FileEntry = { path: string; content: string };
 type CustomMessagesConfig = NonNullable<KodusConfigFile['customMessages']>;
 
+export type CentralizedConfigDownloadOptions = {
+    skipAuthorization?: boolean;
+    organizationId?: string;
+    markRulesAsPendingWithSourcePath?: boolean;
+    /** Only these repositories: a Git connection's own. */
+    repositoryIds?: string[];
+    /** The workspace's global config and global rules; on unless set to false. */
+    includeWorkspaceDefaults?: boolean;
+};
+
 @Injectable()
 export class CentralizedConfigDownloadUseCase implements IUseCase {
     private readonly logger = createLogger(
@@ -53,17 +63,16 @@ export class CentralizedConfigDownloadUseCase implements IUseCase {
     public async execute(
         user: Partial<IUser>,
         teamId: string,
-        options: {
-            skipAuthorization?: boolean;
-            organizationId?: string;
-            markRulesAsPendingWithSourcePath?: boolean;
-        } = {},
+        options: CentralizedConfigDownloadOptions = {},
     ): Promise<FileEntry[]> {
         try {
-            const codeReview = await this.getCodeReviewParameterUseCase.execute(
-                user,
-                teamId,
-                options,
+            const codeReview = this.scopeToRepositories(
+                await this.getCodeReviewParameterUseCase.execute(
+                    user,
+                    teamId,
+                    options,
+                ),
+                options.repositoryIds,
             );
 
             const [configEntries, rulesEntries] = await Promise.all([
@@ -91,7 +100,7 @@ export class CentralizedConfigDownloadUseCase implements IUseCase {
         codeReview: Awaited<
             ReturnType<GetCodeReviewParameterUseCase['execute']>
         >,
-        options: { skipAuthorization?: boolean; organizationId?: string } = {},
+        options: CentralizedConfigDownloadOptions = {},
     ): Promise<FileEntry[]> {
         const entries: FileEntry[] = [];
         const organizationId =
@@ -105,13 +114,15 @@ export class CentralizedConfigDownloadUseCase implements IUseCase {
 
         const [defaultConfig, globalConfig] = await Promise.all([
             this.getDefaultConfigEntry(teamId),
-            this.getGlobalConfigEntry(
-                teamId,
-                options,
-                customMessagesByScope.get(
-                    this.getCustomMessagesScopeKeyGlobal(),
-                ),
-            ),
+            options.includeWorkspaceDefaults === false
+                ? null
+                : this.getGlobalConfigEntry(
+                      teamId,
+                      options,
+                      customMessagesByScope.get(
+                          this.getCustomMessagesScopeKeyGlobal(),
+                      ),
+                  ),
         ]);
 
         if (defaultConfig) entries.push(defaultConfig);
@@ -303,17 +314,42 @@ export class CentralizedConfigDownloadUseCase implements IUseCase {
         return null;
     }
 
+    /** Keeps only the repositories of one Git connection, when asked. */
+    private scopeToRepositories<
+        T extends { configValue?: { repositories?: Array<{ id: string }> } },
+    >(codeReview: T, repositoryIds?: string[]): T {
+        if (!repositoryIds || !codeReview?.configValue) return codeReview;
+        const ids = new Set(repositoryIds.map(String));
+        return {
+            ...codeReview,
+            configValue: {
+                ...codeReview.configValue,
+                repositories: (
+                    codeReview.configValue.repositories ?? []
+                ).filter((repository) => ids.has(String(repository.id))),
+            },
+        };
+    }
+
+    private inScope(
+        rule: IKodyRule,
+        repositoryMapping: ReadonlyMap<string, unknown>,
+        options: CentralizedConfigDownloadOptions,
+    ): boolean {
+        const repositoryId = String(rule.repositoryId ?? 'global');
+        if (repositoryId === 'global') {
+            return options.includeWorkspaceDefaults !== false;
+        }
+        return !options.repositoryIds || repositoryMapping.has(repositoryId);
+    }
+
     private async getRulesEntries(
         user: Partial<IUser>,
         teamId: string,
         codeReview: Awaited<
             ReturnType<GetCodeReviewParameterUseCase['execute']>
         >,
-        options: {
-            skipAuthorization?: boolean;
-            organizationId?: string;
-            markRulesAsPendingWithSourcePath?: boolean;
-        } = {},
+        options: CentralizedConfigDownloadOptions = {},
     ): Promise<FileEntry[]> {
         const entries: FileEntry[] = [];
         const organizationId =
@@ -384,8 +420,9 @@ export class CentralizedConfigDownloadUseCase implements IUseCase {
         // ACTIVE when the PR is merged and synced back.
         const rules = fetchedRules.filter(
             (rule) =>
-                rule.status === KodyRulesStatus.ACTIVE ||
-                rule.status === KodyRulesStatus.PAUSED,
+                (rule.status === KodyRulesStatus.ACTIVE ||
+                    rule.status === KodyRulesStatus.PAUSED) &&
+                this.inScope(rule, repositoryMapping, options),
         );
 
         if (rules.length === 0) {

@@ -259,4 +259,90 @@ describe('config centralized command', () => {
             bytes: 456,
         });
     });
+
+    describe('with several Git connections', () => {
+        it('passes the connection named with --connection', async () => {
+            mockCentralizedConfigService.sync.mockResolvedValue({
+                success: true,
+                message: 'Synchronized',
+            });
+            mockCentralizedConfigService.disable.mockResolvedValue({
+                success: true,
+                message: 'Disabled',
+            });
+            mockCentralizedConfigService.download.mockResolvedValue({
+                outputPath: '/tmp/c.zip',
+                bytes: 1,
+            });
+            mockCentralizedConfigService.getStatus.mockResolvedValue({
+                enabled: false,
+                repository: null,
+            });
+            vi.spyOn(console, 'log').mockImplementation(() => {});
+
+            await configCommand.parseAsync(
+                ['centralized', 'sync', '--connection', 'gl-b'],
+                { from: 'user' },
+            );
+            await configCommand.parseAsync(
+                ['centralized', 'disable', '--connection', 'gl-b'],
+                { from: 'user' },
+            );
+            await configCommand.parseAsync(
+                [
+                    'centralized',
+                    'download',
+                    '--out',
+                    './c.zip',
+                    '--connection',
+                    'gl-b',
+                ],
+                { from: 'user' },
+            );
+            await configCommand.parseAsync(
+                ['centralized', 'status', '--connection', 'gl-b'],
+                { from: 'user' },
+            );
+
+            expect(mockCentralizedConfigService.sync).toHaveBeenCalledWith({
+                connectionId: 'gl-b',
+            });
+            expect(mockCentralizedConfigService.disable).toHaveBeenCalledWith({
+                connectionId: 'gl-b',
+            });
+            expect(mockCentralizedConfigService.download).toHaveBeenCalledWith(
+                './c.zip',
+                { connectionId: 'gl-b' },
+            );
+            expect(mockCentralizedConfigService.getStatus).toHaveBeenCalledWith(
+                { connectionId: 'gl-b' },
+            );
+        });
+
+        it("lists each connection's centralized config in the status", async () => {
+            const logSpy = vi
+                .spyOn(console, 'log')
+                .mockImplementation(() => {});
+            mockCentralizedConfigService.getStatus.mockResolvedValue({
+                enabled: true,
+                repository: { id: 'repo-1', name: 'acme/config' },
+                connections: [
+                    {
+                        connectionId: 'gh-a',
+                        enabled: true,
+                        repository: { id: 'repo-1', name: 'acme/config' },
+                    },
+                    { connectionId: 'gl-b', enabled: false, repository: null },
+                ],
+            });
+
+            await configCentralizedStatusAction();
+
+            const output = logSpy.mock.calls
+                .map((call) => call.join(' '))
+                .join('\n');
+            expect(output).toContain('gh-a: enabled, acme/config (repo-1)');
+            expect(output).toContain('gl-b: disabled');
+        });
+    });
 });

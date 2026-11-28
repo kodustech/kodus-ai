@@ -32,5 +32,12 @@ export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandler({
     // route takes a client-chosen organizationId, so a browser must never
     // reach any of them. The app reads and mutates credits through server
     // actions only (session-derived org, server-side billingFetch).
-    denyPathPrefixes: ["/admin", "/internal", "/metrics", "/debug", "/credits"],
+    denyPathPrefixes: [
+        "/admin",
+        "/internal",
+        "/metrics",
+        "/debug",
+        "/credits",
+        "/connections",
+    ],
 });

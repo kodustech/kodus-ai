@@ -65,6 +65,9 @@ import {
 import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
 import { PullRequestAuthorPolicy } from '@libs/code-review/dtos/dashboard/pull-request-author-policy.constants';
 import {
+    CompiledAuthorPolicyConfig,
+    compileAuthorPolicyByConnection,
+    repositoryConnectionMap,
     compileAuthorPolicyConfig,
     shouldIncludeAuthorByPolicy,
 } from './utils/author-policy-filter.util';
@@ -386,7 +389,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                         shouldIncludeAuthorByPolicy({
                             policy: authorPolicy,
                             authorId: pr?.user?.id,
-                            config: authorPolicyConfig,
+                            config: authorPolicyConfig(pr.repository?.id),
                         }),
                     );
 
@@ -1177,7 +1180,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
     private async getCompiledAuthorPolicyConfig(
         policy: PullRequestAuthorPolicy,
         organizationAndTeamData: OrganizationAndTeamData,
-    ) {
+    ): Promise<((repositoryId?: string) => CompiledAuthorPolicyConfig) | null> {
         if (policy === 'all') {
             return null;
         }
@@ -1192,7 +1195,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 (config?.configValue as OrganizationParametersAutoAssignConfig) ||
                 null;
 
-            return compileAuthorPolicyConfig(configValue);
+            return compileAuthorPolicyByConnection(
+                configValue,
+                Object.keys(configValue?.connections ?? {}).length
+                    ? await this.repositoryConnections(organizationAndTeamData)
+                    : new Map(),
+            );
         } catch (error) {
             this.logger.warn({
                 message:
@@ -1206,8 +1214,21 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 },
             });
 
-            return compileAuthorPolicyConfig(null);
+            const none = compileAuthorPolicyConfig(null);
+            return () => none;
         }
+    }
+
+    /** Repository id -> the Git connection that lists it, for per-connection author lists. */
+    private async repositoryConnections(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Map<string, string>> {
+        const configs =
+            (await this.integrationConfigService.findAllOfTeamByConfigKey(
+                IntegrationConfigKey.REPOSITORIES,
+                organizationAndTeamData,
+            )) ?? [];
+        return repositoryConnectionMap(configs);
     }
 
     private async resolveRepositoryIdsByName(params: {

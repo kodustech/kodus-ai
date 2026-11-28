@@ -101,6 +101,7 @@ export class PreviewPrApprovalUseCase {
         const request = { organizationAndTeamData, repository, prNumber };
         const platformType = await this.codeManagement.getTypeIntegration(
             organizationAndTeamData,
+            repository,
         );
         const providerError =
             override?.data &&

@@ -16,6 +16,10 @@ describe('CentralizedConfigSyncUseCase', () => {
                 id: 'central-repo-id',
                 name: 'kodus',
             }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
+            }),
             discoverConfigFiles: jest.fn().mockResolvedValue([
                 {}, // global config
                 {
@@ -127,6 +131,10 @@ describe('CentralizedConfigSyncUseCase', () => {
                 id: 'central-repo-id',
                 name: 'kodus',
             }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
+            }),
             discoverConfigFiles: jest.fn().mockResolvedValue([]),
             discoverKodyRulesFiles: jest.fn().mockResolvedValue([]),
             synchronizeConfigs: jest.fn().mockResolvedValue({
@@ -172,6 +180,10 @@ describe('CentralizedConfigSyncUseCase', () => {
                 id: 'central-repo-id',
                 name: 'kodus',
             }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
+            }),
             discoverConfigFiles: jest.fn().mockResolvedValue([]),
             discoverKodyRulesFiles: jest.fn().mockResolvedValue([]),
             synchronizeConfigs: jest.fn().mockResolvedValue({
@@ -216,6 +228,10 @@ describe('CentralizedConfigSyncUseCase', () => {
             getCentralizedConfigRepository: jest.fn().mockResolvedValue({
                 id: 'central-repo-id',
                 name: 'kodus',
+            }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
             }),
             discoverConfigFiles: jest.fn().mockResolvedValue([
                 {},
@@ -317,6 +333,10 @@ describe('CentralizedConfigSyncUseCase', () => {
             getCentralizedConfigRepository: jest
                 .fn()
                 .mockResolvedValue({ id: 'central-repo-id', name: 'kodus' }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
+            }),
             discoverConfigFiles: jest.fn().mockResolvedValue([]),
             // A transient read failure now THROWS (scanRepositoryTree) instead
             // of returning [] — the use-case must abort before any removeStale
@@ -363,6 +383,10 @@ describe('CentralizedConfigSyncUseCase', () => {
             getCentralizedConfigRepository: jest
                 .fn()
                 .mockResolvedValue({ id: 'r', name: 'kodus' }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
+            }),
             discoverConfigFiles: jest.fn().mockResolvedValue([]),
             discoverKodyRulesFiles: jest
                 .fn()
@@ -415,6 +439,10 @@ describe('CentralizedConfigSyncUseCase — log level of a failed rule sync', () 
             getCentralizedConfigRepository: jest
                 .fn()
                 .mockResolvedValue({ id: 'central', name: 'kodus' }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'central-repo-id',
+                connectionScoped: false,
+            }),
             discoverConfigFiles: jest.fn().mockResolvedValue([]),
             discoverKodyRulesFiles: jest.fn().mockResolvedValue([]),
             synchronizeConfigs: jest
@@ -493,5 +521,152 @@ describe('CentralizedConfigSyncUseCase — log level of a failed rule sync', () 
         await run(useCase);
 
         expect(logger.error).toHaveBeenCalled();
+    });
+
+    it("skips the root kodus-config.yml of a Git connection's own centralized config, so workspace defaults stay", async () => {
+        const rootConfig = { path: 'kodus-config.yml' };
+        const repoConfig = {
+            repositoryId: 'repo-1-id',
+            centralizedDirectoryPath: 'repo1',
+        };
+        const ok = { success: true, message: 'ok' };
+        const centralizedConfigService = {
+            validateCentralizedConfig: jest.fn().mockResolvedValue(ok),
+            getCentralizedConfigRepository: jest
+                .fn()
+                .mockResolvedValue({ id: 'cfg-b', name: 'cfg' }),
+            getCentralizedSource: jest.fn().mockResolvedValue({
+                repositoryId: 'cfg-b',
+                connectionId: 'gl-b',
+                connectionScoped: true,
+            }),
+            discoverConfigFiles: jest
+                .fn()
+                .mockResolvedValue([rootConfig, repoConfig]),
+            discoverKodyRulesFiles: jest.fn().mockResolvedValue([]),
+            synchronizeConfigs: jest.fn().mockResolvedValue(ok),
+            synchronizeKodyRules: jest.fn().mockResolvedValue(ok),
+            removeStaleConfigs: jest.fn().mockResolvedValue(ok),
+            removeStaleKodyRules: jest.fn().mockResolvedValue(ok),
+        };
+
+        await new CentralizedConfigSyncUseCase(
+            centralizedConfigService as any,
+        ).execute({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                integrationId: 'gl-b',
+            },
+        } as any);
+
+        expect(
+            centralizedConfigService.synchronizeConfigs.mock.calls[0][0]
+                .configFiles,
+        ).toEqual([repoConfig]);
+        expect(
+            centralizedConfigService.removeStaleConfigs.mock.calls[0][0]
+                .configFiles,
+        ).toEqual([repoConfig]);
+        // The root file still proves the tree read worked.
+        expect(
+            centralizedConfigService.removeStaleKodyRules.mock.calls[0][0]
+                .configFiles,
+        ).toEqual([rootConfig, repoConfig]);
+    });
+
+    it("never syncs a global scope from a Git connection's own centralized config, even one holding only rule files", async () => {
+        const repoConfig = {
+            repositoryId: 'repo-1-id',
+            centralizedDirectoryPath: 'repo1',
+        };
+        const globalRule = {
+            centralizedDirectoryPath: '.kody-rules/review',
+            path: '.kody-rules/review/x.yml',
+        };
+        const ok = { success: true, message: 'ok' };
+        const source = {
+            repositoryId: 'cfg-b',
+            connectionId: 'gl-b',
+            connectionScoped: true,
+        };
+        const centralizedConfigService = {
+            validateCentralizedConfig: jest.fn().mockResolvedValue(ok),
+            getCentralizedConfigRepository: jest
+                .fn()
+                .mockResolvedValue({ id: 'cfg-b', name: 'cfg' }),
+            getCentralizedSource: jest.fn().mockResolvedValue(source),
+            discoverConfigFiles: jest
+                .fn()
+                .mockResolvedValue([{ path: 'kodus-config.yml' }, repoConfig]),
+            discoverKodyRulesFiles: jest.fn().mockResolvedValue([globalRule]),
+            synchronizeConfigs: jest.fn().mockResolvedValue(ok),
+            synchronizeKodyRules: jest.fn().mockResolvedValue(ok),
+            removeStaleConfigs: jest.fn().mockResolvedValue(ok),
+            removeStaleKodyRules: jest.fn().mockResolvedValue(ok),
+        };
+
+        await new CentralizedConfigSyncUseCase(
+            centralizedConfigService as any,
+        ).execute({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                integrationId: 'gl-b',
+            },
+        } as any);
+
+        const synced =
+            centralizedConfigService.synchronizeConfigs.mock.calls[0][0]
+                .configFiles;
+        expect(synced).toEqual([repoConfig]);
+        expect(
+            centralizedConfigService.removeStaleConfigs.mock.calls[0][0]
+                .configFiles,
+        ).toEqual([repoConfig]);
+        // The global rule itself still syncs, scoped to the connection.
+        expect(
+            centralizedConfigService.synchronizeKodyRules.mock.calls[0][0]
+                .ruleFiles,
+        ).toEqual([globalRule]);
+    });
+
+    it('reads the centralized source once and hands it to the rule sync and cleanup', async () => {
+        const ok = { success: true, message: 'ok' };
+        const source = { repositoryId: 'cfg', connectionScoped: false };
+        const centralizedConfigService = {
+            validateCentralizedConfig: jest.fn().mockResolvedValue(ok),
+            getCentralizedConfigRepository: jest
+                .fn()
+                .mockResolvedValue({ id: 'cfg', name: 'cfg' }),
+            getCentralizedSource: jest.fn().mockResolvedValue(source),
+            discoverConfigFiles: jest.fn().mockResolvedValue([{}]),
+            discoverKodyRulesFiles: jest.fn().mockResolvedValue([]),
+            synchronizeConfigs: jest.fn().mockResolvedValue(ok),
+            synchronizeKodyRules: jest.fn().mockResolvedValue(ok),
+            removeStaleConfigs: jest.fn().mockResolvedValue(ok),
+            removeStaleKodyRules: jest.fn().mockResolvedValue(ok),
+        };
+
+        await new CentralizedConfigSyncUseCase(
+            centralizedConfigService as any,
+        ).execute({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+        } as any);
+
+        expect(
+            centralizedConfigService.getCentralizedSource,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            centralizedConfigService.synchronizeKodyRules.mock.calls[0][0]
+                .source,
+        ).toBe(source);
+        expect(
+            centralizedConfigService.removeStaleKodyRules.mock.calls[0][0]
+                .source,
+        ).toBe(source);
     });
 });

@@ -136,6 +136,7 @@ const TEST_DB = 'security_scan_schedules_it';
                     repositoryKeyOf: jest.fn(async () => repository),
                 } as any,
                 {} as any,
+                {} as any, // scans: listing is not exercised here
             );
             const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
             const now = new Date('2026-11-24T10:00:00.000Z');
@@ -205,6 +206,7 @@ const TEST_DB = 'security_scan_schedules_it';
                     }),
                 } as any,
                 { isEnabledFor: jest.fn(async () => true) } as any,
+                {} as any, // scans: listing is not exercised here
             );
 
             expect(

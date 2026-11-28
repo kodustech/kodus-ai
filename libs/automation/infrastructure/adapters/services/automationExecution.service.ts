@@ -43,6 +43,7 @@ export class AutomationExecutionService implements IAutomationExecutionService {
                 this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
                     organizationId: orgId,
                     executionUuid: execution.uuid,
+                    repositoryId: execution.repositoryId,
                     status: execution.status,
                     timestamp: new Date().toISOString(),
                 });

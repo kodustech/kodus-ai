@@ -103,7 +103,12 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
             const codeRepositories =
                 await this.integrationConfigService.findIntegrationConfigFormatted<
                     ICodeRepository[]
-                >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
+                >(IntegrationConfigKey.REPOSITORIES, {
+                    // Every Git connection's repositories: the review config
+                    // keeps an entry for each of them.
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                });
 
             const filteredRepositories = codeRepositories.map((repository) => {
                 return {

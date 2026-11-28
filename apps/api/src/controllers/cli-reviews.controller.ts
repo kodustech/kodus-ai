@@ -1,7 +1,9 @@
 import {
     Controller,
+    ForbiddenException,
     Get,
     Inject,
+    NotFoundException,
     Param,
     Query,
     UnauthorizedException,
@@ -28,10 +30,12 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 
@@ -44,11 +48,22 @@ export class CliReviewsController {
         private readonly getCliReviewByIdUseCase: GetCliReviewByIdUseCase,
         @Inject(REQUEST)
         private readonly request: UserRequest,
+        private readonly authorizationService: AuthorizationService,
     ) {}
+
+    /** The repositories the caller may read CLI reviews of; null for all. */
+    private readableRepositories(): Promise<string[] | null> {
+        return this.authorizationService.getRepositoryScope({
+            user: this.request.user,
+            action: Action.Read,
+            resource: ResourceType.CliReview,
+        });
+    }
 
     @Get('/executions')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -71,6 +86,18 @@ export class CliReviewsController {
             );
         }
 
+        // A member limited to some repositories (assignment, or the Git
+        // connections they are granted) reads one of theirs at a time.
+        const readable = await this.readableRepositories();
+        if (
+            readable !== null &&
+            (!query.repositoryId || !readable.includes(query.repositoryId))
+        ) {
+            throw new ForbiddenException(
+                'Choose one of the repositories you can read (repositoryId).',
+            );
+        }
+
         return this.getCliReviewsUseCase.execute({
             organizationAndTeamData: {
                 organizationId,
@@ -87,6 +114,7 @@ export class CliReviewsController {
     @Get('/:executionUuid')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -108,9 +136,17 @@ export class CliReviewsController {
                 'Authenticated organization not found',
             );
         }
-        return this.getCliReviewByIdUseCase.execute({
+        const review = await this.getCliReviewByIdUseCase.execute({
             executionUuid,
             organizationId,
         });
+        const readable = await this.readableRepositories();
+        if (
+            readable !== null &&
+            !readable.includes(String(review?.repositoryId ?? ''))
+        ) {
+            throw new NotFoundException('CLI review not found');
+        }
+        return review;
     }
 }

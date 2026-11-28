@@ -1,6 +1,7 @@
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
 
+import { getBillingConnectionId } from "../_services/billing/billing-connection.server";
 import {
     getOrganizationMemberLabels,
     getOrganizationMembers,
@@ -13,12 +14,15 @@ import { LicensesPageClient } from "./_components/page.client";
 
 export default async function SubscriptionTabs() {
     const teamId = await getGlobalSelectedTeamId();
+    const connectionId = await getBillingConnectionId(teamId);
 
     const [memberList, usersWithLicense, license, autoLicenseAssignmentConfig] =
         await Promise.all([
-            getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
-            getUsersWithLicense({ teamId }).catch(() => []),
-            validateOrganizationLicense({ teamId }).catch(() => ({
+            getOrganizationMembers({ teamId, connectionId }).catch(
+                () => MEMBERS_UNAVAILABLE,
+            ),
+            getUsersWithLicense({ teamId, connectionId }).catch(() => []),
+            validateOrganizationLicense({ teamId, connectionId }).catch(() => ({
                 valid: false,
                 subscriptionStatus: "inactive" as const,
             })),

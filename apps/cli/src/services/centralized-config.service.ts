@@ -14,12 +14,17 @@ import { resolveTeamKeyAccess } from '../utils/team-key-auth.js';
 type InitOptions = {
     repository?: string;
     syncOption: 'pr' | 'manual';
+    connectionId?: string;
 };
 
+type ConnectionScope = { connectionId?: string };
+
 class CentralizedConfigService {
-    async getStatus(): Promise<CentralizedConfigStatus> {
+    async getStatus(
+        scope: ConnectionScope = {},
+    ): Promise<CentralizedConfigStatus> {
         const teamKey = await this.requireTeamKey();
-        return api.config.getCentralizedConfigStatus(teamKey);
+        return api.config.getCentralizedConfigStatus(teamKey, scope);
     }
 
     async init(options: InitOptions): Promise<
@@ -36,6 +41,9 @@ class CentralizedConfigService {
         const response = await api.config.initCentralizedConfig(teamKey, {
             repositoryId: repository.id,
             syncOption: options.syncOption,
+            ...(options.connectionId
+                ? { connectionId: options.connectionId }
+                : {}),
         });
 
         return {
@@ -44,17 +52,24 @@ class CentralizedConfigService {
         };
     }
 
-    async sync(): Promise<CentralizedConfigActionResponse> {
+    async sync(
+        scope: ConnectionScope = {},
+    ): Promise<CentralizedConfigActionResponse> {
         const teamKey = await this.requireTeamKey();
-        return api.config.syncCentralizedConfig(teamKey);
+        return api.config.syncCentralizedConfig(teamKey, scope);
     }
 
-    async disable(): Promise<CentralizedConfigActionResponse> {
+    async disable(
+        scope: ConnectionScope = {},
+    ): Promise<CentralizedConfigActionResponse> {
         const teamKey = await this.requireTeamKey();
-        return api.config.disableCentralizedConfig(teamKey);
+        return api.config.disableCentralizedConfig(teamKey, scope);
     }
 
-    async download(outPath: string): Promise<{
+    async download(
+        outPath: string,
+        scope: ConnectionScope = {},
+    ): Promise<{
         outputPath: string;
         bytes: number;
     }> {
@@ -66,7 +81,10 @@ class CentralizedConfigService {
         }
 
         const teamKey = await this.requireTeamKey();
-        const binary = await api.config.downloadCentralizedConfig(teamKey);
+        const binary = await api.config.downloadCentralizedConfig(
+            teamKey,
+            scope,
+        );
 
         const outputPath = path.resolve(outPath);
         await fs.mkdir(path.dirname(outputPath), { recursive: true });

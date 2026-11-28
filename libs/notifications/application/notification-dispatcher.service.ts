@@ -5,6 +5,10 @@ import { STATUS } from '@libs/core/infrastructure/config/types/database/status.t
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    ConnectionAccessService,
+    ConnectionRestriction,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
     IUsersService,
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
@@ -44,6 +48,11 @@ export interface NotificationMessage {
     /** Explicit recipients chosen by the emitter. Always an array on the wire. */
     recipients: NotificationRecipient[];
     correlationId: string;
+    /**
+     * The repository the event is about. The config-driven audience then
+     * reaches only members who can read it.
+     */
+    repository?: { id?: string; name?: string };
 }
 
 interface ResolvedRecipient {
@@ -68,6 +77,42 @@ interface ResolvedRecipient {
      */
     directed?: boolean;
 }
+
+type NamedRepository = { id?: string; name?: string };
+
+/**
+ * The repositories an event payload names, under the fields emitters use:
+ * its own repository, or each listed rule's (a rule list can span several
+ * Git connections). A global rule names none.
+ */
+const repositoriesOfPayload = (
+    payload: Record<string, unknown>,
+): NamedRepository[] => {
+    const id = payload?.repositoryId;
+    const name = payload?.repoName;
+    if (typeof id === 'string' || typeof name === 'string') {
+        return [
+            {
+                ...(typeof id === 'string' && id ? { id } : {}),
+                ...(typeof name === 'string' && name ? { name } : {}),
+            },
+        ];
+    }
+    const rules = Array.isArray(payload?.rules) ? payload.rules : [];
+    const ids = rules
+        .map((rule) =>
+            rule && typeof rule === 'object'
+                ? (rule as { repositoryId?: unknown }).repositoryId
+                : undefined,
+        )
+        .filter(
+            (ruleRepository): ruleRepository is string =>
+                typeof ruleRepository === 'string' &&
+                !!ruleRepository &&
+                ruleRepository !== 'global',
+        );
+    return [...new Set(ids)].map((ruleRepository) => ({ id: ruleRepository }));
+};
 
 /**
  * Worker-side fanout logic.
@@ -94,7 +139,8 @@ export class NotificationDispatcherService {
         private readonly usersService: IUsersService,
         private readonly sseService: NotificationSseService,
         @Optional()
-        private readonly metricsCollector?: MetricsCollectorService,
+        private readonly metricsCollector: MetricsCollectorService | undefined,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {
         this.adapterMap = new Map(
             adapters
@@ -143,8 +189,23 @@ export class NotificationDispatcherService {
                   (r) => ({ ...r, directed: true }),
               )
             : [];
+        // Only members of a role the event reaches are checked for access.
         const audience = defaults.defaultRoles
-            ? await this.resolveAllOrgMembers(organizationId)
+            ? await this.readersOf(
+                  (await this.resolveAllOrgMembers(organizationId)).filter(
+                      (member) =>
+                          this.resolveEnabledChannels(
+                              ruleByKey,
+                              event,
+                              member.role,
+                              defaults,
+                          ).length > 0,
+                  ),
+                  organizationId,
+                  message.repository
+                      ? [message.repository]
+                      : repositoriesOfPayload(payload),
+              )
             : [];
         const recipients = this.dedupeByUser([...directed, ...audience]);
 
@@ -678,6 +739,54 @@ export class NotificationDispatcherService {
             email: u.email,
             role: u.role ?? role,
         }));
+    }
+
+    /**
+     * Members who can read every repository the event names: one granted
+     * only some Git connections hears about their repositories only. Read in
+     * one pass; when access cannot be read, only owners (who read every
+     * connection) are reached.
+     */
+    private async readersOf(
+        members: ResolvedRecipient[],
+        organizationId: string,
+        repositories: NamedRepository[],
+    ): Promise<ResolvedRecipient[]> {
+        const named = repositories.filter(
+            (repository) => repository?.id || repository?.name,
+        );
+        if (!named.length || !members.length) return members;
+
+        let restrictions: Map<string, ConnectionRestriction | null>;
+        try {
+            restrictions = await this.connectionAccess.restrictionsFor(
+                members.map((member) => ({
+                    uuid: member.userId,
+                    role: member.role,
+                    organization: { uuid: organizationId },
+                })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'notification_readers_unresolved',
+                context: NotificationDispatcherService.name,
+                error,
+                metadata: { organizationId, memberCount: members.length },
+            });
+            return members.filter((member) => member.role === Role.OWNER);
+        }
+        return members.filter((member) => {
+            if (!member.userId || !restrictions.has(member.userId)) {
+                return false;
+            }
+            const restriction = restrictions.get(member.userId);
+            return (
+                !restriction ||
+                named.every((repository) =>
+                    restriction.allowsRepository(repository),
+                )
+            );
+        });
     }
 
     private async resolveAllOrgMembers(

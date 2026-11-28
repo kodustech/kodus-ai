@@ -76,6 +76,13 @@ export type CentralizedConfigActivePullRequest = {
 
 export type CentralizedConfigParameter = {
     enabled: boolean;
+    /** The Git connection the config repository is on, once one is recorded. */
+    integrationId?: string;
+    /**
+     * Set on a read for a Git connection other than the one the workspace's
+     * config belongs to. Never stored.
+     */
+    connectionScoped?: boolean;
     repository: {
         name: string;
         id: string;

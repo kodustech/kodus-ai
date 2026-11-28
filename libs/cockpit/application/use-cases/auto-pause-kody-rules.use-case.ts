@@ -48,6 +48,7 @@ import {
 import { isCockpitTierAllowed } from '../../domain/tier-policy';
 import { KodyRuleUsageRow } from '../../domain/types';
 import { CockpitHealthService } from '../../infrastructure/services/cockpit-health.service';
+import { StoredCentralizedConfig } from '@libs/organization/domain/parameters/utils/centralized-config-scope';
 
 /** Same staleness bar as the self-hosted doctor's analytics check. */
 const MAX_INGESTION_LAG_HOURS = 26;
@@ -340,20 +341,30 @@ export class AutoPauseKodyRulesUseCase {
                         ParametersKey.CODE_REVIEW_CONFIG,
                         orgTeam,
                     ),
-                    this.parametersService.findByKey(
-                        ParametersKey.CENTRALIZED_CONFIG,
-                        orgTeam,
-                    ),
+                    this.parametersService.findOne({
+                        team: { uuid: team.uuid },
+                        configKey: ParametersKey.CENTRALIZED_CONFIG,
+                        active: true,
+                    }),
                 ]);
                 return {
                     teamId: team.uuid,
                     codeReviewConfig: codeReview?.configValue as
                         CodeReviewParameter | undefined,
-                    centralized: Boolean(
-                        (
-                            centralized?.configValue as
-                                CentralizedConfigParameter | undefined
-                        )?.enabled,
+                    // Any of the team's Git connections with its own
+                    // centralized config counts, not only the workspace's.
+                    centralized: [
+                        centralized?.configValue as
+                            StoredCentralizedConfig | undefined,
+                        ...Object.values(
+                            (
+                                centralized?.configValue as
+                                    StoredCentralizedConfig | undefined
+                            )?.connections ?? {},
+                        ),
+                    ].some(
+                        (config: CentralizedConfigParameter | undefined) =>
+                            config?.enabled === true,
                     ),
                 };
             }),

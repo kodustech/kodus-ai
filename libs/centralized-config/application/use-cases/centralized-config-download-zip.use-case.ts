@@ -6,7 +6,10 @@ import { createZipArchive } from '@libs/common/utils/zip-archive';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
-import { CentralizedConfigDownloadUseCase } from './centralized-config-download.use-case';
+import {
+    CentralizedConfigDownloadOptions,
+    CentralizedConfigDownloadUseCase,
+} from './centralized-config-download.use-case';
 
 /**
  * Packs the centralized config entries into a zip stream.
@@ -28,11 +31,7 @@ export class CentralizedConfigDownloadZipUseCase implements IUseCase {
     public async execute(
         user: Partial<IUser>,
         teamId: string,
-        options: {
-            skipAuthorization?: boolean;
-            organizationId?: string;
-            markRulesAsPendingWithSourcePath?: boolean;
-        } = {},
+        options: CentralizedConfigDownloadOptions = {},
     ): Promise<Readable> {
         const entries = await this.centralizedConfigDownloadUseCase.execute(
             user,

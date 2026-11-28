@@ -1,3 +1,4 @@
+import { CentralizedConfigConnectionScope } from '@libs/centralized-config/application/services/centralized-config-connection-scope.service';
 import {
     BadRequestException,
     ForbiddenException,
@@ -12,7 +13,11 @@ describe('CliCentralizedConfigController', () => {
     let controller: CliCentralizedConfigController;
     let teamCliKeyService: { validateKey: jest.Mock };
     let codeManagementService: { getTypeIntegration: jest.Mock };
-    let integrationConfigService: { findIntegrationConfigFormatted: jest.Mock };
+    let integrationService: { find: jest.Mock };
+    let integrationConfigService: {
+        findIntegrationConfigFormatted: jest.Mock;
+        findAllOfTeamByConfigKey: jest.Mock;
+    };
     let parametersService: { findByKey: jest.Mock };
     let createOrUpdateParametersUseCase: { execute: jest.Mock };
     let centralizedConfigInitUseCase: { execute: jest.Mock };
@@ -55,10 +60,15 @@ describe('CliCentralizedConfigController', () => {
             findIntegrationConfigFormatted: jest
                 .fn()
                 .mockResolvedValue(selectedRepositories),
+            findAllOfTeamByConfigKey: jest.fn().mockResolvedValue([]),
         };
 
         parametersService = {
             findByKey: jest.fn().mockResolvedValue(null),
+        };
+
+        integrationService = {
+            find: jest.fn().mockResolvedValue([{ uuid: 'gh-a' }]),
         };
 
         createOrUpdateParametersUseCase = {
@@ -93,6 +103,11 @@ describe('CliCentralizedConfigController', () => {
             centralizedConfigInitUseCase as any,
             centralizedConfigSyncUseCase as any,
             centralizedConfigDownloadZipUseCase as any,
+            new CentralizedConfigConnectionScope(
+                integrationService as any,
+                integrationConfigService as any,
+                parametersService as any,
+            ),
         );
     });
 
@@ -285,5 +300,169 @@ describe('CliCentralizedConfigController', () => {
                 undefined,
             ),
         ).rejects.toThrow(BadRequestException);
+    });
+
+    describe('with several Git connections', () => {
+        const workspace = { organizationId: 'org-1', teamId: 'team-1' };
+
+        beforeEach(() => {
+            integrationService.find.mockResolvedValue([
+                { uuid: 'gh-a' },
+                { uuid: 'gl-b' },
+            ]);
+            integrationConfigService.findAllOfTeamByConfigKey.mockResolvedValue(
+                [
+                    {
+                        integration: { uuid: 'gh-a' },
+                        configValue: [{ id: 'repo-1', selected: true }],
+                    },
+                    {
+                        integration: { uuid: 'gl-b' },
+                        configValue: [{ id: 'repo-9', selected: true }],
+                    },
+                ],
+            );
+        });
+
+        it('initializes on the connection that lists the repository', async () => {
+            integrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'repo-9', name: 'group/config', selected: true }],
+            );
+
+            await controller.initialize(
+                { repositoryId: 'repo-9', syncOption: 'manual' },
+                'kodus_test_key',
+                undefined,
+            );
+
+            expect(
+                integrationConfigService.findIntegrationConfigFormatted,
+            ).toHaveBeenCalledWith(IntegrationConfigKey.REPOSITORIES, {
+                ...workspace,
+                integrationId: 'gl-b',
+            });
+            expect(centralizedConfigInitUseCase.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        ...workspace,
+                        integrationId: 'gl-b',
+                    },
+                }),
+            );
+        });
+
+        it('asks which connection to sync when none is named', async () => {
+            await expect(
+                controller.sync('kodus_test_key', undefined),
+            ).rejects.toThrow(BadRequestException);
+            expect(centralizedConfigSyncUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('syncs and disables the named connection', async () => {
+            await controller.sync('kodus_test_key', undefined, 'gl-b');
+            await controller.disable('kodus_test_key', undefined, 'gl-b');
+
+            expect(centralizedConfigSyncUseCase.execute).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    ...workspace,
+                    integrationId: 'gl-b',
+                },
+            });
+            expect(
+                createOrUpdateParametersUseCase.execute,
+            ).toHaveBeenCalledWith(
+                ParametersKey.CENTRALIZED_CONFIG,
+                expect.anything(),
+                { ...workspace, integrationId: 'gl-b' },
+            );
+        });
+
+        it('checks the integration on the chosen connection, not the whole workspace', async () => {
+            // Connections on different platforms leave the workspace with no single platform.
+            codeManagementService.getTypeIntegration.mockImplementation(
+                async (context: { integrationId?: string }) =>
+                    context.integrationId ? 'gitlab' : null,
+            );
+            integrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'repo-9', name: 'group/config', selected: true }],
+            );
+
+            await controller.sync('kodus_test_key', undefined, 'gl-b');
+            await controller.initialize(
+                { repositoryId: 'repo-9', syncOption: 'manual' },
+                'kodus_test_key',
+                undefined,
+            );
+
+            expect(
+                codeManagementService.getTypeIntegration,
+            ).toHaveBeenCalledWith({
+                ...workspace,
+                integrationId: 'gl-b',
+            });
+            expect(centralizedConfigSyncUseCase.execute).toHaveBeenCalled();
+            expect(centralizedConfigInitUseCase.execute).toHaveBeenCalled();
+        });
+
+        it('asks which connection even when one has no repositories saved yet', async () => {
+            integrationConfigService.findAllOfTeamByConfigKey.mockResolvedValue(
+                [
+                    {
+                        integration: { uuid: 'gh-a' },
+                        configValue: [{ id: 'repo-1', selected: true }],
+                    },
+                ],
+            );
+
+            await expect(
+                controller.sync('kodus_test_key', undefined),
+            ).rejects.toThrow(BadRequestException);
+            await controller.sync('kodus_test_key', undefined, 'gl-b');
+
+            expect(centralizedConfigSyncUseCase.execute).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    ...workspace,
+                    integrationId: 'gl-b',
+                },
+            });
+        });
+
+        it('refuses a connection that is not in the workspace', async () => {
+            await expect(
+                controller.sync('kodus_test_key', undefined, 'other'),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("reports each connection's status when none is named", async () => {
+            parametersService.findByKey.mockImplementation(
+                async (_key: unknown, otd: { integrationId?: string }) => ({
+                    configValue:
+                        otd.integrationId === 'gl-b'
+                            ? {
+                                  enabled: true,
+                                  repository: { id: 'repo-9', name: 'cfg' },
+                              }
+                            : { enabled: false, repository: null },
+                }),
+            );
+
+            const result = await controller.getStatus(
+                'kodus_test_key',
+                undefined,
+            );
+
+            expect(result).toEqual({
+                enabled: false,
+                repository: null,
+                connections: [
+                    { connectionId: 'gh-a', enabled: false, repository: null },
+                    {
+                        connectionId: 'gl-b',
+                        enabled: true,
+                        repository: { id: 'repo-9', name: 'cfg' },
+                    },
+                ],
+            });
+        });
     });
 });

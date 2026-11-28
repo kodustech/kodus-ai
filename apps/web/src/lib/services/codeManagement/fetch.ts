@@ -6,6 +6,10 @@ import {
 import { axiosAuthorized } from "src/core/utils/axios";
 
 import {
+    clearConnectionIntent,
+    readConnectionIntent,
+} from "./connection-intent";
+import {
     CODE_MANAGEMENT_API_PATHS,
     type Repository,
     type RepositoryUploadResult,
@@ -14,10 +18,17 @@ import {
 export const getRepositories = async (
     teamId: string,
     organizationSelected?: any,
+    connectionId?: string,
 ) => {
     const { data }: { data: any[] } = await axiosAuthorized.fetcher(
         CODE_MANAGEMENT_API_PATHS.GET_REPOSITORIES_ORG,
-        { params: { teamId, organizationSelected } },
+        {
+            params: {
+                teamId,
+                organizationSelected,
+                ...(connectionId ? { connectionId } : {}),
+            },
+        },
     );
 
     return data;
@@ -42,6 +53,8 @@ export const createOrUpdateRepositories = (
          * hooks never come back if the process dies mid-save.
          */
         deferWebhooks?: boolean;
+        /** The Git connection the repositories belong to. */
+        connectionId?: string;
     },
 ) => {
     return axiosAuthorized.post(
@@ -51,15 +64,18 @@ export const createOrUpdateRepositories = (
             teamId,
             type,
             ...(options?.deferWebhooks ? { deferWebhooks: true } : {}),
+            ...(options?.connectionId
+                ? { connectionId: options.connectionId }
+                : {}),
         },
     );
 };
-
 
 export const createOrUpdateRepositoriesInChunks = async (
     repositories: Repository[],
     teamId: string,
     onProgress?: (current: number, total: number) => void,
+    connectionId?: string,
 ): Promise<RepositoryUploadResult> => {
     const CHUNK_SIZE = 50;
     const chunks = [];
@@ -82,6 +98,7 @@ export const createOrUpdateRepositoriesInChunks = async (
             // complete selection.
             await createOrUpdateRepositories(chunks[i], teamId, type, {
                 deferWebhooks: !isLastChunk,
+                connectionId,
             });
             results.success += chunks[i].length;
         } catch (error) {
@@ -107,6 +124,7 @@ export const createCodeManagementIntegration = ({
     username = "",
     email = "",
     orgName = "",
+    connectionId,
 }: {
     integrationType: PlatformType;
     organizationAndTeamData: OrganizationAndTeamData;
@@ -121,34 +139,88 @@ export const createCodeManagementIntegration = ({
     username?: string;
     email?: string;
     orgName?: string;
+    /** Reconnect this Git connection instead of the workspace's default one. */
+    connectionId?: string;
 }) => {
     const authCode = installationId || code;
+    // An "Add connection" flow started before the provider redirect.
+    const intent = connectionId ? undefined : readConnectionIntent();
 
     if (!token && !authCode) {
         throw new Error(
             "Either installationId or code must be provided when token is not present",
         );
     }
-    return axiosAuthorized.post<{
-        statusCode: number;
-        data: {
-            success: boolean;
-            status: "SUCCESS" | "NO_ORGANIZATION" | "NO_REPOSITORIES";
-        };
-    }>(CODE_MANAGEMENT_API_PATHS.CREATE_AUTH_INTEGRATION, {
-        code: authCode,
-        githubCode,
-        githubState,
-        integrationType,
-        organizationAndTeamData,
-        authMode,
-        token,
-        host,
-        username,
-        email,
-        orgName,
-    });
+    return axiosAuthorized
+        .post<{
+            statusCode: number;
+            data: {
+                success: boolean;
+                status: "SUCCESS" | "NO_ORGANIZATION" | "NO_REPOSITORIES";
+                /** The Git connection created or updated. */
+                integrationId?: string;
+            };
+        }>(CODE_MANAGEMENT_API_PATHS.CREATE_AUTH_INTEGRATION, {
+            code: authCode,
+            githubCode,
+            githubState,
+            integrationType,
+            organizationAndTeamData,
+            authMode,
+            token,
+            host,
+            username,
+            email,
+            orgName,
+            ...(connectionId ? { connectionId } : {}),
+            ...(intent ?? {}),
+        })
+        .then((response) => {
+            if (intent && response?.data?.success) clearConnectionIntent();
+            return response;
+        });
 };
+
+export const updateConnection = (params: {
+    teamId: string;
+    connectionId: string;
+    name?: string | null;
+    reviewEnabled?: boolean;
+}) => {
+    const { teamId, connectionId, ...body } = params;
+    return axiosAuthorized.patch(
+        CODE_MANAGEMENT_API_PATHS.CONNECTION(connectionId),
+        body,
+        { params: { teamId } },
+    );
+};
+
+export const getConnectionAccess = async (
+    teamId: string,
+    connectionId: string,
+) => {
+    const { data } = await axiosAuthorized.fetcher<{
+        data: { userIds: string[] };
+    }>(CODE_MANAGEMENT_API_PATHS.CONNECTION_ACCESS(connectionId), {
+        params: { teamId },
+    });
+    // An unreadable answer is not "no one": callers must not save over it.
+    if (!Array.isArray(data?.userIds)) {
+        throw new Error("Could not read who reads this connection");
+    }
+    return data.userIds;
+};
+
+export const setConnectionAccess = (
+    teamId: string,
+    connectionId: string,
+    userIds: string[],
+) =>
+    axiosAuthorized.put(
+        CODE_MANAGEMENT_API_PATHS.CONNECTION_ACCESS(connectionId),
+        { userIds },
+        { params: { teamId } },
+    );
 
 export const finishOnboarding = (params: {
     teamId: string;
@@ -168,17 +240,23 @@ export const finishOnboarding = (params: {
     });
 };
 
-export const deleteIntegration = async (teamId: string) => {
+export const deleteIntegration = async (
+    teamId: string,
+    connectionId?: string,
+) => {
     return axiosAuthorized.deleted<any>(
         CODE_MANAGEMENT_API_PATHS.DELETE_INTEGRATION,
-        { params: { teamId } },
+        { params: { teamId, ...(connectionId ? { connectionId } : {}) } },
     );
 };
 
-export const deleteIntegrationAndRepositories = async (teamId: string) => {
+export const deleteIntegrationAndRepositories = async (
+    teamId: string,
+    connectionId?: string,
+) => {
     return axiosAuthorized.deleted<any>(
         CODE_MANAGEMENT_API_PATHS.DELETE_INTEGRATION_AND_REPOSITORIES,
-        { params: { teamId } },
+        { params: { teamId, ...(connectionId ? { connectionId } : {}) } },
     );
 };
 

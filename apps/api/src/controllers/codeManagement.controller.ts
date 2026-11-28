@@ -3,6 +3,7 @@ import {
     Body,
     Controller,
     Delete,
+    ForbiddenException,
     Get,
     Inject,
     Post,
@@ -12,8 +13,14 @@ import {
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
+    assertConnectionReadable,
+    readableConnectionIds,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 import { GetAreaRiskMapUseCase } from '../use-cases/get-area-risk-map.use-case';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -103,6 +110,7 @@ export class CodeManagementController {
         private readonly getRepositorySelectionUseCase: GetRepositorySelectionUseCase,
         private readonly setRepositorySelectionUseCase: SetRepositorySelectionUseCase,
         private readonly previewAllRepositoriesUseCase: PreviewAllRepositoriesUseCase,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     @Get('/area-risk-map')
@@ -130,6 +138,7 @@ export class CodeManagementController {
 
     @Get('/repositories/org')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -150,6 +159,12 @@ export class CodeManagementController {
     @ApiQuery({ name: 'isSelected', required: false, type: Boolean })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'perPage', required: false, type: Number })
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection to list; every connection of the workspace when absent.',
+    })
     @ApiOkResponse({ type: CodeManagementRepositoriesResponseDto })
     public async getRepositories(
         @Query()
@@ -159,13 +174,20 @@ export class CodeManagementController {
             isSelected?: boolean;
             page?: number;
             perPage?: number;
+            connectionId?: string;
         },
     ) {
-        return this.getRepositoriesUseCase.execute(query);
+        const restriction = await this.readRestriction();
+        assertConnectionReadable(restriction, query.connectionId);
+        return this.getRepositoriesUseCase.execute({
+            ...query,
+            readableConnectionIds: readableConnectionIds(restriction),
+        });
     }
 
     @Get('/repositories/selected')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -227,6 +249,8 @@ export class CodeManagementController {
         body: {
             repositories: Repository[];
             teamId: string;
+            /** The Git connection the repositories belong to; required when the workspace has several. */
+            connectionId?: string;
             type?: 'replace' | 'append';
             /**
              * Set by the chunked save on every request but the last, so
@@ -241,6 +265,7 @@ export class CodeManagementController {
 
     @Get('/repository-selection')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -253,11 +278,18 @@ export class CodeManagementController {
             'Whether the team picks repositories by hand or reviews every repository its git integration can see, and the progress of the automatic sync.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    public async getRepositorySelection(@Query() query: { teamId: string }) {
+    @ApiQuery({ name: 'connectionId', required: false })
+    public async getRepositorySelection(
+        @Query() query: { teamId: string; connectionId?: string },
+    ) {
+        const integrationId = await this.memberListConnection(
+            query.connectionId,
+        );
         return this.getRepositorySelectionUseCase.execute({
             organizationAndTeamData: {
                 organizationId: this.request?.user?.organization?.uuid,
                 teamId: query.teamId,
+                ...(integrationId ? { integrationId } : {}),
             },
         });
     }
@@ -310,6 +342,7 @@ export class CodeManagementController {
         @Body()
         body: {
             teamId: string;
+            connectionId?: string;
             mode: 'manual' | 'all';
             includeForksAndMirrors?: boolean;
         },
@@ -318,6 +351,9 @@ export class CodeManagementController {
             organizationAndTeamData: {
                 organizationId: this.request?.user?.organization?.uuid,
                 teamId: body.teamId,
+                ...(body.connectionId
+                    ? { integrationId: body.connectionId }
+                    : {}),
             },
             mode: body.mode,
             includeForksAndMirrors: body.includeForksAndMirrors,
@@ -339,8 +375,15 @@ export class CodeManagementController {
             'Returns members from the connected code platform. A "unavailable" status means the platform could not be reached and the empty list must not be read as an empty organization.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    public async getOrganizationMembers(@Query() query: { teamId: string }) {
-        return this.getCodeManagementMemberListUseCase.execute(query.teamId);
+    @ApiQuery({ name: 'connectionId', required: false })
+    public async getOrganizationMembers(
+        @Query() query: { teamId: string; connectionId?: string },
+    ) {
+        return this.getCodeManagementMemberListUseCase.execute(
+            query.teamId,
+            {},
+            await this.memberListConnection(query.connectionId),
+        );
     }
 
     @Get('/organization-members/labels')
@@ -387,16 +430,38 @@ export class CodeManagementController {
             'Clears the cached members list and re-fetches from the code platform.',
     })
     @ApiQuery({ name: 'teamId', required: true })
+    @ApiQuery({ name: 'connectionId', required: false })
     public async refreshOrganizationMembers(
-        @Query() query: { teamId: string },
+        @Query() query: { teamId: string; connectionId?: string },
     ) {
         return this.getCodeManagementMemberListUseCase.refreshMembers(
             query.teamId,
+            await this.memberListConnection(query.connectionId),
         );
+    }
+
+    /**
+     * The connection whose members a call reads. A member granted only some
+     * connections reads one at a time; with a single grant that one is implied.
+     */
+    private async memberListConnection(
+        requested?: string,
+    ): Promise<string | undefined> {
+        const restriction = await this.readRestriction();
+        assertConnectionReadable(restriction, requested);
+        if (requested) return requested;
+        if (!restriction) return undefined;
+        if (restriction.connectionIds.size !== 1) {
+            throw new ForbiddenException(
+                'Name one of your Git connections (connectionId).',
+            );
+        }
+        return [...restriction.connectionIds][0];
     }
 
     @Get('/get-prs')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -428,6 +493,26 @@ export class CodeManagementController {
             repository?: string;
         },
     ) {
+        // A member granted some connections names one of their
+        // repositories, and every identifier given has to be one of them.
+        const restriction = await this.readRestriction();
+        const named = [
+            ...(query.repositoryId ? [{ id: query.repositoryId }] : []),
+            ...[query.repositoryName, query.repository]
+                .filter((name): name is string => !!name)
+                .map((name) => ({ name })),
+        ];
+        if (
+            restriction &&
+            (!named.length ||
+                !named.every((repository) =>
+                    restriction.allowsRepository(repository),
+                ))
+        ) {
+            throw new ForbiddenException(
+                'Name a repository of the Git connections you are granted.',
+            );
+        }
         return await this.getPRsUseCase.execute({
             teamId: query.teamId,
             number: query.number,
@@ -441,6 +526,7 @@ export class CodeManagementController {
 
     @Get('/get-prs-repo')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -477,6 +563,15 @@ export class CodeManagementController {
         },
     ) {
         const { teamId, repositoryId, ...filters } = query;
+        const restriction = await this.readRestriction();
+        if (
+            restriction &&
+            !restriction.allowsRepository({ id: repositoryId })
+        ) {
+            throw new ForbiddenException(
+                'You are not granted the Git connection of this repository.',
+            );
+        }
         return await this.getPRsByRepoUseCase.execute({
             teamId,
             repositoryId,
@@ -517,7 +612,15 @@ export class CodeManagementController {
         description: 'Removes a code management integration for the team.',
     })
     @ApiNoContentResponse({ description: 'Integration deleted' })
-    public async deleteIntegration(@Query() query: { teamId: string }) {
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection to reset; required when the workspace has several.',
+    })
+    public async deleteIntegration(
+        @Query() query: { teamId: string; connectionId?: string },
+    ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -529,6 +632,7 @@ export class CodeManagementController {
         return await this.deleteIntegrationUseCase.execute({
             organizationId,
             teamId: query.teamId,
+            connectionId: query.connectionId,
         });
     }
 
@@ -548,8 +652,14 @@ export class CodeManagementController {
     @ApiNoContentResponse({
         description: 'Integration and repositories deleted',
     })
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection to reset; required when the workspace has several.',
+    })
     public async deleteIntegrationAndRepositories(
-        @Query() query: { teamId: string },
+        @Query() query: { teamId: string; connectionId?: string },
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
@@ -562,6 +672,7 @@ export class CodeManagementController {
         return await this.deleteIntegrationAndRepositoriesUseCase.execute({
             organizationId,
             teamId: query.teamId,
+            connectionId: query.connectionId,
         });
     }
 
@@ -674,6 +785,7 @@ export class CodeManagementController {
     // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
     @Get('/hook-status')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -688,19 +800,34 @@ export class CodeManagementController {
     public async getWebhookStatus(
         @Query() query: WebhookStatusQueryDto,
     ): Promise<{ active: boolean }> {
+        const restriction = await this.readRestriction();
+        if (
+            restriction &&
+            !restriction.allowsRepository({ id: query.repositoryId })
+        ) {
+            throw new ForbiddenException(
+                'You are not granted the Git connection of this repository.',
+            );
+        }
+        // The caller's own organization, never one from the query.
         return this.getWebhookStatusUseCase.execute({
             organizationAndTeamData: {
-                organizationId: query.organizationId,
+                organizationId: this.request?.user?.organization?.uuid,
                 teamId: query.teamId,
             },
             repositoryId: query.repositoryId,
         });
     }
 
+    private readRestriction() {
+        return this.connectionAccess.restrictionFor(this.request?.user);
+    }
+
     // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to
     // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
     @Get('/hook-failures')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -713,16 +840,26 @@ export class CodeManagementController {
             'Repositories whose webhook could not be created during the last repository selection save, with the reason returned by the provider.',
     })
     @ApiQuery({ name: 'teamId', required: true })
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection whose save is read; its own failures only.',
+    })
     @ApiOkResponse({ type: CodeManagementWebhookCreationFailuresResponseDto })
     public async getWebhookCreationFailures(
-        @Query() query: { teamId: string },
+        @Query() query: { teamId: string; connectionId?: string },
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
+        const integrationId = await this.memberListConnection(
+            query.connectionId,
+        );
 
         return this.getWebhookCreationFailuresUseCase.execute({
             organizationAndTeamData: {
                 organizationId,
                 teamId: query.teamId,
+                ...(integrationId ? { integrationId } : {}),
             },
         });
     }

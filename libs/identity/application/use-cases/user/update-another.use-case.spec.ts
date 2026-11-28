@@ -9,6 +9,8 @@ import { ORGANIZATION_SERVICE_TOKEN } from '@libs/organization/domain/organizati
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { TEAM_MEMBERS_SERVICE_TOKEN } from '@libs/organization/domain/teamMembers/contracts/teamMembers.service.contracts';
 
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+
 import { UpdateAnotherUserUseCase } from './update-another.use-case';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
@@ -23,12 +25,17 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('UpdateAnotherUserUseCase — org.role_changed emit', () => {
     let useCase: UpdateAnotherUserUseCase;
-    let usersService: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock };
+    let usersService: {
+        find: jest.Mock;
+        findOne: jest.Mock;
+        update: jest.Mock;
+    };
     let orgService: { findOne: jest.Mock };
     let teamService: { findOne: jest.Mock };
     let teamMembers: { findOne: jest.Mock };
     let eventEmitter: { emit: jest.Mock };
     let notify: { emit: jest.Mock };
+    let connectionAccess: { grantOrganizationConnections: jest.Mock };
 
     const TARGET_USER = {
         uuid: 'target-1',
@@ -46,9 +53,11 @@ describe('UpdateAnotherUserUseCase — org.role_changed emit', () => {
     beforeEach(async () => {
         usersService = {
             find: jest.fn(),
-            findOne: jest.fn().mockImplementation(async ({ uuid }: any) =>
-                uuid === ACTING_USER.uuid ? ACTING_USER : TARGET_USER,
-            ),
+            findOne: jest
+                .fn()
+                .mockImplementation(async ({ uuid }: any) =>
+                    uuid === ACTING_USER.uuid ? ACTING_USER : TARGET_USER,
+                ),
             update: jest
                 .fn()
                 .mockResolvedValue({ toObject: () => TARGET_USER }),
@@ -58,6 +67,11 @@ describe('UpdateAnotherUserUseCase — org.role_changed emit', () => {
         teamMembers = { findOne: jest.fn().mockResolvedValue(TEAM_MEMBER) };
         eventEmitter = { emit: jest.fn() };
         notify = { emit: jest.fn().mockResolvedValue(undefined) };
+        connectionAccess = {
+            grantOrganizationConnections: jest
+                .fn()
+                .mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -71,6 +85,10 @@ describe('UpdateAnotherUserUseCase — org.role_changed emit', () => {
                 {
                     provide: TelemetryService,
                     useValue: { memberRoleChanged: jest.fn() },
+                },
+                {
+                    provide: ConnectionAccessService,
+                    useValue: connectionAccess,
                 },
             ],
         }).compile();
@@ -147,5 +165,37 @@ describe('UpdateAnotherUserUseCase — org.role_changed emit', () => {
         );
 
         expect(result).toBeDefined();
+    });
+
+    it('lets a demoted owner keep reading every Git connection of the organization', async () => {
+        usersService.findOne.mockImplementation(async ({ uuid }: any) =>
+            uuid === ACTING_USER.uuid
+                ? ACTING_USER
+                : { ...TARGET_USER, role: Role.OWNER },
+        );
+
+        await useCase.execute(
+            ACTING_USER.uuid,
+            TARGET_USER.uuid,
+            { role: Role.REPO_ADMIN } as any,
+            ORG.uuid,
+        );
+
+        expect(
+            connectionAccess.grantOrganizationConnections,
+        ).toHaveBeenCalledWith(TARGET_USER.uuid, ORG.uuid);
+    });
+
+    it('grants nothing on other role changes', async () => {
+        await useCase.execute(
+            ACTING_USER.uuid,
+            TARGET_USER.uuid,
+            { role: Role.REPO_ADMIN } as any,
+            ORG.uuid,
+        );
+
+        expect(
+            connectionAccess.grantOrganizationConnections,
+        ).not.toHaveBeenCalled();
     });
 });

@@ -33,7 +33,8 @@ export class AxiosLicenseService {
         });
 
         // Billing authenticates the callers of its `/credits/*` routes (money)
-        // with the SAME shared secret that already signs its outbound webhooks
+        // and `/connections*` routes (which connection holds the plan) with
+        // the SAME shared secret that already signs its outbound webhooks
         // to us (API_BILLING_WEBHOOK_SECRET here,
         // KODUS_NOTIFICATION_WEBHOOK_SECRET there — one value by contract), so
         // enabling this needs no new env var. Signed, not sent: the secret

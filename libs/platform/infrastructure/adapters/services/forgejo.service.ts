@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { assertGitServerUrlAllowed } from './git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
@@ -36,6 +37,7 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -512,6 +514,7 @@ export class ForgejoService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -1126,7 +1129,8 @@ export class ForgejoService implements Omit<
         token: string;
         host: string;
         organizationAndTeamData: OrganizationAndTeamData;
-    }): Promise<{ success: boolean; status: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const { token, host, organizationAndTeamData } = params;
 
@@ -1153,14 +1157,20 @@ export class ForgejoService implements Omit<
             });
             if (!checkRepos.success) return checkRepos;
 
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.FORGEJO,
-            });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.FORGEJO,
+                    params.newConnection,
+                );
 
+            let integrationId = integration?.uuid;
             if (!integration) {
-                await this.addAccessToken(organizationAndTeamData, authDetails);
+                const created = await this.addAccessToken(
+                    organizationAndTeamData,
+                    authDetails,
+                );
+                integrationId = created?.uuid;
             } else {
                 await this.updateAuthIntegration({
                     organizationAndTeamData,
@@ -1173,6 +1183,7 @@ export class ForgejoService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const linkError = toIntegrationLinkError(err, 'Forgejo');
@@ -1193,7 +1204,7 @@ export class ForgejoService implements Omit<
 
     private async checkRepositoryPermissions(params: {
         authDetails: ForgejoAuthDetail;
-    }): Promise<{ success: boolean; status: CreateAuthIntegrationStatus }> {
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const client = this.createForgejoClient(params.authDetails);
 
@@ -1251,7 +1262,7 @@ export class ForgejoService implements Omit<
     private async addAccessToken(
         organizationAndTeamData: OrganizationAndTeamData,
         authDetails: ForgejoAuthDetail,
-    ): Promise<void> {
+    ): Promise<{ uuid: string }> {
         const integrationUuid = uuidv4();
         const authIntegrationUuid = uuidv4();
 
@@ -1272,6 +1283,8 @@ export class ForgejoService implements Omit<
             organization: { uuid: organizationAndTeamData.organizationId },
             team: { uuid: organizationAndTeamData.teamId },
         });
+
+        return { uuid: newIntegration.uuid };
     }
 
     async updateAuthIntegration(params: {
@@ -1324,6 +1337,7 @@ export class ForgejoService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -1404,6 +1418,7 @@ export class ForgejoService implements Omit<
         const integration = await this.integrationService.findOne({
             organization: { uuid: organizationAndTeamData.organizationId },
             team: { uuid: organizationAndTeamData.teamId },
+            ...connectionScope(organizationAndTeamData),
             platform: PlatformType.FORGEJO,
         });
 
@@ -1492,6 +1507,7 @@ export class ForgejoService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -4443,7 +4459,20 @@ export class ForgejoService implements Omit<
                 return;
             }
 
-            for (const repo of repositories) {
+            // The hook URL is shared: a repository another connection still
+            // lists keeps it.
+            const integrationId = (authDetail as { integrationId?: string })
+                .integrationId;
+            const listedElsewhere = integrationId
+                ? await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                      params.organizationAndTeamData.organizationId,
+                      integrationId,
+                  )
+                : new Set<string>();
+
+            for (const repo of repositories.filter(
+                (r) => !listedElsewhere.has(String(r?.id)),
+            )) {
                 const repoInfo = this.extractRepoInfo(
                     repo.name,
                     'deleteWebhook',
@@ -4524,6 +4553,7 @@ export class ForgejoService implements Omit<
                             uuid: organizationAndTeamData.organizationId,
                         },
                         team: { uuid: organizationAndTeamData.teamId },
+                        ...connectionScope(organizationAndTeamData),
                         platform: PlatformType.FORGEJO,
                     })
                 )?.uuid;

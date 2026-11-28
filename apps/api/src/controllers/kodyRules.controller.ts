@@ -39,6 +39,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -102,6 +103,7 @@ import {
 } from '../dtos/kody-rules-response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 
 @ApiTags('Kody Rules')
 @ApiStandardResponses()
@@ -144,6 +146,7 @@ export class KodyRulesController {
         private readonly request: UserRequest,
 
         private readonly authorizationService: AuthorizationService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     /**
@@ -166,6 +169,15 @@ export class KodyRulesController {
             action,
             resource: ResourceType.KodyRules,
             repoIds,
+        });
+    }
+
+    /** The repositories a member reads, or null when every one. */
+    private readableRepositories(): Promise<string[] | null> {
+        return this.authorizationService.getRepositoryScope({
+            user: this.request.user,
+            action: Action.Read,
+            resource: ResourceType.KodyRules,
         });
     }
 
@@ -204,6 +216,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/index')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -228,11 +241,15 @@ export class KodyRulesController {
             );
         }
 
-        return this.getKodyRulesIndexUseCase.execute(organizationId);
+        return this.getKodyRulesIndexUseCase.execute(
+            organizationId,
+            await this.connectionAccess.restrictionFor(this.request.user),
+        );
     }
 
     @Get('/find-by-organization-id')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -245,12 +262,15 @@ export class KodyRulesController {
     })
     @ApiOkResponse({ type: KodyRulesFindByOrgResponseDto })
     public async findByOrganizationId() {
-        return this.findByOrganizationIdKodyRulesUseCase.execute();
+        return this.findByOrganizationIdKodyRulesUseCase.execute(
+            await this.connectionAccess.restrictionFor(this.request.user),
+        );
     }
 
     @ApiBearerAuth('jwt')
     @Get('/limits')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -269,6 +289,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/counts-by-repository')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -291,6 +312,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/suggestions')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -305,12 +327,22 @@ export class KodyRulesController {
     public async findSuggestionsByRule(
         @Query() query: FindSuggestionsByRuleDto,
     ) {
-        return this.findSuggestionsByRuleUseCase.execute(query.ruleId);
+        const [suggestions, readable] = await Promise.all([
+            this.findSuggestionsByRuleUseCase.execute(query.ruleId),
+            this.readableRepositories(),
+        ]);
+        if (readable === null) return suggestions;
+        // A global rule reviews every connection's pull requests.
+        const allowed = new Set(readable.map(String));
+        return (suggestions ?? []).filter((suggestion) =>
+            allowed.has(String(suggestion?.repositoryId)),
+        );
     }
 
     @ApiBearerAuth('jwt')
     @Get('/find-rules-in-organization-by-filter')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -429,6 +461,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/find-recommended-kody-rules')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -615,6 +648,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/check-sync-status')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -640,6 +674,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/past-reviewers')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -659,11 +694,29 @@ export class KodyRulesController {
         @Query('repositoryId') repositoryId?: string,
         @Query('months') months?: string,
     ) {
+        // A member scoped to some repositories names one of them (`global`
+        // is no repository); the list spans its connection's members and
+        // authors, and the use case holds that connection to the grants.
+        const readable = await this.readableRepositories();
+        if (
+            readable !== null &&
+            (!repositoryId ||
+                repositoryId === 'global' ||
+                !readable.includes(String(repositoryId)))
+        ) {
+            throw new ForbiddenException(
+                'Name a repository of the Git connections you are granted.',
+            );
+        }
+        const restriction = await this.connectionAccess.restrictionFor(
+            this.request.user,
+        );
         // Just parse the query string here; the use-case validates/bounds it.
         return this.listPastReviewersUseCase.execute({
             teamId,
             repositoryId,
             months: months !== undefined ? Number(months) : undefined,
+            readableConnectionIds: restriction?.connectionIds ?? null,
         });
     }
 
@@ -722,6 +775,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/global-source-repositories')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -735,12 +789,21 @@ export class KodyRulesController {
     })
     @ApiQuery({ name: 'teamId', type: String, required: true })
     public async getGlobalSourceRepositories(@Query('teamId') teamId: string) {
-        return this.getGlobalRulesSourceRepositoriesUseCase.execute({ teamId });
+        const [repositories, readable] = await Promise.all([
+            this.getGlobalRulesSourceRepositoriesUseCase.execute({ teamId }),
+            this.readableRepositories(),
+        ]);
+        if (readable === null) return repositories;
+        const allowed = new Set(readable.map(String));
+        return repositories.filter((repository) =>
+            allowed.has(String(repository?.id)),
+        );
     }
 
     @ApiBearerAuth('jwt')
     @Get('/global-source-repositories/import-status')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -805,6 +868,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/pending')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -825,6 +889,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/agent-instruction-files')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -951,6 +1016,7 @@ export class KodyRulesController {
     @ApiBearerAuth('jwt')
     @Get('/imported/count')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,

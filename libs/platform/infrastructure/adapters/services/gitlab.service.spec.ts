@@ -23,7 +23,10 @@ describe('GitlabService', () => {
     };
 
     let service: GitlabService;
-    let integrationService: { findOne: jest.Mock };
+    let integrationService: {
+        findOne: jest.Mock;
+        connectionToUpdate: jest.Mock;
+    };
     let integrationConfigService: Record<string, never>;
     let authIntegrationService: Record<string, never>;
     let configService: ConfigService;
@@ -35,6 +38,9 @@ describe('GitlabService', () => {
     beforeEach(() => {
         integrationService = {
             findOne: jest.fn().mockResolvedValue({ uuid: 'integration-1' }),
+            connectionToUpdate: jest
+                .fn()
+                .mockResolvedValue({ uuid: 'integration-1' }),
         };
         integrationConfigService = {};
         authIntegrationService = {};

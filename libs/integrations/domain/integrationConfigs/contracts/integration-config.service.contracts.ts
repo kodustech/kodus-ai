@@ -21,4 +21,8 @@ export interface IIntegrationConfigService extends IIntegrationConfigRepository 
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<T>;
     savePrivateChannel(params: any): Promise<void>;
+    repositoryIdsListedByOtherConnections(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<Set<string>>;
 }

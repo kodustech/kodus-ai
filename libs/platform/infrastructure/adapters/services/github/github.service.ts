@@ -1,5 +1,7 @@
+import { connectionCacheScope } from '@libs/integrations/domain/integrations/utils/connection-cache-scope';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { assertGitServerUrlAllowed } from '../git-server-url.guard';
 import { integrationGuardedFetch } from '@libs/llm/gateway-address-guard';
 import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
@@ -78,6 +80,7 @@ import {
 } from '@libs/common/utils/translations/translations';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     InstallationStatus,
     IntegrationCategory,
@@ -275,21 +278,73 @@ export class GithubService
         private readonly mcpManagerService?: MCPManagerService,
     ) {}
 
+    /** Creates the connection or rewrites its credentials; returns its id. */
     private async handleIntegration(
         integration: any,
         authDetails: any,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
+            );
+            return created?.uuid;
+        }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
+    }
+
+    /**
+     * The connection a connect call rewrites. The one named; else the one
+     * already holding this App installation (a reconfigure, whatever the
+     * caller asked); else none when the caller adds a new one, or the
+     * workspace's only GitHub connection. With several and none of them
+     * matching, it refuses instead of rewriting one of them.
+     */
+    private async findConnectionToUpdate(
+        params: any,
+        installationId?: string | number | null,
+    ): Promise<any> {
+        const scope = {
+            organization: {
+                uuid: params.organizationAndTeamData.organizationId,
+            },
+            team: { uuid: params.organizationAndTeamData.teamId },
+            platform: PlatformType.GITHUB,
+        };
+        if (params.organizationAndTeamData?.integrationId) {
+            return this.integrationService.findOne({
+                ...scope,
+                ...connectionScope(params.organizationAndTeamData),
             });
         }
+
+        const existing =
+            (await this.integrationService.find({ ...scope, status: true })) ??
+            [];
+        if (installationId != null) {
+            const holding = existing.find(
+                (connection) =>
+                    String(
+                        connection?.authIntegration?.authDetails
+                            ?.installationId,
+                    ) === String(installationId),
+            );
+            if (holding) return holding;
+        }
+        if (params?.newConnection) return undefined;
+        if (existing.length > 1) {
+            throw new BadRequestException(
+                'This workspace has several GitHub connections: reconnect one from its card in Settings > Git.',
+            );
+        }
+        return existing[0];
     }
 
     private normalizeGithubHost(host?: string): string | undefined {
@@ -505,6 +560,7 @@ export class GithubService
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -547,9 +603,7 @@ export class GithubService
                 );
 
             if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
-                this.connectedSelectionByTeam?.delete(
-                    GithubService.teamKey(params.organizationAndTeamData),
-                );
+                this.forgetConnectedSelections(params.organizationAndTeamData);
             }
 
             if (shouldRefreshTokenWebhooks) {
@@ -594,7 +648,7 @@ export class GithubService
 
     async createAuthIntegration(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
                 success: boolean;
@@ -646,6 +700,7 @@ export class GithubService
         installationId: unknown;
         userId: string;
         organizationId: string;
+        newConnection?: boolean;
     }): { url: string } {
         if (!isInstallationId(params.installationId)) {
             throw new BadRequestException('Invalid GitHub installation id.');
@@ -659,6 +714,7 @@ export class GithubService
             installationId: params.installationId,
             userId: params.userId,
             organizationId: params.organizationId,
+            ...(params.newConnection ? { newConnection: true as const } : {}),
         });
         return {
             url: githubUserAuthorizationUrl(
@@ -781,6 +837,23 @@ export class GithubService
                 'This GitHub installation is already connected to another Kodus organization.',
             );
         }
+        // Asked for a new connection while a connection of this workspace
+        // holds the installation (an intent left over from an earlier
+        // attempt): that connection is reconnected instead. One of another
+        // workspace is refused.
+        const teamId = params?.organizationAndTeamData?.teamId;
+        if (
+            params?.newConnection &&
+            linked.some(
+                (integration) =>
+                    integration?.organization?.uuid === organizationId &&
+                    integration?.team?.uuid !== teamId,
+            )
+        ) {
+            throw new BadRequestException(
+                'This GitHub account is already connected in this Kodus organization.',
+            );
+        }
     }
 
     private createUserOctokit(userToken: string): Octokit {
@@ -789,7 +862,7 @@ export class GithubService
 
     async authenticateWithCodeOauth(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         // Which step a failed link stopped at: the error below is rewrapped
         // for the client, so without it the log only shows the catch.
         const progress: InstallationLinkProgress = { step: 'check-env' };
@@ -863,27 +936,27 @@ export class GithubService
             }
 
             progress.step = 'find-integration';
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                platform: PlatformType.GITHUB,
-            });
+            const integration = await this.findConnectionToUpdate(
+                params,
+                authDetails.installationId,
+            );
 
             progress.step = integration
                 ? 'update-integration'
                 : 'create-integration';
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
             );
+            const connectionTeamData = {
+                ...params.organizationAndTeamData,
+                integrationId,
+            };
 
             progress.step = 'update-installation-status';
-            const githubStatus = await this.findOneByOrganizationId(
-                params.organizationAndTeamData,
-            );
+            const githubStatus =
+                await this.findOneByOrganizationId(connectionTeamData);
             if (
                 githubStatus?.installationStatus === InstallationStatus.PENDING
             ) {
@@ -892,7 +965,7 @@ export class GithubService
                         installationStatus: InstallationStatus.SUCCESS,
                         organizationName: accountLogin,
                     },
-                    params.organizationAndTeamData,
+                    connectionTeamData,
                 );
             }
 
@@ -902,12 +975,14 @@ export class GithubService
                 metadata: {
                     ...installationLinkLogMetadata(params, progress),
                     created: !integration,
+                    integrationId,
                 },
             });
 
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const metadata = {
@@ -941,7 +1016,7 @@ export class GithubService
 
     async authenticateWithToken(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         try {
             const { token } = params;
             const normalizedHost = this.normalizeGithubHost(params.host);
@@ -978,15 +1053,9 @@ export class GithubService
 
             if (!repoPermissions.success) return repoPermissions;
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                platform: PlatformType.GITHUB,
-            });
+            const integration = await this.findConnectionToUpdate(params);
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
@@ -995,6 +1064,7 @@ export class GithubService
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             throw toIntegrationLinkError(err, 'GitHub');
@@ -2068,7 +2138,25 @@ export class GithubService
     private static teamKey(
         organizationAndTeamData: OrganizationAndTeamData,
     ): string {
-        return `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+        return `${GithubService.teamPrefix(organizationAndTeamData)}${organizationAndTeamData?.integrationId ?? ''}`;
+    }
+
+    private static teamPrefix(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): string {
+        return `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}:`;
+    }
+
+    /** A saved selection drops every cached read of the workspace's connections. */
+    private forgetConnectedSelections(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): void {
+        const prefix = GithubService.teamPrefix(organizationAndTeamData);
+        for (const key of this.connectedSelectionByTeam?.keys() ?? []) {
+            if (key.startsWith(prefix)) {
+                this.connectedSelectionByTeam.delete(key);
+            }
+        }
     }
 
     /**
@@ -2987,6 +3075,7 @@ export class GithubService
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITHUB,
                 status: true,
             });
@@ -3029,6 +3118,7 @@ export class GithubService
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITHUB,
                 status: true,
             });
@@ -3060,6 +3150,7 @@ export class GithubService
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -3138,6 +3229,8 @@ export class GithubService
                         organization: {
                             uuid: params.organizationAndTeamData.organizationId,
                         },
+                        team: { uuid: params.organizationAndTeamData.teamId },
+                        ...connectionScope(params.organizationAndTeamData),
                         status: true,
                         platform: PlatformType.GITHUB,
                     }),
@@ -3880,7 +3973,7 @@ export class GithubService
                 throw new BadRequestException('Instalation not found');
             }
 
-            const ns = `${organizationAndTeamData?.organizationId ?? 'no-org'}:${organizationAndTeamData?.teamId ?? 'no-team'}`;
+            const ns = `${organizationAndTeamData?.organizationId ?? 'no-org'}:${organizationAndTeamData?.teamId ?? 'no-team'}:${githubAuthDetail.integrationId ?? 'no-connection'}`;
             const store = this.makeTenantETagStore(ns);
 
             if (
@@ -4244,6 +4337,7 @@ export class GithubService
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -6728,7 +6822,7 @@ This is an experimental feature that generates committable changes. Review the d
         // single worker serves many PRs from the same repo. Memory store,
         // so caches are independent per container — that's fine here, the
         // worst case is each container does one fetch per repo per hour.
-        const cacheKey = `gh:default-branch:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name ?? 'no-repo'}`;
+        const cacheKey = `gh:default-branch:${connectionCacheScope(organizationAndTeamData)}:${repository?.id ?? repository?.name ?? 'no-repo'}`;
         const cached = await this.cacheService.getFromCache<string>(cacheKey);
         if (cached) {
             return cached;
@@ -6936,6 +7030,7 @@ This is an experimental feature that generates committable changes. Review the d
                         uuid: organizationAndTeamData.organizationId,
                     },
                     team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     platform: PlatformType.GITHUB,
                 })
             )?.uuid;
@@ -8094,7 +8189,7 @@ This is an experimental feature that generates committable changes. Review the d
     }): Promise<any> {
         const { organizationAndTeamData, username } = params;
 
-        const cacheKey = `gh:user:${organizationAndTeamData.organizationId}:${username.toLowerCase()}`;
+        const cacheKey = `gh:user:${connectionCacheScope(organizationAndTeamData)}:${username.toLowerCase()}`;
         const cached = await this.cacheService.getFromCache<any | null>(
             cacheKey,
         );
@@ -8155,7 +8250,7 @@ This is an experimental feature that generates committable changes. Review the d
 
     // Batch-fetch many users in a single GraphQL request using login
     // aliases. Reads from the same Redis cache as `getUserByUsername`
-    // (key `gh:user:{orgId}:{login}`), so an entry warmed by either
+    // (key `gh:user:{orgId}:{connection}:{login}`), so an entry warmed by either
     // path is reused by both. Designed to be called as a pre-flight
     // before extractUser/extractUsers fans out per-user, eliminating
     // the N parallel REST round-trips during PR saves.
@@ -8182,7 +8277,7 @@ This is an experimental feature that generates committable changes. Review the d
         );
 
         const makeCacheKey = (login: string) =>
-            `gh:user:${organizationAndTeamData?.organizationId}:${login}`;
+            `gh:user:${connectionCacheScope(organizationAndTeamData)}:${login}`;
 
         // 1. Cache lookup. Matches existing getUserByUsername semantics:
         //    cached null falls through to refetch (the function reads
@@ -8981,6 +9076,30 @@ This is an experimental feature that generates committable changes. Review the d
         return result;
     }
 
+    /** Active credentials, other than `authIntegrationId`, on the same installation. */
+    private async otherLinksOfInstallation(
+        installationId: string | number,
+        authIntegrationId: string,
+    ): Promise<string[]> {
+        const linked = (
+            await Promise.all(
+                [Number(installationId), String(installationId)].map((id) =>
+                    this.authIntegrationService.find({
+                        authDetails: { installationId: id },
+                        status: true,
+                    }),
+                ),
+            )
+        ).flat();
+        return [
+            ...new Set(
+                linked
+                    .map((auth) => auth?.uuid)
+                    .filter((uuid) => uuid && uuid !== authIntegrationId),
+            ),
+        ];
+    }
+
     async deleteWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositories?: Repositories[];
@@ -8990,6 +9109,7 @@ This is an experimental feature that generates committable changes. Review the d
                 uuid: params.organizationAndTeamData.organizationId,
             },
             team: { uuid: params.organizationAndTeamData.teamId },
+            ...connectionScope(params.organizationAndTeamData),
             platform: PlatformType.GITHUB,
         });
 
@@ -9000,7 +9120,28 @@ This is an experimental feature that generates committable changes. Review the d
         const { authMode } = integration.authIntegration.authDetails;
 
         if (authMode === AuthMode.OAUTH) {
-            if (integration.authIntegration.authDetails.installationId) {
+            const installationId =
+                integration.authIntegration.authDetails.installationId;
+            const sharedWithAuthIntegrationIds = installationId
+                ? await this.otherLinksOfInstallation(
+                      installationId,
+                      integration.authIntegration.uuid,
+                  )
+                : [];
+            if (sharedWithAuthIntegrationIds.length) {
+                // Another connection reviews through the same installation:
+                // uninstalling the App would cut it off too.
+                this.logger.log({
+                    message:
+                        'GitHub App kept installed: another connection uses the installation',
+                    context: GithubService.name,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        installationId,
+                        sharedWithAuthIntegrationIds,
+                    },
+                });
+            } else if (installationId) {
                 try {
                     const appOctokit = this.createOctokitInstance();
                     await appOctokit.apps.deleteInstallation({
@@ -9045,7 +9186,17 @@ This is an experimental feature that generates committable changes. Review the d
                         octokit,
                     );
 
-                    for (const repo of repositories) {
+                    // The hook URL is shared: a repository another
+                    // connection still lists keeps it.
+                    const listedElsewhere =
+                        await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                            params.organizationAndTeamData.organizationId,
+                            integration.uuid,
+                        );
+
+                    for (const repo of repositories.filter(
+                        (r) => !listedElsewhere.has(String(r?.id)),
+                    )) {
                         const owner =
                             GithubService.recordedOwnerOf(repo) ||
                             this.trustedOwnerOf(repo, authDetails) ||

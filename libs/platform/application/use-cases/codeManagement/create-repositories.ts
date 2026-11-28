@@ -1,11 +1,24 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    HttpException,
+    Inject,
+    Injectable,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
 import { ActiveCodeManagementTeamAutomationsUseCase } from '@libs/automation/application/use-cases/teamAutomation/active-code-manegement-automations.use-case';
 import { ActiveCodeReviewAutomationUseCase } from '@libs/automation/application/use-cases/teamAutomation/active-code-review-automation.use-case';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
+import { connectionServerKey } from '@libs/integrations/domain/integrations/utils/connection-host';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -27,7 +40,6 @@ import { RepositoryConnectionService } from '@libs/platform/application/services
 import { RepositorySelectionConfig } from '@libs/platform/application/services/repository-sync/repository-sync.types';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
-
 @Injectable()
 export class CreateRepositoriesUseCase implements IUseCase {
     private readonly logger = createLogger(CreateRepositoriesUseCase.name);
@@ -48,6 +60,8 @@ export class CreateRepositoriesUseCase implements IUseCase {
             user: { organization: { uuid: string }; uuid?: string };
         },
         private readonly telemetry: TelemetryService,
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
     ) {}
 
     public async execute(params: any) {
@@ -70,21 +84,40 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 throw new BadRequestException('Organization ID is required.');
             }
 
+            const connection = await this.connectionToSave(
+                organizationId,
+                teamId,
+                params?.connectionId,
+            );
+            const connectionTeamData = {
+                organizationId,
+                teamId,
+                integrationId: connection.uuid,
+            };
+
             const previouslyPersistedRepoIds = new Set(
                 (
                     (await this.integrationConfigService.findIntegrationConfigFormatted<
                         Array<{ id: string | number }>
-                    >(IntegrationConfigKey.REPOSITORIES, {
-                        organizationId,
-                        teamId,
-                    })) ?? []
+                    >(IntegrationConfigKey.REPOSITORIES, connectionTeamData)) ??
+                    []
                 ).map((repo) => String(repo.id)),
             );
 
             await this.assertNoRemovalInAllMode(
-                { organizationId, teamId },
+                connectionTeamData,
                 params,
                 previouslyPersistedRepoIds,
+            );
+
+            await this.assertNotListedElsewhere(
+                connection,
+                connectionTeamData,
+                (params.repositories ?? [])
+                    .map((repo: { id: string | number }) => String(repo.id))
+                    .filter(
+                        (id: string) => !previouslyPersistedRepoIds.has(id),
+                    ),
             );
 
             await this.codeManagementService.createOrUpdateIntegrationConfig({
@@ -95,10 +128,7 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 // a chunked save from an authoritative one. Absent means
                 // authoritative, which is what every other caller sends.
                 deferWebhooks: params.deferWebhooks,
-                organizationAndTeamData: {
-                    teamId: teamId,
-                    organizationId: organizationId,
-                },
+                organizationAndTeamData: connectionTeamData,
             });
 
             // One event per save, beside the per-repo `repository_connected`
@@ -170,16 +200,16 @@ export class CreateRepositoriesUseCase implements IUseCase {
                     });
                 } else {
                     this.repositoryConnectionService.startHistoricalBackfill(
-                        { organizationId, teamId },
+                        connectionTeamData,
                         reposToBackfill,
                     );
                 }
 
                 setImmediate(() => {
-                    this.enqueueAstGraphBuilds(repositories, {
-                        organizationId,
-                        teamId,
-                    }).catch((error) => {
+                    this.enqueueAstGraphBuilds(
+                        repositories,
+                        connectionTeamData,
+                    ).catch((error) => {
                         this.logger.error({
                             message: `Error enqueuing AST graph builds: ${error?.message || String(error)}`,
                             context: CreateRepositoriesUseCase.name,
@@ -192,7 +222,136 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 status: true,
             };
         } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
             throw new BadRequestException(error);
+        }
+    }
+
+    /**
+     * The Git connection a selection is saved on: the one named, or the
+     * workspace's only one. A workspace with several has to name it.
+     */
+    private async connectionToSave(
+        organizationId: string,
+        teamId: string,
+        connectionId?: string,
+    ): Promise<IntegrationEntity> {
+        if (connectionId) {
+            const named = await this.integrationService.findOne({
+                uuid: connectionId,
+                organization: { uuid: organizationId },
+                team: { uuid: teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            });
+            if (!named) {
+                throw new BadRequestException(
+                    'This Git connection is not in the workspace.',
+                );
+            }
+            return named;
+        }
+
+        const resolved =
+            await this.integrationService.resolveCodeManagementConnection({
+                organizationId,
+                teamId,
+            });
+        if (!resolved.integration) {
+            throw new BadRequestException(
+                resolved.ambiguous
+                    ? 'This workspace has several Git connections: choose the one the repositories belong to.'
+                    : 'This workspace has no Git connection.',
+            );
+        }
+        return resolved.integration;
+    }
+
+    /**
+     * A repository is reviewed by one connection in the organization: a
+     * newly added one may not already be listed by another connection on the
+     * same server. The other connection is named only when it is in the
+     * caller's workspace.
+     */
+    private async assertNotListedElsewhere(
+        connection: IntegrationEntity,
+        organizationAndTeamData: {
+            organizationId: string;
+            teamId: string;
+            integrationId: string;
+        },
+        addedIds: string[],
+    ): Promise<void> {
+        if (!addedIds.length) return;
+
+        const [connections, configs] = await Promise.all([
+            this.integrationService.find({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            }),
+            this.integrationConfigService.findByOrganizationAndConfigKey(
+                organizationAndTeamData.organizationId,
+                IntegrationConfigKey.REPOSITORIES,
+            ),
+        ]);
+
+        const connectionById = new Map(
+            (connections ?? []).map((c) => [c.uuid, c]),
+        );
+        const serverOf = new Map(
+            (connections ?? []).map((c) => [
+                c.uuid,
+                connectionServerKey(c.platform, c.authIntegration?.authDetails),
+            ]),
+        );
+        const server = connectionServerKey(
+            connection.platform,
+            connection.authIntegration?.authDetails,
+        );
+        const added = new Set(addedIds);
+
+        for (const config of configs ?? []) {
+            const otherId = config?.integration?.uuid;
+            if (
+                !otherId ||
+                otherId === connection.uuid ||
+                serverOf.get(otherId) !== server
+            ) {
+                continue;
+            }
+            const clash = (
+                Array.isArray(config.configValue) ? config.configValue : []
+            ).filter((repo: { id: string | number }) =>
+                added.has(String(repo?.id)),
+            );
+            if (!clash.length) continue;
+
+            const other = connectionById.get(otherId);
+            const sameWorkspace =
+                (config as { team?: { uuid?: string } })?.team?.uuid ===
+                organizationAndTeamData.teamId;
+
+            this.logger.warn({
+                message: 'Rejected repositories listed by another connection',
+                context: CreateRepositoriesUseCase.name,
+                metadata: {
+                    ...organizationAndTeamData,
+                    otherIntegrationId: otherId,
+                    sameWorkspace,
+                    repositoryIds: clash.map((repo: { id: string }) =>
+                        String(repo.id),
+                    ),
+                },
+            });
+
+            throw new ConflictException(
+                sameWorkspace
+                    ? `Some repositories are already selected on the Git connection "${other?.name || other?.platform}".`
+                    : 'Some repositories are already selected on a Git connection in another workspace.',
+            );
         }
     }
 

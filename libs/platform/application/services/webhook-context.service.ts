@@ -143,6 +143,7 @@ export class WebhookContextService {
         }
 
         const candidateTeamIds: string[] = [];
+        const reviewDisabledConnectionIds: string[] = [];
 
         for (const config of candidates) {
             if (!config?.team?.organization?.uuid || !config?.team?.uuid) {
@@ -150,6 +151,11 @@ export class WebhookContextService {
             }
 
             candidateTeamIds.push(config.team.uuid);
+
+            if (config?.integration?.reviewEnabled === false) {
+                reviewDisabledConnectionIds.push(config.integration.uuid);
+                continue;
+            }
 
             const teamAutomations = await this.teamAutomationService.find({
                 automation: { uuid: automation.uuid },
@@ -162,6 +168,7 @@ export class WebhookContextService {
                     organizationAndTeamData: {
                         organizationId: config.team.organization.uuid,
                         teamId: config.team.uuid,
+                        integrationId: config?.integration?.uuid,
                     },
                     teamAutomationId: teamAutomations[0].uuid,
                     botUsername:
@@ -180,7 +187,12 @@ export class WebhookContextService {
             message:
                 'Webhook ignored: repository is connected but no team has an active code review automation',
             context: WebhookContextService.name,
-            metadata: { platformType, repositoryId, candidateTeamIds },
+            metadata: {
+                platformType,
+                repositoryId,
+                candidateTeamIds,
+                reviewDisabledConnectionIds,
+            },
         });
 
         return null;

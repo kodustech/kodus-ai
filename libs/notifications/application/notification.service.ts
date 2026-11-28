@@ -41,6 +41,8 @@ export interface EmitNotificationInput<E extends NotificationEvent> {
     recipients?: NotificationRecipient | NotificationRecipient[];
     /** Optional correlation id for tracing. Generated if absent. */
     correlationId?: string;
+    /** The repository the event is about; narrows the config-driven audience. */
+    repository?: { id?: string; name?: string };
 }
 
 /**
@@ -112,6 +114,9 @@ export class NotificationService {
                     organizationId: input.organizationId,
                     recipients,
                     correlationId,
+                    ...(input.repository
+                        ? { repository: input.repository }
+                        : {}),
                 },
             });
 

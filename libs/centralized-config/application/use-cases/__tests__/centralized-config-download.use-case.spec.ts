@@ -617,4 +617,73 @@ describe('CentralizedConfigDownloadUseCase', () => {
         expect(markedUuids).not.toContain('pending-rule');
         expect(markedUuids).not.toContain('rejected-rule');
     });
+
+    it("exports only a Git connection's own repositories and rules, without the workspace defaults, when asked", async () => {
+        const getCodeReviewParameterUseCase = {
+            execute: jest.fn().mockResolvedValue({
+                configValue: {
+                    repositories: [
+                        {
+                            id: 'repo-gh',
+                            name: 'gh-repo',
+                            isSelected: true,
+                            directories: [],
+                        },
+                        {
+                            id: 'repo-gl',
+                            name: 'gl-repo',
+                            isSelected: true,
+                            directories: [],
+                        },
+                    ],
+                },
+            }),
+        };
+        const generateKodusConfigFileUseCase = {
+            execute: jest.fn().mockResolvedValue({
+                yamlString: 'languageResultPrompt: english\n',
+            }),
+        };
+        const rule = (uuid: string, repositoryId: string) => ({
+            uuid,
+            title: uuid,
+            rule: uuid,
+            status: 'active',
+            severity: 'medium',
+            type: 'standard',
+            scope: 'file',
+            path: '**/*',
+            examples: [],
+            inheritance: { inheritable: true, include: [], exclude: [] },
+            repositoryId,
+        });
+        const useCase = new CentralizedConfigDownloadUseCase(
+            getCodeReviewParameterUseCase as any,
+            generateKodusConfigFileUseCase as any,
+            {
+                execute: jest
+                    .fn()
+                    .mockResolvedValue([
+                        rule('gh-rule', 'repo-gh'),
+                        rule('gl-rule', 'repo-gl'),
+                        rule('global-rule', 'global'),
+                    ]),
+            } as any,
+            { execute: jest.fn() } as any,
+            { find: jest.fn().mockResolvedValue([]) } as any,
+            centralizedConfigPrServiceMock as CentralizedConfigPrService,
+        );
+
+        const entries = await useCase.execute(user, teamId, {
+            skipAuthorization: true,
+            repositoryIds: ['repo-gl'],
+            includeWorkspaceDefaults: false,
+        });
+        const paths = entries.map((entry) => entry.path);
+
+        expect(paths.some((p) => p.startsWith('gl-repo/'))).toBe(true);
+        expect(paths.some((p) => p.startsWith('gh-repo/'))).toBe(false);
+        expect(paths).not.toContain('kodus-config.yml');
+        expect(paths.some((p) => p.startsWith('.kody-rules/'))).toBe(false);
+    });
 });

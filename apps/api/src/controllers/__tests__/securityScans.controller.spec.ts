@@ -6,6 +6,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { SecurityScansController } from '../securityScans.controller';
+import { SecurityScanSchedulesUseCase } from '@libs/security-scan/application/security-scan-schedules.use-case';
 
 describe('SecurityScansController.start', () => {
     const setup = (allowed: string[]) => {
@@ -161,5 +162,52 @@ describe('SecurityScansController.cancel', () => {
             NotFoundException,
         );
         expect(cancelSecurityScan.execute).not.toHaveBeenCalled();
+    });
+});
+
+describe('SecurityScansController — reads by a member granted some Git connections', () => {
+    // The guard lets a connection-scoped read through only to a handler marked
+    // as narrowing it itself.
+    it.each(['list', 'get', 'listSchedules'] as const)(
+        '%s is marked as narrowing itself',
+        (handler) => {
+            expect(
+                Reflect.getMetadata(
+                    'applies_connection_scope',
+                    SecurityScansController.prototype[handler],
+                ),
+            ).toBe(true);
+        },
+    );
+
+    it('lists only the schedules of the repositories the caller sees', async () => {
+        const key = { platform: 'GITHUB', host: 'github.com' };
+        const stored = [
+            { uuid: 'granted', repository: { ...key, id: 'repo-gh' } },
+            { uuid: 'ungranted', repository: { ...key, id: 'repo-gl' } },
+        ];
+        const listSchedules = new SecurityScanSchedulesUseCase(
+            { list: jest.fn().mockResolvedValue(stored) } as any,
+            {} as any,
+            {} as any,
+            {
+                repositoryScope: jest.fn(async (_org: string, ids: string[]) =>
+                    ids.map((id) => ({ ...key, id })),
+                ),
+            } as any,
+        );
+        const controller = new SecurityScansController(
+            { user: { organization: { uuid: 'org-1' } } } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {
+                getRepositoryScope: jest.fn().mockResolvedValue(['repo-gh']),
+            } as any,
+            { isEnabledFor: jest.fn().mockResolvedValue(true) } as any,
+            listSchedules,
+        );
+
+        await expect(controller.listSchedules()).resolves.toEqual([stored[0]]);
     });
 });

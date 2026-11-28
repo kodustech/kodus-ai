@@ -1,4 +1,6 @@
 import { PullRequestAuthorPolicy } from '@libs/code-review/dtos/dashboard/pull-request-author-policy.constants';
+import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
+import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 
 export type AuthorPolicyConfigValue = {
     ignoredUsers?: string[];
@@ -74,4 +76,64 @@ export const shouldIncludeAuthorByPolicy = (params: {
     }
 
     return excluded;
+};
+
+/**
+ * The compiled policy of each PR's Git connection, found from its repository.
+ * A repository no connection lists gets the organization's lists.
+ */
+export const compileAuthorPolicyByConnection = (
+    configValue: Partial<OrganizationParametersAutoAssignConfig> | null,
+    repositoryConnection: ReadonlyMap<string, string>,
+): ((repositoryId?: string) => CompiledAuthorPolicyConfig) => {
+    const compiled = new Map<string, CompiledAuthorPolicyConfig>();
+    const compileFor = (integrationId?: string) => {
+        const key = integrationId ?? '';
+        let config = compiled.get(key);
+        if (!config) {
+            config = compileAuthorPolicyConfig(
+                authorFiltersFor(configValue, integrationId),
+            );
+            compiled.set(key, config);
+        }
+        return config;
+    };
+    return (repositoryId) =>
+        compileFor(
+            repositoryId
+                ? repositoryConnection.get(String(repositoryId))
+                : undefined,
+        );
+};
+
+/**
+ * Repository id -> the Git connection that lists it. An id more than one
+ * connection lists (ids repeat across hosts) maps to none.
+ */
+export const repositoryConnectionMap = (
+    configs: ReadonlyArray<{
+        integration?: { uuid?: string };
+        configValue?: unknown;
+    }>,
+): Map<string, string> => {
+    const map = new Map<string, string>();
+    const shared = new Set<string>();
+    for (const config of configs) {
+        const integrationId = config?.integration?.uuid;
+        if (!integrationId || !Array.isArray(config.configValue)) continue;
+        for (const repository of config.configValue as Array<{
+            id?: unknown;
+        }>) {
+            if (repository?.id == null || repository.id === '') continue;
+            const id = String(repository.id);
+            const owner = map.get(id);
+            if (shared.has(id) || (owner && owner !== integrationId)) {
+                shared.add(id);
+                map.delete(id);
+                continue;
+            }
+            map.set(id, integrationId);
+        }
+    }
+    return map;
 };

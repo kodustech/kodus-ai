@@ -230,8 +230,9 @@ describe('BitbucketDataCenterService.createAuthIntegration', () => {
             log: jest.fn(),
             debug: jest.fn(),
         };
+        // A first-time connection: nothing to rewrite.
         svc.integrationService = {
-            findOne: jest.fn(async () => null),
+            connectionToUpdate: jest.fn(async () => undefined),
         };
         svc.addAccessToken = jest.fn(async () => ({}));
         return svc;

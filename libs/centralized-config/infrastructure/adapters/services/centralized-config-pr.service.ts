@@ -1,3 +1,4 @@
+import { IKodyRuleCentralizedConfig } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -60,6 +61,8 @@ export interface CentralizedMutationPullRequestRequest {
     sourceBranch: Resolvable<string>;
     author?: { name: string; email?: string };
     centralizedModeMessage?: string;
+    /** The changed rule's sync source: a connection's own global rule goes back to that connection's config. */
+    ruleSource?: IKodyRuleCentralizedConfig | null;
 }
 
 export interface BuildCentralizedPathParams {
@@ -188,6 +191,68 @@ export class CentralizedConfigPrService {
         };
     }
 
+    /**
+     * Each Git connection has its own centralized config, so a change to a
+     * repository goes to the config of the connection that lists it. A
+     * workspace-wide change, or a call that already names a connection, is
+     * left as it is.
+     */
+    async scopeToRepositoryConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId?: string,
+        ruleSource?: IKodyRuleCentralizedConfig | null,
+    ): Promise<OrganizationAndTeamData> {
+        if (
+            !organizationAndTeamData.integrationId &&
+            ruleSource?.connectionScoped &&
+            ruleSource.sourceConnectionId
+        ) {
+            return {
+                ...organizationAndTeamData,
+                integrationId: ruleSource.sourceConnectionId,
+            };
+        }
+        if (
+            organizationAndTeamData.integrationId ||
+            !organizationAndTeamData.teamId ||
+            !repositoryId ||
+            repositoryId === 'global'
+        ) {
+            return organizationAndTeamData;
+        }
+        const configs =
+            (await this.integrationConfigService.findAllOfTeamByConfigKey(
+                IntegrationConfigKey.REPOSITORIES,
+                organizationAndTeamData,
+            )) ?? [];
+        if (configs.length < 2) return organizationAndTeamData;
+        const listing = configs.filter(
+            (config) =>
+                Array.isArray(config.configValue) &&
+                (config.configValue as Repositories[]).some(
+                    (repository) =>
+                        String(repository.id) === String(repositoryId),
+                ),
+        );
+        const integrationId =
+            listing.length === 1 ? listing[0].integration?.uuid : undefined;
+        return integrationId
+            ? { ...organizationAndTeamData, integrationId }
+            : organizationAndTeamData;
+    }
+
+    /** The repository ids the named Git connection lists. */
+    async repositoryIdsOf(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<string[]> {
+        const repositories =
+            (await this.integrationConfigService.findIntegrationConfigFormatted<
+                Repositories[]
+            >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData)) ??
+            [];
+        return repositories.map((repository) => String(repository.id));
+    }
+
     async resolveRepositoryFolderName(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId?: string,
@@ -206,8 +271,16 @@ export class CentralizedConfigPrService {
     }
 
     async createMutationPullRequestIfEnabled(
-        params: CentralizedMutationPullRequestRequest,
+        request: CentralizedMutationPullRequestRequest,
     ): Promise<CentralizedPrMetadata> {
+        const params: CentralizedMutationPullRequestRequest = {
+            ...request,
+            organizationAndTeamData: await this.scopeToRepositoryConnection(
+                request.organizationAndTeamData,
+                request.repositoryId,
+                request.ruleSource,
+            ),
+        };
         const centralizedConfig = await this.getCentralizedConfigParameter(
             params.organizationAndTeamData,
         );

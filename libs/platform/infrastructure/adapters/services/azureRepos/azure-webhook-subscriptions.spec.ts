@@ -172,11 +172,14 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
         });
     });
 
-    function withSelection(repos: Repo[]) {
+    function withSelection(repos: Repo[], teamSelection: Repo[] = repos) {
         jest.spyOn(
             service as any,
             'findOneByOrganizationAndTeamDataAndConfigKey',
         ).mockResolvedValue(repos);
+        jest.spyOn(service as any, 'teamAzureSelection').mockResolvedValue(
+            teamSelection,
+        );
     }
 
     // ── the bug: listings must not scale with repositories × events ───────
@@ -576,6 +579,34 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
             expect(
                 deletedIds.every((id: string) => id.includes(REPO_B.id)),
             ).toBe(true);
+        });
+
+        it('keeps the subscriptions of a repository another Azure connection of the team selects', async () => {
+            withSelection([REPO_A], [REPO_A, REPO_B]);
+            helper.listSubscriptions.mockResolvedValue(
+                allSubscriptionsFor([REPO_A, REPO_B]),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+        });
+
+        it("prunes nothing, and still subscribes, when the team's other selections cannot be read", async () => {
+            withSelection([REPO_A]);
+            jest.spyOn(service as any, 'teamAzureSelection').mockResolvedValue(
+                null,
+            );
+            helper.listSubscriptions.mockResolvedValue(
+                allSubscriptionsFor([REPO_B]),
+            );
+
+            await service.createWebhook(orgTeam);
+
+            expect(helper.deleteWebhookById).not.toHaveBeenCalled();
+            expect(helper.createSubscriptionForProject).toHaveBeenCalledTimes(
+                3,
+            );
         });
 
         it('converges without a second listing', async () => {

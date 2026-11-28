@@ -27,6 +27,8 @@ export type InstallationAuthorizationState = {
     installationId: string;
     userId: string;
     organizationId: string;
+    /** The link adds a Git connection beside the workspace's others. */
+    newConnection?: true;
 };
 
 export class InstallationAuthorizationError extends Error {
@@ -50,8 +52,16 @@ export function sealInstallationState(
     state: InstallationAuthorizationState,
     now = Date.now(),
 ): string {
-    const { installationId, userId, organizationId } = state;
-    return tokens.seal({ installationId, userId, organizationId }, now);
+    const { installationId, userId, organizationId, newConnection } = state;
+    return tokens.seal(
+        {
+            installationId,
+            userId,
+            organizationId,
+            ...(newConnection ? { newConnection: true as const } : {}),
+        },
+        now,
+    );
 }
 
 export function openInstallationState(
@@ -59,11 +69,14 @@ export function openInstallationState(
     now = Date.now(),
 ): InstallationAuthorizationState {
     try {
-        const { installationId, userId, organizationId } = tokens.open(
-            sealed,
-            now,
-        );
-        return { installationId, userId, organizationId };
+        const { installationId, userId, organizationId, newConnection } =
+            tokens.open(sealed, now);
+        return {
+            installationId,
+            userId,
+            organizationId,
+            ...(newConnection === true ? { newConnection: true as const } : {}),
+        };
     } catch (err) {
         if (err instanceof SealedTokenError) {
             throw new InstallationAuthorizationError(
@@ -149,4 +162,16 @@ export function installationLinkLogMetadata(
         targetType: progress.targetType,
         hasAccount: progress.hasAccount,
     };
+}
+
+/**
+ * Whether a sealed state asks for a new connection; false for one that does
+ * not open (the link itself then refuses it).
+ */
+export function stateAsksForNewConnection(sealed: unknown): boolean {
+    try {
+        return openInstallationState(sealed).newConnection === true;
+    } catch {
+        return false;
+    }
 }

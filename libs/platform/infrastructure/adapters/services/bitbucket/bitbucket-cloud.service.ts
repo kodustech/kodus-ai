@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { createLogger } from '@libs/core/log/logger';
 import pLimit from 'p-limit';
 
@@ -24,6 +25,7 @@ import {
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -1372,6 +1374,7 @@ export class BitbucketCloudService implements Omit<
                 team: {
                     uuid: organizationAndTeamData.teamId,
                 },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -1683,6 +1686,8 @@ export class BitbucketCloudService implements Omit<
                     organization: {
                         uuid: organizationAndTeamData.organizationId,
                     },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     status: true,
                     platform: PlatformType.BITBUCKET,
                 }),
@@ -3351,7 +3356,8 @@ export class BitbucketCloudService implements Omit<
         username?: string;
         email?: string;
         host?: string;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
                 success: boolean;
@@ -3372,6 +3378,7 @@ export class BitbucketCloudService implements Omit<
                     username: params.username,
                     email: params.email,
                     host: params.host,
+                    newConnection: params.newConnection,
                 });
             } else if (params && params?.authMode === AuthMode.BASIC) {
                 // Basic is how a Data Center host authenticates (#2570): there
@@ -3466,6 +3473,7 @@ export class BitbucketCloudService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -3548,6 +3556,7 @@ export class BitbucketCloudService implements Omit<
                         uuid: organizationAndTeamData.organizationId,
                     },
                     team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     platform: PlatformType.BITBUCKET,
                 })
             )?.uuid;
@@ -4199,6 +4208,7 @@ export class BitbucketCloudService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -4234,7 +4244,8 @@ export class BitbucketCloudService implements Omit<
         token: string;
         email?: string;
         host?: string;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const { organizationAndTeamData, token, username, email } = params;
 
@@ -4268,13 +4279,12 @@ export class BitbucketCloudService implements Omit<
                 return checkRepos;
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: organizationAndTeamData.organizationId,
-                },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.BITBUCKET,
-            });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.BITBUCKET,
+                    params?.newConnection,
+                );
 
             const authDetails: BitbucketAuthDetail = {
                 username: username,
@@ -4284,7 +4294,7 @@ export class BitbucketCloudService implements Omit<
                 host: params.host,
             };
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 organizationAndTeamData,
@@ -4293,6 +4303,7 @@ export class BitbucketCloudService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const linkError = toIntegrationLinkError(err, 'Bitbucket Cloud');
@@ -4358,17 +4369,21 @@ export class BitbucketCloudService implements Omit<
         integration: IntegrationEntity | null,
         authDetails: BitbucketAuthDetail,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
     }
 
     async addAccessToken(
@@ -5682,7 +5697,21 @@ export class BitbucketCloudService implements Omit<
                     return;
                 }
 
-                for (const repo of repositories) {
+                // The hook URL is shared: a repository another connection
+                // still lists keeps it.
+                const integrationId = (
+                    authDetails as { integrationId?: string }
+                ).integrationId;
+                const listedElsewhere = integrationId
+                    ? await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                          params.organizationAndTeamData.organizationId,
+                          integrationId,
+                      )
+                    : new Set<string>();
+
+                for (const repo of (repositories ?? []).filter(
+                    (r) => !listedElsewhere.has(String(r?.id)),
+                )) {
                     try {
                         const existingHooks = await bitbucketAPI.webhooks
                             .listForRepo({

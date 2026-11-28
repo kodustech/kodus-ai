@@ -9,7 +9,29 @@ export const INTEGRATION_CONFIG_REPOSITORY_TOKEN = Symbol(
     'IntegrationConfigRepository',
 );
 
+/** One entry of a connection's repository list. */
+export type RepositoryListing = {
+    integrationId: string;
+    repository: Record<string, unknown>;
+};
+
+/** One active connection's repository list, with the server it is on. */
+export type OrganizationRepositoryList = {
+    integrationId: string;
+    platform: string;
+    host?: string | null;
+    repositories: unknown;
+};
+
 export interface IIntegrationConfigRepository {
+    findRepositoryListsOfOrganization(
+        organizationId: string,
+    ): Promise<OrganizationRepositoryList[]>;
+    findRepositoryListings(params: {
+        teamId: string;
+        integrationIds: string[];
+        repository: { id?: string | number; name?: string; fullName?: string };
+    }): Promise<RepositoryListing[]>;
     find(
         filter?: Partial<IIntegrationConfig>,
     ): Promise<IntegrationConfigEntity[]>;
@@ -31,6 +53,11 @@ export interface IIntegrationConfigRepository {
         configKey: IntegrationConfigKey,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<IntegrationConfigEntity>;
+    /** One row per active Git connection of the workspace that has the key. */
+    findAllOfTeamByConfigKey(
+        configKey: IntegrationConfigKey,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IntegrationConfigEntity[]>;
     findIntegrationConfigWithTeams(
         configKey: IntegrationConfigKey,
         repositoryId: string,

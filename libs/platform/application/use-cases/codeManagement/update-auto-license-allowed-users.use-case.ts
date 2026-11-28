@@ -44,7 +44,10 @@ export class UpdateAutoLicenseAllowedUsersUseCase {
             organizationAndTeamData,
         );
 
+        // Kept whole: it also carries the bots seeded, the revocation timers,
+        // the manual seats and each Git connection's lists.
         const config: OrganizationParametersAutoAssignConfig = {
+            ...(existing?.configValue ?? {}),
             enabled: existing?.configValue?.enabled ?? false,
             ignoredUsers: existing?.configValue?.ignoredUsers ?? [],
             allowedUsers: existing?.configValue?.allowedUsers ?? [],
@@ -84,10 +87,13 @@ export class UpdateAutoLicenseAllowedUsersUseCase {
 
         config.allowedUsers = Array.from(merged);
 
-        return this.organizationParametersService.createOrUpdateConfig(
+        // Only the organization's allowed list is written, merged into the
+        // stored value.
+        await this.organizationParametersService.mergeConfigValue(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-            config,
-            organizationAndTeamData,
+            organizationAndTeamData.organizationId,
+            { allowedUsers: config.allowedUsers },
         );
+        return true;
     }
 }

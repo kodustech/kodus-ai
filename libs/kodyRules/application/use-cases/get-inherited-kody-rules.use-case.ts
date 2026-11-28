@@ -22,6 +22,8 @@ import {
 
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
 import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
+import { ruleAppliesToConnection } from '@libs/kodyRules/domain/utils/centralized-rule-source';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
 type KodyRuleWithInheritance = Partial<IKodyRule> & {
     inherited?: 'global' | 'repository' | 'directory';
@@ -41,6 +43,7 @@ export class GetInheritedRulesKodyRulesUseCase {
         private readonly kodyRulesService: IKodyRulesService,
         @Inject(CONTEXT_REFERENCE_SERVICE_TOKEN)
         private readonly contextReferenceService: IContextReferenceService,
+        private readonly codeManagementService: CodeManagementService,
     ) {}
 
     async execute(
@@ -77,8 +80,19 @@ export class GetInheritedRulesKodyRulesUseCase {
         // same rule reaches the page lower-cased via one endpoint and
         // raw-cased via the other, so a strict severity compare (sort /
         // "High" filter) treats the inherited copy as a different value.
+        // A connection's own global rules review only its repositories, as
+        // at review time: shown as inherited only on those.
+        const repositoryConnectionId =
+            await this.codeManagementService.connectionIdFor(
+                organizationAndTeamData,
+                { id: repositoryId },
+            );
         const allRules = (existing.rules || [])
-            .filter((r) => r.status === KodyRulesStatus.ACTIVE)
+            .filter(
+                (r) =>
+                    r.status === KodyRulesStatus.ACTIVE &&
+                    ruleAppliesToConnection(r, repositoryConnectionId),
+            )
             .map((rule) => ({
                 ...rule,
                 severity: rule.severity?.toLowerCase() as IKodyRule['severity'],

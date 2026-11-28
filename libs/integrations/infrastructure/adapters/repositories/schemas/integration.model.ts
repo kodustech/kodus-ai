@@ -42,6 +42,14 @@ export class IntegrationModel extends CoreModel {
     @Column({ type: 'enum', enum: IntegrationCategory })
     integrationCategory: IntegrationCategory;
 
+    // Label owners give a Git connection so a workspace with several can tell them apart.
+    @Column({ type: 'varchar', length: 120, nullable: true })
+    name?: string | null;
+
+    // Per-connection review switch; the workspace automation still has to be on too.
+    @Column({ type: 'boolean', default: true })
+    reviewEnabled: boolean;
+
     @ManyToOne(() => OrganizationModel)
     @JoinColumn({ name: 'organization_id', referencedColumnName: 'uuid' })
     organization: OrganizationModel;

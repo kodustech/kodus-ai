@@ -16,7 +16,11 @@ import {
     mapSimpleModelToEntity,
 } from '@libs/core/infrastructure/repositories/mappers';
 import { createNestedConditions } from '@libs/core/infrastructure/repositories/model/filters';
-import { IIntegrationConfigRepository } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.repository.contracts';
+import {
+    IIntegrationConfigRepository,
+    OrganizationRepositoryList,
+    RepositoryListing,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.repository.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { IIntegrationConfig } from '@libs/integrations/domain/integrationConfigs/interfaces/integration-config.interface';
 
@@ -411,6 +415,11 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
                             organization: {
                                 uuid: organizationAndTeamData.organizationId,
                             } as any,
+                            ...(organizationAndTeamData.integrationId
+                                ? {
+                                      uuid: organizationAndTeamData.integrationId,
+                                  }
+                                : {}),
                         } as any,
                         team: { uuid: organizationAndTeamData.teamId } as any,
                     },
@@ -440,6 +449,101 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
             console.log(error);
             throw error;
         }
+    }
+
+    async findAllOfTeamByConfigKey(
+        configKey: IntegrationConfigKey,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IntegrationConfigEntity[]> {
+        if (!configKey || !organizationAndTeamData?.teamId) return [];
+
+        const integrationConfigs = await this.integrationConfigRepository.find({
+            where: {
+                configKey,
+                integration: {
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    } as any,
+                    status: true,
+                } as any,
+                team: { uuid: organizationAndTeamData.teamId } as any,
+            },
+            relations: ['integration'],
+            order: { createdAt: 'ASC' },
+        });
+
+        return mapSimpleModelsToEntities(
+            integrationConfigs,
+            IntegrationConfigEntity,
+        );
+    }
+
+    /** Every active Git connection's repository list in the organization, with its server. */
+    async findRepositoryListsOfOrganization(
+        organizationId: string,
+    ): Promise<OrganizationRepositoryList[]> {
+        if (!organizationId) return [];
+        return (await this.integrationConfigRepository.manager.query(
+            `SELECT i."uuid" AS "integrationId",
+                    i."platform" AS "platform",
+                    ai."authDetails"->>'host' AS "host",
+                    ic."configValue" AS "repositories"
+               FROM "integration_configs" ic
+               JOIN "integrations" i ON i."uuid" = ic."integration_id"
+               LEFT JOIN "auth_integrations" ai ON ai."uuid" = i."auth_integration_id"
+              WHERE i."organization_id" = $1
+                AND i."status" = true
+                AND ic."configKey" = $2`,
+            [organizationId, IntegrationConfigKey.REPOSITORIES],
+        )) as OrganizationRepositoryList[];
+    }
+
+    /**
+     * The entries of the team's repository lists, among the given
+     * connections, that match the repository: by id when given, else by full
+     * name, else by name. Matched in the database, so only the matching
+     * entries leave it.
+     */
+    async findRepositoryListings(params: {
+        teamId: string;
+        integrationIds: string[];
+        repository: { id?: string | number; name?: string; fullName?: string };
+    }): Promise<RepositoryListing[]> {
+        const { teamId, integrationIds, repository } = params;
+        const id = repository?.id != null ? String(repository.id) : null;
+        const fullName = repository?.fullName?.toLowerCase() || null;
+        const name = repository?.name || null;
+        if (!teamId || !integrationIds?.length || (!id && !fullName && !name)) {
+            return [];
+        }
+
+        return (await this.integrationConfigRepository.manager.query(
+            `SELECT ic."integration_id" AS "integrationId", elem AS "repository"
+               FROM "integration_configs" ic
+               CROSS JOIN LATERAL jsonb_array_elements(
+                   CASE WHEN jsonb_typeof(ic."configValue") = 'array'
+                        THEN ic."configValue" ELSE '[]'::jsonb END
+               ) AS elem
+              WHERE ic."configKey" = $1
+                AND ic."team_id" = $2
+                AND ic."integration_id" = ANY($3::uuid[])
+                AND CASE
+                    WHEN $4::text IS NOT NULL THEN elem->>'id' = $4::text
+                    WHEN $5::text IS NOT NULL THEN
+                        lower(elem->>'full_name') = $5::text
+                        OR lower(concat_ws('/', elem->>'organizationName', elem->>'name')) = $5::text
+                        OR lower(elem->>'name') = $5::text
+                    ELSE elem->>'name' = $6::text
+                END`,
+            [
+                IntegrationConfigKey.REPOSITORIES,
+                teamId,
+                integrationIds,
+                id,
+                fullName,
+                name,
+            ],
+        )) as RepositoryListing[];
     }
 
     async delete(uuid: string): Promise<void> {

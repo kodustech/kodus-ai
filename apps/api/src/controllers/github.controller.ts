@@ -69,10 +69,21 @@ export class GithubController {
             "Returns GitHub's authorization page for the Kodus App, with a state bound to the signed-in user. Linking an installation requires the code GitHub returns from it.",
     })
     @ApiQuery({ name: 'installationId', required: true, type: String })
+    @ApiQuery({
+        name: 'newConnection',
+        required: false,
+        type: Boolean,
+        description:
+            "Link the installation as a new Git connection beside the workspace's others; carried through GitHub in the sealed state.",
+    })
     public getInstallationAuthorization(
         @Query('installationId') installationId: string,
+        @Query('newConnection') newConnection?: string,
     ) {
-        return this.getInstallationAuthorizationUseCase.execute(installationId);
+        return this.getInstallationAuthorizationUseCase.execute(
+            installationId,
+            newConnection === 'true',
+        );
     }
 
     @Get('/organization-name')

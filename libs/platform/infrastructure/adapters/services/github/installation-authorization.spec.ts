@@ -40,6 +40,23 @@ describe('GitHub installation authorization', () => {
         }
     });
 
+    it('carries a request to add a new connection through the authorization round trip', () => {
+        const base = {
+            installationId: '42',
+            userId: 'u-1',
+            organizationId: 'org-1',
+        };
+
+        expect(
+            openInstallationState(
+                sealInstallationState({ ...base, newConnection: true }),
+            ),
+        ).toEqual({ ...base, newConnection: true });
+        expect(openInstallationState(sealInstallationState(base))).toEqual(
+            base,
+        );
+    });
+
     it('says why a state does not open, and names the error', () => {
         const state = sealInstallationState(
             { installationId: '42', userId: 'u', organizationId: 'o' },

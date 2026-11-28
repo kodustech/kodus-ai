@@ -13,7 +13,7 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('CodeManagementService – countReactions & getPullRequestReviewComment', () => {
     let service: CodeManagementService;
-    let integrationService: { findOne: jest.Mock };
+    let integrationService: { resolveCodeManagementConnection: jest.Mock };
     let factory: PlatformIntegrationFactory;
     let mockPlatformService: jest.Mocked<
         Pick<
@@ -28,7 +28,7 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
     };
 
     beforeEach(() => {
-        integrationService = { findOne: jest.fn() };
+        integrationService = { resolveCodeManagementConnection: jest.fn() };
         factory = new PlatformIntegrationFactory();
 
         mockPlatformService = {
@@ -49,9 +49,12 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
 
     describe('countReactions', () => {
         it('should resolve integration type and delegate to the platform service', async () => {
-            integrationService.findOne.mockResolvedValue({
-                platform: PlatformType.GITHUB,
-            });
+            integrationService.resolveCodeManagementConnection.mockResolvedValue(
+                {
+                    ambiguous: false,
+                    platform: PlatformType.GITHUB,
+                },
+            );
             factory.registerCodeManagementService(
                 PlatformType.GITHUB,
                 mockPlatformService as unknown as ICodeManagementService,
@@ -65,7 +68,9 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
 
             const result = await service.countReactions(params);
 
-            expect(integrationService.findOne).toHaveBeenCalled();
+            expect(
+                integrationService.resolveCodeManagementConnection,
+            ).toHaveBeenCalled();
             expect(mockPlatformService.countReactions).toHaveBeenCalledWith(
                 params,
             );
@@ -75,7 +80,12 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
         it('should handle null integration type gracefully instead of throwing', async () => {
             // BUG: getTypeIntegration returns null → getCodeManagementService(null) throws
             // Expected behavior: return [] when no integration found
-            integrationService.findOne.mockResolvedValue(null);
+            integrationService.resolveCodeManagementConnection.mockResolvedValue(
+                {
+                    platform: null,
+                    ambiguous: false,
+                },
+            );
 
             const params = {
                 organizationAndTeamData: orgAndTeam,
@@ -89,7 +99,7 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
             expect(result).toEqual([]);
         });
 
-        it('should use explicit type without calling getTypeIntegration', async () => {
+        it('should dispatch to the explicit type, passing it to the connection lookup', async () => {
             factory.registerCodeManagementService(
                 PlatformType.GITLAB,
                 mockPlatformService as unknown as ICodeManagementService,
@@ -103,15 +113,23 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
 
             await service.countReactions(params, PlatformType.GITLAB);
 
-            expect(integrationService.findOne).not.toHaveBeenCalled();
+            expect(
+                integrationService.resolveCodeManagementConnection,
+            ).toHaveBeenCalledWith(
+                orgAndTeam,
+                expect.objectContaining({ platform: PlatformType.GITLAB }),
+            );
         });
     });
 
     describe('getPullRequestReviewComment', () => {
         it('should resolve integration type and delegate to the platform service', async () => {
-            integrationService.findOne.mockResolvedValue({
-                platform: PlatformType.GITHUB,
-            });
+            integrationService.resolveCodeManagementConnection.mockResolvedValue(
+                {
+                    ambiguous: false,
+                    platform: PlatformType.GITHUB,
+                },
+            );
             factory.registerCodeManagementService(
                 PlatformType.GITHUB,
                 mockPlatformService as unknown as ICodeManagementService,
@@ -127,7 +145,9 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
 
             const result = await service.getPullRequestReviewComment(params);
 
-            expect(integrationService.findOne).toHaveBeenCalled();
+            expect(
+                integrationService.resolveCodeManagementConnection,
+            ).toHaveBeenCalled();
             expect(
                 mockPlatformService.getPullRequestReviewComment,
             ).toHaveBeenCalledWith(params);
@@ -136,7 +156,12 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
 
         it('should handle null integration type gracefully instead of throwing', async () => {
             // BUG: same as countReactions — no null guard before factory call
-            integrationService.findOne.mockResolvedValue(null);
+            integrationService.resolveCodeManagementConnection.mockResolvedValue(
+                {
+                    platform: null,
+                    ambiguous: false,
+                },
+            );
 
             const params = {
                 organizationAndTeamData: orgAndTeam,
@@ -152,7 +177,7 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
             expect(result).toEqual([]);
         });
 
-        it('should use explicit type without calling getTypeIntegration', async () => {
+        it('should dispatch to the explicit type, passing it to the connection lookup', async () => {
             factory.registerCodeManagementService(
                 PlatformType.GITHUB,
                 mockPlatformService as unknown as ICodeManagementService,
@@ -171,7 +196,12 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
                 PlatformType.GITHUB,
             );
 
-            expect(integrationService.findOne).not.toHaveBeenCalled();
+            expect(
+                integrationService.resolveCodeManagementConnection,
+            ).toHaveBeenCalledWith(
+                orgAndTeam,
+                expect.objectContaining({ platform: PlatformType.GITHUB }),
+            );
         });
     });
 });

@@ -1,5 +1,6 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -14,6 +15,7 @@ import pLimit from 'p-limit';
 import { v4 } from 'uuid';
 
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -3094,15 +3096,31 @@ export class AzureReposService implements Omit<
             // had expired got deleted by the create side and again by the
             // prune, while its freshly created replacement turned into a new
             // duplicate.
-            const { removed: pruned, surviving } =
-                await this.pruneSubscriptionsOutsideSelection({
-                    passId,
-                    orgName: azureAuthDetail.orgName,
-                    token: azureAuthDetail.token,
-                    selection,
-                    existingSubscriptions,
-                    teamId: organizationAndTeamData?.teamId,
+            //
+            // Subscriptions carry the team, not the connection, so the prune
+            // keeps whatever any Azure connection of the team selects: one
+            // connection's pass must not unsubscribe another's repositories.
+            // Unreadable selections prune nothing.
+            const teamSelection = await this.teamAzureSelection(
+                organizationAndTeamData,
+            );
+            if (!teamSelection) {
+                this.logger.warn({
+                    message: `[AZURE-HOOKS] pass ${passId} | the team's Azure selections could not be read; nothing pruned`,
+                    context: this.createWebhook.name,
+                    metadata: { passId, organizationAndTeamData },
                 });
+            }
+            const { removed: pruned, surviving } = teamSelection
+                ? await this.pruneSubscriptionsOutsideSelection({
+                      passId,
+                      orgName: azureAuthDetail.orgName,
+                      token: azureAuthDetail.token,
+                      selection: [...selection, ...teamSelection],
+                      existingSubscriptions,
+                      teamId: organizationAndTeamData?.teamId,
+                  })
+                : { removed: 0, surviving: existingSubscriptions };
 
             // One index for the whole pass. The create side used to rescan the
             // organization-wide snapshot once per repository per event type,
@@ -3161,11 +3179,47 @@ export class AzureReposService implements Omit<
         }
     }
 
+    /**
+     * Every repository the team's active Azure connections select, or null
+     * when a selection cannot be read.
+     */
+    private async teamAzureSelection(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Repositories[] | null> {
+        try {
+            const configs =
+                (await this.integrationConfigService.findAllOfTeamByConfigKey(
+                    IntegrationConfigKey.REPOSITORIES,
+                    organizationAndTeamData,
+                )) ?? [];
+            return configs
+                .filter(
+                    (config) =>
+                        config?.integration?.platform ===
+                        PlatformType.AZURE_REPOS,
+                )
+                .flatMap((config) =>
+                    Array.isArray(config.configValue)
+                        ? (config.configValue as Repositories[])
+                        : [],
+                );
+        } catch (error) {
+            this.logger.error({
+                message: "Could not read the team's Azure selections",
+                context: AzureReposService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return null;
+        }
+    }
+
     async createAuthIntegration(params: any): Promise<any> {
         try {
-            const res: {
+            let res: {
                 success: boolean;
                 status?: CreateAuthIntegrationStatus;
+                integrationId?: string;
             } = { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
             if (params && params?.authMode === AuthMode.OAUTH) {
                 throw new BadRequestException(
@@ -3176,11 +3230,12 @@ export class AzureReposService implements Omit<
                 params?.authMode === AuthMode.TOKEN &&
                 params.token
             ) {
-                const res = await this.authenticateWithToken({
+                res = await this.authenticateWithToken({
                     organizationAndTeamData: params.organizationAndTeamData,
                     token: params.token,
                     orgUrl: params.orgUrl,
                     orgName: params.orgName,
+                    newConnection: params.newConnection,
                 });
 
                 if (!res.success) {
@@ -3205,7 +3260,8 @@ export class AzureReposService implements Omit<
         orgUrl: string;
         token: string;
         orgName: string;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const { organizationAndTeamData, token, orgUrl, orgName } = params;
 
@@ -3226,15 +3282,14 @@ export class AzureReposService implements Omit<
                 return checkRepos;
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: organizationAndTeamData.organizationId,
-                },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: PlatformType.AZURE_REPOS,
-            });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    organizationAndTeamData,
+                    PlatformType.AZURE_REPOS,
+                    params?.newConnection,
+                );
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 organizationAndTeamData,
@@ -3243,6 +3298,7 @@ export class AzureReposService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const linkError = toIntegrationLinkError(err, 'Azure Repos');
@@ -3350,17 +3406,21 @@ export class AzureReposService implements Omit<
         integration: IntegrationEntity | null,
         authDetails: AzureReposAuthDetail,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
     }
 
     async addAccessToken(
@@ -3409,6 +3469,7 @@ export class AzureReposService implements Omit<
                 team: {
                     uuid: params.organizationAndTeamData.teamId,
                 },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -3469,6 +3530,7 @@ export class AzureReposService implements Omit<
                 team: {
                     uuid: params.organizationAndTeamData.teamId,
                 },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -4034,6 +4096,7 @@ export class AzureReposService implements Omit<
                 team: {
                     uuid: organizationAndTeamData.teamId,
                 },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -4798,6 +4861,7 @@ export class AzureReposService implements Omit<
                     team: {
                         uuid: params.organizationAndTeamData.teamId,
                     },
+                    ...connectionScope(params.organizationAndTeamData),
                     platform: PlatformType.AZURE_REPOS,
                     status: true,
                 }),
@@ -4837,6 +4901,8 @@ export class AzureReposService implements Omit<
         try {
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -4872,6 +4938,7 @@ export class AzureReposService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 

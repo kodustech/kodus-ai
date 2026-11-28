@@ -53,3 +53,167 @@ describe('IntegrationConfigService', () => {
         expect(repository.update).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('IntegrationConfigService.findIntegrationConfigFormatted — connections', () => {
+    const repositoryWith = (
+        configs: Array<{ integrationId: string; value: unknown }>,
+    ) =>
+        ({
+            findOneIntegrationConfigWithIntegrations: jest.fn(
+                async (_key: unknown, orgTeam: { integrationId?: string }) =>
+                    configs.find(
+                        (c) =>
+                            !orgTeam.integrationId ||
+                            c.integrationId === orgTeam.integrationId,
+                    ) && {
+                        configValue: configs.find(
+                            (c) =>
+                                !orgTeam.integrationId ||
+                                c.integrationId === orgTeam.integrationId,
+                        )!.value,
+                    },
+            ),
+            findAllOfTeamByConfigKey: jest.fn(async () =>
+                configs.map((c) => ({ configValue: c.value })),
+            ),
+        }) as any;
+
+    const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
+
+    it('lists the repositories of every connection in the workspace', async () => {
+        const service = new IntegrationConfigService(
+            repositoryWith([
+                { integrationId: 'gh', value: [{ id: '1', name: 'api' }] },
+                { integrationId: 'gl', value: [{ id: '2', name: 'web' }] },
+            ]),
+        );
+
+        const repos = await service.findIntegrationConfigFormatted<
+            Array<{ id: string }>
+        >(IntegrationConfigKey.REPOSITORIES, orgTeam);
+
+        expect(repos.map((r) => r.id)).toEqual(['1', '2']);
+    });
+
+    it('lists only the named connection’s repositories', async () => {
+        const repository = repositoryWith([
+            { integrationId: 'gh', value: [{ id: '1', name: 'api' }] },
+            { integrationId: 'gl', value: [{ id: '2', name: 'web' }] },
+        ]);
+        const service = new IntegrationConfigService(repository);
+
+        const repos = await service.findIntegrationConfigFormatted<
+            Array<{ id: string }>
+        >(IntegrationConfigKey.REPOSITORIES, {
+            ...orgTeam,
+            integrationId: 'gl',
+        });
+
+        expect(repos.map((r) => r.id)).toEqual(['2']);
+        expect(repository.findAllOfTeamByConfigKey).not.toHaveBeenCalled();
+    });
+
+    it('answers an empty list, not "no config", when the saved lists are empty', async () => {
+        const service = new IntegrationConfigService(
+            repositoryWith([{ integrationId: 'gh', value: [] }]),
+        );
+
+        await expect(
+            service.findIntegrationConfigFormatted(
+                IntegrationConfigKey.REPOSITORIES,
+                orgTeam,
+            ),
+        ).resolves.toEqual([]);
+    });
+
+    it('returns null when no connection has a repositories config', async () => {
+        const service = new IntegrationConfigService(repositoryWith([]));
+
+        await expect(
+            service.findIntegrationConfigFormatted(
+                IntegrationConfigKey.REPOSITORIES,
+                orgTeam,
+            ),
+        ).resolves.toBeNull();
+    });
+
+    it('keeps reading a single config for other keys', async () => {
+        const repository = repositoryWith([
+            { integrationId: 'gh', value: { installId: '9' } },
+        ]);
+        const service = new IntegrationConfigService(repository);
+
+        await expect(
+            service.findIntegrationConfigFormatted(
+                IntegrationConfigKey.INSTALLATION_GITHUB,
+                orgTeam,
+            ),
+        ).resolves.toEqual({ installId: '9' });
+        expect(repository.findAllOfTeamByConfigKey).not.toHaveBeenCalled();
+    });
+});
+
+describe('IntegrationConfigService.repositoryIdsListedByOtherConnections', () => {
+    const lists = [
+        {
+            integrationId: 'mine',
+            platform: 'GITLAB',
+            host: 'https://git.a.io',
+            repositories: [{ id: 1 }, { id: 2 }, { id: 42 }],
+        },
+        {
+            integrationId: 'other-same-server',
+            platform: 'GITLAB',
+            host: 'git.a.io',
+            repositories: [{ id: 2 }],
+        },
+        {
+            integrationId: 'other-server',
+            platform: 'GITLAB',
+            host: 'git.b.io',
+            repositories: [{ id: 42 }],
+        },
+        {
+            integrationId: 'forgejo',
+            platform: 'FORGEJO',
+            host: 'git.a.io',
+            repositories: [{ id: '1' }],
+        },
+    ];
+
+    it('collects the ids other connections on the same server list', async () => {
+        const repository = {
+            findRepositoryListsOfOrganization: jest
+                .fn()
+                .mockResolvedValue(lists),
+        } as any;
+        const service = new IntegrationConfigService(repository);
+
+        const ids = await service.repositoryIdsListedByOtherConnections(
+            'org-1',
+            'mine',
+        );
+
+        // 42 on another GitLab and 1 on a Forgejo are other repositories.
+        expect([...ids]).toEqual(['2']);
+        expect(
+            repository.findRepositoryListsOfOrganization,
+        ).toHaveBeenCalledWith('org-1');
+    });
+
+    it('keeps every listed id when the connection itself is not found, so no hook is removed on a guess', async () => {
+        const repository = {
+            findRepositoryListsOfOrganization: jest
+                .fn()
+                .mockResolvedValue(lists.slice(1)),
+        } as any;
+        const service = new IntegrationConfigService(repository);
+
+        const ids = await service.repositoryIdsListedByOtherConnections(
+            'org-1',
+            'mine',
+        );
+
+        expect([...ids].sort()).toEqual(['1', '2', '42']);
+    });
+});

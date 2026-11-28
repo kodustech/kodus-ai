@@ -30,15 +30,18 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
     public async execute(
         teamId?: string,
         options: { skipCache?: boolean } = {},
+        connectionId?: string,
     ): Promise<OrganizationMemberListResult> {
         const organizationAndTeamData: OrganizationAndTeamData = {
             organizationId: this.request.user.organization.uuid,
             teamId,
+            ...(connectionId ? { integrationId: connectionId } : {}),
         };
 
         const cacheKey = this.buildCacheKey(
             organizationAndTeamData.organizationId,
             teamId,
+            connectionId,
         );
 
         if (!options.skipCache) {
@@ -89,22 +92,30 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
 
     public async refreshMembers(
         teamId?: string,
+        connectionId?: string,
     ): Promise<OrganizationMemberListResult> {
         const cacheKey = this.buildCacheKey(
             this.request.user.organization.uuid,
             teamId,
+            connectionId,
         );
 
         await this.cacheService.removeFromCache(cacheKey);
 
-        return this.execute(teamId, { skipCache: true });
+        return this.execute(teamId, { skipCache: true }, connectionId);
     }
 
-    private buildCacheKey(organizationId: string, teamId?: string): string {
+    private buildCacheKey(
+        organizationId: string,
+        teamId?: string,
+        connectionId?: string,
+    ): string {
         // v3: entries hold the confirmed-absent seat ids beside the members;
         // v1 entries may hold a partial list.
-        return teamId !== undefined
-            ? `org_members_v3_${organizationId}_${teamId}`
-            : `org_members_v3_${organizationId}`;
+        const base =
+            teamId !== undefined
+                ? `org_members_v3_${organizationId}_${teamId}`
+                : `org_members_v3_${organizationId}`;
+        return connectionId ? `${base}_${connectionId}` : base;
     }
 }

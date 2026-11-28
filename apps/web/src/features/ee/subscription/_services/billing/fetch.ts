@@ -94,11 +94,17 @@ const toMemberListResult = (
     return { status: "unavailable", members: [] };
 };
 
-export const getOrganizationMembers = async (params: { teamId: string }) => {
+export const getOrganizationMembers = async (params: {
+    teamId: string;
+    connectionId?: string;
+}) => {
     const response = await authorizedFetch<unknown>(
         pathToApiUrl("/code-management/organization-members"),
         {
-            params: { teamId: params.teamId },
+            params: {
+                teamId: params.teamId,
+                connectionId: params.connectionId,
+            },
         },
     );
 
@@ -126,12 +132,16 @@ export const getOrganizationMemberLabels = async (params: {
 
 export const refreshOrganizationMembers = async (params: {
     teamId: string;
+    connectionId?: string;
 }) => {
     const response = await authorizedFetch<unknown>(
         pathToApiUrl("/code-management/organization-members/refresh"),
         {
             method: "POST",
-            params: { teamId: params.teamId },
+            params: {
+                teamId: params.teamId,
+                connectionId: params.connectionId,
+            },
         },
     );
 
@@ -212,6 +222,7 @@ export const createCheckoutSession = async (params: {
     teamId: string;
     quantity: number;
     planId: string;
+    connectionId?: string;
 }) => {
     const organizationId = await getOrganizationId();
 
@@ -222,6 +233,7 @@ export const createCheckoutSession = async (params: {
             teamId: params.teamId,
             quantity: params.quantity,
             planType: params.planId,
+            connectionId: params.connectionId,
         }),
     });
 };
@@ -242,11 +254,13 @@ export type UserWithLicense = {
 
 export const getUsersWithLicense = async (params: {
     teamId: string;
+    connectionId?: string;
 }): Promise<Array<UserWithLicense>> => {
     if (isSelfHosted) {
         try {
             return await authorizedFetch<Array<UserWithLicense>>(
                 pathToApiUrl("/license/users"),
+                { params: { connectionId: params.connectionId } },
             );
         } catch {
             return [];
@@ -255,7 +269,11 @@ export const getUsersWithLicense = async (params: {
 
     const organizationId = await getOrganizationId();
     return billingFetch<Array<UserWithLicense>>(`users-with-license`, {
-        params: { organizationId, teamId: params.teamId },
+        params: {
+            organizationId,
+            teamId: params.teamId,
+            connectionId: params.connectionId,
+        },
     });
 };
 
@@ -266,16 +284,25 @@ export type PruneSeatsResult = {
     failed: string[];
 };
 
-export const getRemovableSeats = async (params: { teamId: string }) => {
+export const getRemovableSeats = async (params: {
+    teamId: string;
+    connectionId?: string;
+}) => {
     return authorizedFetch<PruneSeatsResult>(
         pathToApiUrl("/license/removable-seats"),
-        { params: { teamId: params.teamId } },
+        {
+            params: {
+                teamId: params.teamId,
+                connectionId: params.connectionId,
+            },
+        },
     );
 };
 
 export const pruneRemovedSeats = async (params: {
     teamId: string;
     gitIds?: string[];
+    connectionId?: string;
 }) => {
     return authorizedFetch<PruneSeatsResult>(
         pathToApiUrl("/license/prune-seats"),
@@ -284,6 +311,7 @@ export const pruneRemovedSeats = async (params: {
             body: JSON.stringify({
                 teamId: params.teamId,
                 gitIds: params.gitIds,
+                connectionId: params.connectionId,
             }),
         },
     );
@@ -296,6 +324,7 @@ export const getPlans = () =>
 
 export const assignOrDeassignUserLicense = async (params: {
     teamId: string;
+    connectionId?: string;
     user: {
         gitId: string;
         gitTool: string;
@@ -315,6 +344,7 @@ export const assignOrDeassignUserLicense = async (params: {
             method: "POST",
             body: JSON.stringify({
                 teamId: params.teamId,
+                connectionId: params.connectionId,
                 users: [params.user],
                 editedBy: params.currentUser,
                 userName: params.userName,
@@ -332,6 +362,7 @@ export const assignOrDeassignUserLicense = async (params: {
         body: JSON.stringify({
             organizationId,
             teamId: params.teamId,
+            connectionId: params.connectionId,
             users: [params.user],
             editedBy: params.currentUser,
             userName: params.userName,
@@ -341,6 +372,7 @@ export const assignOrDeassignUserLicense = async (params: {
 
 export const validateOrganizationLicense = async (params: {
     teamId: string;
+    connectionId?: string;
 }): Promise<OrganizationLicense> => {
     if (isSelfHosted) {
         // Check if there's a self-hosted license key activated
@@ -376,7 +408,11 @@ export const validateOrganizationLicense = async (params: {
     const organizationId = await getOrganizationId();
     return billingFetch<OrganizationLicense>(`validate-org-license`, {
         method: "GET",
-        params: { organizationId, teamId: params.teamId },
+        params: {
+            organizationId,
+            teamId: params.teamId,
+            connectionId: params.connectionId,
+        },
     });
 };
 

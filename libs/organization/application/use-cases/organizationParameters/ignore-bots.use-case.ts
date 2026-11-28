@@ -26,10 +26,24 @@ export class IgnoreBotsUseCase implements IUseCase {
         private readonly organizationParametersService: IOrganizationParametersService,
     ) {}
 
-    public async execute(params: { organizationId: string; teamId: string }) {
+    /**
+     * Seeds the bots found on a Git connection into the PR author ignore list.
+     * A connection added beside the workspace's others (`separateConnection`),
+     * or one that already has lists of its own, is seeded into its own lists:
+     * git ids differ per provider and host. Otherwise the organization's.
+     */
+    public async execute(params: {
+        organizationId: string;
+        teamId: string;
+        integrationId?: string;
+        separateConnection?: boolean;
+    }) {
         const organizationAndTeamData = {
             organizationId: params.organizationId,
             teamId: params.teamId,
+            ...(params.integrationId
+                ? { integrationId: params.integrationId }
+                : {}),
         };
 
         const orgMembers = await this.codeManagementService.getListMembers({
@@ -49,10 +63,7 @@ export class IgnoreBotsUseCase implements IUseCase {
             this.logger.warn({
                 message: 'No users found',
                 context: IgnoreBotsUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                },
+                metadata: organizationAndTeamData,
             });
         }
 
@@ -62,67 +73,60 @@ export class IgnoreBotsUseCase implements IUseCase {
             ),
         );
 
+        if (!botIds.length) return;
+
         const autoLicenseEntity =
             await this.organizationParametersService.findByKey(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
                 organizationAndTeamData,
             );
+        const stored = autoLicenseEntity?.configValue as
+            OrganizationParametersAutoAssignConfig | undefined;
 
-        if (!autoLicenseEntity || !autoLicenseEntity?.configValue) {
-            this.logger.warn({
-                message:
-                    'Auto license assignment config not found, creating one',
-                context: IgnoreBotsUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                },
-            });
+        // A connection added beside others, or one that already has lists of
+        // its own, is seeded into them; the workspace's first, into the
+        // organization's.
+        const ownLists =
+            params.integrationId &&
+            (params.separateConnection ||
+                Boolean(stored?.connections?.[params.integrationId]));
+        const target = ownLists ? params.integrationId : undefined;
 
-            await this.organizationParametersService.createOrUpdateConfig(
-                OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                {
-                    enabled: false,
-                    ignoredUsers: botIds,
-                    allowedUsers: [],
-                    seededBotIds: botIds,
-                },
-                organizationAndTeamData,
-            );
-        } else {
-            this.logger.debug({
-                message: 'Auto license assignment config found',
-                context: IgnoreBotsUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                },
-            });
+        // Written in one statement against the stored lists: only bots never
+        // seeded before are ignored (an admin may have chosen to review one,
+        // e.g. an app authoring PRs on a paid seat), and the allow list is
+        // never touched, so a filters save landing meanwhile stays.
+        await this.organizationParametersService.seedBotIds(
+            params.organizationId,
+            botIds,
+            target ? { connectionId: target } : {},
+        );
 
-            const autoLicenseConfig =
-                autoLicenseEntity.configValue as OrganizationParametersAutoAssignConfig;
+        this.logger.log({
+            message: 'pr_author_bots_seeded',
+            context: IgnoreBotsUseCase.name,
+            metadata: {
+                ...organizationAndTeamData,
+                connectionLists: Boolean(target),
+                bots: botIds.length,
+            },
+        });
+    }
 
-            autoLicenseConfig.allowedUsers =
-                autoLicenseConfig.allowedUsers || [];
-
-            // Only bots never seeded before are added. Re-adding every bot
-            // found would undo an admin's decision to review one — the case
-            // that matters is an app authoring PRs on a paid seat.
-            const seededBotIds = new Set(autoLicenseConfig.seededBotIds ?? []);
-            const newBotIds = botIds.filter((id) => !seededBotIds.has(id));
-
-            autoLicenseConfig.ignoredUsers = Array.from(
-                new Set([...autoLicenseConfig.ignoredUsers, ...newBotIds]),
-            );
-            autoLicenseConfig.seededBotIds = Array.from(
-                new Set([...seededBotIds, ...botIds]),
-            );
-
-            await this.organizationParametersService.createOrUpdateConfig(
-                OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                autoLicenseConfig,
-                organizationAndTeamData,
-            );
-        }
+    /**
+     * A connection added beside others gets lists of its own at once, empty,
+     * so until its bots are found it never reads another connection's (an
+     * allow-list there would skip every PR on it).
+     */
+    async claimConnectionLists(params: {
+        organizationId: string;
+        integrationId: string;
+    }): Promise<void> {
+        await this.organizationParametersService.mergeConfigValue(
+            OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+            params.organizationId,
+            { ignoredUsers: [], allowedUsers: [], seededBotIds: [] },
+            { connectionId: params.integrationId, onlyIfAbsent: true },
+        );
     }
 }

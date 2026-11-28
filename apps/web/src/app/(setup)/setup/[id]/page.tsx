@@ -193,6 +193,7 @@ export default function Redirect() {
     const redirectToConfiguration = async (
         integrationKey: Integration,
         teamId: string,
+        connectionId?: string,
     ) => {
         if (isSetup) {
             removeQueries({
@@ -206,7 +207,11 @@ export default function Redirect() {
 
         ClientSideCookieHelpers("global-selected-team-id").set(teamId);
 
-        router.replace("/settings/git/repositories");
+        router.replace(
+            connectionId
+                ? `/settings/git/repositories?connectionId=${encodeURIComponent(connectionId)}`
+                : "/settings/git/repositories",
+        );
     };
 
     const newIntegration = async () => {
@@ -268,6 +273,7 @@ export default function Redirect() {
                         await redirectToConfiguration(
                             INTEGRATIONS_KEY.GITHUB,
                             selectedTeam,
+                            integrationResponse?.data?.integrationId,
                         );
                         break;
                     }
@@ -329,6 +335,7 @@ export default function Redirect() {
                         await redirectToConfiguration(
                             INTEGRATIONS_KEY.GITLAB,
                             selectedTeam,
+                            integrationResponse?.data?.integrationId,
                         );
                         break;
                     }
@@ -383,6 +390,7 @@ export default function Redirect() {
                     await redirectToConfiguration(
                         INTEGRATIONS_KEY.AZURE_REPOS,
                         selectedTeam,
+                        integrationResponse?.data?.integrationId,
                     );
                 }
                 break;

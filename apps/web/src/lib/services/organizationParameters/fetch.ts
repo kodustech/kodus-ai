@@ -23,6 +23,26 @@ export const createOrUpdateOrganizationParameter = async (
     );
 };
 
+/**
+ * Saves one Git connection's PR author lists, or the organization's when no
+ * connection is named; nothing else stored with them is sent or replaced.
+ */
+export const updateAuthorFilters = async (params: {
+    connectionId?: string;
+    ignoredUsers: string[];
+    allowedUsers: string[];
+}) =>
+    axiosAuthorized.post<void>(
+        ORGANIZATION_PARAMETERS_PATHS.UPDATE_AUTHOR_FILTERS,
+        {
+            ...(params.connectionId
+                ? { connectionId: params.connectionId }
+                : {}),
+            ignoredUsers: params.ignoredUsers,
+            allowedUsers: params.allowedUsers,
+        },
+    );
+
 const routingReadSignal = (signal?: AbortSignal) =>
     signal
         ? AbortSignal.any([signal, AbortSignal.timeout(8_000)])

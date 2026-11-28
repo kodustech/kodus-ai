@@ -8,12 +8,26 @@ export const TEAM_MEMBERS_REPOSITORY_TOKEN = Symbol.for(
     'TeamMembersRepository',
 );
 
+/** Runs SQL inside the transaction a member is inserted in. */
+export type TeamMemberInsertRunner = {
+    query(sql: string, parameters?: unknown[]): Promise<unknown>;
+};
+
 export interface ITeamMemberRepository {
     countByUser(userId: string, teamMemberStatus?: boolean): Promise<number>;
     countTeamMembers(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<number>;
-    create(teamMember: ITeamMember): Promise<any>;
+    /**
+     * `alsoWithin` runs in the insert's transaction: when it fails, the
+     * member is not created either.
+     */
+    create(
+        teamMember: ITeamMember,
+        options?: {
+            alsoWithin?: (runner: TeamMemberInsertRunner) => Promise<void>;
+        },
+    ): Promise<any>;
     deleteMembers(members: TeamMemberEntity[]): Promise<void>;
     findManyByOrganizationId(
         organizationId: string,

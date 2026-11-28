@@ -19,11 +19,11 @@ import {
     OrganizationParametersConfigKey,
     type OrganizationParametersAutoAssignConfig,
 } from "@services/parameters/types";
-import { useSuspenseGetConnections } from "@services/setup/hooks";
 import { UserPlusIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { assignOrDeassignUserLicenseAction } from "../../_actions/assign-or-deassign-license";
+import { useBillingConnection } from "../../_hooks/use-billing-connection";
 
 /**
  * Resolves the connected platform the same way the per-row toggle does, so the
@@ -37,11 +37,9 @@ export const AssignByGitIdButton = ({
     autoLicenseAssignmentConfig?: OrganizationParametersAutoAssignConfig;
 }) => {
     const { teamId } = useSelectedTeamId();
-    const connections = useSuspenseGetConnections(teamId);
+    const { connection } = useBillingConnection();
 
-    const gitTool = connections
-        .find((connection) => connection.category === "CODE_MANAGEMENT")
-        ?.platformName.toLowerCase();
+    const gitTool = connection?.platformName.toLowerCase();
 
     if (!gitTool) return null;
 

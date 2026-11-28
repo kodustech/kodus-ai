@@ -1,5 +1,7 @@
+import { connectionCacheScope } from '@libs/integrations/domain/integrations/utils/connection-cache-scope';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { assertGitServerUrlAllowed } from './git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
@@ -36,6 +38,7 @@ import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integ
 import { resolveGitlabDraftStatus } from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     GitlabPullRequestState,
     IntegrationCategory,
@@ -1297,17 +1300,21 @@ export class GitlabService implements Omit<
         integration: any,
         authDetails: any,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
     }
 
     async createOrUpdateIntegrationConfig(params: any): Promise<any> {
@@ -1317,6 +1324,7 @@ export class GitlabService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -1356,7 +1364,7 @@ export class GitlabService implements Omit<
 
     async createAuthIntegration(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
                 success: boolean;
@@ -1463,15 +1471,14 @@ export class GitlabService implements Omit<
 
             if (!checkRepos.success) return checkRepos;
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                platform: PlatformType.GITLAB,
-            });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    params.organizationAndTeamData,
+                    PlatformType.GITLAB,
+                    params?.newConnection,
+                );
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
@@ -1480,6 +1487,7 @@ export class GitlabService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             // The exchange authenticates with Kodus's OAuth client: a 401 is
@@ -1523,15 +1531,14 @@ export class GitlabService implements Omit<
 
             if (!checkRepos.success) return checkRepos;
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                platform: PlatformType.GITLAB,
-            });
+            const integration =
+                await this.integrationService.connectionToUpdate(
+                    params.organizationAndTeamData,
+                    PlatformType.GITLAB,
+                    params?.newConnection,
+                );
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
@@ -1540,6 +1547,7 @@ export class GitlabService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             throw toIntegrationLinkError(err, 'GitLab');
@@ -1655,6 +1663,7 @@ export class GitlabService implements Omit<
                 team: {
                     uuid: params.organizationAndTeamData.teamId,
                 },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -2086,6 +2095,7 @@ export class GitlabService implements Omit<
             team: {
                 uuid: params.organizationAndTeamData.teamId,
             },
+            ...connectionScope(params.organizationAndTeamData),
             platform: PlatformType.GITLAB,
         });
 
@@ -2097,7 +2107,8 @@ export class GitlabService implements Omit<
 
         const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-        const repositories = integrationConfig.configValue;
+        // A connection with no repositories saved yet has no members to list.
+        const repositories = integrationConfig?.configValue ?? [];
         const users = [];
         const batchSize = 10;
 
@@ -2190,6 +2201,8 @@ export class GitlabService implements Omit<
                     organization: {
                         uuid: params.organizationAndTeamData.organizationId,
                     },
+                    team: { uuid: params.organizationAndTeamData.teamId },
+                    ...connectionScope(params.organizationAndTeamData),
                     status: true,
                     platform: PlatformType.GITLAB,
                 }),
@@ -2309,6 +2322,7 @@ export class GitlabService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -3840,6 +3854,7 @@ export class GitlabService implements Omit<
                     uuid: organizationAndTeamData.organizationId,
                 },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -5100,10 +5115,11 @@ export class GitlabService implements Omit<
     ): Promise<any | null> {
         const { userName, email } = params;
 
-        // Scoped by organization: each org resolves against its own GitLab
-        // (and credentials), so a user found for one must never answer another.
+        // Scoped by organization and connection: each resolves against its
+        // own GitLab (and credentials), so a user found for one must never
+        // answer another.
         // The entry wraps the result so "not found" is cacheable too.
-        const cacheKey = `gitlab-user-${params.organizationAndTeamData?.organizationId}-${email || 'no-email'}-${userName}`;
+        const cacheKey = `gitlab-user-${connectionCacheScope(params.organizationAndTeamData)}-${email || 'no-email'}-${userName}`;
         const remember = async (user: any, ttl: number) => {
             try {
                 await this.cacheService.addToCache(cacheKey, { user }, ttl);
@@ -5377,7 +5393,7 @@ export class GitlabService implements Omit<
             return null;
         }
 
-        const cacheKey = `gitlab-mr-author-${organizationAndTeamData.organizationId}-${authorId}`;
+        const cacheKey = `gitlab-mr-author-${connectionCacheScope(organizationAndTeamData)}-${authorId}`;
 
         try {
             const cached = await this.cacheService.getFromCache<any>(cacheKey);
@@ -5988,6 +6004,7 @@ export class GitlabService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -6002,7 +6019,16 @@ export class GitlabService implements Omit<
                 );
 
             if (repositories) {
-                for (const repo of repositories) {
+                // The hook URL is shared: a repository another connection
+                // still lists keeps it.
+                const listedElsewhere =
+                    await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                        params.organizationAndTeamData.organizationId,
+                        integration.uuid,
+                    );
+                for (const repo of repositories.filter(
+                    (r) => !listedElsewhere.has(String(r?.id)),
+                )) {
                     try {
                         const webhooks = await gitlabAPI.ProjectHooks.all(
                             repo.id,

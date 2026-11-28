@@ -10,7 +10,9 @@ describe('ReportRecipientsService', () => {
     beforeEach(() => {
         usersService = { find: jest.fn() };
         review = { getRepositoryNames: jest.fn() };
-        service = new ReportRecipientsService(usersService, review);
+        service = new ReportRecipientsService(usersService, review, {
+            restrictionFor: jest.fn().mockResolvedValue(null),
+        } as any);
     });
 
     describe('getOwners', () => {
@@ -88,6 +90,51 @@ describe('ReportRecipientsService', () => {
 
             expect(admins).toEqual([]);
             expect(review.getRepositoryNames).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('getRepoAdmins per Git connection', () => {
+        it('leaves out assigned repositories of Git connections the admin is not granted', async () => {
+            usersService.find.mockResolvedValue([
+                {
+                    uuid: 'u-1',
+                    role: 'repo_admin',
+                    email: 'admin@acme.com',
+                    permissions: {
+                        permissions: { assignedRepositoryIds: ['r1', 'r2'] },
+                    },
+                },
+            ]);
+            review.getRepositoryNames.mockResolvedValue(
+                new Map([
+                    ['r1', 'acme/auth'],
+                    ['r2', 'group/api'],
+                ]),
+            );
+            const connectionAccess = {
+                restrictionFor: jest.fn().mockResolvedValue({
+                    connectionIds: new Set(['gh-a']),
+                    repositoryIds: new Set(['r1']),
+                    allowsRepository: ({ id }: { id?: unknown }) => id === 'r1',
+                }),
+            };
+            const scoped = new ReportRecipientsService(
+                usersService,
+                review,
+                connectionAccess as any,
+            );
+
+            const admins = await scoped.getRepoAdmins(ORG);
+
+            expect(admins).toEqual([
+                expect.objectContaining({ repositories: ['acme/auth'] }),
+            ]);
+            expect(connectionAccess.restrictionFor).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: 'u-1',
+                    organization: { uuid: ORG },
+                }),
+            );
         });
     });
 });

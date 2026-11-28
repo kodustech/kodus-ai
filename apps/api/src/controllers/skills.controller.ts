@@ -16,6 +16,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -47,6 +48,7 @@ export class SkillsController {
     })
     @ApiOkResponse({ type: SkillMetaResponseDto })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -66,6 +68,7 @@ export class SkillsController {
     })
     @ApiOkResponse({ type: SkillInstructionsResponseDto })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,

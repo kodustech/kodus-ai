@@ -25,6 +25,8 @@ const TEAMS = {
 const setup = (
     opts: {
         listing?: any[] | Error;
+        /** Ids another connection on the same server already lists. */
+        listedElsewhere?: string[];
         teams?: Array<{
             orgTeam: { organizationId: string; teamId: string };
             mode?: 'manual' | 'all';
@@ -82,6 +84,9 @@ const setup = (
         findIntegrationConfigFormatted: jest.fn(
             async (configKey: string, orgTeam: { teamId: string }) =>
                 store.get(key(orgTeam.teamId, configKey)) ?? null,
+        ),
+        repositoryIdsListedByOtherConnections: jest.fn(
+            async () => new Set(opts.listedElsewhere ?? []),
         ),
         createOrUpdateConfig: jest.fn(
             async (configKey: string, value: unknown, _int: string, orgTeam) => {
@@ -215,6 +220,19 @@ describe('SyncAllRepositoriesUseCase', () => {
             added: 1,
             skipped: { archived: 1, forksAndMirrors: 2 },
         });
+    });
+
+    it('never adds a repository another connection on the same server already reviews', async () => {
+        const t = setup({
+            listing: [repo('1'), repo('2'), repo('3')],
+            listedElsewhere: ['2'],
+            teams: [{ orgTeam: TEAMS.a, mode: 'all', selected: [repo('1')] }],
+        });
+
+        await t.useCase.syncTeam(TEAMS.a, 'enable');
+
+        expect(t.selected('team-a')).toEqual(['1', '3']);
+        expect(t.state('team-a')).toMatchObject({ added: 1 });
     });
 
     it('includes forks and mirrors when the team asked for them', async () => {
