@@ -17,7 +17,7 @@ import { magicModal } from "@components/ui/magic-modal";
 import { Switch } from "@components/ui/switch";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
-import { AxiosError } from "axios";
+import { AxiosError, isAxiosError } from "axios";
 import { SaveIcon } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { GitTokenDocs } from "src/core/components/system/git-token-docs";
@@ -42,7 +42,14 @@ const tokenFormSchema = z.object({
         })
         .or(z.literal(""))
         .optional(),
-    selfHostedUrl: z.string().optional(),
+    // The server refuses a URL without a scheme; say so before it does.
+    selfHostedUrl: z
+        .string()
+        .optional()
+        .refine(
+            (value) => !value?.trim() || /^https?:\/\//i.test(value.trim()),
+            "Include https:// in the URL, for example https://bitbucket.your-company.com",
+        ),
     dataCenterPassword: z.string().optional(),
 });
 
@@ -57,6 +64,7 @@ export const BitbucketTokenModal = (props: {
 }) => {
     const router = useRouter();
     const [selfhosted, setSelfhosted] = useState(false);
+    const [dataCenterError, setDataCenterError] = useState("");
     const nextStepPath = "/setup/choosing-repositories";
 
     const form = useForm({
@@ -67,11 +75,13 @@ export const BitbucketTokenModal = (props: {
             username: "",
             email: "",
             selfHostedUrl: "",
+            dataCenterPassword: "",
         },
     });
 
     const submit = async (data: z.infer<typeof tokenFormSchema>) => {
         magicModal.lock();
+        setDataCenterError("");
 
         try {
             const integrationResponse = await createCodeManagementIntegration({
@@ -106,7 +116,13 @@ export const BitbucketTokenModal = (props: {
         } catch (error) {
             magicModal.unlock();
 
-            if (error instanceof AxiosError && error.status === 400) {
+            if (selfhosted) {
+                setDataCenterError(
+                    isAxiosError(error) && error.response?.status === 400
+                        ? "Could not connect to Bitbucket Data Center. Check the server URL and credentials, then try again."
+                        : "Could not confirm the Bitbucket Data Center connection. Please try again.",
+                );
+            } else if (error instanceof AxiosError && error.status === 400) {
                 form.setError("token", {
                     type: "custom",
                     message: "Invalid Token or Username",
@@ -138,7 +154,9 @@ export const BitbucketTokenModal = (props: {
     return (
         <Dialog open onOpenChange={() => magicModal.hide()}>
             <DialogContent>
-                <form onSubmit={form.handleSubmit(submit)}>
+                <form
+                    onSubmit={form.handleSubmit(submit)}
+                    onChange={() => setDataCenterError("")}>
                     <DialogHeader>
                         <DialogTitle>Bitbucket API Token</DialogTitle>
                         <DialogDescription></DialogDescription>
@@ -146,7 +164,7 @@ export const BitbucketTokenModal = (props: {
 
                     <div className="border-informative/20 bg-informative/5 my-4 flex flex-col gap-3 rounded-xl border p-4">
                         <p className="text-text-secondary text-sm">
-                            Reviews will be posted from the token owner's
+                            Reviews will be posted from the token owner&apos;s
                             account:
                         </p>
                         <KodyReviewPreview
@@ -254,7 +272,18 @@ export const BitbucketTokenModal = (props: {
 
                         <Collapsible
                             open={selfhosted}
-                            onOpenChange={(open) => setSelfhosted(open)}
+                            onOpenChange={(open) => {
+                                setDataCenterError("");
+                                setSelfhosted(open);
+                                // The URL is checked whatever section is open:
+                                // back on Cloud, a mistyped one would keep save
+                                // disabled with no visible error.
+                                if (!open) {
+                                    form.setValue("selfHostedUrl", "", {
+                                        shouldValidate: true,
+                                    });
+                                }
+                            }}
                             className="flex flex-col gap-1">
                             <div className="relative">
                                 <CollapsibleTrigger asChild>
@@ -363,6 +392,11 @@ export const BitbucketTokenModal = (props: {
                         </Collapsible>
 
                         {!selfhosted && <GitTokenDocs provider="bitbucket" />}
+                        {selfhosted && dataCenterError && (
+                            <FormControl.Error role="alert">
+                                {dataCenterError}
+                            </FormControl.Error>
+                        )}
                     </div>
 
                     <DialogFooter>

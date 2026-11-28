@@ -12,6 +12,7 @@ import {
 import {
     IIntegrationRepository,
     INTEGRATION_REPOSITORY_TOKEN,
+    SaveCodeManagementAuthOptions,
 } from '@libs/integrations/domain/integrations/contracts/integration.repository.contracts';
 import { IIntegrationService } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
@@ -109,6 +110,20 @@ export class IntegrationService implements IIntegrationService {
 
     create(integration: IIntegration): Promise<IntegrationEntity> {
         return this.integrationRepository.create(integration);
+    }
+
+    saveCodeManagementAuth(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform: PlatformType,
+        authDetails: Record<string, unknown>,
+        options?: SaveCodeManagementAuthOptions,
+    ): Promise<IntegrationEntity> {
+        return this.integrationRepository.saveCodeManagementAuth(
+            organizationAndTeamData,
+            platform,
+            authDetails,
+            options,
+        );
     }
 
     update(
