@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
@@ -9,6 +9,7 @@ import { Link } from "@components/ui/link";
 import { MultiStep, useMultiStep } from "@components/ui/multi-step";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedCallback } from "@hooks/use-debounced-callback";
+import { isAxiosError } from "axios";
 import {
     ArrowLeft,
     ArrowRight,
@@ -17,7 +18,6 @@ import {
     EyeClosed,
     LogInIcon,
 } from "lucide-react";
-import { isAxiosError } from "axios";
 import { signIn } from "next-auth/react";
 import {
     Controller,
@@ -537,6 +537,57 @@ export const RegisterPageContent = () => {
             confirmPassword: "",
         },
     });
+
+    // When an on-screen keyboard opens, the focused field can end up behind
+    // it. iOS Safari and Chrome for Android shrink only the visual viewport,
+    // so scrollIntoView() sees nothing clipped; scroll the form's scroll
+    // column by however far the field sits outside the visible area instead
+    // (below it, or above it when the browser's own reveal overshoots).
+    // Only on a shrink, so a later URL-bar or rotation resize does not snap
+    // the column back to a field that still has focus.
+    useEffect(() => {
+        const viewport = window.visualViewport;
+        const target = viewport ?? window;
+        const visibleTop = () => (viewport ? viewport.offsetTop : 0);
+        const visibleBottom = () =>
+            viewport
+                ? viewport.offsetTop + viewport.height
+                : window.innerHeight;
+        let previousBottom = visibleBottom();
+
+        const onResize = () => {
+            const bottom = visibleBottom();
+            const shrank = bottom < previousBottom;
+            previousBottom = bottom;
+            if (!shrank) return;
+
+            const active = document.activeElement;
+            if (!(active instanceof HTMLInputElement)) return;
+
+            // Positive scrolls the column down, negative up; 16px of margin
+            // either way so the field is not flush with the edge.
+            const rect = active.getBoundingClientRect();
+            const below = rect.bottom - bottom;
+            const above = rect.top - visibleTop();
+            if (below <= 0 && above >= 0) return;
+            const delta = below > 0 ? below + 16 : above - 16;
+
+            let scroller = active.parentElement;
+            while (
+                scroller &&
+                !(
+                    /auto|scroll/.test(getComputedStyle(scroller).overflowY) &&
+                    scroller.scrollHeight > scroller.clientHeight
+                )
+            ) {
+                scroller = scroller.parentElement;
+            }
+            if (scroller) scroller.scrollTop += delta;
+        };
+
+        target.addEventListener("resize", onResize);
+        return () => target.removeEventListener("resize", onResize);
+    }, []);
 
     return (
         <FormProvider {...form}>
