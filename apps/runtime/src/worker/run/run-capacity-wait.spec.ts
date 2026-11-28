@@ -131,6 +131,20 @@ describe('waiting for room on a cell', () => {
         expect(published.some((p) => p.kind === 'check')).toBe(true);
     });
 
+    // A teammate saw the host of a Run that ended timed_out stay `ready` (and paid for) long after it.
+    it('a Run that ends timed_out gives back its claims and ends its demand for hosts, so the fleet retires them at once', async () => {
+        const env = new FakeEnvironmentRuntime(SCENARIOS, () => new Date());
+        env.acquire = async () => noRoom();
+        const { deps, projection, claims } = inMemoryRunDeps({ env });
+        let clock = Date.now();
+        deps.now = () => new Date(clock);
+        deps.sleep = async (ms) => void (clock += ms);
+        const req = shopRunRequest();
+        await seed(projection, req);
+        expect(await runRuntimeRun(req, deps)).toMatchObject({ state: 'timed_out' });
+        expect(claims.demandEnded).toEqual([[req.organizationId, req.runId]]);
+    });
+
     it('a Run that waits past RUNTIME_CAPACITY_WAIT_MAX_MS ends timed_out then, and its page names the full hosts and when the first frees', async () => {
         const env = new FakeEnvironmentRuntime(SCENARIOS, () => new Date());
         const full: Blocked = {

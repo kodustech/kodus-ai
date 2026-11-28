@@ -176,6 +176,14 @@ export class PgSuiteRuns {
         );
     }
 
+    /** The run is over: a shard that never reported its end (a host lost, a process that died) is closed, so nothing shows it running. */
+    async closeShards(organizationId: string, suiteRunId: string, at: Date): Promise<void> {
+        await this.pool.query(
+            `UPDATE runtime.runtime_suite_shards SET state = 'finished', finished_at = COALESCE(finished_at, $3), updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND state <> 'finished'`,
+            [organizationId, suiteRunId, at],
+        );
+    }
+
     async shards(organizationId: string, suiteRunId: string): Promise<StoredSuiteShard[]> {
         const r = await this.pool.query(`SELECT shard, state, specs FROM runtime.runtime_suite_shards WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY shard`, [organizationId, suiteRunId]);
         return r.rows.map((x) => ({ shard: x.shard, state: x.state, specs: x.specs }));

@@ -28,6 +28,11 @@ export class InMemoryRunClaims implements RunClaims {
     async forRun(organizationId: string, runId: string) {
         return [...this.claims.values()].filter((c) => c.runId === runId && c.organizationId === organizationId && !c.released);
     }
+    /** The Runs whose demand for hosts was ended, as `[organizationId, runId]`. */
+    readonly demandEnded: Array<[string, string]> = [];
+    async endDemand(organizationId: string, runId: string) {
+        this.demandEnded.push([organizationId, runId]);
+    }
     async markReleased(claimId: string) {
         const c = this.claims.get(claimId);
         if (c) c.released = true;

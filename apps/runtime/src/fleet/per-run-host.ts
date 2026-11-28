@@ -46,11 +46,16 @@ export interface PerRunTiming {
     serveCheckMs: number;
     /** How often the dead-man TTL is pushed forward while the host lives. */
     extendEveryMs: number;
+    /**
+     * How long after its Run or suite run ended a host that still has claims is kept: the consumer releases them on its way out,
+     * so a claim still there past this was missed (a workflow that died, a release that raced a boot) and the host is taken back.
+     */
+    endedGraceMs: number;
     /** The most create attempts for retryable provider errors (throttled, no ready machine). */
     createAttempts: number;
 }
 
-export const DEFAULT_PER_RUN_TIMING: PerRunTiming = { pollMs: 5_000, serveCheckMs: 15_000, extendEveryMs: 5 * 60_000, createAttempts: 6 };
+export const DEFAULT_PER_RUN_TIMING: PerRunTiming = { pollMs: 5_000, serveCheckMs: 15_000, extendEveryMs: 5 * 60_000, endedGraceMs: 5 * 60_000, createAttempts: 6 };
 
 /** A step that may run again when it throws (DBOS `retriesAllowed`): attempts, first wait, and its growth. */
 export interface StepRetry {
@@ -235,14 +240,24 @@ async function serve(input: PerRunHostInput, pool: HostPool, provider: HostProvi
     const ttl = pool.hostClass.provider === 'boat' ? pool.hostClass.boat.ttlSeconds : 7200;
     let lastExtend = startedAt;
     for (let i = 0; ; i++) {
-        const s = await d.step(`serve:${i}`, async () => ({
-            asked: await d.store.demandLive(input.poolId, input.boundKey),
-            claims: await d.store.liveClaimsOnHost(input.hostId),
-            cell: await d.store.hostCell(input.hostId),
-            now: d.now(),
-        }), FLEET_STEP_RETRY);
+        const s = await d.step(
+            `serve:${i}`,
+            async () => {
+                const asked = await d.store.demandLive(input.poolId, input.boundKey);
+                const claims = await d.store.liveClaimsOnHost(input.hostId);
+                // Read only when something would keep the host: a claim a finished consumer never released.
+                const ended = !asked && claims > 0 && (await d.store.consumerEnded(input.hostId, input.boundKey, t.endedGraceMs));
+                return { asked, claims, ended, cell: await d.store.hostCell(input.hostId), now: d.now() };
+            },
+            FLEET_STEP_RETRY,
+        );
         if (!s.asked && s.claims === 0) {
             await d.step('host.served', () => d.store.moveHost(input.hostId, 'terminating', 'served'), FLEET_STEP_RETRY);
+            return { outcome: 'served' };
+        }
+        // Its Run or suite run is over (past the grace) and no demand asks for the host: what still holds it is a claim nobody released.
+        if (!s.asked && s.ended) {
+            await d.step('host.abandoned', () => d.store.moveHost(input.hostId, 'terminating', 'abandoned'), FLEET_STEP_RETRY);
             return { outcome: 'served' };
         }
         if (s.now >= until) {

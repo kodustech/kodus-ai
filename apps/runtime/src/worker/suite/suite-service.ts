@@ -16,6 +16,7 @@ import type { PgSuiteQueue } from './pg-suite-queue';
 import type { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
 import type { PgSuiteRuns, StoredSuiteRun, SuiteRunState } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
+import type { RunClaims } from '../run/ports';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { isCancellation } from '../workflow-cancellation';
 import { mainHistoryOf } from './suite-adapters';
@@ -70,6 +71,8 @@ export interface SuiteServiceDeps {
     setups: Pick<EnvironmentSetupStore, 'get'>;
     environment(ctx: SuiteEnvironmentContext): SuiteEnvironment;
     demand(scope: { organizationId: string; suiteRunId: string }): SuiteHostDemand;
+    /** The claims the hub holds for a suite run (`PgRunClaims`): what the run gives back when it ends, beyond the ones the engine knows. */
+    claims?: Pick<RunClaims, 'forRun'>;
     runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts' | 'latestForPr'> & Partial<Pick<PgSuiteRuns, 'markShard' | 'results'>>;
     /** The spec queue of a run (section 6): the shards pull their specs from it. Absent: the plan is fixed per shard. */
     queue?: Pick<PgSuiteQueue, 'seed' | 'claimNext' | 'renew' | 'complete' | 'release' | 'requeueExpired' | 'counts' | 'leftovers'>;
@@ -172,6 +175,8 @@ export class SuiteService {
         } catch (e) {
             // The workflow was cancelled (a newer push, the PR closed, the Run stopped) before the engine could close the check.
             if (publisher && !closed && isCancellation(e)) await publisher.cancelled(cmd).catch(() => undefined);
+            // Any other throw: the engine already ended the run errored; the check is closed with it, never left in progress.
+            else if (publisher && !closed) await publisher.finished(cmd, { status: 'ran', suiteRunId: cmd.suiteRunId, state: 'errored', replayed: false }, suite).catch(() => undefined);
             throw e;
         }
     }
@@ -250,6 +255,7 @@ export class SuiteService {
             stats: this.d.stats,
             demand,
             clock,
+            ...(this.d.claims ? { claims: this.d.claims } : {}),
             ...(this.d.queue ? { queue: this.d.queue } : {}),
             ...(this.d.mainResults ? { mainResults: this.d.mainResults } : {}),
             ...(this.d.baselines ? { baselines: this.d.baselines } : {}),

@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 
 import { HostPoolSchema, type HostPool } from '@libs/runtime/fleet/pool';
 import { LIVE_CLAIM_STATES } from '@libs/runtime/contracts/enums';
+import { TERMINAL_STATES } from '@libs/runtime/run/run-state';
 
 // What runtime-fleet reads and writes in the Runtime database
 // (docs/runtime/host-providers.md §5.2): pools (status only; the spec is
@@ -14,7 +15,7 @@ export const HOST_STATES = ['requested', 'provisioning', 'bootstrapping', 'ready
 export type HostState = (typeof HOST_STATES)[number];
 
 /** Why a host moved: a closed set, as claims have ClaimReason. */
-export const HOST_REASONS = ['demand', 'created', 'running', 'registered', 'served', 'expired', 'failed', 'destroyed', 'orphan'] as const;
+export const HOST_REASONS = ['demand', 'created', 'running', 'registered', 'served', 'expired', 'abandoned', 'failed', 'destroyed', 'orphan'] as const;
 export type HostReason = (typeof HOST_REASONS)[number];
 
 /** Why a host could not serve its Run: what the Run's blocker names (host_unavailable). */
@@ -80,6 +81,13 @@ export interface FleetStore {
     hostCell(hostId: string): Promise<{ cellId: string; connected: boolean } | null>;
     /** Live claims on the host's cell. */
     liveClaimsOnHost(hostId: string): Promise<number>;
+    /**
+     * Whether the Run or suite run the host's bound key names (`run:<org>/<run>[/<side>]`, `suite:<org>/<suiteRun>/<shard>`)
+     * ended at least `graceMs` ago, and no claim on the host is held for diagnosis (its machines are evidence). A key of any
+     * other kind (a setup, a template) is never ended here. Read-only: it only lets the fleet stop keeping a host for claims
+     * nobody released.
+     */
+    consumerEnded(hostId: string, boundKey: string, graceMs: number): Promise<boolean>;
 }
 
 /** The host a Run's demand on a pool gets: derived, so every replica and every retry names the same host. */
@@ -195,6 +203,27 @@ export class PgFleetStore implements FleetStore {
             [hostId, [...LIVE_CLAIM_STATES]],
         );
         return Number(r.rows[0]?.n ?? 0);
+    }
+
+    async consumerEnded(hostId: string, boundKey: string, graceMs: number) {
+        const [kind, rest] = [boundKey.slice(0, boundKey.indexOf(':')), boundKey.slice(boundKey.indexOf(':') + 1)];
+        const [organizationId, consumerId] = rest.split('/');
+        if (!organizationId || !consumerId) return false;
+        const ago = `now() - ($3::double precision * interval '1 millisecond')`;
+        const ended =
+            kind === 'run'
+                ? { sql: `SELECT 1 FROM runtime.runtime_runs WHERE run_id = $2 AND organization_id = $1 AND state = ANY($5::text[]) AND COALESCE(finished_at, updated_at) < ${ago}`, extra: [[...TERMINAL_STATES]] }
+                : kind === 'suite'
+                  ? { sql: `SELECT 1 FROM runtime.runtime_suite_runs WHERE suite_run_id = $2 AND organization_id = $1 AND finished_at IS NOT NULL AND finished_at < ${ago}`, extra: [] }
+                  : undefined;
+        if (!ended) return false;
+        const r = await this.db.query(
+            `SELECT EXISTS (${ended.sql}) AND NOT EXISTS (
+                SELECT 1 FROM runtime.runtime_claims k JOIN runtime.runtime_cells c ON c.cell_id = k.cell_id
+                 WHERE c.host_id = $4 AND k.released_at IS NULL AND k.state = 'held' AND k.hard_expires_at > now()) AS ended`,
+            [organizationId, consumerId, graceMs, hostId, ...ended.extra],
+        );
+        return r.rows[0]?.ended === true;
     }
 
     private async event(hostId: string, poolId: string, from: string | null, to: string, reason: HostReason, detail?: string) {

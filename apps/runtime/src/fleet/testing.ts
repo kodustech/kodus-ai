@@ -17,6 +17,10 @@ export class InMemoryFleetStore implements FleetStore {
     /** Hosts whose cell registered and is connected. */
     readonly connected = new Set<string>();
     readonly claims = new Map<string, number>();
+    /** When the Run or suite run a bound key names ended (a test says so), by bound key. */
+    readonly consumerEndedAt = new Map<string, number>();
+    /** Hosts with a claim held for diagnosis: its machines are evidence, never taken away on the consumer's word. */
+    readonly heldOnHost = new Set<string>();
 
     constructor(private readonly clock: { now(): number }) {}
 
@@ -90,6 +94,10 @@ export class InMemoryFleetStore implements FleetStore {
     }
     async liveClaimsOnHost(hostId: string) {
         return this.claims.get(hostId) ?? 0;
+    }
+    async consumerEnded(hostId: string, boundKey: string, graceMs: number) {
+        const endedAt = this.consumerEndedAt.get(boundKey);
+        return endedAt !== undefined && this.clock.now() - endedAt >= graceMs && !this.heldOnHost.has(hostId);
     }
 }
 

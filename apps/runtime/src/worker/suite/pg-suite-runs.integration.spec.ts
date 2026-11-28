@@ -170,4 +170,20 @@ const run: SuiteRunRecord = {
         // A closed PR keeps nothing.
         expect(await ids()).toEqual(['r-new', 'r-old']);
     });
+
+    it('closing the shards of an ended run finishes the ones still planned or running, keeps the time of one that finished, and touches no other run or organization', async () => {
+        await store.create(run);
+        await store.create({ ...run, suiteRunId: 'r-other' });
+        await store.savePlan('org-a', run.suiteRunId, [{ shard: 0, specs: ['a'] }, { shard: 1, specs: ['b'] }, { shard: 2, specs: ['c'] }]);
+        await store.savePlan('org-a', 'r-other', [{ shard: 0, specs: ['a'] }]);
+        await store.markShard('org-a', run.suiteRunId, 0, 'running', new Date('2026-11-23T12:01:00.000Z'));
+        await store.markShard('org-a', run.suiteRunId, 1, 'running', new Date('2026-11-23T12:01:00.000Z'));
+        await store.markShard('org-a', run.suiteRunId, 1, 'finished', new Date('2026-11-23T12:05:00.000Z'));
+        await store.closeShards('org-b', run.suiteRunId, new Date('2026-11-23T12:30:00.000Z'));
+        expect((await store.shards('org-a', run.suiteRunId)).map((x) => x.state)).toEqual(['running', 'finished', 'planned']);
+        await store.closeShards('org-a', run.suiteRunId, new Date('2026-11-23T12:30:00.000Z'));
+        expect((await store.shards('org-a', run.suiteRunId)).map((x) => x.state)).toEqual(['finished', 'finished', 'finished']);
+        expect((await pool.query(`SELECT finished_at FROM runtime.runtime_suite_shards WHERE suite_run_id = $1 AND shard = 1`, [run.suiteRunId])).rows[0].finished_at).toEqual(new Date('2026-11-23T12:05:00.000Z'));
+        expect((await store.shards('org-a', 'r-other')).map((x) => x.state)).toEqual(['planned']);
+    });
 });

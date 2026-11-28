@@ -36,6 +36,11 @@ export interface PublishRequester {
 export interface RunClaims {
     /** Claims of the org's Run not yet released. */
     forRun(organizationId: string, runId: string): Promise<{ claimId: string; side: string }[]>;
+    /**
+     * The Run is over: its demand for perRun hosts (`runtime_pool_demand`, the worker's own rows) ends now instead of lapsing
+     * on its 120 s lifetime, so the fleet retires the hosts as soon as no claim holds them. Idempotent.
+     */
+    endDemand?(organizationId: string, runId: string): Promise<void>;
     /** Outbound requests the proxy denied for these claims of the org during the test. */
     egressBlocked(organizationId: string, claimIds: string[]): Promise<{ host: string; port: number; phase: string }[]>;
     /**
