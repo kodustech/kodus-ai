@@ -418,6 +418,11 @@ export function wrapByokModel(
  * reads that header (`getRetryDelayInMs`) and waits it, under a minute, for
  * its next attempt. A header the provider sent is left as it is.
  */
+/** The longest retry header the AI SDK honors: `getRetryDelayInMs` takes
+ *  it only under 60 s and otherwise retries on its own 2 s backoff, inside
+ *  the window a "retry in 60s" names. */
+const SDK_RETRY_HEADER_MAX_MS = 59_999;
+
 function withProviderRetryDelay(
     err: unknown,
     category: LlmErrorCategory,
@@ -429,7 +434,10 @@ function withProviderRetryDelay(
     const ms = providerRetryDelayMs(err, category);
     if (ms === undefined) return;
     try {
-        call.responseHeaders = { ...headers, 'retry-after-ms': String(ms) };
+        call.responseHeaders = {
+            ...headers,
+            'retry-after-ms': String(Math.min(ms, SDK_RETRY_HEADER_MAX_MS)),
+        };
     } catch {
         // A frozen error keeps the SDK's own backoff.
     }

@@ -107,6 +107,26 @@ describe('a per-minute 429 retried by the agent loop', () => {
         ).toEqual({ 'retry-after': '1' });
     });
 
+    // The SDK honors a retry header only under 60 s (`getRetryDelayInMs`):
+    // "retry in 60s" handed over as 60000 fell back to its 2 s backoff,
+    // inside the window (#2792 review).
+    it('hands a full minute as just under it, which the SDK still honors', async () => {
+        const { model } = flakyModel(() => googlePerMinute('60'));
+        const thrown = await Promise.resolve(
+            wrap(model).doGenerate({
+                prompt: [
+                    { role: 'user', content: [{ type: 'text', text: 'x' }] },
+                ],
+            } as never),
+        ).catch(
+            (e: unknown) => e as { responseHeaders: Record<string, string> },
+        );
+        expect(
+            (thrown as { responseHeaders: Record<string, string> })
+                .responseHeaders['retry-after-ms'],
+        ).toBe('59999');
+    });
+
     it('hands no delay past a minute: that is a daily cap, not a window', async () => {
         const { model } = flakyModel(() => googlePerMinute('3600'));
         const thrown = await Promise.resolve(
