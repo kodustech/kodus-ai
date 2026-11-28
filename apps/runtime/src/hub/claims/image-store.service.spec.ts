@@ -4,7 +4,7 @@ import { FakeImageStoreProvider } from '@libs/runtime/fleet/testing';
 
 import type { CellSession } from '../hub-store';
 import { InMemoryImageStoreBook } from '../testing';
-import { ImageStoreService } from './image-store.service';
+import { ImageStoreService, type PreparedImageStore } from './image-store.service';
 
 // The shard's wait for the PR image its builder pushes (docs/runtime/shared-image-store.md sections 5 and 6).
 
@@ -46,7 +46,7 @@ describe('a suite shard waiting for its PR image', () => {
         ctx.onPoll((n) => {
             if (n === 2) void ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder', state: 'ready', images: [image] });
         });
-        const prepared = await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.prImages).toEqual([{ fingerprint: image.fingerprint, digest: image.digest }]);
         expect(ctx.polls()).toBe(2);
         expect(ctx.outcomes).toEqual(['waited_ready']);
@@ -54,7 +54,7 @@ describe('a suite shard waiting for its PR image', () => {
 
     it('does not wait at all when no builder asked to push this PR: the shard builds as it does today', async () => {
         const ctx = setup();
-        const prepared = await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.grant).toBeDefined();
         expect(prepared?.prImages).toBeUndefined();
         expect(ctx.polls()).toBe(0);
@@ -64,7 +64,7 @@ describe('a suite shard waiting for its PR image', () => {
         const ctx = setup();
         await ctx.pending();
         await ctx.book.finishPrImage({ orgId: 'org', environmentId: 'env', prSha: SHA, builderClaim: 'builder', state: 'failed', images: [], reason: 'secret_in_image' });
-        const prepared = await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.prImages).toBeUndefined();
         expect(ctx.outcomes).toEqual(['failed']);
     });
@@ -75,7 +75,7 @@ describe('a suite shard waiting for its PR image', () => {
         ctx.onPoll((n) => {
             if (n === 1) ctx.claims.set('builder', 'terminated');
         });
-        const prepared = await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.prImages).toBeUndefined();
         expect((await ctx.book.prImage('org', 'env', SHA))?.state).toBe('failed');
     });
@@ -83,7 +83,7 @@ describe('a suite shard waiting for its PR image', () => {
     it('stops waiting at the cap even when the builder is still alive, and builds', async () => {
         const ctx = setup({ waitMs: 3 * 60_000 });
         await ctx.pending();
-        const prepared = await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.prImages).toBeUndefined();
         expect(ctx.polls()).toBe(3);
         expect(ctx.outcomes).toEqual(['waited_timeout']);
@@ -93,7 +93,7 @@ describe('a suite shard waiting for its PR image', () => {
         const ctx = setup();
         await ctx.book.startPrImage({ orgId: 'other', environmentId: 'env', prSha: SHA, builderClaim: 'x', expiresAt: '2099-01-01T00:00:00.000Z' });
         await ctx.book.finishPrImage({ orgId: 'other', environmentId: 'env', prSha: SHA, builderClaim: 'x', state: 'ready', images: [image] });
-        const prepared = await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(session, ask, { claimId: 'shard-0', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.prImages).toBeUndefined();
     });
 });
@@ -186,7 +186,7 @@ describe('the credential of a claim that is still booting', () => {
         const ctx = setup();
         const writer = { ...ask, consumer: 'runtime', ref: { side: 'pr' as const, sha: SHA } };
         const bk = { ...session, boundKey: 'run:org/run-1' };
-        const prepared = await ctx.service.prepare(bk, writer, { claimId: 'pr-claim', cellId: 'cell-s' });
+        const prepared = (await ctx.service.prepare(bk, writer, { claimId: 'pr-claim', cellId: 'cell-s' })) as PreparedImageStore | undefined;
         expect(prepared?.grant).toBeDefined();
         const sent: unknown[] = [];
         const stop = ctx.service.keepFresh('pr-claim', bk, async (g) => void sent.push(g));

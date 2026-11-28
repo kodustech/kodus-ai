@@ -86,6 +86,8 @@ export interface PrImageUnavailable {
     unavailable: string;
 }
 
+export const isPrImageUnavailable = <T extends object>(p: T | PrImageUnavailable): p is PrImageUnavailable => !Array.isArray(p) && 'unavailable' in p;
+
 export type StoreAsk = {
     organizationId: string;
     environmentId: string;
@@ -150,8 +152,8 @@ export class ImageStoreService {
             let prImages: PrImage[] | undefined;
             if (kind === 'suite') {
                 const waited = await this.awaitPrImages(req, ids.claimId, log);
-                if (waited && 'unavailable' in waited) return waited;
-                prImages = waited;
+                if (waited && isPrImageUnavailable(waited)) return waited;
+                prImages = waited as PrImage[] | undefined;
             }
             const writes = repos.some((r) => r.push);
             const now = this.deps.now();
@@ -238,16 +240,17 @@ export class ImageStoreService {
     keepFresh(claimId: string, session: CellSession, send: (grant: ImageStoreGrant) => Promise<unknown>): () => void {
         let timer: ReturnType<typeof setTimeout> | undefined;
         let stopped = false;
+        const renew = async () => {
+            try {
+                const grant = await this.renewal({ claimId }, session);
+                if (grant && !stopped) await send(grant);
+            } catch (e) {
+                this.deps.log('warn', 'image_store.booting_renew_failed', { claimId, error: (e as Error).message });
+            }
+            if (!stopped) tick();
+        };
         const tick = () => {
-            timer = setTimeout(async () => {
-                try {
-                    const grant = await this.renewal({ claimId }, session);
-                    if (grant && !stopped) await send(grant);
-                } catch (e) {
-                    this.deps.log('warn', 'image_store.booting_renew_failed', { claimId, error: (e as Error).message });
-                }
-                if (!stopped) tick();
-            }, this.deps.refreshMs ?? BOOTING_GRANT_REFRESH_MS);
+            timer = setTimeout(() => void renew(), this.deps.refreshMs ?? BOOTING_GRANT_REFRESH_MS);
         };
         tick();
         return () => {

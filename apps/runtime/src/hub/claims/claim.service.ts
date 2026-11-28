@@ -24,7 +24,7 @@ import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-c
 import type { TicketService } from './ticket.service';
 import type { MachineMinuteBudget } from './machine-minutes';
 import type { OrgSecretRefs } from './org-secret-refs';
-import { ImageStoreService, type PreparedImageStore } from './image-store.service';
+import { ImageStoreService, isPrImageUnavailable, type PreparedImageStore } from './image-store.service';
 import { type BuilderAcquire, ToolLayerService } from './tool-layers';
 
 // The claim lifecycle on the hub: acquire (with rebind on a retry), the
@@ -439,8 +439,8 @@ export class ClaimService {
         // minute or memory is held). Any failure is its own: undefined, and the claim builds as it always did.
         const prepared = await this.opts.imageStore?.prepare(session, req, { claimId, cellId });
         // A Run's shard whose PR image is not there is refused with the cause: it never rebuilds the PR in parallel.
-        if (prepared && 'unavailable' in prepared) return prImageUnavailable(prepared.unavailable);
-        const store = prepared;
+        if (prepared && isPrImageUnavailable(prepared)) return prImageUnavailable(prepared.unavailable);
+        const store = prepared as PreparedImageStore | undefined;
         if (store) at = this.now().getTime();
         const overBudget = await this.reserveMachineMinutes(ids, req);
         if (overBudget) return overBudget;
