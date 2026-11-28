@@ -176,9 +176,9 @@ function headOf(text: string, max: number): string {
     return lastLine > 0 ? head.slice(0, lastLine) : head;
 }
 
-/** `NAME=value` before a command, the value quoted or not. */
+/** `NAME=value` before a command, the value quoted, escaped (`a\ b`) or bare. */
 const INLINE_ASSIGNMENT =
-    /^[A-Za-z_][A-Za-z0-9_]*=(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s;|&<>()'"])*\s*/;
+    /^[A-Za-z_][A-Za-z0-9_]*=(?:"(?:[^"\\]|\\.)*"|'[^']*'|\\.|[^\s;|&<>()'"\\])*\s*/;
 /** `env` and its flags, when a command follows. */
 const ENV_PREFIX = /^env(?:\s+-[A-Za-z-]+)*\s+/;
 
@@ -194,7 +194,10 @@ function programOf(command: string): string {
         if (!prefix) break;
         rest = rest.slice(prefix[0].length);
     }
-    return (rest.split(/[\s;|&<>()]+/)[0] ?? '').slice(0, 40);
+    const program = rest.split(/[\s;|&<>()]+/)[0] ?? '';
+    // A quote or an escape left here is part of a value the shell never
+    // parsed (`TOKEN="abc seq`): log no program rather than a piece of it.
+    return /['"\\]/.test(program) ? '' : program.slice(0, 40);
 }
 
 export interface BuildE2BRemoteCommandsOptions {

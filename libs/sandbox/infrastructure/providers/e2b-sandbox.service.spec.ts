@@ -183,9 +183,7 @@ describe('buildE2BRemoteCommands', () => {
      * `run` resolves; `outcome` is what `wait()` settles with.
      */
     const backgroundRun = (
-        outcome:
-            | { stdout: string; stderr?: string; exitCode: number }
-            | Error,
+        outcome: { stdout: string; stderr?: string; exitCode: number } | Error,
         chunks: Array<string | { stderr: string }> = [],
         // E2B streams output while the command runs, after `run` returned the
         // handle; `late` delivers the chunks then instead of before.
@@ -635,7 +633,10 @@ describe('buildE2BRemoteCommands', () => {
             expect(res).toEqual({ stdout: 'ok', stderr: 'warn', exitCode: 0 });
             expect(run).toHaveBeenCalledWith(
                 `cd ${REPO_DIR} && git status`,
-                expect.objectContaining({ background: true, timeoutMs: 30_000 }),
+                expect.objectContaining({
+                    background: true,
+                    timeoutMs: 30_000,
+                }),
             );
             expect(kill).not.toHaveBeenCalled();
         });
@@ -682,7 +683,9 @@ describe('buildE2BRemoteCommands', () => {
                 program: 'git',
                 maxChars: 2_000_000,
             });
-            expect(JSON.stringify(warn.mock.calls)).not.toContain('SECRET_CANARY');
+            expect(JSON.stringify(warn.mock.calls)).not.toContain(
+                'SECRET_CANARY',
+            );
         });
 
         it('stops a command whose output arrives after run returned', async () => {
@@ -731,7 +734,11 @@ describe('buildE2BRemoteCommands', () => {
                                 opts.onStdout?.(chunk);
                                 if (received === 400) {
                                     clearInterval(timer);
-                                    resolve({ stdout: handle.stdout, stderr: '', exitCode: 0 });
+                                    resolve({
+                                        stdout: handle.stdout,
+                                        stderr: '',
+                                        exitCode: 0,
+                                    });
                                 }
                             }, 0);
                             dropped = (err) => {
@@ -809,6 +816,11 @@ describe('buildE2BRemoteCommands', () => {
                 ['A=1 B="two words" git log -p', 'git'],
                 ['env -i TOKEN=s3cret PATH=/bin cat big.json', 'cat'],
                 ['TOKEN=only', ''],
+                // A value with an escaped space, or a quote never closed:
+                // no part of it is the program.
+                ['TOKEN=abc\\ def seq', 'seq'],
+                ['TOKEN="abc seq', ''],
+                ["TOKEN='abc seq", ''],
             ];
             for (const [command, program] of cases) {
                 const { run } = backgroundRun(exitError(big, '', -1), [big]);
@@ -818,7 +830,8 @@ describe('buildE2BRemoteCommands', () => {
                 });
                 await rc.exec(command);
                 expect(warn).toHaveBeenCalledWith({
-                    message: '[SANDBOX-EXEC] command stopped after 2000000 output characters',
+                    message:
+                        '[SANDBOX-EXEC] command stopped after 2000000 output characters',
                     context: undefined,
                     metadata: { program, maxChars: 2_000_000 },
                 });
@@ -858,7 +871,9 @@ describe('buildE2BRemoteCommands', () => {
         });
 
         it('keeps what a stopped command printed when its stream errors', async () => {
-            const chunks = Array.from({ length: 3 }, () => 'y\n'.repeat(600_000));
+            const chunks = Array.from({ length: 3 }, () =>
+                'y\n'.repeat(600_000),
+            );
             const { run } = backgroundRun(new Error('stream closed'), chunks);
             const rc = buildE2BRemoteCommands(makeSandbox(run));
 
