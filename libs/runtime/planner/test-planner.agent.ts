@@ -593,7 +593,8 @@ export async function planTests(deps: { runner: AgentRunner; base: RepoReader; h
         tools: new InMemoryToolRegistry(tools),
         policies: [new BudgetPolicy(), new ForceFinalizePolicy({ doneToolName: SUBMIT_PLAN_TOOL }), new TestPlannerStopPolicy(state, maxTokens)],
         maxSteps,
-        temperature: 0,
+        // No temperature: reasoning models behind a BYOK gateway refuse anything but their default (temperature=0 got
+        // "UnsupportedParamsError … only temperature=1" and every Run ended "LLM unavailable"). The provider's default it is.
         resultToolName: SUBMIT_PLAN_TOOL,
     };
     // Routes of the files that import an unmapped JS/TS file; {} (the prompt unchanged) when none is found.

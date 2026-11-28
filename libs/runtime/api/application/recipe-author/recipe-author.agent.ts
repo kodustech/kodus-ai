@@ -836,7 +836,7 @@ export async function authorRecipe(
         ],
         // single: one submission and up to two fixes of what the checks refused.
         maxSteps: single ? 3 : RECIPE_AUTHOR_LIMITS.maxSteps,
-        temperature: 0,
+        // No temperature, as the test planner: a reasoning model refuses anything but its default.
         resultToolName: SUBMIT_RECIPE_TOOL,
     };
     const run = await deps.runner.run(spec, { prompt }, { runId: input.runId, ...(input.signal ? { signal: input.signal } : {}) });

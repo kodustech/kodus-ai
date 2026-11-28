@@ -714,6 +714,20 @@ describe('the planner budget fits a large monorepo inside a Run', () => {
         expect(seen[0]).toBeGreaterThan(seen[1]);
     });
 
+    // Behavior: the planner never pins a temperature, so a reasoning model that accepts only its default is not refused.
+    it('asks the model with no temperature of its own', async () => {
+        const temperatures: unknown[] = [];
+        const runner: AgentRunner = {
+            run: async (spec, _input, ctx) => {
+                temperatures.push(spec.temperature);
+                return { runId: ctx.runId, agentId: spec.id, status: 'completed', steps: [], artifacts: [], usage: { inputTokens: 1, outputTokens: 1 }, trace: [] };
+            },
+        };
+        const req = request({ round: 0, execLeft: 3 });
+        await planTests({ runner, base: readerOf(BASE), head: readerOf(HEAD) }, { runId: req.runId, repositoryName: 'g/g', baseSha: 'a'.repeat(40), request: req });
+        expect(temperatures).toEqual([undefined]);
+    });
+
     // Behavior: after the first refusal the fix step is still in budget, so a refused browser probe is fixed in the round instead of left standing.
     it('keeps room in the round to fix a refusal of the first submission', async () => {
         const browser = {
