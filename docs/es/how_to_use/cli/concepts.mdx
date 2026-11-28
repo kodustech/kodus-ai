@@ -16,7 +16,7 @@ Cada revisión necesita responder una pregunta: *¿qué cambió?* El CLI admite 
 | **Rama** (`--branch <base>`) | `git diff <base>...HEAD`: tus commits desde que la rama salió de `<base>` | No | Revisión previa a la fusión de toda la rama.   |
 | **Commit** (`--commit <sha>`)  | El diff introducido por un solo commit              | No                   | Auditar un commit, revisión de cherry-pick.         |
 
-Los archivos indicados en la línea de comandos (`kodus review src/auth.ts`) limitan una revisión del árbol de trabajo a esos archivos. Si pasas más de un ámbito, los archivos tienen prioridad sobre `--branch`, `--branch` sobre `--commit` y `--commit` sobre `--staged`.
+Los archivos indicados en la línea de comandos (`kodus review src/auth.ts`) limitan una revisión del árbol de trabajo o con `--staged` a esos archivos. Si pasas más de un ámbito, los archivos tienen prioridad sobre `--branch`, `--branch` sobre `--commit` y `--commit` sobre `--staged`.
 
 Los archivos sin rastrear no forman parte de ningún diff hasta que les haces `git add`.
 

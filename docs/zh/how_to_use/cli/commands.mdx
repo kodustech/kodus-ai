@@ -40,7 +40,7 @@ kodus review --fix                    # Apply all fixable issues
 kodus review --prompt-only            # Output optimized for AI agents
 ```
 
-未指定范围标志时,`kodus review` 会审查工作目录中已跟踪的改动,包括已暂存和未暂存的。如果传入多个范围,文件优先于 `--branch`,`--branch` 优先于 `--commit`,`--commit` 优先于 `--staged`。参见 [Diff 模式](/zh/how_to_use/cli/concepts#diff-模式)。
+未指定范围标志时,`kodus review` 会审查工作目录中已跟踪的改动,包括已暂存和未暂存的。指定文件会把工作目录或 `--staged` 审查限制在这些文件上。如果传入多个范围,文件优先于 `--branch`,`--branch` 优先于 `--commit`,`--commit` 优先于 `--staged`。参见 [Diff 模式](/zh/how_to_use/cli/concepts#diff-模式)。
 
 ### 标志
 

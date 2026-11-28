@@ -14,10 +14,39 @@ export function parseGitStatus(statusChar: string): FileDiff['status'] {
     }
 }
 
+export type GitNameStatusEntry = {
+    file: string;
+    status: FileDiff['status'];
+    oldFile?: string;
+};
+
 export function parseGitNameStatusOutput(
     nameStatus: string,
-): Array<{ file: string; status: FileDiff['status'] }> {
-    const files: Array<{ file: string; status: FileDiff['status'] }> = [];
+): GitNameStatusEntry[] {
+    const files: GitNameStatusEntry[] = [];
+
+    if (nameStatus.includes('\0')) {
+        const tokens = nameStatus.split('\0');
+        for (let i = 0; i < tokens.length;) {
+            const statusChar = tokens[i++];
+            if (!statusChar) {
+                continue;
+            }
+            const isRename = statusChar.startsWith('R');
+            const isCopy = statusChar.startsWith('C');
+            const oldFile = isRename || isCopy ? tokens[i++] : undefined;
+            const fileName = tokens[i++];
+            if (!fileName) {
+                continue;
+            }
+            files.push({
+                file: fileName,
+                status: parseGitStatus(statusChar),
+                ...(isRename && oldFile ? { oldFile } : {}),
+            });
+        }
+        return files;
+    }
 
     for (const line of nameStatus.split('\n')) {
         const trimmed = line.trim();
@@ -27,10 +56,11 @@ export function parseGitNameStatusOutput(
 
         const parts = trimmed.split('\t');
         const statusChar = parts[0];
+        const isRename = statusChar.startsWith('R');
+        const isCopy = statusChar.startsWith('C');
+        const oldFile = isRename || isCopy ? parts[1] : undefined;
         const fileName =
-            statusChar.startsWith('R') || statusChar.startsWith('C')
-                ? parts[parts.length - 1]
-                : parts[1];
+            isRename || isCopy ? parts[parts.length - 1] : parts[1];
 
         if (!fileName) {
             continue;
@@ -39,6 +69,7 @@ export function parseGitNameStatusOutput(
         files.push({
             file: fileName,
             status: parseGitStatus(statusChar),
+            ...(isRename && oldFile ? { oldFile } : {}),
         });
     }
 

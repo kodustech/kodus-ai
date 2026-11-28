@@ -218,36 +218,45 @@ class GitService {
         return diff;
     }
 
-    async getDiffForFiles(files: string[]): Promise<string> {
+    async getDiffForFiles(
+        files: string[],
+        options?: { staged?: boolean },
+    ): Promise<string> {
         await this.ensureRepo();
         const diffs: string[] = [];
 
         if (this.verbose) {
             cliDebug(
                 chalk.dim(
-                    `[verbose] Getting diff for ${files.length} file(s): ${files.join(', ')}`,
+                    `[verbose] Getting ${options?.staged ? 'staged ' : ''}diff for ${files.length} file(s): ${files.join(', ')}`,
                 ),
             );
         }
 
-        for (const file of files) {
-            const stagedDiff = await this.git.diff(['--cached', '--', file]);
-            const unstagedDiff = await this.git.diff(['--', file]);
+        if (files.length === 0) {
+            return '';
+        }
 
-            if (this.verbose) {
-                cliDebug(
-                    chalk.dim(
-                        `[verbose]   ${file}: staged=${stagedDiff ? `${stagedDiff.length} chars` : 'empty'}, unstaged=${unstagedDiff ? `${unstagedDiff.length} chars` : 'empty'}`,
-                    ),
-                );
-            }
+        const stagedDiff = await this.git.diff(['--cached', '--', ...files]);
+        const unstagedDiff = options?.staged
+            ? ''
+            : await this.git.diff(['--', ...files]);
 
-            if (stagedDiff) {
-                diffs.push(stagedDiff);
-            }
-            if (unstagedDiff) {
-                diffs.push(unstagedDiff);
-            }
+        if (this.verbose) {
+            cliDebug(
+                chalk.dim(
+                    options?.staged
+                        ? `[verbose]   staged=${stagedDiff ? `${stagedDiff.length} chars` : 'empty'}`
+                        : `[verbose]   staged=${stagedDiff ? `${stagedDiff.length} chars` : 'empty'}, unstaged=${unstagedDiff ? `${unstagedDiff.length} chars` : 'empty'}`,
+                ),
+            );
+        }
+
+        if (stagedDiff) {
+            diffs.push(stagedDiff);
+        }
+        if (unstagedDiff) {
+            diffs.push(unstagedDiff);
         }
 
         const result = diffs.join('\n').trim();
@@ -305,6 +314,24 @@ class GitService {
         return files;
     }
 
+    private async getStagedNameStatusPrefix(): Promise<string> {
+        try {
+            const prefix = (await this.git.revparse(['--show-prefix'])).trim();
+            if (!prefix) {
+                return '';
+            }
+            const diffRelative = (
+                await this.git.raw(['config', '--bool', 'diff.relative'])
+            ).trim();
+            if (diffRelative !== 'true') {
+                return '';
+            }
+            return prefix.endsWith('/') ? prefix : `${prefix}/`;
+        } catch {
+            return '';
+        }
+    }
+
     async getFullFileContents(
         explicitFiles?: string[],
         options?: {
@@ -318,10 +345,15 @@ class GitService {
             | {
                   filesToRead: string[];
                   fileStatusMap: Map<string, FileDiff['status']>;
+                  fileOldPathMap?: Map<string, string>;
               }
             | undefined;
 
-        if (explicitFiles && explicitFiles.length > 0) {
+        const isStagedOnly = Boolean(
+            options?.staged && !options?.branch && !options?.commit,
+        );
+
+        if (explicitFiles && explicitFiles.length > 0 && !isStagedOnly) {
             selection = createFileSelectionFromPaths(explicitFiles);
         } else if (options?.branch) {
             const nameStatus = await this.git.diff([
@@ -336,11 +368,24 @@ class GitService {
                 options.commit,
             ]);
             selection = createFileSelectionFromNameStatus(nameStatus);
+        } else if (options?.staged) {
+            const nameStatusArgs = ['--cached', '--name-status', '-z'];
+            if (explicitFiles && explicitFiles.length > 0) {
+                nameStatusArgs.push('--', ...explicitFiles);
+            }
+            const [nameStatus, pathPrefix] = await Promise.all([
+                this.git.diff(nameStatusArgs),
+                this.getStagedNameStatusPrefix(),
+            ]);
+            selection = createFileSelectionFromNameStatus(
+                nameStatus,
+                pathPrefix,
+            );
         } else {
             const allModifiedFiles = await this.getModifiedFiles();
             selection = createFileSelectionFromModifiedFiles(allModifiedFiles);
         }
-        const { filesToRead, fileStatusMap } = selection;
+        const { filesToRead, fileStatusMap, fileOldPathMap } = selection;
 
         // 2. For each file, read content and diff
         const fileContents: FileContent[] = [];
@@ -355,7 +400,10 @@ class GitService {
                     continue;
                 }
 
-                const diffPlan = buildFileDiffReadPlan(filePath, options);
+                const diffPlan = buildFileDiffReadPlan(filePath, {
+                    ...options,
+                    oldFilePath: fileOldPathMap?.get(filePath),
+                });
                 let fileDiff: string;
                 if (diffPlan.mode === 'single-diff') {
                     fileDiff = await this.git.diff(diffPlan.args);

@@ -81,4 +81,65 @@ describe('resolveReviewDiff', () => {
             verboseMessages: [],
         });
     });
+
+    it('scopes file diff to staged changes when --staged and explicit files are combined', async () => {
+        const git = {
+            setVerbose: vi.fn(),
+            getDiffForFiles: vi.fn().mockResolvedValue('staged file diff'),
+            getDiffForBranch: vi.fn(),
+            getDiffForCommit: vi.fn(),
+            getStagedDiff: vi.fn(),
+            getWorkingTreeDiff: vi.fn(),
+        };
+
+        const result = await resolveReviewDiff({
+            files: ['src/a.ts'],
+            options: { staged: true },
+            verbose: true,
+            git,
+        });
+
+        expect(git.getDiffForFiles).toHaveBeenCalledWith(['src/a.ts'], {
+            staged: true,
+        });
+        expect(result.diff).toBe('staged file diff');
+        expect(result.verboseMessages).toEqual([
+            '[verbose] Getting staged diff for specific files: src/a.ts',
+            '[verbose] Diff result: 16 characters',
+            '[verbose] Diff preview:\nstaged file diff',
+        ]);
+    });
+
+    it('keeps files precedence over --branch and --commit when --staged is also passed', async () => {
+        const git = {
+            setVerbose: vi.fn(),
+            getDiffForFiles: vi
+                .fn()
+                .mockResolvedValue('working tree file diff'),
+            getDiffForBranch: vi.fn(),
+            getDiffForCommit: vi.fn(),
+            getStagedDiff: vi.fn(),
+            getWorkingTreeDiff: vi.fn(),
+        };
+
+        await resolveReviewDiff({
+            files: ['src/a.ts'],
+            options: { staged: true, branch: 'main' },
+            verbose: false,
+            git,
+        });
+        expect(git.getDiffForFiles).toHaveBeenCalledTimes(1);
+        expect(git.getDiffForFiles).toHaveBeenLastCalledWith(['src/a.ts']);
+
+        git.getDiffForFiles.mockClear();
+
+        await resolveReviewDiff({
+            files: ['src/a.ts'],
+            options: { staged: true, commit: 'abc123' },
+            verbose: false,
+            git,
+        });
+        expect(git.getDiffForFiles).toHaveBeenCalledTimes(1);
+        expect(git.getDiffForFiles).toHaveBeenLastCalledWith(['src/a.ts']);
+    });
 });

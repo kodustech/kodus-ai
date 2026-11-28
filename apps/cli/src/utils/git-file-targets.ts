@@ -15,3 +15,15 @@ export function buildFileStatusMap(
         ]),
     );
 }
+
+export function buildFileRenameSourceMap(
+    nameStatus: string,
+): Map<string, string> {
+    const renameMap = new Map<string, string>();
+    for (const entry of parseGitNameStatusOutput(nameStatus)) {
+        if (entry.oldFile) {
+            renameMap.set(entry.file, entry.oldFile);
+        }
+    }
+    return renameMap;
+}

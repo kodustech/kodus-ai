@@ -40,7 +40,7 @@ kodus review --fix                    # Apply all fixable issues
 kodus review --prompt-only            # Output optimized for AI agents
 ```
 
-スコープのフラグを指定しない場合、`kodus review` は作業ツリー内の追跡対象の変更（ステージング済みと未ステージングの両方）をレビューします。複数のスコープを指定した場合は、ファイルが `--branch` より、`--branch` が `--commit` より、`--commit` が `--staged` より優先されます。[差分モード](/ja/how_to_use/cli/concepts#差分モード)を参照してください。
+スコープのフラグを指定しない場合、`kodus review` は作業ツリー内の追跡対象の変更（ステージング済みと未ステージングの両方）をレビューします。ファイルを指定すると、作業ツリーまたは `--staged` のレビューはそのファイルに限定されます。複数のスコープを指定した場合は、ファイルが `--branch` より、`--branch` が `--commit` より、`--commit` が `--staged` より優先されます。[差分モード](/ja/how_to_use/cli/concepts#差分モード)を参照してください。
 
 ### フラグ
 

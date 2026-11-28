@@ -410,6 +410,235 @@ describe('review integration', () => {
         }
     });
 
+    it('keeps both diff and inlined config.files scoped to staged changes only', async () => {
+        const stagedPath = path.join(gitRepoDir, 'staged-scope.ts');
+        const untrackedPath = path.join(gitRepoDir, 'untracked-scope.ts');
+        await fs.writeFile(stagedPath, 'const STAGED_CONTENT = true;\n');
+        await execFileAsync('git', ['add', 'staged-scope.ts'], {
+            cwd: gitRepoDir,
+        });
+        await fs.writeFile(
+            stagedPath,
+            'const STAGED_CONTENT = true;\nconst UNSTAGED_SAME_FILE = true;\n',
+        );
+        await fs.writeFile(untrackedPath, 'const UNTRACKED_OTHER = true;\n');
+
+        try {
+            const { exitCode } = await runCli([
+                'review',
+                '--staged',
+                '--format',
+                'json',
+            ]);
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toContain('STAGED_CONTENT');
+            expect(req!.body.diff).not.toContain('UNSTAGED_SAME_FILE');
+            expect(req!.body.diff).not.toContain('let z = 3');
+            expect(req!.body.diff).not.toContain('UNTRACKED_OTHER');
+
+            const files = req!.body.config?.files ?? [];
+            expect(files.map((file: any) => file.path)).toEqual([
+                'staged-scope.ts',
+            ]);
+            expect(files[0].content).toContain('STAGED_CONTENT');
+            expect(files[0].content).not.toContain('UNSTAGED_SAME_FILE');
+            expect(files[0].diff).toContain('STAGED_CONTENT');
+            expect(files[0].diff).not.toContain('UNSTAGED_SAME_FILE');
+        } finally {
+            await execFileAsync('git', ['reset', 'HEAD', 'staged-scope.ts'], {
+                cwd: gitRepoDir,
+            }).catch(() => {});
+            await fs.unlink(stagedPath).catch(() => {});
+            await fs.unlink(untrackedPath).catch(() => {});
+        }
+    });
+
+    it('keeps --staged with explicit files scoped to staged index changes only', async () => {
+        const stagedPath = path.join(gitRepoDir, 'staged-explicit.ts');
+        await fs.writeFile(stagedPath, 'const STAGED_EXPLICIT = true;\n');
+        await execFileAsync('git', ['add', 'staged-explicit.ts'], {
+            cwd: gitRepoDir,
+        });
+        await fs.writeFile(
+            stagedPath,
+            'const STAGED_EXPLICIT = true;\nconst UNSTAGED_EXPLICIT_EDIT = true;\n',
+        );
+
+        try {
+            const { exitCode } = await runCli([
+                'review',
+                '--staged',
+                'staged-explicit.ts',
+                'test.ts',
+                '--format',
+                'json',
+            ]);
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toContain('STAGED_EXPLICIT');
+            expect(req!.body.diff).not.toContain('UNSTAGED_EXPLICIT_EDIT');
+            expect(req!.body.diff).not.toContain('let z = 3');
+
+            const files = req!.body.config?.files ?? [];
+            expect(files.map((file: any) => file.path)).toEqual([
+                'staged-explicit.ts',
+            ]);
+            expect(files[0].content).toContain('STAGED_EXPLICIT');
+            expect(files[0].content).not.toContain('UNSTAGED_EXPLICIT_EDIT');
+
+            mockServer.reset();
+
+            const unstagedOnly = await runCli([
+                'review',
+                '--staged',
+                'test.ts',
+                '--format',
+                'json',
+            ]);
+            expect(unstagedOnly.stdout + unstagedOnly.stderr).toContain(
+                'No changes to review',
+            );
+            expect(
+                mockServer.requests.filter((r) => r.url === '/cli/review'),
+            ).toHaveLength(0);
+        } finally {
+            await execFileAsync(
+                'git',
+                ['reset', 'HEAD', 'staged-explicit.ts'],
+                {
+                    cwd: gitRepoDir,
+                },
+            ).catch(() => {});
+            await fs.unlink(stagedPath).catch(() => {});
+        }
+    });
+
+    it('preserves rename hunks, stage-prefix filenames, and bracket filenames in --staged review', async () => {
+        const renameSrc = path.join(gitRepoDir, 'rename-src.ts');
+        const renameDst = path.join(gitRepoDir, 'rename-dst.ts');
+        const stagePrefixFile = path.join(gitRepoDir, '1:sample.txt');
+        const bracketFile = path.join(gitRepoDir, 'a[1].txt');
+        const seedLines = [
+            'export const alpha = 1;',
+            'export const beta = 2;',
+            'export const gamma = 3;',
+            'export const delta = 4;',
+            'export const epsilon = 5;',
+            '',
+        ].join('\n');
+
+        await execFileAsync('git', ['config', 'core.abbrev', '7'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.context', '3'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.noprefix', 'false'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.mnemonicPrefix', 'false'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['config', 'diff.renames', 'true'], {
+            cwd: gitRepoDir,
+        });
+        await fs.writeFile(renameSrc, seedLines);
+        await execFileAsync('git', ['add', 'rename-src.ts'], {
+            cwd: gitRepoDir,
+        });
+        await execFileAsync('git', ['commit', '-m', 'seed rename-src'], {
+            cwd: gitRepoDir,
+        });
+
+        try {
+            await execFileAsync(
+                'git',
+                ['mv', 'rename-src.ts', 'rename-dst.ts'],
+                { cwd: gitRepoDir },
+            );
+            await fs.writeFile(
+                renameDst,
+                `${seedLines}export const STAGED_RENAME_EDIT = 6;\n`,
+            );
+            await fs.writeFile(stagePrefixFile, 'stage-0-prefixed-file\n');
+            await fs.writeFile(bracketFile, 'literal-bracket-file\n');
+            await execFileAsync(
+                'git',
+                [
+                    'add',
+                    'rename-dst.ts',
+                    ':(literal)1:sample.txt',
+                    ':(literal)a[1].txt',
+                ],
+                { cwd: gitRepoDir },
+            );
+
+            const { exitCode } = await runCli([
+                'review',
+                '--staged',
+                '--format',
+                'json',
+            ]);
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+
+            const files = req!.body.config?.files ?? [];
+            const byPath = new Map<string, any>(
+                files.map((file: any) => [file.path, file]),
+            );
+
+            expect(byPath.get('rename-dst.ts')?.status).toBe('renamed');
+            expect(byPath.get('rename-dst.ts')?.diff).toBe(
+                [
+                    'diff --git a/rename-src.ts b/rename-dst.ts',
+                    'similarity index 76%',
+                    'rename from rename-src.ts',
+                    'rename to rename-dst.ts',
+                    'index 8e274ec..cbaba89 100644',
+                    '--- a/rename-src.ts',
+                    '+++ b/rename-dst.ts',
+                    '@@ -3,3 +3,4 @@ export const beta = 2;',
+                    ' export const gamma = 3;',
+                    ' export const delta = 4;',
+                    ' export const epsilon = 5;',
+                    '+export const STAGED_RENAME_EDIT = 6;',
+                    '',
+                ].join('\n'),
+            );
+            expect(byPath.get('1:sample.txt')?.content).toBe(
+                'stage-0-prefixed-file\n',
+            );
+            expect(byPath.get('a[1].txt')?.content).toBe(
+                'literal-bracket-file\n',
+            );
+        } finally {
+            await execFileAsync('git', ['reset', '--hard', 'HEAD~1'], {
+                cwd: gitRepoDir,
+            }).catch(() => {});
+            await fs.writeFile(
+                path.join(gitRepoDir, 'test.ts'),
+                'const x = 1;\nconst y = 2;\nlet z = 3;\n',
+            );
+            await fs.unlink(renameSrc).catch(() => {});
+            await fs.unlink(renameDst).catch(() => {});
+            await fs.unlink(stagePrefixFile).catch(() => {});
+            await fs.unlink(bracketFile).catch(() => {});
+        }
+    });
+
     it('outputs markdown format', async () => {
         const { stdout, exitCode } = await runCli([
             'review',

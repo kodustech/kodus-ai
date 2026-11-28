@@ -16,7 +16,7 @@ description: "充分利用 Kodus CLI 所需的心智模型。"
 | **分支**（`--branch <base>`） | `git diff <base>...HEAD`：分支从 `<base>` 分出之后您的提交 | 否 | 对整个分支进行合并前审查。 |
 | **提交**（`--commit <sha>`） | 单个提交引入的 diff | 否 | 审核单个提交、cherry-pick 场景。 |
 
-在命令行中指定文件（`kodus review src/auth.ts`）会把工作目录审查限制在这些文件上。如果同时传入多个范围，文件优先于 `--branch`，`--branch` 优先于 `--commit`，`--commit` 优先于 `--staged`。
+在命令行中指定文件（`kodus review src/auth.ts`）会把工作目录或 `--staged` 审查限制在这些文件上。如果同时传入多个范围，文件优先于 `--branch`，`--branch` 优先于 `--commit`，`--commit` 优先于 `--staged`。
 
 未跟踪的文件在您执行 `git add` 之前不属于任何 diff。
 
