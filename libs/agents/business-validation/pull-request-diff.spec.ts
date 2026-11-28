@@ -4,6 +4,7 @@ import {
     diffTokenBudget,
     fitDiff,
     formatPullRequestDiff,
+    readingTier,
     sliceWhole,
 } from './pull-request-diff';
 
@@ -134,6 +135,84 @@ describe("fitDiff within the model's window (#2233)", () => {
             unseenFiles: [],
             cutByTokens: false,
         });
+    });
+});
+
+// QA of #2681 on a 24k window: packed in path order, the fixture took the
+// budget and `fee.service.ts` was left unread.
+describe('fitDiff reads code before fixtures and assets', () => {
+    const diff = formatPullRequestDiff([
+        { filename: 'fixtures/students.min.json', patch: '+'.repeat(150) },
+        { filename: 'public/logo.svg', patch: '+'.repeat(150) },
+        { filename: 'src/enrollment/fee.service.ts', patch: '+'.repeat(150) },
+    ]);
+
+    it('gives the budget to the code first', () => {
+        const fitted = fitDiff(diff, 250);
+        expect(fitted.diff).toContain(
+            '=== FILE: src/enrollment/fee.service.ts',
+        );
+        expect(fitted.unseenFiles).toEqual([
+            'fixtures/students.min.json',
+            'public/logo.svg',
+        ]);
+    });
+
+    it('keeps the order of the PR within a tier, and sends the kept files as they are', () => {
+        const files = ['src/a.ts', 'src/b.ts', 'src/c.ts'].map((filename) => ({
+            filename,
+            patch: '+'.repeat(150),
+        }));
+        const fitted = fitDiff(formatPullRequestDiff(files), 400);
+        expect(fitted.diff).toBe(
+            formatPullRequestDiff(files.slice(0, 2)) + '\n\n',
+        );
+        expect(fitted.unseenFiles).toEqual(['src/c.ts']);
+    });
+
+    it('names the files left out in the order of the PR, whatever their tier', () => {
+        const fitted = fitDiff(
+            formatPullRequestDiff([
+                { filename: 'public/logo.svg', patch: '+'.repeat(500) },
+                { filename: 'src/big.ts', patch: '+'.repeat(500) },
+                { filename: 'config/big.json', patch: '+'.repeat(500) },
+                { filename: 'src/small.ts', patch: '+a' },
+            ]),
+            200,
+        );
+        expect(fitted.unseenFiles).toEqual([
+            'public/logo.svg',
+            'src/big.ts',
+            'config/big.json',
+        ]);
+    });
+
+    it('shows what it kept in the order of the PR', () => {
+        const kept = fitDiff(
+            formatPullRequestDiff([
+                { filename: 'config/fees.json', patch: '+a' },
+                { filename: 'src/b.ts', patch: '+b' },
+            ]),
+            { chars: 200_000, tokens: 1_000 },
+        ).diff;
+        expect(kept.indexOf('config/fees.json')).toBeLessThan(
+            kept.indexOf('src/b.ts'),
+        );
+    });
+
+    it.each([
+        ['src/enrollment/fee.service.ts', 0],
+        ['lib/pricing.py', 0],
+        ['config/fees.json', 1],
+        ['docs/rules.md', 1],
+        ['fixtures/students.min.json', 2],
+        ['test/__snapshots__/fee.spec.ts.snap', 2],
+        ['public/logo.svg', 2],
+        ['pnpm-lock.yaml', 2],
+        ['dist/app.js', 2],
+        ['web/app.min.js', 2],
+    ])('%s reads at tier %i', (file, tier) => {
+        expect(readingTier(file)).toBe(tier);
     });
 });
 

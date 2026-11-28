@@ -672,6 +672,7 @@ export class BusinessValidationService {
             diff,
             language,
             judge,
+            unseenFiles,
         );
         return {
             task: found.task,
@@ -697,6 +698,8 @@ export class BusinessValidationService {
         diff: string,
         language: string,
         judge: () => Promise<IntentJudge>,
+        /** Files of this PR the judge's diff left out. */
+        unseenFiles: string[] = [],
     ): Promise<ValidationResult> {
         const reader = request.repositoryReader;
         const open = (verdict.requirements ?? [])
@@ -761,6 +764,12 @@ export class BusinessValidationService {
             return verdict;
         }
         const requirements = [...(verdict.requirements ?? [])];
+        // A file the judge left out is still this PR's: code found there is
+        // not "outside this PR's diff" (#2233 QA).
+        const pullRequestFiles = new Set([
+            ...changedFileNames(diff),
+            ...unseenFiles,
+        ]);
         open.forEach(({ requirement, index }, i) => {
             const settled = results[i];
             if (!settled) {
@@ -775,7 +784,8 @@ export class BusinessValidationService {
                 // What the judge said before the runtime moved it.
                 judgedState: requirement.judgedState ?? requirement.state,
                 downgraded: undefined,
-                ...(settled.state === 'missing'
+                ...(settled.state === 'missing' ||
+                settled.evidence.some((at) => pullRequestFiles.has(at.file))
                     ? {}
                     : { foundOutsideDiff: true as const }),
             };
