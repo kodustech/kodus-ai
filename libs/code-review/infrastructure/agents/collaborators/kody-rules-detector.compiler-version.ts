@@ -10,6 +10,11 @@
  * rule once, on the next nightly sweep or save, on the customer's BYOK key.
  * Leave it alone for wording edits that should not cost that.
  *
+ * A bump refreshes only the detector and its compile attempt. The same call
+ * also infers `fileScope` and `contextNeed`, but those are keyed separately
+ * (`saveFileScope` on the rule text, `CONTEXT_NEED_PROMPT_VERSION`), so a rule
+ * that already has them keeps them.
+ *
  * Kept in its own file so `compile-hash` can read it without loading the
  * compiler. Version 1 adds nothing to the hash, so hashes stored before the
  * version existed stay current.
