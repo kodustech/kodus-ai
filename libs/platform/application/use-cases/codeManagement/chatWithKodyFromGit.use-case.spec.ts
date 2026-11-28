@@ -291,11 +291,12 @@ describe('ChatWithKodyFromGitUseCase', () => {
             expect(conversation).toHaveBeenCalledTimes(1);
         });
 
-        it('skips Business Logic when the review comments cannot be read', async () => {
-            const { businessLogic, conversation } = await run(null as any);
+        it('offers the comment to Business Logic when the review comments cannot be read', async () => {
+            // The conversation flow reads the same list and cannot answer;
+            // a top-level waiver or dispute still gets recorded.
+            const { businessLogic } = await run(null as any);
 
-            expect(businessLogic).not.toHaveBeenCalled();
-            expect(conversation).toHaveBeenCalledTimes(1);
+            expect(businessLogic).toHaveBeenCalledTimes(1);
         });
 
         it('still offers a top-level comment to Business Logic first', async () => {

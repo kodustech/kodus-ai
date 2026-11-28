@@ -727,10 +727,11 @@ export class ChatWithKodyFromGitUseCase {
                             filters: { pullRequestNumber, repository },
                         },
                     );
-                // Unreadable list: not a Business Logic decision we can prove,
-                // so skip that handler; the conversation flow retries.
+                // Unreadable list: the conversation flow reads the same list
+                // and cannot answer either, so keep Business Logic decisions
+                // on top-level comments working.
                 if (!Array.isArray(reviewComments)) {
-                    return false;
+                    return true;
                 }
                 return !reviewComments.some((c) => c?.id === commentId);
             }
