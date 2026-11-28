@@ -273,13 +273,18 @@ describe('ForgejoService — review comments keep their file and line (#2790 rev
                     original_position: 0,
                 },
             ),
-        ).toEqual(
-            expect.objectContaining({
-                id: 11,
-                path: 'a.ts',
-                position: 10,
-                originalPosition: 0,
-            }),
-        );
+        ).toEqual({
+            id: 11,
+            path: 'a.ts',
+            position: 10,
+            originalPosition: 0,
+            threadId: '11',
+            isResolved: false,
+            isOutdated: false,
+            body: 'x',
+            createdAt: undefined,
+            updatedAt: undefined,
+            author: { id: '', username: '', name: '' },
+        });
     });
 });

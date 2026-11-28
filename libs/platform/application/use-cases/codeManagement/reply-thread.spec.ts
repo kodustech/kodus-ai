@@ -97,7 +97,8 @@ describe('reply-thread on Forgejo (#2790 review)', () => {
     const alice = forgejo(3, 'alice', 'I think it is fine', 'a.ts', 10);
     const elsewhere = forgejo(4, 'carol', 'unrelated', 'b.ts', 4);
     const reply = forgejo(5, 'bob', '@kody why is this a problem?', 'a.ts', 10);
-    const all = [findingA, findingB, alice, elsewhere, reply];
+    const later = forgejo(6, 'dave', 'posted after the reply', 'a.ts', 10);
+    const all = [findingA, findingB, alice, elsewhere, reply, later];
 
     it('finds the Kody finding the reply sits under, by file and line', () => {
         expect(
@@ -109,7 +110,7 @@ describe('reply-thread on Forgejo (#2790 review)', () => {
         ).toBe(findingA);
     });
 
-    it("returns the thread's other human replies only", () => {
+    it("returns the thread's human replies before the reply only", () => {
         expect(
             getOthersReplies(reply as any, all as any, PlatformType.FORGEJO),
         ).toEqual([alice]);

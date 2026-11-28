@@ -433,12 +433,15 @@ export function getOthersReplies(
                             reply.discussionId === comment.discussionId) &&
                         !isKodyComment(reply, platformType),
                 );
-            case PlatformType.FORGEJO:
-                return forgejoThreadOf(comment, allComments).filter(
-                    (reply) =>
-                        reply.id !== comment.id &&
-                        !isKodyComment(reply, platformType),
-                );
+            case PlatformType.FORGEJO: {
+                // Only what was said before the reply: a late webhook must
+                // not hand the agent messages posted after it.
+                const thread = forgejoThreadOf(comment, allComments);
+                const index = thread.findIndex((c) => c.id === comment.id);
+                return thread
+                    .slice(0, Math.max(index, 0))
+                    .filter((reply) => !isKodyComment(reply, platformType));
+            }
             default:
                 logger.warn({ message: `Plataforma nu00e3o suportada: ${platformType}`, context: 'ChatWithKodyFromGitUseCase', metadata: { platformType, commentId: comment?.id } });
                 return [];
