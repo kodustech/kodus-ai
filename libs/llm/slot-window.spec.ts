@@ -1,11 +1,7 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 
-import {
-    knownSlotContextWindow,
-    slotContextWindow,
-    slotInputRoom,
-} from './slot-window';
+import { cappedByFallback, slotInputRoom } from './slot-window';
 
 /**
  * The window a call on a slot must fit: `LLM.run` sends the same request to
@@ -21,60 +17,45 @@ const slot = (fields: Record<string, unknown>) =>
 
 const DEFAULT_WINDOW = resolveContextWindow({ modelName: 'no-such-model-x' });
 
-describe('knownSlotContextWindow', () => {
-    it("caps a known primary at the default guess when the fallback's window is unknown", () => {
-        const big = slot({
+describe('cappedByFallback', () => {
+    const fallback = (fields: Record<string, unknown>) => ({
+        provider: 'openai_compatible',
+        apiKey: '',
+        ...fields,
+    });
+
+    // QA of #2681: a 1M primary with a 24k GLM fallback planned the review
+    // at 1,000,000.
+    it("caps the primary's window at a smaller fallback's", () => {
+        const s = slot({
             model: 'big',
             maxInputTokens: 1_000_000,
-            fallback: {
-                provider: 'openai_compatible',
-                apiKey: '',
-                model: 'no-such-model-x',
-            },
+            fallback: fallback({ model: 'glm', maxInputTokens: 24_000 }),
         });
-        expect(knownSlotContextWindow(big)).toBe(DEFAULT_WINDOW);
+        expect(cappedByFallback(1_000_000, s)).toBe(24_000);
+    });
+
+    it("caps a known primary at the default window when the fallback's is unknown", () => {
+        const s = slot({
+            model: 'big',
+            fallback: fallback({ model: 'no-such-model-x' }),
+        });
+        expect(cappedByFallback(1_000_000, s)).toBe(DEFAULT_WINDOW);
         expect(DEFAULT_WINDOW).toBeLessThan(1_000_000);
     });
 
-    it('takes the smaller of two known windows, and nothing when neither is known', () => {
+    it('keeps the primary window without a fallback, or beside a larger one', () => {
+        expect(cappedByFallback(50_000, slot({ model: 'a' }))).toBe(50_000);
+        expect(cappedByFallback(50_000, undefined)).toBe(50_000);
         expect(
-            knownSlotContextWindow(
+            cappedByFallback(
+                50_000,
                 slot({
                     model: 'a',
-                    maxInputTokens: 200_000,
-                    fallback: {
-                        provider: 'openai_compatible',
-                        apiKey: '',
-                        model: 'b',
-                        maxInputTokens: 32_000,
-                    },
+                    fallback: fallback({ model: 'b', maxInputTokens: 200_000 }),
                 }),
             ),
-        ).toBe(32_000);
-        expect(
-            knownSlotContextWindow(slot({ model: 'no-such-model-x' })),
-        ).toBeUndefined();
-    });
-
-    it("takes a known fallback's window when only the primary's is a guess", () => {
-        expect(
-            knownSlotContextWindow(
-                slot({
-                    model: 'no-such-model-x',
-                    fallback: {
-                        provider: 'openai_compatible',
-                        apiKey: '',
-                        model: 'b',
-                        maxInputTokens: 32_000,
-                    },
-                }),
-            ),
-        ).toBe(32_000);
-    });
-
-    it('agrees with slotContextWindow wherever the window is known', () => {
-        const s = slot({ model: 'a', maxInputTokens: 50_000 });
-        expect(knownSlotContextWindow(s)).toBe(slotContextWindow(s));
+        ).toBe(50_000);
     });
 });
 

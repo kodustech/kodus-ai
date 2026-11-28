@@ -541,6 +541,38 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.contextWindowTokens).toBe(200_000);
     });
 
+    // QA of #2681: a 1M primary with a 24k GLM fallback logged
+    // `context window: 1000000` and planned the review and its verify at 1M.
+    it("sizes the review and its verify to a smaller fallback's window", async () => {
+        resolveModelMock.mockResolvedValue(
+            makeModel({
+                main: { maxInputTokens: 1_000_000 },
+                byokConfig: {
+                    provider: 'openai',
+                    model: 'gpt-4o',
+                    maxInputTokens: 1_000_000,
+                    fallback: {
+                        provider: 'openai_compatible',
+                        model: 'glm-x',
+                        maxInputTokens: 24_000,
+                    },
+                },
+            }),
+        );
+        const agent = newAgent();
+        const log = jest.spyOn((agent as any).agentLogger, 'log');
+        await agent.execute(makeInput());
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.contextWindowTokens).toBe(24_000);
+        const entry = log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) => /context window:/.test(e.message));
+        expect(entry.metadata).toMatchObject({
+            contextWindowTokens: 24_000,
+            contextWindowSource: 'fallback',
+        });
+    });
+
     it('sizes the context window by the bare model id, not the provider-prefixed label', async () => {
         // `openai:gpt-6.1-sol` misses the mirror's exact and normalized keys
         // and resolves by substring to `bedrock_mantle/openai.gpt-6.1-sol`
