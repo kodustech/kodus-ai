@@ -148,4 +148,38 @@ describe('replyFor', () => {
             'Business logic re-checked: #1 met.',
         );
     });
+
+    // A PR that says it is part of a task passes with requirements missing
+    // (`taskPasses`, UC-18): the reply says they are missing, never "none".
+    it('names the missing requirements of a task the PR is part of', () => {
+        const requirement = (state: string) => ({
+            requirement: `AC ${state}`,
+            state,
+            evidence: [],
+            confidence: 'high',
+        });
+        const partOf = (...states: string[]) =>
+            ({
+                kind: 'validated',
+                passed: true,
+                checks: [
+                    {
+                        task: { id: '#1' },
+                        reference: { intent: 'part_of' },
+                        verdict: { requirements: states.map(requirement) },
+                        passed: true,
+                    },
+                ],
+            }) as any;
+
+        expect(replyFor(partOf('met', 'missing'), 'none')).toBe(
+            'Business logic re-checked: #1 has 1 missing requirement, not failed because the pull request is part of the task.',
+        );
+        expect(replyFor(partOf('missing', 'missing', 'partial'), 'none')).toBe(
+            'Business logic re-checked: #1 has 2 missing and 1 partial requirements, not failed because the pull request is part of the task.',
+        );
+        expect(replyFor(partOf('met', 'met'), 'none')).toBe(
+            'Business logic re-checked: #1 met.',
+        );
+    });
 });

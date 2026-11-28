@@ -70,9 +70,9 @@ export function replyFor(
 }
 
 /**
- * "met" only when nothing is left open. PARTIAL does not fail a task
- * (`taskPasses`), so a passing run can still have partial requirements, and
- * calling it met hid them (QA of #2681).
+ * "met" only when nothing is left open. A passing run can still have open
+ * requirements, and calling it met hid them: PARTIAL never fails a task (QA
+ * of #2681), and MISSING doesn't fail one the PR is only part of (UC-18).
  */
 function verdictWords(
     outcome: Extract<BusinessValidationOutcome, { kind: 'validated' }>,
@@ -80,12 +80,22 @@ function verdictWords(
     if (!outcome.passed) {
         return 'has open requirements';
     }
-    const partial = outcome.checks.reduce(
-        (n, c) => n + (c.verdict ? countBlockers(c.verdict).partial : 0),
-        0,
-    );
+    let missing = 0;
+    let partial = 0;
+    for (const check of outcome.checks) {
+        const open = check.verdict ? countBlockers(check.verdict) : undefined;
+        missing += open?.missing ?? 0;
+        partial += open?.partial ?? 0;
+    }
+    const plural = (n: number) => (n === 1 ? '' : 's');
+    if (missing) {
+        const counts = partial
+            ? `${missing} missing and ${partial} partial requirements`
+            : `${missing} missing requirement${plural(missing)}`;
+        return `has ${counts}, not failed because the pull request is part of the task`;
+    }
     return partial
-        ? `has ${partial} partial requirement${partial === 1 ? '' : 's'} and none missing`
+        ? `has ${partial} partial requirement${plural(partial)} and none missing`
         : 'met';
 }
 
