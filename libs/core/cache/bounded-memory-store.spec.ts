@@ -52,7 +52,9 @@ describe('BoundedMemoryStore', () => {
         const store = new BoundedMemoryStore(bounds);
         store.set('small', 'v');
         store.set('huge', 'x'.repeat(bounds.maxEntryBytes + 1));
+        store.set('at-cap', 'x'.repeat(bounds.maxEntryBytes));
         expect(store.has('huge')).toBe(false);
+        expect(store.has('at-cap')).toBe(true);
         expect(store.has('small')).toBe(true);
     });
 
@@ -107,6 +109,124 @@ describe('BoundedMemoryStore', () => {
         ).toBe(true);
         expect(store.heldBytes).toBeLessThanOrEqual(bounds.maxBytes);
         expect(await cache.get('gh:contents:0')).toBeUndefined();
+    });
+
+    describe('a flag that must last its TTL (#2744 QA)', () => {
+        const FLAG = 'notif-rate:review_skipped_no_license:org:author';
+        const DAY = 86_400_000;
+
+        beforeEach(() => {
+            jest.useFakeTimers({ now: new Date('2026-11-28T12:00:00Z') });
+        });
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        // Keyv drops an expired entry only when that key is read again, so
+        // short-lived keys nobody reads again used to fill the entry cap and
+        // push the live flag out.
+        it('drops expired entries before a live one', async () => {
+            const store = new BoundedMemoryStore(bounds);
+            const cache = createCache({ stores: [new Keyv({ store })] });
+            await cache.set(FLAG, true, DAY);
+
+            // One short-lived key every 50 ms: about 20 are live at a time,
+            // hundreds have expired by the end.
+            for (let i = 0; i < 3 * bounds.maxEntries; i++) {
+                await cache.set(`cli:trial:ratelimit:${i}`, 1, 1_000);
+                jest.advanceTimersByTime(50);
+            }
+            for (let i = 0; i < 10; i++) {
+                await cache.set(`etag:${i}`, 'v', DAY);
+            }
+
+            expect(await cache.get(FLAG)).toBe(true);
+            expect(store.size).toBeLessThanOrEqual(bounds.maxEntries);
+        });
+
+        // File contents are cached for a day and are usually above
+        // SMALL_ENTRY_BYTES: with room left in bytes, they reached the entry
+        // cap first and took the flag with them.
+        it('gives up a large value before a small one at the entry cap', async () => {
+            const store = new BoundedMemoryStore({
+                ...bounds,
+                maxBytes: 10_000_000,
+            });
+            const cache = createCache({ stores: [new Keyv({ store })] });
+            await cache.set(FLAG, true, DAY);
+
+            for (let i = 0; i < 3 * bounds.maxEntries; i++) {
+                await cache.set(`gh:contents:${i}`, 'x'.repeat(2_000), DAY);
+            }
+
+            expect(await cache.get(FLAG)).toBe(true);
+            expect(store.size).toBe(bounds.maxEntries);
+            // The value just written is served; the oldest file is not.
+            expect(
+                await cache.get(`gh:contents:${3 * bounds.maxEntries - 1}`),
+            ).toBe('x'.repeat(2_000));
+            expect(await cache.get('gh:contents:0')).toBeUndefined();
+        });
+
+        it('keeps dropping entries as they expire, sweep after sweep', () => {
+            const store = new BoundedMemoryStore({ ...bounds, maxEntries: 3 });
+            store.set('live', 'v', DAY);
+            store.set('first', 'v', 1_000);
+            store.set('second', 'v', 5_000);
+            jest.advanceTimersByTime(2_000);
+            store.set('a', 'v', DAY);
+            expect([...store.keys()]).toEqual(['live', 'second', 'a']);
+
+            store.delete('a');
+            jest.advanceTimersByTime(4_000);
+            store.set('b', 'v', DAY);
+            store.set('c', 'v', DAY);
+            // `second` expired after the first sweep: the second sweep drops
+            // it, and the live entries all stay.
+            expect([...store.keys()]).toEqual(['live', 'b', 'c']);
+        });
+
+        // Keyv serves an entry until `now > expires`.
+        it('still holds an entry at its expiry millisecond', () => {
+            const store = new BoundedMemoryStore({ ...bounds, maxEntries: 2 });
+            store.set('older', 'v');
+            store.set('flag', 'v', 1_000);
+            jest.advanceTimersByTime(1_000);
+            store.set('new', 'v');
+            // Nothing has expired yet: the cap takes the oldest entry.
+            expect([...store.keys()]).toEqual(['flag', 'new']);
+
+            jest.advanceTimersByTime(1);
+            store.set('newer', 'v');
+            // One millisecond later the flag has expired and goes first.
+            expect([...store.keys()]).toEqual(['new', 'newer']);
+        });
+
+        it('never expires an entry set without a TTL', () => {
+            const store = new BoundedMemoryStore({ ...bounds, maxEntries: 3 });
+            store.set('no-ttl', 'v');
+            store.set('zero-ttl', 'v', 0);
+            store.set('short', 'v', 1_000);
+            jest.advanceTimersByTime(DAY);
+            store.set('next', 'v', 1_000);
+
+            // Over the cap by one: the expired entry goes, not the others.
+            expect([...store.keys()]).toEqual(['no-ttl', 'zero-ttl', 'next']);
+        });
+
+        it('still serves a live entry whose TTL has not passed', async () => {
+            const store = new BoundedMemoryStore({ ...bounds, maxEntries: 2 });
+            const cache = createCache({ stores: [new Keyv({ store })] });
+            await cache.set('a', 'v', 10_000);
+            await cache.set('b', 'v', 1_000);
+            jest.advanceTimersByTime(5_000);
+            await cache.set('c', 'v', 10_000);
+
+            // `b` had expired: it goes, and `a` stays although it is older.
+            expect(await cache.get('a')).toBe('v');
+            expect(await cache.get('c')).toBe('v');
+            expect(store.has('b')).toBe(false);
+        });
     });
 
     it('evicts by size from the values of at least SMALL_ENTRY_BYTES', () => {
