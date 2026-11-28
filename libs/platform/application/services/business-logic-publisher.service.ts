@@ -327,7 +327,17 @@ export class BusinessLogicPublisher {
               ])
             : [[], undefined];
         const previousVerdict = earlier.find((r) => r.outcome === 'validated');
-        const outcome = carryOver(input.result.outcome, previousVerdict?.tasks);
+        const outcome = carryOver(
+            input.result.outcome,
+            previousVerdict?.tasks,
+            {
+                // Reworded out-of-scope changes match by their files only on the
+                // commit the previous verdict judged (`matchOutOfScope`).
+                sameCommit:
+                    !!input.headSha &&
+                    previousVerdict?.headSha === input.headSha,
+            },
+        );
         const history = checkedCommits(earlier, input.headSha);
         return { scope, outcome, previousComment, history };
     }
