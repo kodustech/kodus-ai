@@ -15,6 +15,7 @@ import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.inter
 import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
+import { PlatformType } from '@libs/core/domain/enums';
 
 // Custom agents read the install's mode. Pinned to Cloud here, as CI runs;
 // the self-hosted cases below switch it.
@@ -722,6 +723,25 @@ describe('ValidateConfigStage — v2 routing', () => {
                     body: expect.stringMatching(/credit/i),
                 }),
             );
+            gate.mockResolvedValue(null);
+        });
+
+        it('on Bitbucket the credits comment opens with the chip and carries no HTML comment', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const context = ultraContext('ultra');
+            (context as any).platformType = PlatformType.BITBUCKET;
+
+            await stage.execute(context);
+
+            const body = mockCodeManagementService.createIssueComment.mock
+                .calls[0][0].body as string;
+            expect(body.startsWith('`kody|code-review`\n\n## ')).toBe(true);
+            expect(body).not.toContain('<!--');
             gate.mockResolvedValue(null);
         });
 
@@ -1549,10 +1569,11 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
     const buildContext = (
         reviewMode: 'balanced' | 'heavy',
         showStatusFeedback = true,
+        platformType: string = 'github',
     ): CodeReviewPipelineContext =>
         ({
             origin: 'command',
-            platformType: 'github',
+            platformType,
             teamAutomationId: 'team-automation-id',
             organizationAndTeamData: {
                 organizationId: 'org-1',
@@ -1644,9 +1665,24 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
         expect(createIssueComment).toHaveBeenCalledWith(
             expect.objectContaining({
                 prNumber: 3,
-                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+                body: `${KODUS_CREDITS_EXHAUSTED_COMMENT}\n\n<!-- kody-codereview -->`,
             }),
         );
+    });
+
+    it('on Bitbucket opens the credits comment with the chip and carries no HTML comment', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        await stage.execute(
+            buildContext('heavy', true, PlatformType.BITBUCKET),
+        );
+
+        const body = createIssueComment.mock.calls[0][0].body as string;
+        expect(body.startsWith('`kody|code-review`\n\n## ')).toBe(true);
+        expect(body).not.toContain('<!--');
     });
 
     it('posts no comment when status feedback is off', async () => {

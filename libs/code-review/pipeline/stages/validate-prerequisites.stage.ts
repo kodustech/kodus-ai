@@ -1,5 +1,4 @@
 import { createLogger } from '@libs/core/log/logger';
-import { KODY_IDENTIFIERS } from '@libs/common/utils/kody-identifiers';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
@@ -74,7 +73,10 @@ import {
     IAutomationExecutionService,
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
+import {
+    KODUS_CREDITS_EXHAUSTED_COMMENT,
+    kodyCommentBody,
+} from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 const SKIPPED_NO_LICENSE_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24h
 
@@ -85,12 +87,8 @@ export const USER_NO_LICENSE_NOTICE =
     'Kody skipped this review because the PR author has no Kodus license assigned. ' +
     'Ask your Kodus admin to assign you a license.';
 
-// Bitbucket renders an HTML comment as text, so there the notice opens with
-// the chip Kody's other Bitbucket comments carry.
 export const licenseNoticeBody = (platformType: PlatformType): string =>
-    platformType === PlatformType.BITBUCKET
-        ? `\`${KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.BITBUCKET}\`\n\n${USER_NO_LICENSE_NOTICE}`
-        : `${USER_NO_LICENSE_NOTICE}\n\n<!-- ${KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.DEFAULT} -->`;
+    kodyCommentBody(USER_NO_LICENSE_NOTICE, platformType);
 
 type ValidationFailureOutcome = {
     outcome: 'auto_assigned' | 'failed';
@@ -652,6 +650,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     organizationAndTeamData,
                     repository,
                     prNumber: pullRequest.number,
+                    platformType,
                     noActiveSubscriptionType,
                 });
             }
@@ -1181,6 +1180,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
         prNumber: number;
+        platformType: PlatformType;
         noActiveSubscriptionType: NoActiveSubscriptionType;
     }) {
         if (params.noActiveSubscriptionType === 'no_error') {
@@ -1205,7 +1205,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             organizationAndTeamData: params.organizationAndTeamData,
             repository: params.repository,
             prNumber: params?.prNumber,
-            body: message,
+            body: kodyCommentBody(message, params.platformType),
         });
 
         this.logger.log({
@@ -1223,8 +1223,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return (
             '## Your trial has ended! 😢\n\n' +
             'To keep getting reviews, activate your plan [here](https://app.kodus.io/settings/subscription).\n\n' +
-            'Got questions about plans or want to see if we can extend your trial? Talk to our founders [here](https://cal.com/gabrielmalinosqui/30min).😎\n\n' +
-            '<!-- kody-codereview -->'
+            'Got questions about plans or want to see if we can extend your trial? Talk to our founders [here](https://cal.com/gabrielmalinosqui/30min).😎'
         );
     }
 
@@ -1236,8 +1235,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             '**[Connect your own AI key](https://app.kodus.io/byok)** ' +
             'to keep Kody reviewing — unlimited reviews, on any plan (Free included).\n\n' +
             'Want more trial reviews to finish evaluating before adding a key? ' +
-            '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎\n\n' +
-            '<!-- kody-codereview -->'
+            '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎'
         );
     }
 
@@ -1251,8 +1249,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             "We couldn't confirm your subscription right now — the license " +
             'service is temporarily unreachable.\n\n' +
             'Please re-run the review in a few minutes (or push a new commit) ' +
-            'and Kody will pick it up.\n\n' +
-            '<!-- kody-codereview -->'
+            'and Kody will pick it up.'
         );
     }
 
@@ -1260,8 +1257,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return (
             '## BYOK Configuration Required! 🔑\n\n' +
             'Your plan requires a Bring Your Own Key (BYOK) configuration to perform code reviews.\n\n' +
-            'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).\n\n' +
-            '<!-- kody-codereview -->'
+            'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).'
         );
     }
 

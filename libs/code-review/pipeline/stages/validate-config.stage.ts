@@ -78,7 +78,10 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
-import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
+import {
+    KODUS_CREDITS_EXHAUSTED_COMMENT,
+    kodyCommentBody,
+} from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -598,7 +601,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                             context.organizationAndTeamData,
                         repository: context.repository,
                         prNumber: context.pullRequest?.number,
-                        body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+                        body: kodyCommentBody(
+                            KODUS_CREDITS_EXHAUSTED_COMMENT,
+                            context.platformType,
+                        ),
                     })
                     .catch(() => null));
             return this.updateContext(context, (draft) => {
@@ -691,7 +697,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 organizationAndTeamData: context.organizationAndTeamData,
                 repository: context.repository,
                 prNumber: context.pullRequest?.number,
-                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+                body: kodyCommentBody(
+                    KODUS_CREDITS_EXHAUSTED_COMMENT,
+                    context.platformType,
+                ),
             });
         }
         return true;

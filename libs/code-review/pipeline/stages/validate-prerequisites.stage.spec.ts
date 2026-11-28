@@ -851,6 +851,65 @@ describe('ValidatePrerequisitesStage', () => {
             ).toHaveBeenCalledTimes(1);
         });
 
+        describe.each([
+            ['trial ended', { errorType: ValidationErrorType.INVALID_LICENSE }],
+            [
+                'trial credits exhausted',
+                {
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: true },
+                },
+            ],
+            [
+                'license unavailable',
+                { errorType: ValidationErrorType.LICENSE_UNAVAILABLE },
+            ],
+            ['BYOK required', { errorType: ValidationErrorType.BYOK_REQUIRED }],
+            [
+                'credits exhausted',
+                {
+                    errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+                    subscriptionStatus: 'active',
+                    metadata: { creditsExhausted: true, creditBalanceUsd: 0 },
+                },
+            ],
+        ])('the %s notice', (_name, validation) => {
+            const postedBody = async (platformType: PlatformType) => {
+                mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                    { allowed: false, ...validation },
+                );
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: {
+                        configs: { showStatusFeedback: true },
+                        repositories: [],
+                    },
+                });
+
+                await stage.execute(makeContext({ platformType }));
+
+                return mockCodeManagementService.createIssueComment.mock
+                    .calls[0][0].body as string;
+            };
+
+            it('opens with the chip on Bitbucket and carries no HTML comment', async () => {
+                const body = await postedBody(PlatformType.BITBUCKET);
+
+                expect(body.startsWith('`kody|code-review`\n\n## ')).toBe(true);
+                expect(body).not.toContain('<!--');
+                expect(isKodyAuthoredBody(body)).toBe(true);
+            });
+
+            it('ends with the HTML comment off Bitbucket', async () => {
+                const body = await postedBody(PlatformType.GITHUB);
+
+                expect(body.startsWith('## ')).toBe(true);
+                expect(body.endsWith('\n\n<!-- kody-codereview -->')).toBe(
+                    true,
+                );
+            });
+        });
+
         it('keeps the generic "Plan Limit Exceeded" SKIPPED status for a non-trial plan limit', async () => {
             const context = makeContext();
 
