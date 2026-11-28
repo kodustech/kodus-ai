@@ -1308,8 +1308,6 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
-        /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
         /** A line the review adds at the end (an Ultra review's fallback). */
         extraLine?: string,
         /**
@@ -1318,6 +1316,8 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
          * these the summary called it clean.
          */
         prLevelCommentResults?: Array<CommentResult>,
+        /** Agent named on lastReviewError, when the failure was attributed. */
+        reviewErrorAgentName?: string,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured

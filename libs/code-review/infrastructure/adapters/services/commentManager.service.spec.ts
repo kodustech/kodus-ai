@@ -1661,6 +1661,8 @@ describe('partial primary-agent failures name the reviewer that did not run', ()
             undefined,
             false,
             undefined,
+            undefined,
+            undefined,
             'security',
         );
         await service.createComment(

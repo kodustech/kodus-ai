@@ -234,7 +234,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             }),
         );
         expect(
-            commentManagerService.updateOverallComment.mock.calls[0][18],
+            commentManagerService.updateOverallComment.mock.calls[0][20],
         ).toBe('security');
 
         await (stage as any).executeStage(
@@ -244,7 +244,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             }),
         );
         expect(
-            commentManagerService.updateOverallComment.mock.calls[1][18],
+            commentManagerService.updateOverallComment.mock.calls[1][20],
         ).toBe('security');
 
         await (stage as any).executeStage(
@@ -938,7 +938,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         await stage.execute(context(undefined, undefined));
         expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
         expect(
-            commentManagerService.updateOverallComment.mock.calls[0][18],
+            commentManagerService.updateOverallComment.mock.calls[0][20],
         ).toBeUndefined();
     });
 

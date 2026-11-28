@@ -547,9 +547,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
                 undefined,
-                context.lastReviewError?.agentName,
                 ultraInfoLine,
                 context.prLevelCommentResults ?? [],
+                context.lastReviewError?.agentName,
             );
             return context;
         }
@@ -623,9 +623,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
                 undefined,
-                context.lastReviewError?.agentName,
                 ultraInfoLine,
                 context.prLevelCommentResults ?? [],
+                context.lastReviewError?.agentName,
             );
             return context;
         }
