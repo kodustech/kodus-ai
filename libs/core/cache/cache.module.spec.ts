@@ -58,10 +58,14 @@ describe('GlobalCacheModule', () => {
         expect(store.bounds).toEqual(GLOBAL_CACHE_BOUNDS);
     });
 
+    // This loop takes 300-500 s on the CI runner. With a 60 s TTL the store
+    // rightly swept the expired keys midway and held 42,243: the TTL must
+    // outlive the run, or this measures the clock instead of the bound.
     it('stops growing at the entry bound when set through the cache', async () => {
         const store: BoundedMemoryStore = (cache as any).stores[0].store;
+        const outlivesTheRun = 24 * 60 * 60_000;
         for (let i = 0; i <= GLOBAL_CACHE_BOUNDS.maxEntries; i++) {
-            await cache.set(`k:count:${i}`, 'v', 60_000);
+            await cache.set(`k:count:${i}`, 'v', outlivesTheRun);
         }
         expect(store.size).toBe(GLOBAL_CACHE_BOUNDS.maxEntries);
         expect(await cache.get('k:count:0')).toBeUndefined();
