@@ -8,7 +8,11 @@ import type {
     ConfigRepository,
     ConfigTeam,
 } from '../../types/config.js';
-import type { IssueListItem, IssuesFixPrompt } from '../../types/issues.js';
+import type {
+    IssueListItem,
+    IssuesFixPrompt,
+    IssuesFixPromptAvailability,
+} from '../../types/issues.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
 import type {
     CodeReviewScope,
@@ -229,6 +233,9 @@ export interface IRulesApi {
 export interface IIssuesApi {
     listIssues(accessToken: string): Promise<IssueListItem[]>;
     fixPrompt(accessToken: string, ids: string[]): Promise<IssuesFixPrompt>;
+    fixPromptAvailability(
+        accessToken: string,
+    ): Promise<IssuesFixPromptAvailability>;
 }
 
 export interface IKodusApi {

@@ -12,6 +12,9 @@ const ISSUES_FEATURE = 'Issues';
 /** At most this many issues go into one prompt (the API refuses more). */
 export const FIX_PROMPT_MAX_ISSUES = 25;
 
+export const FIX_PROMPT_NOT_ENABLED_MESSAGE =
+    "The fix prompt is part of the deep scan's private alpha, which is not enabled for your organization. kodus issues list still lists your issues.";
+
 const SEVERITY_RANK = new Map(
     ['critical', 'high', 'medium', 'low'].map((s, i) => [s, i] as const),
 );
@@ -79,10 +82,37 @@ class IssuesService {
         }
         const accessToken =
             await userContextService.requireUserToken(ISSUES_FEATURE);
+        if (!(await this.fixPromptAvailable(accessToken))) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                FIX_PROMPT_NOT_ENABLED_MESSAGE,
+            );
+        }
         return api.issues.fixPrompt(
             accessToken,
             wanted.slice(0, FIX_PROMPT_MAX_ISSUES),
         );
+    }
+
+    /**
+     * Whether the fix prompt is enabled for the user's organization, to offer
+     * it only there. Unknown (an API without the endpoint, a failed call)
+     * counts as enabled: the prompt request then answers for itself.
+     */
+    async fixPromptEnabled(): Promise<boolean> {
+        const accessToken =
+            await userContextService.requireUserToken(ISSUES_FEATURE);
+        return this.fixPromptAvailable(accessToken);
+    }
+
+    private async fixPromptAvailable(accessToken: string): Promise<boolean> {
+        try {
+            const availability =
+                await api.issues.fixPromptAvailability(accessToken);
+            return availability?.enabled !== false;
+        } catch {
+            return true;
+        }
     }
 }
 

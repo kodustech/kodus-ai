@@ -111,9 +111,12 @@ export async function issuesListAction(
             return;
         }
         issues.forEach(printIssue);
+        const count = `${issues.length} issue${issues.length === 1 ? '' : 's'}.`;
         cliInfo(
             chalk.dim(
-                `\n${issues.length} issue${issues.length === 1 ? '' : 's'}. kodus issues show <id> prints a fix prompt for your coding agent.`,
+                (await issuesService.fixPromptEnabled())
+                    ? `\n${count} kodus issues show <id> prints a fix prompt for your coding agent.`
+                    : `\n${count}`,
             ),
         );
     } catch (error) {
@@ -151,14 +154,14 @@ issuesCommand
     .option('--json', 'Output the issues as JSON')
     .option(
         '--prompt-only',
-        `Print one fix prompt for the listed issues (the ${FIX_PROMPT_MAX_ISSUES} most severe) for your coding agent`,
+        `Print one fix prompt for the listed issues (the ${FIX_PROMPT_MAX_ISSUES} most severe) for your coding agent (deep scan private alpha)`,
     )
     .action(issuesListAction);
 
 issuesCommand
     .command('show')
     .description(
-        'Print a fix prompt for one or more issues: location, explanation, suggested fix, attack path and reproduction test',
+        'Print a fix prompt for one or more issues: location, explanation, suggested fix, attack path and reproduction test (deep scan private alpha)',
     )
     .argument('<ids...>', 'Issue ids (from kodus issues list)')
     .option('--json', 'Output the prompt and which issues it carries as JSON')

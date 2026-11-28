@@ -825,6 +825,17 @@
     }
   },
   {
+    "key": "issues.controller.ts#fixPromptAvailability",
+    "httpMethod": "GET",
+    "urlPath": "/issues/fix-prompt",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "issues.controller.ts#getIssueById",
     "httpMethod": "GET",
     "urlPath": "/issues/:id",

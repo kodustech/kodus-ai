@@ -39,3 +39,16 @@ export class IssuesFixPromptResponseDto extends ApiResponseBaseDto {
     @ApiProperty({ type: IssuesFixPromptDto })
     data: IssuesFixPromptDto;
 }
+
+class IssuesFixPromptAvailabilityDto {
+    @ApiProperty({
+        description:
+            "Whether the deep scan's private alpha, which the fix prompt is part of, is enabled for the caller's organization.",
+    })
+    enabled: boolean;
+}
+
+export class IssuesFixPromptAvailabilityResponseDto extends ApiResponseBaseDto {
+    @ApiProperty({ type: IssuesFixPromptAvailabilityDto })
+    data: IssuesFixPromptAvailabilityDto;
+}
