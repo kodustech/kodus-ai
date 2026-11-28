@@ -1317,7 +1317,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
          */
         prLevelCommentResults?: Array<CommentResult>,
         /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1457,7 +1457,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
         /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -2135,26 +2135,43 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
     private appendPrimaryAgentDidNotRun(
         body: string,
         reviewErrorMessage: string | undefined,
-        reviewErrorAgentName: string | undefined,
+        reviewErrorAgentName: string | readonly string[] | undefined,
         language: string,
     ): string {
-        const agentName = reviewErrorAgentName?.trim();
+        const agentNames = (
+            typeof reviewErrorAgentName === 'string'
+                ? [reviewErrorAgentName]
+                : (reviewErrorAgentName ?? [])
+        )
+            .map((name) => name?.trim())
+            .filter(Boolean);
         const reason = reviewErrorMessage?.trim();
-        if (!agentName || !reason || !isPrimaryReviewAgent(agentName)) {
+        if (
+            !agentNames.length ||
+            !reason ||
+            !agentNames.every((name) => isPrimaryReviewAgent(name))
+        ) {
             return body;
         }
+        const several = agentNames.length > 1;
+        const key = several ? 'primaryAgentsDidNotRun' : 'primaryAgentDidNotRun';
         const template =
             getTranslationsForLanguageByCategory(
                 language as LanguageValue,
                 TranslationsCategory.PullRequestFinishSummaryMarkdown,
-            )?.primaryAgentDidNotRun ??
+            )?.[key] ??
             getTranslationsForLanguageByCategory(
                 LanguageValue.ENGLISH,
                 TranslationsCategory.PullRequestFinishSummaryMarkdown,
-            )?.primaryAgentDidNotRun ??
-            'The {{agentName}} review did not run: {{reason}}';
+            )?.[key] ??
+            (several
+                ? 'The {{agentNames}} reviews did not run: {{reason}}'
+                : 'The {{agentName}} review did not run: {{reason}}');
+        const names = several
+            ? listInLanguage(agentNames, language)
+            : agentNames[0];
         const sentence = template
-            .replace(/\{\{agentName\}\}/g, () => agentName)
+            .replace(/\{\{agentNames?\}\}/g, () => names)
             .replace(/\{\{reason\}\}/g, () => reason);
         return `${body}\n\n${sentence}`;
     }
@@ -2226,7 +2243,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
         /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<string> {
         try {
             const language =
@@ -3353,7 +3370,7 @@ ${reviewOptions}
         reviewWarnings?: ReviewWarning[],
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
         /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
+        reviewErrorAgentName?: string | readonly string[],
         /** A line under the body, e.g. an Ultra review's fallback notice. */
         extraLine?: string,
     ): Promise<void> {
@@ -3669,4 +3686,19 @@ function wholeCharacters(text: string, end: number): string {
     }
     const last = text.charCodeAt(end - 1);
     return text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end);
+}
+
+/** "security and performance", joined the way the review language joins a list. */
+function listInLanguage(items: readonly string[], language: string): string {
+    try {
+        return new Intl.ListFormat(language, {
+            style: 'long',
+            type: 'conjunction',
+        }).format(items);
+    } catch {
+        return new Intl.ListFormat('en-US', {
+            style: 'long',
+            type: 'conjunction',
+        }).format(items);
+    }
 }

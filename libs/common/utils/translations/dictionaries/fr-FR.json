@@ -9,7 +9,8 @@
         "withoutComments": "# Revue de Kody terminée\n**Excellentes nouvelles!** 🎉\nAucun problème n'a été trouvé correspondant à vos configurations de revue actuelles.\n\nContinuez votre excellent travail! 🚀",
         "withErrors": "## Revue de Code Non Terminée ⚠️\n\nLa revue a échoué avant que des suggestions puissent être générées.\n\n**Raison :** {{errorMessage}}\n\nAprès avoir corrigé le problème, commentez `@kody review` sur cette PR pour relancer la revue.\n\n",
         "partialErrorsNotice": "\n\n> ⚠️ Remarque : certaines étapes de la revue n'ont pas pu être complétées lors de cette exécution, l'approbation automatique (lorsqu'elle est activée) a donc été ignorée. Consultez les détails sur {{dashboardUrl}} puis commentez `@kody review` sur cette PR pour réessayer une fois le problème résolu.\n",
-        "primaryAgentDidNotRun": "La revue {{agentName}} n'a pas été exécutée : {{reason}}"
+        "primaryAgentDidNotRun": "La revue {{agentName}} n'a pas été exécutée : {{reason}}",
+        "primaryAgentsDidNotRun": "Les revues {{agentNames}} n'ont pas été exécutées : {{reason}}"
     },
     "pullRequestSummaryMarkdown": {
         "title": "Résumé de PR (Commentaire créé par [Kody](https://kodus.io) 🤖)",

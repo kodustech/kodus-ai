@@ -9,7 +9,8 @@
         "withoutComments": "# סקירת Kody הושלמה\n**חדשות נהדרות!** 🎉\nלא נמצאו בעיות התואמות את הגדרות הסקירה הנוכחיות שלך.\n\nהמשך בעבודה המצוינת! 🚀",
         "withErrors": "## Code Review Could Not Complete ⚠️\n\nThe review failed before suggestions could be generated.\n\n**Reason:** {{errorMessage}}\n\nAfter fixing the issue, comment `@kody review` on this PR to re-run the review.\n\n",
         "partialErrorsNotice": "\n\n> ⚠️ Note: some checks couldn't be completed in this run, so auto-approval (when enabled) was skipped. Check the details at {{dashboardUrl}} and then comment `@kody review` on this PR to retry once the issue is resolved.\n",
-        "primaryAgentDidNotRun": "סקירת {{agentName}} לא רצה: {{reason}}"
+        "primaryAgentDidNotRun": "סקירת {{agentName}} לא רצה: {{reason}}",
+        "primaryAgentsDidNotRun": "סקירות {{agentNames}} לא רצו: {{reason}}"
     },
     "pullRequestSummaryMarkdown": {
         "title": "סיכום PR (תגובה נוצרה על ידי [Kody](https://kodus.io) 🤖)",

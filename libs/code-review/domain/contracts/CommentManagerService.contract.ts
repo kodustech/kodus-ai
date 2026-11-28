@@ -100,8 +100,11 @@ export interface ICommentManagerService {
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
         extraLine?: string,
         prLevelCommentResults?: Array<CommentResult>,
-        /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
+        /**
+         * Agent named on lastReviewError, or every primary reviewer that
+         * shares its quota failure.
+         */
+        reviewErrorAgentName?: string | readonly string[],
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -183,7 +186,7 @@ export interface ICommentManagerService {
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
         /** Agent named on lastReviewError, when the failure was attributed. */
-        reviewErrorAgentName?: string,
+        reviewErrorAgentName?: string | readonly string[],
         extraLine?: string,
     ): Promise<void>;
 }

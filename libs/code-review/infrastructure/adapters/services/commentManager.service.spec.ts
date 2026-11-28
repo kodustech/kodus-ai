@@ -1585,7 +1585,7 @@ describe('partial primary-agent failures name the reviewer that did not run', ()
     const summary = (
         reviewHasPartialErrors: boolean,
         reviewErrorMessage?: string,
-        reviewErrorAgentName?: string,
+        reviewErrorAgentName?: string | string[],
     ) =>
         summaryService().generatePullRequestFinishSummaryMarkdown(
             org,
@@ -1650,6 +1650,40 @@ describe('partial primary-agent failures name the reviewer that did not run', ()
         } finally {
             mockStripPrimaryAgentSentence = false;
         }
+    });
+
+    it('names every primary reviewer that shares the failure', async () => {
+        const body = await summary(true, securityOutOfCredits, [
+            'security',
+            'performance',
+        ] as any);
+
+        expect(body).toContain(
+            `The security and performance reviews did not run: ${securityOutOfCredits}`,
+        );
+        expect(body.match(/did not run/g)).toHaveLength(1);
+    });
+
+    it('joins the reviewers in the review language', async () => {
+        const body = await summaryService().generatePullRequestFinishSummaryMarkdown(
+            org,
+            7,
+            [],
+            { languageResultPrompt: LanguageValue.PORTUGUESE_BR },
+            [],
+            false,
+            securityOutOfCredits,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            false,
+            ['security', 'performance'],
+        );
+
+        expect(body).toContain(
+            `As revisões de security e performance não foram executadas: ${securityOutOfCredits}`,
+        );
     });
 
     it('stays silent for a summary-only failure', async () => {

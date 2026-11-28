@@ -1,3 +1,4 @@
+import { failedPrimaryReviewers } from './primary-review-agents';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import type { IAutomationExecutionService } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
@@ -474,6 +475,57 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
             ]);
             expect(context.lastReviewError?.agentName).toBe('security');
         });
+
+        it.each([
+            ['two primary reviewers', []],
+            ['two primary reviewers and Kody Rules', ['kodyRules']],
+        ] as const)(
+            'names every primary reviewer out of credits: %s',
+            async (_case, auxiliary) => {
+                const { stage } = makeStage({
+                    suggestions: [],
+                    agentResults: [bugAgent([])],
+                    failures: [
+                        failedAgent('security', 402),
+                        failedAgent('performance', 402),
+                        ...auxiliary.map((name) => failedAgent(name, 402)),
+                    ],
+                });
+
+                const context = await run(stage, reviewContext(true));
+
+                expect(
+                    failedPrimaryReviewers(
+                        context.lastReviewError?.agentName,
+                        context.errors,
+                    ),
+                ).toEqual(['security', 'performance']);
+            },
+        );
+
+        it.each([
+            ['one primary reviewer', ['security'], 'security'],
+            ['Kody Rules only', ['kodyRules'], 'kodyRules'],
+            ['a custom agent only', ['custom-acme'], 'custom-acme'],
+        ] as const)(
+            'keeps the single attributed agent for %s',
+            async (_case, failed, expected) => {
+                const { stage } = makeStage({
+                    suggestions: [],
+                    agentResults: [bugAgent([])],
+                    failures: failed.map((name) => failedAgent(name, 402)),
+                });
+
+                const context = await run(stage, reviewContext(true));
+
+                expect(
+                    failedPrimaryReviewers(
+                        context.lastReviewError?.agentName,
+                        context.errors,
+                    ),
+                ).toBe(expected);
+            },
+        );
     });
 
     it('judges ownership by the attempt that failed, not the pre-run slot', async () => {
