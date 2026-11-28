@@ -306,7 +306,7 @@ function acceptedTask(
     const described = describeTask(record);
     return described
         ? {
-              task: { id: taskId(reference), ...described },
+              task: { id: taskId(reference, repository), ...described },
               complete: !!described.description || carriesDescription(record),
           }
         : undefined;

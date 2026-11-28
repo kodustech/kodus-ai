@@ -125,7 +125,7 @@ export function extractTaskReferences(
     return references;
 }
 
-function strongerIntent(
+export function strongerIntent(
     a: ReferenceIntent,
     b: ReferenceIntent,
 ): ReferenceIntent {

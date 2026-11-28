@@ -4,6 +4,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
+import { isSameRepository } from '../task-references';
 import { asRecord, answersNothing } from '../value-utils';
 import { MANY_ITEMS as MANY, wholeItem } from './whole-item';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
@@ -203,7 +204,7 @@ export class CustomMcpTracker extends McpTaskTracker {
                 status: 'found',
                 task: {
                     tracker: this.name,
-                    id: taskId(reference),
+                    id: taskId(reference, context.repository),
                     ...described,
                 },
             };
@@ -384,13 +385,22 @@ function takesRepository(tool: MCPToolRaw): boolean {
     );
 }
 
-/** The id a task is shown with: `AB#12`, `owner/repo#12`, `SAA-96`. */
-export function taskId(reference: TaskReference): string {
+/**
+ * The id a task is shown with: `AB#12`, `owner/repo#12`, `SAA-96`. An issue
+ * of the PR's own repository is `#12` however it was named: a re-check reads
+ * the task back by its URL, and a second id was another task to the run's
+ * comparison and to what a reviewer accepted (#1941).
+ */
+export function taskId(
+    reference: TaskReference,
+    pullRequestRepository: { owner?: string; name: string } | undefined,
+): string {
     if (reference.kind === 'work_item') {
         return `AB#${reference.id}`;
     }
     if (reference.kind === 'git_issue') {
-        return reference.repository
+        return reference.repository &&
+            !isSameRepository(reference.repository, pullRequestRepository)
             ? `${reference.repository.owner}/${reference.repository.name}#${reference.id}`
             : `#${reference.id}`;
     }

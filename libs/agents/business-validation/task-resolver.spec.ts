@@ -523,6 +523,33 @@ describe('an issue of the PR repository, named by number or by URL', () => {
         );
     });
 
+    it('judges one issue named in the title and by URL in the body once, as closed', async () => {
+        const resolution = await resolveTasks(
+            extractTaskReferences({
+                title: 'feat: export (#31)',
+                body: `Closes ${issueUrl}`,
+            }),
+            [gitIssues()],
+            { ...context, repository },
+        );
+        expect(resolution.kind).toBe('found');
+        const tasks = resolution.kind === 'found' ? resolution.tasks : [];
+        expect(tasks.map((t) => t.task.id)).toEqual(['#31']);
+        expect(tasks[0].reference?.intent).toBe('closes');
+    });
+
+    it("keeps #31 and another repository's #31 as two tasks", async () => {
+        const resolution = await resolveTasks(
+            extractTaskReferences({ body: 'Closes #31, closes acme/specs#31' }),
+            [gitIssues()],
+            { ...context, repository },
+        );
+        expect(
+            resolution.kind === 'found' &&
+                resolution.tasks.map((t) => t.task.id),
+        ).toEqual(['#31', 'acme/specs#31']);
+    });
+
     it("keeps another repository's issue apart from the PR's own", async () => {
         const resolution = await resolveTasks(
             extractTaskReferences({ command: 'acme/specs#31' }),

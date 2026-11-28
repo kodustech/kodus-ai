@@ -210,6 +210,61 @@ describe('CustomMcpTracker with the tool the org picked', () => {
     });
 });
 
+describe('CustomMcpTracker as the task source: an issue of the PR repository (#1941)', () => {
+    const getIssue = tool(
+        'issue_read',
+        {
+            properties: {
+                owner: { type: 'string' },
+                repo: { type: 'string' },
+                issue_number: { type: 'number' },
+            },
+            required: ['owner', 'repo', 'issue_number'],
+        },
+        { readOnlyHint: true },
+    );
+    const plugin = () =>
+        new CustomMcpTracker(
+            'GitHub plugin',
+            session({
+                tools: [getIssue],
+                call: (_name, args) => ({
+                    number: args.issue_number,
+                    title: 'Export',
+                    body: '- AC1',
+                    html_url: `https://github.com/${args.owner}/${args.repo}/issues/${args.issue_number}`,
+                }),
+            }),
+            'issue_read',
+            undefined,
+            true,
+        );
+    const context = {
+        organizationAndTeamData: {} as any,
+        repository: { owner: 'acme', name: 'web' },
+    };
+
+    it.each(['#31', 'acme/web#31', 'https://github.com/acme/web/issues/31'])(
+        'names it #31 when the PR says %s',
+        async (text) => {
+            await expect(
+                plugin().read(ref(text), context),
+            ).resolves.toMatchObject({ status: 'found', task: { id: '#31' } });
+        },
+    );
+
+    it("keeps another repository's issue, and one read with no PR repository, as owner/repo#N", async () => {
+        await expect(
+            plugin().read(ref('acme/specs#31'), context),
+        ).resolves.toMatchObject({ task: { id: 'acme/specs#31' } });
+        await expect(
+            plugin().read(ref('acme/web#31'), {
+                organizationAndTeamData: {} as any,
+            }),
+        ).resolves.toMatchObject({ task: { id: 'acme/web#31' } });
+    });
+});
+
 describe('isReadOnly: a write verb is a word of the name, not part of one', () => {
     it('blocks tools named with a verb that writes, in any casing', () => {
         for (const name of [

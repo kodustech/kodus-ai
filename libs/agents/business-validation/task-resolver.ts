@@ -10,6 +10,7 @@ import {
     isSameRepository,
     referenceLabel,
     selectReferences,
+    strongerIntent,
 } from './task-references';
 import { createLogger } from '@libs/core/log/logger';
 
@@ -137,6 +138,25 @@ export async function resolveTasks(
             }
         }
         if (hit?.status === 'found') {
+            // `feat: export (#31)` and `Closes <its URL>` name one issue: it
+            // is judged once, as closed, not shown twice (#1941).
+            const earlier = found.find(
+                (f) =>
+                    f.task.tracker === hit.task.tracker &&
+                    f.task.id === hit.task.id,
+            );
+            if (earlier) {
+                if (earlier.reference) {
+                    earlier.reference = {
+                        ...earlier.reference,
+                        intent: strongerIntent(
+                            earlier.reference.intent,
+                            reference.intent,
+                        ),
+                    };
+                }
+                continue;
+            }
             const task =
                 (await hitBy?.relate?.(hit.task, context).catch((error) => {
                     warn(
