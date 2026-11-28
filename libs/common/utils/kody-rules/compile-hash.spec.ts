@@ -78,6 +78,20 @@ describe('DETECTOR_COMPILER_VERSION in ruleCompileHash', () => {
             true,
         );
     });
+
+    it('a bump still recognizes a legacy cosmetic decline, so the recheck runs', () => {
+        const { wasDeclinedByLegacyCosmeticGate } = withVersion(2);
+        expect(
+            wasDeclinedByLegacyCosmeticGate({
+                ...input,
+                compileAttempt: {
+                    sourceHash: storedBeforeVersion,
+                    outcome: 'declined',
+                    declineReason: 'cosmetic',
+                },
+            }),
+        ).toBe(true);
+    });
 });
 
 /**

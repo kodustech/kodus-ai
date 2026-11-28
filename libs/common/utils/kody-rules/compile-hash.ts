@@ -23,11 +23,11 @@ function needsCosmeticRecheck(rule: AttemptedRule): boolean {
 function hashCompileInput(
     rule: CompileInput,
     exampleFields?: string[],
+    version: number = DETECTOR_COMPILER_VERSION,
 ): string {
     const examples = JSON.stringify(rule?.examples ?? [], exampleFields);
     // Version 1 has no salt: hashes stored before the version existed match.
-    const salt =
-        DETECTOR_COMPILER_VERSION === 1 ? '' : `v${DETECTOR_COMPILER_VERSION} `;
+    const salt = version === 1 ? '' : `v${version} `;
     return createHash('sha256')
         .update(`${salt}${rule?.rule ?? ''} ${examples}`)
         .digest('hex');
@@ -62,20 +62,26 @@ export function ruleCompileHash(rule: CompileInput): string {
     return hashCompileInput(rule, ['snippet', 'isCorrect']);
 }
 
-function attemptMatchesInput(rule: AttemptedRule): boolean {
+function attemptMatchesInput(
+    rule: AttemptedRule,
+    version: number = DETECTOR_COMPILER_VERSION,
+): boolean {
     const stored = rule?.compileAttempt?.sourceHash;
     // Older CLI attempts used the field order persisted on that rule.
     return (
         !!stored &&
-        (stored === ruleCompileHash(rule) || stored === hashCompileInput(rule))
+        (stored === hashCompileInput(rule, ['snippet', 'isCorrect'], version) ||
+            stored === hashCompileInput(rule, undefined, version))
     );
 }
 
 export function wasDeclinedByLegacyCosmeticGate(rule: AttemptedRule): boolean {
+    // The legacy gate predates the compiler version, so its declines carry a
+    // version-1 hash. A bump makes them stale, not any less legacy.
     return (
         rule.compileAttempt?.declineReason === 'cosmetic' &&
         !rule.compileAttempt.cosmeticSource &&
-        attemptMatchesInput(rule)
+        (attemptMatchesInput(rule, 1) || attemptMatchesInput(rule))
     );
 }
 
